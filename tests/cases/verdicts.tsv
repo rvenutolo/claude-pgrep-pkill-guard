@@ -271,3 +271,32 @@
 "echo 'pkill --full x' |& bash"	deny:kill
 "cat <<EOF > /tmp/f | bash\npkill --full x\nEOF"	allow
 "cat <<EOF | bash 2>&1\npkill --full x\nEOF"	deny:kill
+"until ! pgrep --full zzflagfull; do sleep 5; done"	deny:loop
+"until ! pgrep -af zzflagcluster; do sleep 5; done"	deny:loop
+"until ! pgrep -a zzflagnotfull; do sleep 5; done"	allow
+"pkill --ignore-ancestors --full zzflaglongia"	allow
+"pkill -Af zzflagshortia"	allow
+"pkill --full \\\n  \"[u]nittest discover\""	allow
+"pkill --full \"[z]zoperandlast discover\""	allow
+"pkill --full \"[z]zoperandskip\" --delimiter ,"	allow
+"pkill --full \"[z]zoperandredir\" > /tmp/out"	allow
+"pkill --full -- \"-[z]zoperandterm\""	allow
+"cat <<'EOF'\nx\nEOF\npkill --full \"[a] b\""	allow
+"pkill --full \"[z]zbracketalone\""	allow
+"echo \"unittest discover\"; pkill --full \"[u]nittest discover\""	deny:kill
+"pkill --full \"probe[.]py\""	allow
+"pkill --full \"[abc]needle[d]\""	deny:kill
+"pkill --full \"[d]needle[abc]\""	deny:kill
+"pkill --full \"abc[def[g]hij\""	deny:kill
+"until ! pgrep --full zzctxcond; do sleep 5; done"	deny:loop
+"while true; do pgrep --full zzctxbody || break; sleep 5; done"	deny:loop
+"while read -r line; do :; done < f; pgrep -af zzctxnone"	allow
+"for f in $(pgrep --full zzctxforhead); do :; done"	warn
+"while true; do for f in *; do pgrep --full zzctxnested || break; done; done"	deny:loop
+"while true; do echo done; pgrep --full zzctxdonearg || break; done"	deny:loop
+"while true; do case x in y) :; esac; pgrep --full zzctxcase || break; done"	deny:loop
+"while true; do (echo hi); pgrep --full zzctxsubshell || break; done"	deny:loop
+"while true; do echo \"$(: ; done)\"; pgrep --full zzctxsubdone || break; sleep 5; done"	warn
+"while true; do pgrep --full zztermyes || break; done"	deny:loop
+"while true; do pgrep --full zztermno || sleep 5; done"	warn
+"while true; do for f in *; do pgrep --full zztermouter || sleep 5; done; break; done"	warn

@@ -1,0 +1,17 @@
+{
+  "description": "Deny pgrep/pkill patterns that match the agent's own process or poll in a loop",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/pgrep-pkill-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

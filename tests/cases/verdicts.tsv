@@ -1,0 +1,273 @@
+"ls -la"	allow
+"echo hello"	allow
+"grep --recursive \"until ! pgrep --full x\" ."	allow
+"echo \"pgrep --full x\""	allow
+"echo \"while until pgrep --full x\""	allow
+"pgrep java"	allow
+"pgrep -a java"	allow
+"until ! pgrep --full \"unittest discover\" > /dev/null 2>&1; do sleep 5; done"	deny:loop
+"while pgrep -f build >/dev/null; do sleep 2; done"	deny:loop
+"while true; do pgrep --full x >/dev/null || break; sleep 5; done"	deny:loop
+"until ! pgrep --ignore-ancestors --full x; do sleep 5; done"	deny:loop
+"until ! pgrep -Af x; do sleep 5; done"	deny:loop
+"until ! pgrep --full \"[u]nittest discover\"; do sleep 5; done"	allow
+"echo \"unittest discover\"; until ! pgrep --full \"[u]nittest discover\"; do sleep 5; done"	deny:loop
+"pkill --full \"unittest discover\""	deny:kill
+"pgrep --full java | xargs kill"	deny:kill
+"pkill --ignore-ancestors --full java"	allow
+"while read -r line; do :; done < f; pgrep -af java"	allow
+"for f in *; do :; done; pgrep --full x && echo yes"	warn
+"pgrep --full x >/dev/null && echo running"	warn
+"pgrep --full x | wc -l"	warn
+"pgrep -cf java"	warn
+"while [ -n \"$p\" ]; do p=$(pgrep --full x); sleep 5; done"	warn
+"pgrep -af java"	allow
+"pgrep --list-full --full java"	allow
+"until ! pgrep --list-full java; do sleep 5; done"	allow
+"until ! pgrep -- --full x; do sleep 5; done"	allow
+"pgrep -af java > /tmp/x 2>&1"	allow
+"until [ -z \"$(pgrep --full x)\" ]; do sleep 5; done"	deny:loop
+"echo hi\nuntil ! pgrep --full x\ndo sleep 5\ndone"	deny:loop
+"pgrep --full x &"	allow
+"until [ -z \"`pgrep --full x`\" ]; do sleep 5; done"	deny:loop
+"until [ -z `pgrep --full x` ]; do sleep 5; done"	deny:loop
+"kill $(pgrep --full x)"	deny:kill
+"kill -9 $(pgrep --full x)"	deny:kill
+"sudo kill $(pgrep --full x)"	deny:kill
+"echo kill $(pgrep --full x)"	warn
+"true; kill $(pgrep --full x)"	deny:kill
+"echo $(pgrep --full x)"	warn
+"pgrep --full x | sort > wc"	allow
+"# don't do it\necho 'while true; do pgrep --full x || break; sleep 5; done'"	allow
+"# don't do this\nuntil ! pgrep --full y; do sleep 5; done"	deny:loop
+"n=${#arr[@]}; until ! pgrep --full x; do sleep 5; done"	deny:loop
+"for i in $(seq 1 5); do pgrep -af java; [ \"$i\" -gt 2 ] && break; done"	allow
+"echo $(date); pgrep --full java"	allow
+"echo \"→ checking\"; until ! pgrep --full \"[u]nittest discover\"; do sleep 5; done"	allow
+"pgrep --full x | grep -i kill"	allow
+"pgrep --full java | xargs --no-run-if-empty kill -9"	deny:kill
+"sudo pkill --full java"	deny:kill
+"command pkill --full java"	deny:kill
+"/usr/bin/pgrep --full x | xargs kill"	deny:kill
+"until ! sudo pgrep --full x; do sleep 5; done"	deny:loop
+"if pgrep --full \"java -jar app\" > /dev/null; then echo up; fi"	warn
+"! pgrep --full java"	warn
+"if ! pgrep -f java; then echo down; fi"	warn
+"pgrep --full -- -x"	allow
+"until ! pgrep --full -- \"[u]nittest discover\"; do sleep 5; done"	allow
+"arr=(kill $(pgrep --full x))"	warn
+"until ! FOO=bar pgrep --full x; do sleep 5; done"	deny:loop
+"LC_ALL=C pgrep --full x | xargs kill"	deny:kill
+"FOO=bar pkill --full java"	deny:kill
+"env FOO=bar pkill --full java"	deny:kill
+"for pid in $(pgrep -f java); do kill \"$pid\"; done"	deny:kill
+"pgrep -f java | xargs -I{} kill {}"	deny:kill
+"kill -s TERM $(pgrep -f java)"	deny:kill
+"pgrep -f java | while read -r p; do kill \"$p\"; done"	deny:kill
+"FOO=bar kill $(pgrep -f java)"	deny:kill
+"echo in $(pgrep -f java); while true; do kill 1; done"	warn
+"pgrep -f java | xargs -n 1 kill"	deny:kill
+"pgrep -f java | xargs --max-args 1 kill"	deny:kill
+"pgrep -f java | xargs -P 4 kill"	deny:kill
+"pgrep -f java | xargs -I % kill %"	deny:kill
+"pgrep -f java | xargs --replace=% kill %"	deny:kill
+"pgrep -f java | xargs -n 1 echo"	warn
+"pgrep -f java | xargs -n 1 grep -i kill"	warn
+"pgrep -f java | xargs -r kill"	deny:kill
+"pgrep -f java | xargs --no-run-if-empty kill"	deny:kill
+"pgrep --full x > /dev/null; echo \"exit=$?\""	warn
+"pgrep --full x; rc=$?"	warn
+"pgrep --full x\necho $?"	warn
+"pgrep --full x; echo hi"	allow
+"pgrep --full x; echo hi; rc=$?"	allow
+"while true; do pgrep --full x; rc=$?; [[ $rc -eq 0 ]] && break; sleep 5; done"	deny:loop
+"pgrep -f java |\n  xargs kill"	deny:kill
+"pgrep -f java |\n  xargs -n 1 kill"	deny:kill
+"pgrep -f java |\n  while read -r p; do kill \"$p\"; done"	deny:kill
+"pgrep --full x |\n  wc -l"	warn
+"pgrep --full x\nkill 123"	allow
+"pgrep --full x |\n  grep foo"	allow
+"pgrep -f java | xargs\nkill 123"	warn
+"pgrep -f java | sudo\nkill 123"	allow
+"sudo \\\npkill --full java"	deny:kill
+"while \\\n  pgrep --full x; do sleep 5; done"	deny:loop
+"kill \\\n  $(pgrep -f java)"	deny:kill
+"pgrep \\\n  --full x | xargs kill"	deny:kill
+"until ! p\\grep --full x; do sleep 5; done"	allow
+"echo don\\'t; pgrep --full x | xargs kill"	deny:kill
+"sudo\\ pkill --full java"	allow
+"bash -c 'pkill --full java'"	deny:kill
+"sudo bash -c 'pkill -f myapp'"	deny:kill
+"sh -c 'until ! pgrep --full x; do sleep 5; done'"	deny:loop
+"bash -c \"pkill --full java\""	deny:kill
+"bash -lc 'pkill --full java'"	deny:kill
+"bash -c 'echo hi'"	allow
+"bash -c 'pgrep --ignore-ancestors -f java'"	allow
+"bash -c 'pgrep --full \"[j]ava\"'"	allow
+"bash -c 'pgrep -af java'"	allow
+"ssh host 'pkill -f myapp'"	allow
+"docker exec c sh -c 'pkill -f myapp'"	allow
+"watch 'pgrep -c java'"	allow
+"ssh host bash -c 'pkill --full java'"	allow
+"echo bash -c 'pkill --full java'"	allow
+"bash --version; echo 'pkill --full java'"	allow
+"bash -c 'bash -c \"pkill --full java\"'"	deny:kill
+"bash 'pkill --full java'"	allow
+"bash --posix 'pkill --full java'"	allow
+"bash --version; grep -c 'pkill --full java' /tmp/log"	allow
+"bash -c \"pkill --full java $(date)\""	allow
+"pgrep --full x | wc -l; bash -c 'echo hi'"	warn
+"bash script.sh -c 'pkill --full java'"	allow
+"bash /tmp/deploy.sh --verbose -c 'pkill --full java'"	allow
+"sh runner -c 'pkill --full java'"	allow
+"su - user -c 'pkill --full java'"	deny:kill
+"su user -c 'pkill --full java'"	deny:kill
+"su -c 'pkill --full java'"	deny:kill
+"sudo su - user -c 'until ! pgrep --full x; do sleep 5; done'"	deny:loop
+"su - user extra -c 'pkill --full java'"	allow
+"su - postgres -c 'psql --command \"select 1\"'"	allow
+"su - user -c 'echo hi'"	allow
+"su - user -c 'pgrep --ignore-ancestors -f java'"	allow
+"ssh host su - user -c 'pkill --full java'"	allow
+"echo hi ;# for p in $(pgrep -f java); do kill \"$p\"; done"	allow
+"echo hi ;# until ! pgrep --full x; do sleep 5; done"	allow
+"cat f |# if pgrep --full x; then echo up; fi"	allow
+"ls &# pkill --full java"	allow
+"ls &# for p in $(pgrep -f java); do kill \"$p\"; done"	allow
+"sleep 1 &# until ! pgrep --full x; do sleep 5; done"	allow
+"while :; do case x in y) :; esac; pgrep --full x || break; done"	deny:loop
+"while true; do case \"$1\" in a) echo a ;; b) echo b ;; esac; pgrep --full x > /dev/null || break; sleep 5; done"	deny:loop
+"case x in y) :; esac; pgrep -af java"	allow
+"while :; do case x in y) :; esac; done; pgrep -af java"	allow
+"x=$(case y in z) echo hi;; esac); pgrep -af java"	allow
+"while (echo hi); do sleep 1; done; pgrep --full x"	allow
+"while [ -n \"$(date)\" ]; do sleep 1; done; pgrep --full x"	allow
+"echo hi;# while pgrep --full x; do sleep 5; done"	allow
+"echo $#; pkill --full java"	deny:kill
+"echo \"count=${#a[@]}\"; pkill --full java"	deny:kill
+"pkill --full a#b"	deny:kill
+"pgrep --full x#y | xargs kill"	deny:kill
+"PAT=$(cat /tmp/p); while pgrep -f \"$PAT\" >/dev/null; do sleep 1; done"	deny:loop
+"until ! pgrep --full \"${PAT}\"; do sleep 5; done"	deny:loop
+"pkill --full \"$PAT\""	deny:kill
+"kill $(pgrep --full \"$PAT\")"	deny:kill
+"until ! pgrep --ignore-ancestors --full \"$PAT\"; do sleep 5; done"	deny:loop
+"until ! pgrep -f judge_resolves.py --ignore-ancestors >/dev/null 2>&1; do sleep 30; done"	deny:loop
+"while true; do pgrep -A -f x >/dev/null || break; sleep 5; done"	deny:loop
+"pgrep -A -f x | wc -l"	allow
+"while [ -n \"$p\" ]; do p=$(pgrep -A --full x); sleep 5; done"	allow
+"sudo pgrep --ignore-ancestors --full x | xargs kill"	allow
+"until [ -s /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output ]; do sleep 5; done"	deny:task-poll
+"until grep -qE \"^(OK|FAILED)\" /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output; do sleep 5; done"	deny:task-poll
+"until [ -s \"/tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output\" ]; do sleep 5; done"	deny:task-poll
+"until [ -n \"$(cat /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output 2>/dev/null)\" ]; do sleep 5; done"	deny:task-poll
+"F=/tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output; until [ -s \"$F\" ]; do sleep 5; done"	deny:task-poll
+"F=\"/tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output\"; until [ -s \"${F}\" ]; do sleep 5; done"	deny:task-poll
+"while ! grep -q OK /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output; do sleep 2; done"	deny:task-poll
+"while true; do grep -q OK /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output && break; sleep 5; done"	deny:task-poll
+"until [ -s /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output ]; do :; done"	deny:task-poll
+"bash -c 'until [ -s /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output ]; do sleep 5; done'"	deny:task-poll
+"until [ -s /var/tmp/claude-1000/x/y/tasks/a1.output ]; do sleep 5; done"	deny:task-poll
+"cat /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output"	allow
+"cat /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output | grep -c OK"	allow
+"[ -s /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output ] && echo done"	allow
+"test -s /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output; echo $?"	allow
+"while read -r l; do echo \"$l\"; done < /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output"	allow
+"echo \"until [ -s /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output ]; do sleep 5; done\""	allow
+"until [ -s \"$F\" ]; do sleep 5; done"	allow
+"until [ -s /tmp/other/x.output ]; do sleep 5; done"	allow
+"until [ -s /tmp/claude-1000/p/s/scratchpad/x.output ]; do sleep 5; done"	allow
+"until gh pr checks 123 --watch; do sleep 30; done"	allow
+"until aws s3api head-object --bucket b --key k; do sleep 10; done"	allow
+"until curl --fail --silent https://ci.example/x; do sleep 5; done"	allow
+"while true; do cat /tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks/bcuxbdgc5.output; sleep 5; done"	allow
+"cat > postmortem.md <<'EOF'\nThe guard denied this shape:\n    pkill --full judge_resolves.py\nEOF"	allow
+"cat <<EOF\n$(pkill --full x)\nEOF"	deny:kill
+"cat <<'EOF'\nuntil ! pgrep --full x; do sleep 5; done\nEOF"	allow
+"cat <<-EOF\n\tpkill --full x\n\tEOF"	allow
+"bash <<'EOF'\npkill --full x\nEOF"	deny:kill
+"ssh host bash <<'EOF'\npkill --full x\nEOF"	allow
+"sudo bash <<EOF\nuntil ! pgrep --full x; do sleep 5; done\nEOF"	deny:loop
+"bash <<EOF script.sh\npkill --full x\nEOF"	allow
+"bash << EOF\npkill --full x\nEOF"	deny:kill
+"cat <<A; bash <<B\na-body\nA\npkill --full x\nB"	deny:kill
+"bash -c 'echo hi' <<EOF\npkill --full x\nEOF"	allow
+"bash 0<<EOF\npkill --full x\nEOF"	deny:kill
+"bash 3<<EOF\npkill --full x\nEOF"	allow
+"cat 0<<A\nhello\nA\nbash <<B\npkill --full x\nB"	deny:kill
+"<<EOF bash\npkill --full x\nEOF"	deny:kill
+"echo $((1 << 2)); bash <<EOF\npkill --full x\nEOF"	deny:kill
+"echo $((1<<2)); bash <<A\nnote\nA\ncat <<B\npkill --full x\nB"	allow
+"bash <<EOF > /tmp/log\npkill --full x\nEOF"	deny:kill
+"bash <<EOF 2>&1\npkill --full x\nEOF"	deny:kill
+"bash -s arg <<EOF\npkill --full x\nEOF"	deny:kill
+"bash -s arg -c \"pkill --full x\""	allow
+"bash <<EOF >/tmp/log script.sh\npkill --full x\nEOF"	allow
+"<<A <<B bash\nnote\nA\npkill --full x\nB"	deny:kill
+"cat <<''\nit's fine\n\npkill --full x"	deny:kill
+"cat <<''\nit's fine\npkill --full x\n\necho done"	allow
+"sudo -u bob pkill --full x"	deny:kill
+"sudo --user=bob pkill --full x"	deny:kill
+"sudo --user bob pkill --full x"	deny:kill
+"sudo -u bob -- pkill --full x"	deny:kill
+"doas -u bob pkill --full x"	deny:kill
+"env -i pkill --full x"	deny:kill
+"env -u FOO pkill --full x"	deny:kill
+"sudo -u bob bash -c 'pkill --full x'"	deny:kill
+"until ! sudo -u bob pgrep --full x; do sleep 5; done"	deny:loop
+"timeout 5 pkill --full x"	deny:kill
+"timeout -s KILL 5 pkill --full x"	deny:kill
+"timeout --signal=KILL 5 pkill --full x"	deny:kill
+"command -v pkill"	allow
+"command -v pkill --full x"	allow
+"sudo deploy.sh pkill --full x"	allow
+"timeout 5 deploy.sh pkill --full x"	allow
+"time -o /tmp/t pkill --full x"	allow
+"/usr/bin/time -o /tmp/t pkill --full x"	deny:kill
+"time -p pkill --full x"	deny:kill
+"env time -o /tmp/t pkill --full x"	deny:kill
+"command time -o /tmp/t pkill --full x"	deny:kill
+"nohup time -o /tmp/t pkill --full x"	deny:kill
+"sudo -u bob time -o /tmp/t pkill --full x"	deny:kill
+"FOO=1 time -o /tmp/t pkill --full x"	deny:kill
+"echo hi | time -o /tmp/t pkill --full x"	deny:kill
+"echo hi |& time -o /tmp/t pkill --full x"	deny:kill
+"echo hi | time -p pkill --full x"	deny:kill
+"echo hi | pkill --full x"	deny:kill
+"echo hi | sudo -u bob pkill --full x"	deny:kill
+"sudo -R /chroot pkill --full x"	deny:kill
+"sudo --chroot /chroot pkill --full x"	deny:kill
+"sudo -T 5 pkill --full x"	deny:kill
+"sudo --command-timeout 5 pkill --full x"	deny:kill
+"timeout -- -k 5 pkill --full x"	allow
+"timeout -- 5 pkill --full x"	deny:kill
+"sudo -l pkill --full x"	allow
+"env -u pkill true"	allow
+"timeout -k 5 5 pkill --full x"	deny:kill
+"doas -C /etc/doas.conf pkill --full x"	deny:kill
+"sudo -u bob env -u FOO pkill --full x"	deny:kill
+"timeout 5 bash -c 'pkill --full x'"	deny:kill
+"sudo --future-opt bob pkill --full x"	allow
+"cat <<EOF | bash\npkill --full x\nEOF"	deny:kill
+"cat <<'EOF' | bash\npkill --full x\nEOF"	deny:kill
+"cat <<EOF | sudo bash\nuntil ! pgrep --full x; do sleep 5; done\nEOF"	deny:loop
+"cat <<EOF | bash -s arg\npkill --full x\nEOF"	deny:kill
+"cat - <<EOF | bash\npkill --full x\nEOF"	deny:kill
+"echo 'pkill --full x' | bash"	deny:kill
+"echo \"pkill --full x\" | sudo bash"	deny:kill
+"echo -n 'pkill --full x' | bash"	deny:kill
+"printf 'pkill --full x\\n' | bash"	deny:kill
+"printf '%s\\n' 'pkill --full x' | bash"	deny:kill
+"cat <<EOF | bash script.sh\npkill --full x\nEOF"	allow
+"cat <<EOF | bash -c 'echo hi'\npkill --full x\nEOF"	allow
+"cat file <<EOF | bash\npkill --full x\nEOF"	allow
+"sed <<EOF | bash\npkill --full x\nEOF"	allow
+"cat <<EOF | tee /tmp/f | bash\npkill --full x\nEOF"	allow
+"cat <<EOF | ssh host bash\npkill --full x\nEOF"	allow
+"cat <<EOF | grep x\npkill --full x\nEOF"	allow
+"echo 'pkill --full x' | cat"	allow
+"printf '%s %s\\n' 'pkill --full x' b | bash"	allow
+"echo 'pkill --full x' || bash"	allow
+"echo 'pkill --full x' |& bash"	deny:kill
+"cat <<EOF > /tmp/f | bash\npkill --full x\nEOF"	allow
+"cat <<EOF | bash 2>&1\npkill --full x\nEOF"	deny:kill

@@ -1,0 +1,38 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      # harden-runner is Linux-only, so it cannot be "first in every job" here.
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+        if: runner.os == 'Linux'
+        with:
+          egress-policy: block
+          allowed-endpoints: >-
+            api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
+            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
+            releases.nixos.org:443 tarballs.nixos.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Run the full gate
+        run: ./.ci/in-devshell ./run-all-checks

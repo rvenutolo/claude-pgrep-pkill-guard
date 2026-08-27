@@ -331,14 +331,14 @@ function is_operator() {
 function scan_command() {
   local -r command="$1"
   local raw expected
-  raw="$(printf '%s' "${command}" | LC_ALL=C awk -f "${SCANNER}")" || return 1
-  # One record, and every byte accounted for. An empty command legitimately
-  # yields NR=0.
-  if ((${#command} == 0)); then
-    expected=$'\t''<SCAN:0:0>'
-  else
-    expected=$'\t'"<SCAN:1:${#command}>"
-  fi
+  # The scanner reads lines and reassembles them, so the input MUST end with
+  # exactly one newline: that terminator is how it distinguishes a command
+  # ending in a newline from one that does not, and it is dropped on the way
+  # in. `printf '%s'` here would silently shorten every command ending in a
+  # newline by one byte and trip the trailer below.
+  raw="$(printf '%s\n' "${command}" | LC_ALL=C awk -f "${SCANNER}")" || return 1
+  # Every byte accounted for.
+  expected=$'\t'"<SCAN:${#command}>"
   [[ "${raw}" == *"${expected}"* ]] || return 1
   printf '%s' "${raw%"${expected}"*}"
 }

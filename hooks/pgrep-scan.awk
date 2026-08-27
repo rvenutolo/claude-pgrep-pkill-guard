@@ -16,11 +16,23 @@
 # string, so `$(` and backticks still re-enter code context. One body is
 # emitted to the tokenizer as a `<HD:len>` marker at its first byte, which is
 # how the hook slices a body fed to a local shell wrapper.
-BEGIN { RS = "\0"; ORS = "" }
-{
-  cmd = $0
+#
+# Input handling deliberately depends on nothing about RS. The command is read
+# line by line with getline under the default RS and reassembled with "\n", so
+# the scanner behaves identically on gawk, mawk and one-true-awk (BWK, the stock
+# awk on macOS). BWK truncates RS="\0" to RS="" -- paragraph mode -- which
+# splits records on blank lines and strips leading/trailing newlines; the
+# previous RS="\0" design tripped the integrity trailer there for every heredoc
+# payload (#7). POSIX awk cannot tell `foo` from `foo\n` at end of input (there
+# is no RT), so the CALLER TERMINATES THE INPUT WITH EXACTLY ONE NEWLINE and the
+# loop below drops exactly one: a command's own trailing newline survives,
+# which is what a heredoc body's byte count depends on.
+BEGIN {
+  ORS = ""
+  cmd = ""
+  while ((getline line) > 0) cmd = cmd line "\n"
+  cmd = substr(cmd, 1, length(cmd) - 1)
   n = length(cmd)
-  total += n          # accumulated for the integrity trailer emitted in END
   masked = ""
   depth = 0
   ctx[0] = "N"          # N unquoted, S single-quoted, D double-quoted, H heredoc body
@@ -251,16 +263,15 @@ BEGIN { RS = "\0"; ORS = "" }
   # A body that starts at end of input (`cat <<EOF` with a trailing newline
   # and nothing after) has no byte for the loop to reach.
   while (m < hb_n) { print (hb_start[m] - 1) "\t<HD:" hb_len[m] ">\n"; m++ }
-}
 
-# Integrity trailer. The hook checks this before trusting the stream. It catches
-# an awk whose RS handling differs from ours -- notably BWK awk on macOS, whose
-# C-string semantics truncate RS="\0" to RS="" and silently switch the program
-# into paragraph mode, which desyncs every byte offset while still producing
-# plausible-looking output. NR proves we saw exactly one record; total proves no
-# bytes were stripped. Do NOT replace this with `exit 1`: the hook calls the
-# scanner inside a command substitution, so a non-zero exit is swallowed by the
-# ERR trap and turns into a silent allow. `total+0` is not decoration either --
-# an unset awk variable concatenates as the empty string, so a bare `total`
-# would emit `<SCAN:0:>` for empty input and never match the expected trailer.
-END { print "\t<SCAN:" NR ":" total+0 ">" }
+  # Integrity trailer. The hook checks this before trusting the stream: the
+  # reassembled byte count must equal the length of the command it sent, which
+  # catches any awk that strips, splits or reshapes bytes on the way through
+  # and would otherwise desync every offset while still producing plausible
+  # output. Do NOT replace this with `exit 1`: the hook calls the scanner
+  # inside a command substitution, so a non-zero exit is swallowed by the ERR
+  # trap and turns into a silent allow. `n+0` is not decoration either -- an
+  # unset awk variable concatenates as the empty string, and n is only ever
+  # assigned once the loop above has run.
+  print "\t<SCAN:" n+0 ">"
+}

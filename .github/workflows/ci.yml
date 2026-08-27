@@ -36,3 +36,87 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Run the full gate
         run: ./.ci/in-devshell ./run-all-checks
+
+  compat-linux:
+    name: compat (ubuntu, ambient)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >-
+            api.github.com:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report the ambient toolchain
+        run: |
+          set -Eeuo pipefail
+          bash --version | head -1
+          jq --version
+          # Which awk this runner actually provides is an assumption worth
+          # printing: the image may resolve `awk` to gawk or to mawk. Both
+          # handle RS="\0" correctly, so either is fine here — unlike stock
+          # macOS awk, which is why the macOS leg installs gawk explicitly.
+          command -v awk
+          awk --version 2>&1 | head -1 || awk -W version 2>&1 | head -1
+      - uses: ./.github/actions/bats-ambient
+      - name: Run the suite against ambient tools
+        run: ./run-tests
+
+  compat-macos-brew-bash:
+    name: compat (macos, homebrew bash)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install a modern bash and gawk
+        # gawk is a documented macOS PREREQUISITE, not a convenience: stock
+        # macOS awk is one-true-awk, which degrades RS="\0" to paragraph mode
+        # and makes the guard report itself INACTIVE for every heredoc-payload
+        # and blank-line command. This leg tests the SUPPORTED configuration, so
+        # it installs what the README tells a macOS user to install.
+        run: brew install bash gawk
+      - name: Report the ambient toolchain
+        run: |
+          set -Eeuo pipefail
+          brew_prefix="$(brew --prefix)"
+          "${brew_prefix}/bin/bash" --version | head -1
+          jq --version
+          "${brew_prefix}/opt/gawk/libexec/gnubin/awk" --version | head -1
+      - uses: ./.github/actions/bats-ambient
+      - name: Run the suite against ambient tools
+        run: |
+          set -Eeuo pipefail
+          brew_prefix="$(brew --prefix)"
+          # Put Homebrew's bash ahead of /bin/bash so the hook's shebang picks it
+          # up, and gawk's gnubin ahead of /usr/bin/awk so `awk` IS gawk — which
+          # is exactly what a coworker's Mac looks like after the README's
+          # `brew install bash gawk`.
+          export PATH="${brew_prefix}/opt/gawk/libexec/gnubin:${brew_prefix}/bin:${PATH}"
+          # Fail loudly here rather than letting the suite pass for the wrong
+          # reason if the gnubin path ever stops shadowing /usr/bin/awk.
+          awk --version | head -1
+          awk --version | head -1 | grep -q 'GNU Awk'
+          bash --version | head -1
+          ./run-tests
+
+  compat-macos-stock-bash:
+    name: compat (macos, stock bash 3.2)
+    runs-on: macos-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Assert the guard deactivates loudly
+        run: ./.ci/check-inactive-on-old-bash

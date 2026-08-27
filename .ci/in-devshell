@@ -17,10 +17,21 @@
 #              and nix from the host.
 # @arg $@ command the command to run inside the devShell, plus its arguments
 # @exitcode 0 the wrapped command succeeded
-# @exitcode 1 no command given, or not inside a git repo
+# @exitcode 1 no command given, not inside a git repo, or the host bash is too old
 # @exitcode * otherwise the wrapped command's exit status
 
 set -Eeuo pipefail
+# This script runs under the HOST bash, before the devShell it creates exists,
+# so the host's version is whatever the machine ships. `shopt -s inherit_errexit`
+# below is a bash 4.2 builtin option: on stock macOS bash 3.2 the shell aborts
+# with `shopt: inherit_errexit: invalid shell option name`, which tells a
+# coworker running `just check` nothing about what to install. Check first, and
+# say what to do. Must stay ABOVE the `shopt` line it is protecting.
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 2))); then
+  printf '%s: bash 4.2+ required to run the gate (found %s.%s). On macOS: brew install bash.\n' \
+    "${0##*/}" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" >&2
+  exit 1
+fi
 # Without this, errexit is off inside every $(...) subshell, so a helper called
 # as `n="$(scan ...)"` runs past a failed command and this gate exits 0.
 shopt -s inherit_errexit

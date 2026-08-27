@@ -52,9 +52,11 @@ jobs:
         # boundary is exactly as before -- this only chooses the interpreter
         # that reads the entrypoint script.
         #
-        # TODO: give .ci/in-devshell an explicit `bash >= 4.2` guard so a
-        # coworker running `just check` on a stock Mac gets that sentence
-        # instead of the raw shopt error. Out of scope for the CI phase.
+        # .ci/in-devshell now carries an explicit `bash >= 4.2` guard, so a
+        # coworker running `just check` on a stock Mac gets an actionable
+        # sentence instead of the raw shopt error. This job still selects the
+        # flake's bash, because the point here is to RUN the gate, not to
+        # rediscover that the host bash is too old.
         shell: nix develop --command bash -e {0}
         run: ./.ci/in-devshell ./run-all-checks
 

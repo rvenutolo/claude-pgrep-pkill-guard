@@ -198,9 +198,9 @@ the real code rather than assumed.
   `body_has_terminator`'s missing barrier is an asymmetry with `loop_context`,
   not something this port introduced. Phase 3 must not change hook behaviour, so
   it is left alone and recorded here.
-  <!-- TODO: file an issue for body_has_terminator's missing substitution scope
-       barrier, under the pin-then-fix policy; fixing it would also restore
-       assertion #58's discriminating power. -->
+  Filed as issue #8 under the pin-then-fix policy: giving
+  `body_has_terminator` the same substitution scope barrier `loop_context`
+  already has would restore assertion #58's discriminating power.
 
 ## Nothing else was dropped
 

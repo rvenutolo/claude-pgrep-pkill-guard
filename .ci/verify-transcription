@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+
+# @description One-off gate for the phase-3 transcription: re-extract the case
+#              tables from the hook's still-embedded arrays and byte-compare them
+#              against tests/cases/*.tsv. A silently dropped row would otherwise
+#              keep the whole suite green, which is the failure mode this exists
+#              to catch. Deleted in the same PR, once the embedded arrays are
+#              gone.
+# @noargs
+# @exitcode 0 the TSVs match the embedded arrays exactly
+# @exitcode 1 they do not
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+readonly HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"
+
+# The temp dir is file-scope, NOT a `local` inside main: an EXIT trap referring
+# to a local fires after main returns, when the variable is gone, and under
+# `set -u` the trap itself dies -- making this script exit 1 even when every
+# comparison passed.
+TMP_DIR="$(mktemp -d)"
+readonly TMP_DIR
+trap 'rm -rf -- "${TMP_DIR}"' EXIT
+
+# @description Print the raw $'...' literals of one embedded case array.
+# @arg $1 array_name the array to extract
+# @stdout one $'...' literal per line
+function extract() {
+  local -r array_name="$1"
+  awk -v arr="${array_name}" '$0 ~ "^readonly -a " arr "=\\(", /^\)/' "${HOOK}" \
+    | grep -E "^  \\\$'" \
+    | sed -E 's/^  //; s/[[:space:]]*$//'
+}
+
+# Two emitters, matching the two table shapes. A single last-tab emitter would
+# mangle every 4-field message row into `"cmd\tfield\tmode"` + needle.
+
+# @description Re-emit the verdict array as TSV: jq-encoded command, tab, verdict.
+# @noargs
+# @stdin the $'...' literals from extract
+# @stdout one TSV row per case
+function emit_verdicts() {
+  local raw cmd verdict
+  while IFS= read -r raw; do
+    raw="$(eval "printf %s ${raw}")"
+    cmd="${raw%$'\t'*}"
+    verdict="${raw##*$'\t'}"
+    printf '%s\t%s\n' "$(printf '%s' "${cmd}" | jq --raw-input --slurp .)" "${verdict}"
+  done
+}
+
+# @description Re-emit the message array as TSV: jq-encoded command, field, mode,
+#              jq-encoded needle.
+# @noargs
+# @stdin the $'...' literals from extract
+# @stdout one TSV row per case
+function emit_messages() {
+  local raw cmd field mode needle
+  while IFS= read -r raw; do
+    raw="$(eval "printf %s ${raw}")"
+    IFS=$'\t' read -r cmd field mode needle <<< "${raw}"
+    printf '%s\t%s\t%s\t%s\n' \
+      "$(printf '%s' "${cmd}" | jq --raw-input --slurp .)" \
+      "${field}" "${mode}" \
+      "$(printf '%s' "${needle}" | jq --raw-input --slurp .)"
+  done
+}
+
+function main() {
+  local rc=0
+  local -r tmp="${TMP_DIR}"
+
+  extract SELF_TEST_CASES | emit_verdicts > "${tmp}/verdicts.tsv"
+  extract MESSAGE_TEST_CASES | emit_messages > "${tmp}/messages.tsv"
+
+  # The verdict table may have GAINED rows in Task 11 (re-encoded probes), so
+  # compare as a subset: every embedded row must still be present.
+  local missing
+  missing="$(comm -23 <(sort "${tmp}/verdicts.tsv") <(sort "${REPO_DIR}/tests/cases/verdicts.tsv") || true)"
+  if [[ -n "${missing}" ]]; then
+    printf 'FAIL: rows present in the embedded array but missing from the TSV:\n%s\n' "${missing}" >&2
+    rc=1
+  fi
+
+  if ! diff -u <(sort "${tmp}/messages.tsv") <(sort "${REPO_DIR}/tests/cases/messages.tsv"); then
+    printf 'FAIL: messages.tsv does not match the embedded MESSAGE_TEST_CASES\n' >&2
+    rc=1
+  fi
+
+  local embedded_count tsv_count
+  embedded_count="$(wc -l < "${tmp}/verdicts.tsv")"
+  tsv_count="$(wc -l < "${REPO_DIR}/tests/cases/verdicts.tsv")"
+  printf 'embedded verdict rows: %s; tsv rows: %s\n' "${embedded_count}" "${tsv_count}" >&2
+  if ((embedded_count != 273)); then
+    printf 'FAIL: expected 273 embedded verdict rows, found %s\n' "${embedded_count}" >&2
+    rc=1
+  fi
+  return "${rc}"
+}
+
+main "$@"

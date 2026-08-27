@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "nix": { "enabled": true },
+  "lockFileMaintenance": { "enabled": true },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/actions/.+/action\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)\\s+BATS_[A-Z_]+_SHA:\\s*'(?<currentDigest>[0-9a-f]{40})'"
+      ],
+      "currentValueTemplate": "master"
+    }
+  ]
+}

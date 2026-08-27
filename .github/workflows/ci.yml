@@ -35,6 +35,27 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Run the full gate
+        # The gate is run under a bash from the repo's own flake, not the host's.
+        # .ci/in-devshell runs BEFORE the devShell it creates, so it executes
+        # under whatever bash the host provides -- and macOS ships 3.2, which
+        # has no `shopt -s inherit_errexit`. That option is load-bearing for
+        # every gate script (without it errexit never reaches inside $(...), so
+        # a failing helper is silently swallowed and the gate exits 0), so the
+        # job must not drop it; on a stock runner it dies with a bare
+        # "shopt: inherit_errexit: invalid shell option name" instead.
+        #
+        # `nix develop --command bash` rather than `brew install bash`: Homebrew
+        # would add an unpinned dependency and a second network path (it already
+        # failed here once on a transient pkg-containers DNS error), whereas the
+        # flake is pinned by flake.lock and ./setup has just installed it. The
+        # INNER in-devshell run is still --ignore-environment, so the hermetic
+        # boundary is exactly as before -- this only chooses the interpreter
+        # that reads the entrypoint script.
+        #
+        # TODO: give .ci/in-devshell an explicit `bash >= 4.2` guard so a
+        # coworker running `just check` on a stock Mac gets that sentence
+        # instead of the raw shopt error. Out of scope for the CI phase.
+        shell: nix develop --command bash -e {0}
         run: ./.ci/in-devshell ./run-all-checks
 
   commitlint:

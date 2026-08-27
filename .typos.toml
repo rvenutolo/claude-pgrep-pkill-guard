@@ -1,0 +1,8 @@
+[files]
+# The test tables contain deliberate gibberish (session ids, task-output file
+# names) that typos flags as misspellings.
+extend-exclude = ["tests/cases/*.tsv", "flake.lock"]
+
+[default.extend-words]
+# Real command names that typos mistakes for typos of English words.
+doas = "doas"

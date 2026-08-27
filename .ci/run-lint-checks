@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+# @description Run the config/markup lint suite: actionlint, yamllint,
+#              markdownlint, typos, editorconfig-checker, and shellcheck over
+#              every tracked shell script. Aggregates exit codes rather than
+#              failing fast, so one run surfaces every failing category.
+# @noargs
+# @exitcode 0 every linter passed
+# @exitcode 1 at least one linter failed
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+# @description Log a step banner to stderr.
+# @arg $1 message the text to log
+function log() {
+  local -r message="$1"
+  printf '[%s] %s\n' "${0##*/}" "${message}" >&2
+}
+
+# @description Collect tracked shell scripts: *.sh plus extensionless files whose
+#              first line is a bash shebang. `git ls-files` rather than a tree
+#              walk so untracked scratch files are never linted.
+# @noargs
+# @stdout one path per line
+function shell_files() {
+  local file
+  while IFS= read -r file; do
+    case "${file}" in
+      *.sh | *.bash) printf '%s\n' "${file}" ;;
+      *.bats | *.awk | *.md | *.json | *.yml | *.yaml | *.toml | *.nix | *.lock) ;;
+      *)
+        if [[ -f "${file}" ]] && IFS= read -r first_line < "${file}" \
+          && [[ "${first_line}" == '#!/usr/bin/env bash' ]]; then
+          printf '%s\n' "${file}"
+        fi
+        ;;
+    esac
+  done < <(git -C "${REPO_DIR}" ls-files)
+}
+
+function main() {
+  local rc=0
+  local -a files=()
+  mapfile -t files < <(shell_files)
+
+  log 'running shellcheck'
+  if ((${#files[@]} > 0)); then
+    shellcheck "${files[@]}" || rc=1
+  else
+    log 'no shell files found — this is a failure, not a clean pass'
+    rc=1
+  fi
+
+  log 'running shfmt (verify only)'
+  if ((${#files[@]} > 0)); then
+    shfmt --list --diff "${files[@]}" || rc=1
+  fi
+
+  log 'running actionlint'
+  if [[ -d "${REPO_DIR}/.github/workflows" ]]; then
+    actionlint || rc=1
+  fi
+
+  log 'running yamllint'
+  yamllint --strict . || rc=1
+
+  log 'running markdownlint'
+  # Tracked files only. markdownlint does not honour gitignore, so a glob would
+  # lint the untracked docs/superpowers/ tree and redden every local gate.
+  local -a md_files=()
+  mapfile -t md_files < <(git -C "${REPO_DIR}" ls-files '*.md')
+  if ((${#md_files[@]} > 0)); then
+    markdownlint-cli2 "${md_files[@]}" || rc=1
+  fi
+
+  log 'running typos'
+  typos || rc=1
+
+  log 'running editorconfig-checker'
+  editorconfig-checker || rc=1
+
+  if ((rc != 0)); then
+    log 'one or more linters failed'
+  fi
+  return "${rc}"
+}
+
+main "$@"

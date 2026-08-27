@@ -14,5 +14,26 @@ binary_next_line = true
 switch_case_indent = true
 space_redirects = true
 
+# The repo's extensionless bash scripts. shfmt resolves its style per path, so
+# without these sections it falls back to its own defaults for anything that is
+# not *.sh and rejects the formatting the rest of the repo is written in.
+[{run-all-checks,run-tests}]
+shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+space_redirects = true
+
+[.ci/**]
+shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+space_redirects = true
+
+[.githooks/**]
+shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+space_redirects = true
+
 [*.md]
 trim_trailing_whitespace = false

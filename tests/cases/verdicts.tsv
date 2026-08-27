@@ -296,7 +296,7 @@
 "while true; do echo done; pgrep --full zzctxdonearg || break; done"	deny:loop
 "while true; do case x in y) :; esac; pgrep --full zzctxcase || break; done"	deny:loop
 "while true; do (echo hi); pgrep --full zzctxsubshell || break; done"	deny:loop
-"while true; do echo \"$(: ; done)\"; pgrep --full zzctxsubdone || break; sleep 5; done"	warn
+"while true; do echo \"$(: ; done)\"; pgrep --full zzctxsubdone || break; sleep 5; done"	deny:loop
 "while true; do pgrep --full zztermyes || break; done"	deny:loop
 "while true; do pgrep --full zztermno || sleep 5; done"	warn
 "while true; do for f in *; do pgrep --full zztermouter || sleep 5; done; break; done"	warn

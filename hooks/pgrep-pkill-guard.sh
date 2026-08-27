@@ -588,17 +588,25 @@ function loop_context() {
 
 # @description True when the loop body enclosing an invocation contains a break, exit or return in
 #              command position, which makes a body-position pgrep the effective termination test.
+#              A `$(`, a backtick, or a plain `(` opens a scope barrier, mirroring loop_context: a
+#              `do`/`done`/`break` inside a substitution belongs to the shell that substitution runs,
+#              so it must neither pop the enclosing body's depth nor count as its terminator. Without
+#              the barrier a literal `done` inside `$( )` zeroed the depth and hid a real `break` that
+#              followed it, and loop_context (which has the barrier) answered `body` for the same
+#              command -- two readers of one structure disagreeing (#8). The barrier is opaque in
+#              both directions: while one is open, every loop keyword is ignored.
 # @arg $1 tokens the token stream from scan_command
 # @arg $2 target index of the invocation token
 # @exitcode 0 a terminator is present in the enclosing body
 # @exitcode 1 no terminator
 function body_has_terminator() {
   local -r tokens="$1" target="$2"
-  local depth=0 seen=0 at_cmd=1 idx=0 offset token
+  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token
+  local -a barrier=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     ((idx == target)) && seen=1
-    if ((at_cmd == 1)); then
+    if ((at_cmd == 1 && ${#barrier[@]} == 0)); then
       case "${token}" in
         'do') depth=$((depth + 1)) ;;
         'done')
@@ -608,6 +616,27 @@ function body_has_terminator() {
         'break' | 'exit' | 'return') ((depth > 0)) && return 0 ;;
       esac
     fi
+    case "${token}" in
+      '(')
+        if ((dollar == 1)); then barrier+=('capture'); else barrier+=('subshell'); fi
+        ;;
+      ')')
+        # Same rule as loop_context: a case-pattern `)` has no opener and must
+        # not pop anything.
+        if ((${#barrier[@]} > 0)) && [[ "${barrier[${#barrier[@]} - 1]}" == 'subshell' ||
+          "${barrier[${#barrier[@]} - 1]}" == 'capture' ]]; then
+          unset 'barrier[${#barrier[@]}-1]'
+        fi
+        ;;
+      '`')
+        if ((${#barrier[@]} > 0)) && [[ "${barrier[${#barrier[@]} - 1]}" == 'backtick' ]]; then
+          unset 'barrier[${#barrier[@]}-1]'
+        else
+          barrier+=('backtick')
+        fi
+        ;;
+    esac
+    if [[ "${token}" == *'$' ]]; then dollar=1; else dollar=0; fi
     if is_operator "${token}" || is_keyword "${token}"; then at_cmd=1; else at_cmd=0; fi
     idx=$((idx + 1))
   done <<< "${tokens}"

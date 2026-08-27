@@ -11,7 +11,7 @@ export LC_ALL=C
 
 # Defined above the version guard below, which needs it: everything else in this
 # script is set up after that guard has already run.
-readonly HOOK_NAME='block-pgrep-self-match'
+readonly HOOK_NAME='pgrep-pkill-guard'
 
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3))); then
   # Loud, not silent. A bare `{}` here would leave a coworker on stock macOS
@@ -1718,7 +1718,7 @@ session the same way. The limit is ${REPEAT_THRESHOLD} probes per target per ${R
 
 # @description The per-session repeat rule. State is one file per session,
 #              `<dir>/<session_id>`, of `<epoch>\t<key>` lines, where <dir> is
-#              BLOCK_PGREP_STATE_DIR, else $XDG_RUNTIME_DIR/block-pgrep-self-match, else the same
+#              PGREP_PKILL_GUARD_STATE_DIR, else $XDG_RUNTIME_DIR/pgrep-pkill-guard, else the same
 #              under $TMPDIR or /tmp. It is read and rewritten only by commands that carry a key,
 #              entries older than the window (or unparsable) are dropped on every write, and a
 #              denied command is not recorded. This is the one stateful rule in the guard, so it
@@ -1738,7 +1738,7 @@ session the same way. The limit is ${REPEAT_THRESHOLD} probes per target per ${R
 # @exitcode 0 always
 function repeat_check() {
   local -r session_id="$1" keys="$2"
-  local -r dir="${BLOCK_PGREP_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/block-pgrep-self-match}"
+  local -r dir="${PGREP_PKILL_GUARD_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/pgrep-pkill-guard}"
   local -r file="${dir}/${session_id}"
   local now
   # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
@@ -1746,7 +1746,7 @@ function repeat_check() {
   # directory in this repo exempt from the repo-wide long-options rule, for
   # exactly that reason -- the guard has to run on whatever userland ships.
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
-  # intermediate ever missing here is a hand-set BLOCK_PGREP_STATE_DIR /
+  # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR /
   # TMPDIR, which the caller owns the mode of.
   if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then return 0; fi
   # `mkdir -p` on a dir that already exists changes neither its owner nor its

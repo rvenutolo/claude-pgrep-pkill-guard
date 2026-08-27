@@ -1,10 +1,12 @@
 setup() {
   load 'test_helper/common'
-  # Phase 3 runs against UNMODIFIED logic, which reads BLOCK_PGREP_STATE_DIR.
-  # Phase 4 renames the hook and this variable together.
+  # Every repeat-tier case is redirected into a per-test temp dir. This export
+  # and the hook's own read of the same name must always be renamed in ONE
+  # commit: flip only one and the suite writes real state into the author's
+  # live ${XDG_RUNTIME_DIR} while asserting against an empty temp dir.
   STATE_DIR="${BATS_TEST_TMPDIR}/state"
   mkdir -p "${STATE_DIR}"
-  export BLOCK_PGREP_STATE_DIR="${STATE_DIR}"
+  export PGREP_PKILL_GUARD_STATE_DIR="${STATE_DIR}"
   TASK_BASE='/tmp/claude-1000/-home-u-proj/0b9df07e-7ed4-4c6e-99fa-4dd2deb783de/tasks'
   TASK_PATH="${TASK_BASE}/bcuxbdgc5.output"
 }
@@ -173,7 +175,7 @@ setup() {
 @test "repeat: a state dir that is itself a symlink is refused, not followed" {
   local json link="${BATS_TEST_TMPDIR}/state.link"
   ln -s "${STATE_DIR}" "${link}"
-  json="$(BLOCK_PGREP_STATE_DIR="${link}" run_hook "cat ${TASK_PATH}" 's15')"
+  json="$(PGREP_PKILL_GUARD_STATE_DIR="${link}" run_hook "cat ${TASK_PATH}" 's15')"
   [ "$(decision_of "${json}")" = 'none' ]
   [ ! -e "${STATE_DIR}/s15" ]
 }

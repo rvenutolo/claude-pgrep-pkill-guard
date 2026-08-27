@@ -132,7 +132,7 @@ body carries a terminator, and `none` can only ever reach `warn`.
 | 55 | 2759 | `done` as an argument does not close a span | `while true; do echo done; pgrep --full zzctxdonearg \|\| break; done` | `deny:loop` | discriminating — a popped span gives `warn` |
 | 56 | 2765 | a case pattern does not close the enclosing body span | `while true; do case x in y) :; esac; pgrep --full zzctxcase \|\| break; done` | `deny:loop` | discriminating — a popped span gives `warn` |
 | 57 | 2769 | a subshell close still pops | `while true; do (echo hi); pgrep --full zzctxsubshell \|\| break; done` | `deny:loop` | **pin** — see "Pins", below |
-| 58 | 2777 | a `done` inside a substitution cannot pop the enclosing body span | `while true; do echo "$(: ; done)"; pgrep --full zzctxsubdone \|\| break; sleep 5; done` | `warn` | **pin; discriminating power DROPPED** — see "Pins", below |
+| 58 | 2777 | a `done` inside a substitution cannot pop the enclosing body span | `while true; do echo "$(: ; done)"; pgrep --full zzctxsubdone \|\| break; sleep 5; done` | `deny:loop` | intact since #8 — see "Pins", below |
 
 ## `terminator_probe` → `body_has_terminator` (3) → `tests/cases/verdicts.tsv`
 
@@ -184,27 +184,20 @@ the real code rather than assumed.
   `body` either way. There is no command shape where the missing pop changes the
   JSON verdict.
 - **#58 (2777), "a `done` inside a substitution cannot pop the enclosing body
-  span".** This is the one assertion whose discriminating power is genuinely
-  **dropped**. Removing `loop_context`'s scope barrier turns `body` into `none`,
-  and `body` denies only when `body_has_terminator` also agrees — but
-  `body_has_terminator` has **no** scope barrier of its own, so the same stray
-  `done` decrements its depth counter to zero and it reports "no terminator"
-  regardless. `body`-without-terminator and `none` both fall through to the
-  `result_is_consumed` arm and both emit `warn`. The two internal answers are
-  indistinguishable through the JSON contract for every command shape tried,
-  including nested-loop variants that restore `body_has_terminator`'s depth —
-  those restore `loop_context`'s `body` answer too, via the inner `do`.
-
-  `body_has_terminator`'s missing barrier is an asymmetry with `loop_context`,
-  not something this port introduced. Phase 3 must not change hook behaviour, so
-  it is left alone and recorded here.
-  Filed as issue #8 under the pin-then-fix policy: giving
-  `body_has_terminator` the same substitution scope barrier `loop_context`
-  already has would restore assertion #58's discriminating power.
+  span".** Pinned as `warn` at extraction time, because `body_has_terminator`
+  had no scope barrier of its own: the stray `done` zeroed its depth counter
+  and it reported "no terminator" regardless of what `loop_context` said, so
+  `body`-without-terminator and `none` both fell through to `warn` and the
+  assertion could not discriminate. Issue #8 gave `body_has_terminator` the
+  same barrier, the row's verdict moved to `deny:loop`, and the assertion
+  discriminates again: with both barriers removed the row (and its sibling
+  `zzsubdone` rows) flip back to `warn`. That flip was checked once by hand
+  when #8 landed; it is not a permanent test, since it needs the hook's
+  internals.
 
 ## Nothing else was dropped
 
-61 of the 64 assertions are re-encoded with their discriminating power intact.
-Two (#52, #57) are pins for reasons intrinsic to the hook's own control flow.
-One (#58) loses its discriminating power for the reason above. **No assertion
-was removed without a row or a test.**
+62 of the 64 assertions are re-encoded with their discriminating power intact
+(#58 regained its power when issue #8 landed). Two (#52, #57) are pins for
+reasons intrinsic to the hook's own control flow. **No assertion was removed
+without a row or a test.**

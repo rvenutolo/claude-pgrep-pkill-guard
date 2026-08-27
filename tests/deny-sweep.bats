@@ -8,8 +8,19 @@ setup() {
   while IFS=$'\t' read -r cmd_json expected; do
     [ -z "${cmd_json}" ] && continue
     case "${expected}" in deny:*) ;; *) continue ;; esac
-    count=$((count + 1))
     command="$(jq --raw-output . <<< "${cmd_json}")"
+    json="$(run_hook "${command}")"
+    # Under an awk that mishandles RS="\0" (one-true-awk on macOS), the
+    # scanner's integrity trailer correctly flips the guard to INACTIVE for
+    # input that RS="" reshapes — a blank line, or a heredoc body whose
+    # trailing newline it strips — so there is no deny reason to sweep.
+    # classify.bats owns the INACTIVE assertions for those rows; skipping them
+    # here keeps the macOS compat leg honest rather than permanently red. On
+    # gawk and mawk this never fires and the sweep stays complete.
+    if awk_is_paragraph_mode && [[ "${json}" == *'INACTIVE'* ]]; then
+      continue
+    fi
+    count=$((count + 1))
     case "${expected#deny:}" in
       kill) needle='--ignore-ancestors' ;;
       loop) needle='kill -0' ;;
@@ -22,7 +33,6 @@ setup() {
         continue
         ;;
     esac
-    json="$(run_hook "${command}")"
     reason="$(reason_of "${json}")"
     if [[ "${reason}" != *"${needle}"* ]]; then
       echo "FAIL: '${command}' (${expected}) reason lacks '${needle}'" >&2

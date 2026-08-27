@@ -30,7 +30,10 @@ trap 'emit_allow; exit 0' ERR
 # which is not guaranteed to be exported into the hook's environment.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
-readonly SCANNER="${SCRIPT_DIR}/pgrep-scan.awk"
+# Test seam: lets the suite point the hook at a deliberately broken scanner to
+# prove the integrity check deactivates the guard loudly. Production never sets
+# it; the default is resolved relative to this script.
+readonly SCANNER="${PGREP_GUARD_SCANNER_OVERRIDE:-${SCRIPT_DIR}/pgrep-scan.awk}"
 
 # Keywords after which the next word is in command position.
 readonly -a COMMAND_POSITION_KEYWORDS=(
@@ -316,12 +319,28 @@ function is_operator() {
   esac
 }
 
-# @description Tokenize a command, masking quoted regions.
+# @description Tokenize a command, masking quoted regions, and verify the
+#              scanner's integrity trailer before handing the stream back. See
+#              the trailer comment at the foot of pgrep-scan.awk for what the
+#              check catches and why it is in-band rather than an `exit 1`.
 # @arg $1 command the command string
-# @stdout offset and token pairs, separated by tab
+# @stdout offset and token pairs, separated by tab, trailer stripped
+# @exitcode 0 the stream is trustworthy
+# @exitcode 1 the scanner tokenized the command incorrectly; the caller must
+#             deactivate the guard rather than trust the stream
 function scan_command() {
   local -r command="$1"
-  printf '%s' "${command}" | LC_ALL=C awk -f "${SCANNER}"
+  local raw expected
+  raw="$(printf '%s' "${command}" | LC_ALL=C awk -f "${SCANNER}")" || return 1
+  # One record, and every byte accounted for. An empty command legitimately
+  # yields NR=0.
+  if ((${#command} == 0)); then
+    expected=$'\t''<SCAN:0:0>'
+  else
+    expected=$'\t'"<SCAN:1:${#command}>"
+  fi
+  [[ "${raw}" == *"${expected}"* ]] || return 1
+  printf '%s' "${raw%"${expected}"*}"
 }
 
 # @description Locate pgrep/pkill invocations that sit in command position. A quoted mention such as
@@ -1850,7 +1869,14 @@ function classify_command() {
     return 0
   fi
   local tokens
-  tokens="$(scan_command "${command}")"
+  # The scanner produced an untrustworthy stream (see the trailer comment in
+  # pgrep-scan.awk). Return a verdict rather than printing: this function runs
+  # inside a command substitution, so a printf here would be captured, not
+  # emitted, and the guard would go silently dead.
+  tokens="$(scan_command "${command}")" || {
+    printf 'inactive\n'
+    return 0
+  }
 
   # Parsed once and shared by every invocation in this command, instead of
   # each of feeds_a_kill / result_is_consumed / invocation_is_captured
@@ -1928,6 +1954,11 @@ function classify_command() {
     while IFS= read -r -d '' payload; do
       [[ -z "${payload}" ]] && continue
       payload_verdict="$(classify_command "${payload}" "$((depth + 1))")"
+      # An untrustworthy inner scan must not be reported as a clean allow.
+      if [[ "${payload_verdict}" == inactive* ]]; then
+        printf 'inactive\n'
+        return 0
+      fi
       case "${payload_verdict}" in
         deny:*)
           printf '%s\n' "${payload_verdict}"
@@ -1992,6 +2023,13 @@ function main() {
 
   local decision deny_detail
   IFS=$'\t' read -r decision deny_detail <<< "$(classify_command "${command}")"
+  # main owns stdout; classify_command does not, so it hands the condition up as
+  # a verdict and the message is emitted here.
+  if [[ "${decision}" == 'inactive' ]]; then
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+    return 0
+  fi
   if [[ "${decision}" == deny:* ]]; then
     emit_deny "$(deny_message "${decision#deny:}" "${deny_detail}")"
     return 0
@@ -2005,8 +2043,17 @@ function main() {
   local repeat_reason=''
   if [[ "${session_id}" =~ ^[A-Za-z0-9._-]+$ && "${session_id}" != '.' && "${session_id}" != '..' ]] \
     && [[ "${command}" == *pgrep* || "${command}" == *.output* ]]; then
-    local keys
-    keys="$(probe_keys "${command}" "$(scan_command "${command}")")" || keys=''
+    local keys rt_tokens
+    # Split out of the nested substitution deliberately: with the scan inlined
+    # into probe_keys' arguments, a scanner failure would be swallowed by the
+    # `|| keys=''` below and read as "this command carries no probe key".
+    if rt_tokens="$(scan_command "${command}")"; then
+      keys="$(probe_keys "${command}" "${rt_tokens}")" || keys=''
+    else
+      printf '{"systemMessage":"%s"}\n' \
+        "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+      return 0
+    fi
     if [[ -n "${keys}" ]]; then
       # The `||` is load-bearing beyond the obvious fallback: it is what
       # keeps this whole command substitution off errexit's radar for its

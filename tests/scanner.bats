@@ -124,6 +124,14 @@ tab() {
   # reach, so its marker is emitted after the loop -- with the right offset and
   # a zero length. Written as a $'' literal, not $(printf ...), because the
   # trailing newline is the whole point and $() strips it.
+  #
+  # And that trailing newline is exactly what paragraph mode strips, so there
+  # the body does not exist to mark at all. The integrity trailer catches the
+  # byte-count shortfall and the guard reports INACTIVE instead (covered in
+  # classify.bats); there is nothing meaningful to assert about the raw stream.
+  if awk_is_paragraph_mode; then
+    skip "awk falls back to paragraph mode on RS=\\0; covered by the INACTIVE path"
+  fi
   local out
   out="$(scan $'cat <<EOF\n')"
   run grep '<HD:' <<< "${out}"
@@ -366,4 +374,29 @@ build_inactive_fixture() {
   json="$(run_hook "${command}")"
   [ "$(decision_of "${json}")" = 'deny' ]
   [[ "$(reason_of "${json}")" == *'--ignore-ancestors'* ]]
+}
+
+# --- The scanner integrity trailer ------------------------------------------
+
+@test "scanner: the token stream carries an integrity trailer" {
+  local out
+  out="$(printf '%s' 'ls -la' | LC_ALL=C awk -f "${SCANNER}")"
+  [[ "${out}" == *"<SCAN:1:6>"* ]]
+}
+
+@test "scanner: the trailer reports zero for empty input" {
+  local out
+  out="$(printf '%s' '' | LC_ALL=C awk -f "${SCANNER}")"
+  [[ "${out}" == *'<SCAN:0:0>'* ]]
+}
+
+@test "scanner: a mangled trailer deactivates the guard loudly" {
+  # Simulate an awk whose RS handling splits the command into several records --
+  # the BWK paragraph-mode failure this check exists to catch.
+  local fake="${BATS_TEST_TMPDIR}/bad.awk"
+  printf '%s\n' 'BEGIN { ORS = "" } { print } END { print "\t<SCAN:9:9>" }' > "${fake}"
+  local out
+  out="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}' \
+    | PGREP_GUARD_SCANNER_OVERRIDE="${fake}" "${HOOK}")"
+  [[ "${out}" == *'INACTIVE'* ]]
 }

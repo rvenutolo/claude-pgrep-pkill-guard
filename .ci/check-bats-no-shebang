@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+# @description Assert no tracked *.bats file carries a shebang. All tooling
+#              matches them by extension and check-executable-bit forbids the
+#              exec bit, so a shebang is dead metadata that implies the file is
+#              runnable on its own — it is not.
+# @noargs
+# @exitcode 0 no .bats file has a shebang
+# @exitcode 1 at least one does, or no .bats files exist
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+function main() {
+  local rc=0 count=0 file first_line
+  while IFS= read -r file; do
+    count=$((count + 1))
+    IFS= read -r first_line < "${REPO_DIR}/${file}" || first_line=''
+    if [[ "${first_line}" == '#!'* ]]; then
+      printf 'FAIL: %s has a shebang (%s)\n' "${file}" "${first_line}" >&2
+      rc=1
+    fi
+  done < <(git -C "${REPO_DIR}" ls-files '*.bats')
+
+  if ((count == 0)); then
+    printf 'FAIL: no .bats files found — an empty scan is not a clean pass\n' >&2
+    rc=1
+  fi
+  return "${rc}"
+}
+
+main "$@"

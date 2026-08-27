@@ -58,7 +58,7 @@ function awk_is_paragraph_mode() {
 }
 
 # @description True when a command contains a blank line, i.e. the shape that
-#              paragraph-mode awk mis-tokenizes.
+#              paragraph-mode awk tokenizes incorrectly.
 # @arg $1 command the command string
 function has_blank_line() {
   [[ "$1" == *$'\n\n'* ]]

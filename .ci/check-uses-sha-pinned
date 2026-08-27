@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+# @description Assert every `uses:` in every workflow and composite action is
+#              pinned to a 40-character commit SHA and carries a trailing
+#              version comment. Local actions (`./.github/...`) are exempt: they
+#              are this repo's own tree, already pinned by the checkout.
+# @noargs
+# @exitcode 0 every uses: is SHA-pinned with a version comment
+# @exitcode 1 at least one is not
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+function main() {
+  local rc=0 count=0 file line lineno ref
+  local -a files=()
+  mapfile -t files < <(git -C "${REPO_DIR}" ls-files '.github/workflows/*.yml' '.github/actions/*/action.yml')
+
+  if ((${#files[@]} == 0)); then
+    # Phase 1 has no workflows yet. That is legitimate, not a failure.
+    printf 'note: no workflow files tracked yet; nothing to check\n' >&2
+    return 0
+  fi
+
+  for file in "${files[@]}"; do
+    lineno=0
+    while IFS= read -r line; do
+      lineno=$((lineno + 1))
+      [[ "${line}" =~ ^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*(.*)$ ]] || continue
+      ref="${BASH_REMATCH[1]}"
+      # Local actions are this repo's own tree.
+      [[ "${ref}" == './'* ]] && continue
+      count=$((count + 1))
+      if [[ ! "${ref}" =~ @[0-9a-f]{40}[[:space:]]*\#[[:space:]]*v?[0-9] ]]; then
+        printf 'FAIL: %s:%s not SHA-pinned with a version comment: %s\n' \
+          "${file}" "${lineno}" "${ref}" >&2
+        rc=1
+      fi
+    done < "${REPO_DIR}/${file}"
+  done
+
+  if ((count == 0)); then
+    printf 'FAIL: workflow files exist but contain no external "uses:" — scan looks broken\n' >&2
+    rc=1
+  fi
+  return "${rc}"
+}
+
+main "$@"

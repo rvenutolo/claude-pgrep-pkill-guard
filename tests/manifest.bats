@@ -1,0 +1,53 @@
+setup() {
+  load 'test_helper/common'
+  PLUGIN_JSON="${REPO_DIR}/.claude-plugin/plugin.json"
+  MARKET_JSON="${REPO_DIR}/.claude-plugin/marketplace.json"
+  HOOKS_JSON="${REPO_DIR}/hooks/hooks.json"
+}
+
+@test "manifest: all three files are valid JSON" {
+  run jq empty "${PLUGIN_JSON}"
+  assert_success
+  run jq empty "${MARKET_JSON}"
+  assert_success
+  run jq empty "${HOOKS_JSON}"
+  assert_success
+}
+
+@test "manifest: plugin name matches the marketplace entry" {
+  local plugin_name market_name
+  plugin_name="$(jq --raw-output '.name' "${PLUGIN_JSON}")"
+  market_name="$(jq --raw-output '.plugins[0].name' "${MARKET_JSON}")"
+  [ "${plugin_name}" = 'pgrep-pkill-guard' ]
+  [ "${market_name}" = 'pgrep-pkill-guard' ]
+}
+
+@test "manifest: marketplace declares the required top-level fields" {
+  run jq --exit-status '.name and .owner.name and (.plugins | length > 0)' "${MARKET_JSON}"
+  assert_success
+}
+
+@test "manifest: the plugin source points at the repo root" {
+  local source
+  source="$(jq --raw-output '.plugins[0].source' "${MARKET_JSON}")"
+  [ "${source}" = './' ]
+}
+
+@test "manifest: the hook command invokes the script directly, not via bash" {
+  local command
+  command="$(jq --raw-output '.hooks.PreToolUse[0].hooks[0].command' "${HOOKS_JSON}")"
+  # Direct invocation is load-bearing on macOS: `bash <path>` would resolve to
+  # /bin/bash 3.2 and the version guard would deactivate the hook.
+  refute [ "${command:0:5}" = 'bash ' ]
+  [[ "${command}" == *'${CLAUDE_PLUGIN_ROOT}'* ]]
+  [[ "${command}" == *'pgrep-pkill-guard.sh' ]]
+}
+
+@test "manifest: the hook path in hooks.json exists and is executable" {
+  [ -x "${REPO_DIR}/hooks/pgrep-pkill-guard.sh" ]
+}
+
+@test "manifest: the scanner exists and is NOT executable" {
+  [ -f "${REPO_DIR}/hooks/pgrep-scan.awk" ]
+  [ ! -x "${REPO_DIR}/hooks/pgrep-scan.awk" ]
+}

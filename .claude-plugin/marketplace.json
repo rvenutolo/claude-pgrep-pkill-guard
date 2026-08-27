@@ -1,0 +1,20 @@
+{
+  "name": "rvenutolo",
+  "owner": {
+    "name": "Rick Venutolo",
+    "url": "https://github.com/rvenutolo"
+  },
+  "metadata": {
+    "description": "Rick Venutolo's Claude Code plugins",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "pgrep-pkill-guard",
+      "source": "./",
+      "description": "Blocks pgrep/pkill commands that match the agent's own process or poll in a loop.",
+      "category": "safety",
+      "keywords": ["hook", "safety", "pgrep", "pkill"]
+    }
+  ]
+}

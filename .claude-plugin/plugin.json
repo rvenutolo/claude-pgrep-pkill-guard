@@ -1,0 +1,13 @@
+{
+  "name": "pgrep-pkill-guard",
+  "version": "1.0.0",
+  "description": "Blocks pgrep/pkill commands that match the agent's own process or poll in a loop — the shapes that make an agent kill its own session or spin forever waiting on a process that can never exit.",
+  "author": {
+    "name": "Rick Venutolo",
+    "url": "https://github.com/rvenutolo"
+  },
+  "homepage": "https://github.com/rvenutolo/claude-pgrep-pkill-guard",
+  "repository": "https://github.com/rvenutolo/claude-pgrep-pkill-guard",
+  "license": "MIT",
+  "keywords": ["hook", "safety", "pgrep", "pkill", "pretooluse"]
+}

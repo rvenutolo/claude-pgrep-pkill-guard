@@ -9,8 +9,16 @@ IFS=$'\n\t'
 # two index bases agree.
 export LC_ALL=C
 
+# Defined above the version guard below, which needs it: everything else in this
+# script is set up after that guard has already run.
+readonly HOOK_NAME='block-pgrep-self-match'
+
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3))); then
-  printf '{}\n'
+  # Loud, not silent. A bare `{}` here would leave a coworker on stock macOS
+  # bash 3.2 with an installed plugin that quietly does nothing -- the exact
+  # failure the jq/awk branches further down spend a systemMessage to prevent.
+  printf '{"systemMessage":"%s"}\n' \
+    "${HOOK_NAME}: bash 4.3+ required (found ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}); the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash."
   exit 0
 fi
 
@@ -23,8 +31,6 @@ trap 'emit_allow; exit 0' ERR
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
 readonly SCANNER="${SCRIPT_DIR}/pgrep-scan.awk"
-
-readonly HOOK_NAME='block-pgrep-self-match'
 
 # Keywords after which the next word is in command position.
 readonly -a COMMAND_POSITION_KEYWORDS=(

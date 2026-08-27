@@ -1,0 +1,42 @@
+# Tools the repo's own tooling shells out to. Every entry is justified by a real
+# call site. This file is data: one tool per line, `#` comments and blank lines
+# ignored, no shebang and no executable bit.
+#
+# Two lints consume it:
+# - .ci/check-devshell-provides: every entry must be provided by the devShell,
+#   and every devShell package must contribute at least one entry.
+# - the same lint's reverse pass catches packages nothing justifies.
+#
+# Deliberately absent: prettier, yamlfmt, nixfmt (treefmt resolves these from the
+# Nix store directly, never through PATH).
+
+# invoked by .ci/run-lint-checks
+actionlint
+# run-tests invokes bats from PATH; the devShell provides it
+bats
+# invoked by .githooks/commit-msg
+commitlint
+# invoked by .ci/run-lint-checks
+editorconfig-checker
+# the hook's own runtime dependency, and scanner.bats drives it directly
+gawk
+# asserted by .ci/check-uses-sha-pinned and used by the release flow
+gh
+# every repo-tooling script derives the repo root via `git rev-parse`
+git
+# the hook's own runtime dependency; manifest.bats parses JSON with it
+jq
+# the task runner the .justfile and README document
+just
+# invoked by .ci/run-lint-checks
+markdownlint-cli2
+# asserted by .ci/check-devshell-provides
+nix
+# the lint gate for the repo's entire payload
+shellcheck
+# the format gate; treefmt drives it, check-scripts verifies it
+shfmt
+# invoked by .ci/run-lint-checks
+typos
+# invoked by .ci/run-lint-checks
+yamllint

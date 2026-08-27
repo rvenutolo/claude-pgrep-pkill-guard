@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+# @description Run a command inside this repo's Nix devShell with a hermetic
+#              environment. The single entrypoint for every gate: the pre-push
+#              hook, the .justfile recipes, and every CI step go through it, so
+#              local and CI runs cannot drift and no gate can silently resolve a
+#              tool from the ambient machine.
+#
+#              `nix develop --ignore-environment` is what makes the boundary
+#              real: without it the devShell inherits the caller's PATH and an
+#              undeclared dependency keeps resolving from /usr/bin. Because the
+#              environment is wiped, the few variables the gates genuinely need
+#              are re-admitted through the fixed KEEP_VARS allowlist below.
+#
+#              Standalone on purpose: it runs before the environment it creates,
+#              so it cannot source a function library. It needs only bash, git
+#              and nix from the host.
+# @arg $@ command the command to run inside the devShell, plus its arguments
+# @exitcode 0 the wrapped command succeeded
+# @exitcode 1 no command given, or not inside a git repo
+# @exitcode * otherwise the wrapped command's exit status
+
+set -Eeuo pipefail
+# Without this, errexit is off inside every $(...) subshell, so a helper called
+# as `n="$(scan ...)"` runs past a failed command and this gate exits 0.
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "\033[0;31m[%s] ERROR: line %s (exit %s): %s\033[0m\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+# `--keep` on an unset variable is silent and harmless, so every name is passed
+# unconditionally rather than set-checked.
+readonly KEEP_VARS=(
+  HOME
+  TERM
+  CI
+  IN_DEVSHELL
+  NIX_SSL_CERT_FILE
+  GITHUB_ACTIONS
+  GITHUB_OUTPUT
+  GITHUB_ENV
+  GITHUB_STEP_SUMMARY
+  GITHUB_WORKSPACE
+  GITHUB_REPOSITORY
+  GITHUB_REF
+  GITHUB_REF_NAME
+  GITHUB_SHA
+  GITHUB_EVENT_NAME
+  GITHUB_TOKEN
+  GH_TOKEN
+  GH_REPO
+  RUNNER_OS
+  RUNNER_TEMP
+)
+
+function main() {
+  if (($# == 0)); then
+    printf 'usage: %s <command> [args...]\n' "${0##*/}" >&2
+    exit 1
+  fi
+
+  # Already inside the boundary: run directly, skip a second nix evaluation.
+  if [[ -n "${IN_DEVSHELL:-}" ]]; then
+    exec "$@"
+  fi
+
+  local repo_dir
+  if ! repo_dir="$(git rev-parse --show-toplevel 2> '/dev/null')"; then
+    printf '%s: not a git repo: %s\n' "${0##*/}" "$(pwd)" >&2
+    exit 1
+  fi
+  readonly repo_dir
+
+  export IN_DEVSHELL=1
+
+  # The flake reference is the repo this script was invoked in, never a relative
+  # path: a gate must evaluate the tree it is grading.
+  local -a nix_args=(develop "${repo_dir}" --ignore-environment)
+  local keep_var
+  for keep_var in "${KEEP_VARS[@]}"; do
+    nix_args+=(--keep "${keep_var}")
+  done
+  nix_args+=(--command)
+
+  exec nix "${nix_args[@]}" "$@"
+}
+
+main "$@"

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# @description Git commit-msg hook. Validates the prospective commit message
+#              against Conventional Commits via commitlint, inside the devShell
+#              so the same commitlint runs locally and in CI.
+# @arg $1 msg_file path to the file holding the prospective commit message
+# @exitcode 0 the message is conventional
+# @exitcode 1 it is not; the commit is aborted
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+readonly MSG_FILE="$1"
+
+function main() {
+  local repo_dir
+  repo_dir="$(git rev-parse --show-toplevel)"
+  "${repo_dir}/.ci/in-devshell" commitlint --edit "${MSG_FILE}"
+}
+
+main "$@"

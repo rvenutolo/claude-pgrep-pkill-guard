@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# @description Two-way drift lint between .ci/required-tools and the devShell.
+#              Forward: every declared tool must actually be on PATH inside the
+#              devShell. Reverse: a tool on PATH that nothing declares is not an
+#              error (the shell pulls in transitive deps), so only the forward
+#              direction hard-fails — but an EMPTY declaration list does fail,
+#              since a scan that finds nothing must never read as a clean pass.
+#
+#              Must be run INSIDE the devShell (run-all-checks always is).
+# @noargs
+# @exitcode 0 every declared tool resolves
+# @exitcode 1 a declared tool is missing, or the list is empty
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+readonly TOOLS_FILE="${REPO_DIR}/.ci/required-tools"
+
+function main() {
+  if [[ ! -r "${TOOLS_FILE}" ]]; then
+    printf 'FAIL: %s is missing or unreadable\n' "${TOOLS_FILE}" >&2
+    return 1
+  fi
+
+  local rc=0 count=0 line tool
+  while IFS= read -r line; do
+    # Strip comments and blanks; the file is data, one tool per line.
+    line="${line%%#*}"
+    tool="${line//[[:space:]]/}"
+    [[ -z "${tool}" ]] && continue
+    count=$((count + 1))
+    if ! command -v "${tool}" > /dev/null 2>&1; then
+      printf 'FAIL: declared tool not provided by the devShell: %s\n' "${tool}" >&2
+      rc=1
+    fi
+  done < "${TOOLS_FILE}"
+
+  if ((count == 0)); then
+    printf 'FAIL: no tools declared in %s\n' "${TOOLS_FILE}" >&2
+    rc=1
+  fi
+  return "${rc}"
+}
+
+main "$@"

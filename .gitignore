@@ -1,0 +1,8 @@
+# Nix / direnv
+.direnv/
+result
+
+# NOTE: .claude/ and docs/superpowers/ are deliberately absent here. They are
+# covered by the repo author's global ignore file (~/.config/git/ignore). If a
+# contributor's PR ever shows spec or planning files, that is the signal to
+# reject them in review rather than to add entries here.

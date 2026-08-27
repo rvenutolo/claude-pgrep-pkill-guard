@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+# @description Run the BATS suite under tests/, or forward arguments directly to
+#              bats. Snapshots repo state (HEAD, config, index) before and after
+#              and dies loudly if the suite mutated the real repo, even when bats
+#              itself exited 0 — the repeat-tier cases create state dirs,
+#              symlinks and large fixture files, so fixture escape is a real risk.
+#
+#              Deliberately serial: `bats --jobs` needs flock and GNU parallel,
+#              both Linux-only in nixpkgs, and referencing them would break
+#              evaluation of the devShell on aarch64-darwin.
+# @arg $@ args optional bats arguments or test paths; omit to run all of tests/
+# @exitcode 0 all tests passed and the repo was left untouched
+# @exitcode 1 bats missing, a test failed, or the suite mutated the repo
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+function die() {
+  printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
+  exit 1
+}
+
+# @description Print one line per watched repo artifact: HEAD sha, config hash,
+#              index hash. Used before and after the suite to detect fixture
+#              escapes onto the real repo.
+# @noargs
+# @stdout three KEY=value lines
+function repo_state() {
+  local head_ref config_hash index_hash config_path index_path
+  head_ref="$(git -C "${REPO_DIR}" rev-parse --quiet --verify HEAD || printf 'NO-HEAD')"
+  config_path="$(git -C "${REPO_DIR}" rev-parse --path-format=absolute --git-path config)"
+  index_path="$(git -C "${REPO_DIR}" rev-parse --path-format=absolute --git-path index)"
+  config_hash="$([[ -f "${config_path}" ]] && git hash-object "${config_path}" || printf 'ABSENT')"
+  index_hash="$([[ -f "${index_path}" ]] && git hash-object "${index_path}" || printf 'ABSENT')"
+  printf 'HEAD=%s\nconfig=%s\nindex=%s\n' "${head_ref}" "${config_hash}" "${index_hash}"
+}
+
+function main() {
+  # Unset BASH_ENV so bats' per-test subshells do not re-source the user's
+  # interactive ~/.bashrc. That re-source fires for every test subshell, making
+  # the suite dramatically slower and clobbering exported vars in child shells.
+  unset BASH_ENV
+
+  if ! command -v bats > /dev/null 2>&1; then
+    die "bats not found on PATH — run './.ci/in-devshell ./run-tests' or 'just test'"
+  fi
+
+  local before after status=0
+  before="$(repo_state)"
+  if (($# == 0)); then
+    bats --recursive --print-output-on-failure "${REPO_DIR}/tests" || status=$?
+  else
+    bats "$@" || status=$?
+  fi
+  after="$(repo_state)"
+
+  if [[ "${before}" != "${after}" ]]; then
+    die "test suite mutated the real repo — before: [${before//$'\n'/ }] after: [${after//$'\n'/ }]"
+  fi
+  return "${status}"
+}
+
+main "$@"

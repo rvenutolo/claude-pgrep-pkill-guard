@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+# @description Assert the tracked mode of every file this repo cares about.
+#              Explicit lists rather than a heuristic: the guard MUST be
+#              executable because hooks.json invokes it directly through its
+#              shebang, and pgrep-scan.awk MUST NOT be, because it is only ever
+#              read by `awk -f`. A heuristic that keys on extension or shebang
+#              would get one of those two wrong.
+# @noargs
+# @exitcode 0 every file has its expected mode
+# @exitcode 1 at least one file is wrong, or an expected file is missing
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+# Glob patterns, matched against tracked paths.
+readonly EXPECT_EXECUTABLE=(
+  'hooks/pgrep-pkill-guard.sh'
+  '.ci/in-devshell'
+  '.ci/check-*'
+  '.ci/run-*'
+  '.githooks/*'
+  'run-all-checks'
+  'run-tests'
+)
+readonly EXPECT_NON_EXECUTABLE=(
+  'hooks/pgrep-scan.awk'
+  'hooks/hooks.json'
+  '.ci/required-tools'
+  'tests/*.bats'
+  'tests/**/*.bash'
+  '*.json'
+  '*.md'
+  '*.nix'
+  '*.toml'
+  '*.yml'
+)
+
+function main() {
+  local rc=0 mode path pattern matched
+  # `git ls-files --stage` prints the tracked mode: 100755 or 100644.
+  while read -r mode _ _ path; do
+    matched=0
+    for pattern in "${EXPECT_EXECUTABLE[@]}"; do
+      # shellcheck disable=SC2053 # intentional glob match, not a literal compare
+      if [[ "${path}" == ${pattern} ]]; then
+        matched=1
+        if [[ "${mode}" != '100755' ]]; then
+          printf 'FAIL: %s must be executable (tracked mode %s)\n' "${path}" "${mode}" >&2
+          rc=1
+        fi
+      fi
+    done
+    for pattern in "${EXPECT_NON_EXECUTABLE[@]}"; do
+      # shellcheck disable=SC2053 # intentional glob match, not a literal compare
+      if [[ "${path}" == ${pattern} ]]; then
+        matched=1
+        if [[ "${mode}" != '100644' ]]; then
+          printf 'FAIL: %s must NOT be executable (tracked mode %s)\n' "${path}" "${mode}" >&2
+          rc=1
+        fi
+      fi
+    done
+    : "${matched}"
+  done < <(git -C "${REPO_DIR}" ls-files --stage)
+
+  # An empty scan is a failure, not a clean pass.
+  if [[ -z "$(git -C "${REPO_DIR}" ls-files)" ]]; then
+    printf 'FAIL: no tracked files found\n' >&2
+    rc=1
+  fi
+  return "${rc}"
+}
+
+main "$@"

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+# @description Run the full local verification gate: the formatting check, the
+#              governance lints, the lint suite, and the BATS suite. Verify-only
+#              — it never rewrites the tree, which is why `nix fmt` is a separate
+#              step run before it. Exit codes are AGGREGATED rather than failing
+#              fast, so a single run surfaces every failing category instead of
+#              only the first.
+# @noargs
+# @exitcode 0 every check passed
+# @exitcode 1 one or more checks failed
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+function log() {
+  local -r message="$1"
+  printf '[%s] %s\n' "${0##*/}" "${message}" >&2
+}
+
+# @description Warn when the working tree holds untracked, non-ignored files.
+#              `nix flake check` evaluates the git tree, so an untracked file is
+#              invisible to the formatting gate and passes vacuously. Never
+#              fails the run — blocking on scratch files would be worse.
+# @noargs
+function warn_untracked() {
+  local -a untracked=()
+  mapfile -t untracked < <(git -C "${REPO_DIR}" ls-files --others --exclude-standard)
+  if ((${#untracked[@]} == 0)); then
+    return 0
+  fi
+  log 'untracked files are invisible to nix flake check; git add them:'
+  local file
+  for file in "${untracked[@]}"; do
+    log "  untracked: ${file}"
+  done
+}
+
+function main() {
+  local rc=0
+  warn_untracked
+
+  log 'running nix flake check (formatting)'
+  nix flake check --no-eval-cache "${REPO_DIR}" || rc=1
+
+  log 'running governance checks'
+  "${REPO_DIR}/.ci/check-devshell-provides" || rc=1
+  "${REPO_DIR}/.ci/check-executable-bit" || rc=1
+  "${REPO_DIR}/.ci/check-bats-no-shebang" || rc=1
+  "${REPO_DIR}/.ci/check-uses-sha-pinned" || rc=1
+
+  log 'running lint checks'
+  "${REPO_DIR}/.ci/run-lint-checks" || rc=1
+
+  log 'running tests'
+  "${REPO_DIR}/run-tests" || rc=1
+
+  if ((rc != 0)); then
+    log 'one or more checks failed'
+  fi
+  return "${rc}"
+}
+
+main "$@"

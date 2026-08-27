@@ -1,0 +1,6 @@
+extends:
+  - '@commitlint/config-conventional'
+rules:
+  # Bodies routinely carry long paths, URLs and code fences that cannot be
+  # wrapped at 100 chars. Subject-length checks remain in effect.
+  body-max-line-length: [0, always, Infinity]

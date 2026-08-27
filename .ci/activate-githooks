@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+# @description Point core.hooksPath at the tracked .githooks directory. Invoked
+#              from the devShell's shellHook, because repo-local git config
+#              cannot be committed and a manual per-clone step silently never
+#              happens — which leaves tracked hooks inert. Idempotent and silent
+#              once the value is already correct.
+#
+#              Standalone, like .ci/in-devshell: it runs during shell startup,
+#              before any repo tooling is guaranteed available.
+# @noargs
+# @exitcode 0 hooks path is set (or was already correct)
+# @exitcode 1 not a git repo
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+function main() {
+  local repo_dir current
+  if ! repo_dir="$(git rev-parse --show-toplevel 2> '/dev/null')"; then
+    printf '%s: not a git repo\n' "${0##*/}" >&2
+    exit 1
+  fi
+  current="$(git -C "${repo_dir}" config --local --get core.hooksPath || printf '')"
+  if [[ "${current}" == '.githooks' ]]; then
+    exit 0
+  fi
+  git -C "${repo_dir}" config --local core.hooksPath '.githooks'
+  printf '%s: core.hooksPath -> .githooks\n' "${0##*/}" >&2
+}
+
+main "$@"

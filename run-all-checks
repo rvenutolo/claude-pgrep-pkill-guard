@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 # @description Run the full local verification gate: the formatting check, the
-#              governance lints, the lint suite, and the BATS suite. Verify-only
+#              governance lints, the lint suite, and the BATS suite -- the last
+#              twice, under gawk and under one-true-awk, because the hook must
+#              behave identically on both (#7). Verify-only
 #              — it never rewrites the tree, which is why `nix fmt` is a separate
 #              step run before it. Exit codes are AGGREGATED rather than failing
 #              fast, so a single run surfaces every failing category instead of
@@ -58,8 +60,11 @@ function main() {
   log 'running lint checks'
   "${REPO_DIR}/.ci/run-lint-checks" || rc=1
 
-  log 'running tests'
+  log 'running tests (gawk)'
   "${REPO_DIR}/run-tests" || rc=1
+
+  log 'running tests (one-true-awk)'
+  "${REPO_DIR}/run-tests" --awk=bwk || rc=1
 
   if ((rc != 0)); then
     log 'one or more checks failed'

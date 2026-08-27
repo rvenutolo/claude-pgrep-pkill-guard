@@ -87,6 +87,10 @@
             # which would kill the hermetic macOS gate. bats runs serially.
             jq
             gawk
+            # one-true-awk, the stock awk on macOS: run-tests --awk=bwk runs the
+            # suite under it so the scanner's awk-independence is a gate, not a
+            # hope.
+            nawk
             git
             gh
             just

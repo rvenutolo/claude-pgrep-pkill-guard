@@ -300,3 +300,5 @@
 "while true; do pgrep --full zztermyes || break; done"	deny:loop
 "while true; do pgrep --full zztermno || sleep 5; done"	warn
 "while true; do for f in *; do pgrep --full zztermouter || sleep 5; done; break; done"	warn
+"while true; do p=$(pgrep --full zzsubdone); x=$(echo; done); [ -z \"$p\" ] && break; sleep 1; done"	deny:loop
+"while true; do p=$(pgrep --full zzsubdone); x=$(echo; done); sleep 1; done"	warn

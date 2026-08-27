@@ -1716,10 +1716,14 @@ function repeat_check() {
   local -r dir="${BLOCK_PGREP_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/block-pgrep-self-match}"
   local -r file="${dir}/${session_id}"
   local now
+  # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
+  # no long options at all (no `parents`, no `mode=`). hooks/ is the one
+  # directory in this repo exempt from the repo-wide long-options rule, for
+  # exactly that reason -- the guard has to run on whatever userland ships.
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
   # intermediate ever missing here is a hand-set BLOCK_PGREP_STATE_DIR /
   # TMPDIR, which the caller owns the mode of.
-  if ! mkdir --parents --mode=0700 "${dir}" 2> /dev/null; then return 0; fi
+  if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then return 0; fi
   # `mkdir -p` on a dir that already exists changes neither its owner nor its
   # mode, so under the /tmp fallback another local user who pre-creates this
   # directory (or replaces it with a symlink to one they control) would
@@ -1791,13 +1795,17 @@ function repeat_check() {
     kept+="${now}"$'\t'"${probe_key}"$'\n'
   done <<< "${keys}"
 
+  # POSIX short flags in the `rm` and `mv` calls below, deliberately: macOS
+  # ships BSD coreutils, where `--force` does not exist. hooks/ is the one
+  # directory in this repo exempt from the repo-wide long-options rule, for
+  # exactly that reason.
   if [[ -z "${kept}" ]]; then
     # `|| true` so a bare rm failure (e.g. the directory lost write
     # permission after the mkdir check above) can never trip errexit here --
     # this line is not itself guarded by an enclosing if/||, unlike every
     # other filesystem step in this function. `--` guards a session id that
     # happens to start with `-`.
-    rm --force -- "${file}" 2> /dev/null || true
+    rm -f -- "${file}" 2> /dev/null || true
     return 0
   fi
   local tmp
@@ -1812,14 +1820,14 @@ function repeat_check() {
   # reverse order bash still applies `>` first, so the open failure prints
   # to the ORIGINAL stderr before the stderr redirect ever takes effect.
   if ! printf '%s' "${kept}" 2> /dev/null > "${tmp}"; then
-    rm --force -- "${tmp}" 2> /dev/null
+    rm -f -- "${tmp}" 2> /dev/null
     return 0
   fi
-  if ! mv --force -- "${tmp}" "${file}" 2> /dev/null; then
+  if ! mv -f -- "${tmp}" "${file}" 2> /dev/null; then
     # Last command of this if-body, so unlike the sibling rm above its exit
     # status would otherwise become the if's status -- `|| true` for the
     # same reason.
-    rm --force -- "${tmp}" 2> /dev/null || true
+    rm -f -- "${tmp}" 2> /dev/null || true
   fi
   return 0
 }

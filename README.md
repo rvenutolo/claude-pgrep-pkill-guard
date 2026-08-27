@@ -139,7 +139,8 @@ The stock-awk case is not rare: measured against this repo's own case table,
 a blank line — every heredoc body the guard re-scans carries a trailing newline
 that paragraph mode strips. `pkill --full java` is still denied; a heredoc
 payload is not. Hence `gawk`, not just `bash`. Making the scanner independent of
-`RS="\0"` is tracked as an issue.
+`RS="\0"` is tracked as
+[issue #7](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/7).
 
 ## Opting one command out
 

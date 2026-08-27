@@ -20,6 +20,8 @@ commitlint
 editorconfig-checker
 # the hook's own runtime dependency, and scanner.bats drives it directly
 gawk
+# one-true-awk (BWK); run-tests --awk=bwk shims `awk` to it
+nawk
 # asserted by .ci/check-uses-sha-pinned and used by the release flow
 gh
 # every repo-tooling script derives the repo root via `git rev-parse`

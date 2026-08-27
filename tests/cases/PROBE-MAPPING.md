@@ -48,8 +48,8 @@ below — that granularity loss is the cost A1 accepted.
 | 10 | 2811 | a double-quoted delimiter masks the body | `scanner: a double-quoted delimiter masks the body` |
 | 11 | 2817 | a line merely starting with the delimiter is not a terminator | `scanner: a line merely starting with the delimiter is not a terminator` |
 | 12 | 2824 | a body at end of input still emits a zero-length marker | `scanner: a body at end of input still emits a zero-length marker` |
-| 13 | 2831 | a quoted empty delimiter ends its body at a blank line | `scanner: a quoted empty delimiter ends its body at a blank line` (skipped under paragraph-mode awk) |
-| 14 | 2834 | a quoted empty delimiter masks its body until that blank line | `scanner: a quoted empty delimiter masks its body until that blank line` (skipped under paragraph-mode awk) |
+| 13 | 2831 | a quoted empty delimiter ends its body at a blank line | `scanner: a quoted empty delimiter ends its body at a blank line` |
+| 14 | 2834 | a quoted empty delimiter masks its body until that blank line | `scanner: a quoted empty delimiter masks its body until that blank line` |
 | 15 | 2841 | an unterminated quote ends the delimiter word at the newline | `scanner: an unterminated quote ends the delimiter word at the newline` |
 | 16 | 2845 | backslash-escaped delimiter is a quoted delimiter | `scanner: a backslash-escaped delimiter is a quoted delimiter` |
 | 17 | 2850 | tab-indented terminator closes a `<<-` body | `scanner: a tab-indented terminator closes a <<- body` |

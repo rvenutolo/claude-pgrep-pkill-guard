@@ -14,29 +14,6 @@ assert_row() {
   local -r expected="$2"
   local json decision reason needle
   json="$(run_hook "${command}")"
-
-  # On an awk that mishandles RS="\0" (one-true-awk on macOS), the scanner's
-  # integrity trailer correctly flips the guard to INACTIVE for input that
-  # RS="" reshapes. That is the CORRECT behaviour there, so assert it rather
-  # than the normal verdict — otherwise the macOS compat leg is permanently red.
-  #
-  # Two strengths, deliberately. A blank line ALWAYS splits the record, so those
-  # rows MUST come back INACTIVE. RS="" also strips leading and trailing
-  # newlines, which trips the byte count on any heredoc body the payload
-  # recursion re-scans; that set is not computable here without reimplementing
-  # the scanner, so for every other row a loud INACTIVE is merely tolerated.
-  # Neither branch can fire on gawk or mawk, where the suite stays fully strict.
-  if awk_is_paragraph_mode; then
-    if has_blank_line "${command}"; then
-      [[ "${json}" == *'INACTIVE'* ]] || {
-        echo "expected INACTIVE under paragraph-mode awk for: ${command}" >&2
-        echo "got: ${json}" >&2
-        return 1
-      }
-      return 0
-    fi
-    [[ "${json}" == *'INACTIVE'* ]] && return 0
-  fi
   decision="$(decision_of "${json}")"
   reason="$(reason_of "${json}")"
 

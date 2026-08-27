@@ -9,9 +9,18 @@
 #              Deliberately serial: `bats --jobs` needs flock and GNU parallel,
 #              both Linux-only in nixpkgs, and referencing them would break
 #              evaluation of the devShell on aarch64-darwin.
-# @arg $@ args optional bats arguments or test paths; omit to run all of tests/
+#
+#              `--awk=bwk` runs the suite with `awk` resolving to one-true-awk
+#              (the nawk the devShell provides), which is the stock awk on macOS.
+#              The hook and its scanner resolve `awk` from PATH, so a shim dir
+#              holding a single `awk -> nawk` symlink, prepended to PATH, is all
+#              it takes to exercise that platform from Linux. The default run
+#              keeps whatever `awk` the devShell puts first (gawk).
+# @arg $@ args optional `--awk=bwk`, then bats arguments or test paths; omit
+#         paths to run all of tests/
 # @exitcode 0 all tests passed and the repo was left untouched
-# @exitcode 1 bats missing, a test failed, or the suite mutated the repo
+# @exitcode 1 bats missing, nawk missing under --awk=bwk, a test failed, or the
+#             suite mutated the repo
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -42,6 +51,32 @@ function repo_state() {
   printf 'HEAD=%s\nconfig=%s\nindex=%s\n' "${head_ref}" "${config_hash}" "${index_hash}"
 }
 
+# @description Prepend a shim directory to PATH in which `awk` is one-true-awk,
+#              then prove the swap took by version string: BWK prints
+#              `awk version YYYYMMDD`, gawk `GNU Awk`, mawk `mawk`. A suite that
+#              silently ran under gawk would pass for the wrong reason.
+# @noargs
+# @exitcode 0 `awk` now resolves to one-true-awk
+# @exitcode 1 nawk is not on PATH, or the shim did not take
+function use_bwk_awk() {
+  local nawk shim version
+  if ! nawk="$(command -v nawk)"; then
+    die "nawk not found on PATH — --awk=bwk needs the devShell's one-true-awk"
+  fi
+  shim="$(mktemp --directory)"
+  ln --symbolic "${nawk}" "${shim}/awk"
+  export PATH="${shim}:${PATH}"
+  version="$(awk --version 2>&1 | head --lines=1)"
+  case "${version}" in
+    'awk version '*) log "awk is one-true-awk: ${version}" ;;
+    *) die "expected one-true-awk at the head of PATH, got: ${version}" ;;
+  esac
+}
+
+function log() {
+  printf '[%s] %s\n' "${0##*/}" "$1" >&2
+}
+
 function main() {
   # Unset BASH_ENV so bats' per-test subshells do not re-source the user's
   # interactive ~/.bashrc. That re-source fires for every test subshell, making
@@ -50,6 +85,11 @@ function main() {
 
   if ! command -v bats > /dev/null 2>&1; then
     die "bats not found on PATH — run './.ci/in-devshell ./run-tests' or 'just test'"
+  fi
+
+  if (($# > 0)) && [[ "$1" == '--awk=bwk' ]]; then
+    shift
+    use_bwk_awk
   fi
 
   local before after status=0

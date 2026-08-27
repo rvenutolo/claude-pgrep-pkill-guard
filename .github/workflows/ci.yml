@@ -105,9 +105,10 @@ jobs:
           bash --version | head -1
           jq --version
           # Which awk this runner actually provides is an assumption worth
-          # printing: the image may resolve `awk` to gawk or to mawk. Both
-          # handle RS="\0" correctly, so either is fine here — unlike stock
-          # macOS awk, which is why the macOS leg installs gawk explicitly.
+          # printing: the image may resolve `awk` to gawk or to mawk. The
+          # scanner depends on nothing awk-specific, and the hermetic gate
+          # proves that under one-true-awk too, but the ambient flavour still
+          # belongs in the log when a run goes red.
           command -v awk
           awk --version 2>&1 | head -1 || awk -W version 2>&1 | head -1
       - uses: ./.github/actions/bats-ambient
@@ -124,34 +125,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - name: Install a modern bash and gawk
-        # gawk is a documented macOS PREREQUISITE, not a convenience: stock
-        # macOS awk is one-true-awk, which degrades RS="\0" to paragraph mode
-        # and makes the guard report itself INACTIVE for every heredoc-payload
-        # and blank-line command. This leg tests the SUPPORTED configuration, so
-        # it installs what the README tells a macOS user to install.
-        run: brew install bash gawk
+      - name: Install a modern bash
+        # bash is the ONLY macOS prerequisite. Stock awk is one-true-awk, and
+        # since #7 the scanner depends on nothing awk-specific, so this leg runs
+        # the suite against /usr/bin/awk on purpose: it is exactly what a
+        # coworker's Mac looks like after the README's `brew install bash`.
+        run: brew install bash
       - name: Report the ambient toolchain
         run: |
           set -Eeuo pipefail
           brew_prefix="$(brew --prefix)"
           "${brew_prefix}/bin/bash" --version | head -1
           jq --version
-          "${brew_prefix}/opt/gawk/libexec/gnubin/awk" --version | head -1
+          /usr/bin/awk --version 2>&1 | head -1
       - uses: ./.github/actions/bats-ambient
       - name: Run the suite against ambient tools
         run: |
           set -Eeuo pipefail
           brew_prefix="$(brew --prefix)"
           # Put Homebrew's bash ahead of /bin/bash so the hook's shebang picks it
-          # up, and gawk's gnubin ahead of /usr/bin/awk so `awk` IS gawk — which
-          # is exactly what a coworker's Mac looks like after the README's
-          # `brew install bash gawk`.
-          export PATH="${brew_prefix}/opt/gawk/libexec/gnubin:${brew_prefix}/bin:${PATH}"
+          # up. Nothing is put ahead of /usr/bin/awk.
+          export PATH="${brew_prefix}/bin:${PATH}"
           # Fail loudly here rather than letting the suite pass for the wrong
-          # reason if the gnubin path ever stops shadowing /usr/bin/awk.
-          awk --version | head -1
-          awk --version | head -1 | grep -q 'GNU Awk'
+          # reason if the runner image ever starts shipping gawk first.
+          command -v awk
+          [ "$(command -v awk)" = /usr/bin/awk ]
+          awk --version 2>&1 | head -1
           bash --version | head -1
           ./run-tests
 

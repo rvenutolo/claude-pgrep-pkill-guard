@@ -97,23 +97,21 @@ The repo is its own marketplace, so there is no separate marketplace to add.
 
 - **bash 4.3 or newer** (the guard uses namerefs)
 - **`jq`**
-- **`awk`** — GNU awk (gawk) or mawk
+- **`awk`** — any POSIX awk: gawk, mawk, or one-true-awk (the stock `awk` on
+  macOS and the BSDs). The scanner depends on nothing awk-specific, and the
+  repo's own gate runs the whole suite under gawk *and* one-true-awk.
 
-**Linux works out of the box.** Distro bash is 4.3+, and both gawk and mawk
-handle the scanner's `RS="\0"` correctly.
+**Linux works out of the box.** Distro bash is 4.3+.
 
-**macOS needs two Homebrew packages:**
+**macOS needs one Homebrew package:**
 
 ```console
-brew install bash gawk
+brew install bash
 ```
 
-Stock macOS ships bash 3.2 — a decade below the floor — and one-true-awk, which
-truncates the scanner's `RS="\0"` to `RS=""` (paragraph mode). Paragraph mode
-splits records on blank lines *and* strips leading and trailing newlines, so the
-scanner tokenizes the command incorrectly.
+Stock macOS ships bash 3.2 — a decade below the floor. Its awk is fine.
 
-**With either missing, the guard reports itself INACTIVE rather than guarding
+**With bash too old, the guard reports itself INACTIVE rather than guarding
 silently wrongly.** Fail-open-loudly is deliberate, and it is the thing to know
 how to read. On stock bash, every command gets:
 
@@ -121,8 +119,8 @@ how to read. On stock bash, every command gets:
 pgrep-pkill-guard: bash 4.3+ required (found 3.2); the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash.
 ```
 
-On stock awk, an in-band integrity trailer in the scanner catches the reshaped
-input and affected commands get:
+An in-band integrity trailer in the scanner checks that the awk in use handed
+back every byte of the command; if one ever does not, affected commands get:
 
 ```text
 pgrep-pkill-guard: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command.
@@ -133,14 +131,6 @@ scanner file itself cannot be read. **Every one of these allows the command.** A
 hook that blocked on its own breakage would be worse than no hook; a hook that
 went quiet on its own breakage would be worse still, because you would never
 learn you were unprotected.
-
-The stock-awk case is not rare: measured against this repo's own case table,
-**19 of the 154 deny rows deactivate under one-true-awk**, none of which contain
-a blank line — every heredoc body the guard re-scans carries a trailing newline
-that paragraph mode strips. `pkill --full java` is still denied; a heredoc
-payload is not. Hence `gawk`, not just `bash`. Making the scanner independent of
-`RS="\0"` is tracked as
-[issue #7](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/7).
 
 ## Opting one command out
 

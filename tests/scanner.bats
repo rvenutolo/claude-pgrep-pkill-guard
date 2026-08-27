@@ -5,11 +5,13 @@ setup() {
 # @description Run the scanner exactly the way the hook does. LC_ALL=C is
 #              MANDATORY: the scanner emits BYTE offsets and the hook slices the
 #              raw command back out with them, so a UTF-8 locale here would make
-#              the two index bases disagree.
+#              the two index bases disagree. The input is newline-TERMINATED:
+#              the scanner reads lines, and the one guaranteed final newline is
+#              how it tells `foo` from `foo\n` without depending on RS.
 # @arg $1 command the command string to tokenize
 # @stdout the token stream, one "<offset>\t<token>" record per line
 scan() {
-  printf '%s' "$1" | LC_ALL=C awk -f "${SCANNER}"
+  printf '%s\n' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
 
 # @description A literal tab, for anchoring greps at the token field. `\b` is a
@@ -123,15 +125,10 @@ tab() {
   # A body that begins at end of input has no byte for the tokenizer loop to
   # reach, so its marker is emitted after the loop -- with the right offset and
   # a zero length. Written as a $'' literal, not $(printf ...), because the
-  # trailing newline is the whole point and $() strips it.
-  #
-  # And that trailing newline is exactly what paragraph mode strips, so there
-  # the body does not exist to mark at all. The integrity trailer catches the
-  # byte-count shortfall and the guard reports INACTIVE instead (covered in
-  # classify.bats); there is nothing meaningful to assert about the raw stream.
-  if awk_is_paragraph_mode; then
-    skip "awk falls back to paragraph mode on RS=\\0; covered by the INACTIVE path"
-  fi
+  # trailing newline is the whole point and $() strips it. This is also the
+  # case that proves the scanner keeps a trailing newline distinct from none:
+  # the line reader must not fold the command's own final newline into the
+  # terminating one the caller appends.
   local out
   out="$(scan $'cat <<EOF\n')"
   run grep '<HD:' <<< "${out}"
@@ -143,9 +140,6 @@ tab() {
   # line -- so it is enqueued like any other and its body is masked. Skipping it
   # left the body as code, where the apostrophe in "it's" flipped quote parity
   # and hid the pkill after the blank line altogether.
-  if awk_is_paragraph_mode; then
-    skip "awk falls back to paragraph mode on RS=\\0; covered by the INACTIVE path"
-  fi
   local out
   out="$(scan "$(printf "cat <<''\nit's fine\n\npkill --full x")")"
   run grep -c "$(tab)pkill\$" <<< "${out}"
@@ -153,9 +147,6 @@ tab() {
 }
 
 @test "scanner: a quoted empty delimiter masks its body until that blank line" {
-  if awk_is_paragraph_mode; then
-    skip "awk falls back to paragraph mode on RS=\\0; covered by the INACTIVE path"
-  fi
   local out
   out="$(scan "$(printf "cat <<''\nit's fine\npkill --full x\n\necho done")")"
   run grep -c "$(tab)pkill\$" <<< "${out}"
@@ -380,21 +371,36 @@ build_inactive_fixture() {
 
 @test "scanner: the token stream carries an integrity trailer" {
   local out
-  out="$(printf '%s' 'ls -la' | LC_ALL=C awk -f "${SCANNER}")"
-  [[ "${out}" == *"<SCAN:1:6>"* ]]
+  out="$(scan 'ls -la')"
+  [[ "${out}" == *"<SCAN:6>"* ]]
 }
 
 @test "scanner: the trailer reports zero for empty input" {
   local out
-  out="$(printf '%s' '' | LC_ALL=C awk -f "${SCANNER}")"
-  [[ "${out}" == *'<SCAN:0:0>'* ]]
+  out="$(scan '')"
+  [[ "${out}" == *'<SCAN:0>'* ]]
+}
+
+@test "scanner: the trailer counts every byte of a command with a blank line" {
+  # A blank line is what paragraph-mode awk splits a record on. The scanner no
+  # longer depends on RS at all, so the reassembled byte count must be exact on
+  # every awk, BWK included.
+  local out
+  out="$(scan $'echo a\n\necho b')"
+  [[ "${out}" == *'<SCAN:14>'* ]]
+}
+
+@test "scanner: the trailer counts a trailing newline" {
+  local out
+  out="$(scan $'echo a\n')"
+  [[ "${out}" == *'<SCAN:7>'* ]]
 }
 
 @test "scanner: a mangled trailer deactivates the guard loudly" {
-  # Simulate an awk whose RS handling splits the command into several records --
-  # the BWK paragraph-mode failure this check exists to catch.
+  # Simulate an awk that strips or reshapes bytes on the way through -- the
+  # failure the trailer exists to catch.
   local fake="${BATS_TEST_TMPDIR}/bad.awk"
-  printf '%s\n' 'BEGIN { ORS = "" } { print } END { print "\t<SCAN:9:9>" }' > "${fake}"
+  printf '%s\n' 'BEGIN { ORS = "" } { print } END { print "\t<SCAN:9>" }' > "${fake}"
   local out
   out="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}' \
     | PGREP_GUARD_SCANNER_OVERRIDE="${fake}" "${HOOK}")"

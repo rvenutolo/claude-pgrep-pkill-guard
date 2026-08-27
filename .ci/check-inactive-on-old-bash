@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# Assert the guard deactivates LOUDLY under a bash older than 4.3, rather than
+# emitting a bare {} and leaving the user silently unprotected. Deliberately
+# POSIX sh and deliberately NOT bats: the bats harness loads bats-assert and the
+# transcribed helpers use bash-4 constructs, so on a stock-macOS runner the
+# suite could only fail for reasons unrelated to the property under test.
+#
+# The hook is invoked DIRECTLY so its #!/usr/bin/env bash shebang resolves the
+# same way Claude Code's plugin runner resolves it — that is the contract being
+# tested.
+
+set -eu
+
+hook="$(dirname "$0")/../hooks/pgrep-pkill-guard.sh"
+
+# Guard against a future runner image shipping a newer /bin/bash, which would
+# make this leg vacuously green.
+bash_major="$(bash -c 'echo ${BASH_VERSINFO[0]}')"
+if [ "${bash_major}" -ge 4 ]; then
+  echo "expected a bash older than 4.x on this runner, found ${bash_major}" >&2
+  echo "this leg is meant to exercise the stock-macOS bash; it is now vacuous" >&2
+  exit 1
+fi
+
+out="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}' | "${hook}")"
+
+case "${out}" in
+  *INACTIVE*)
+    echo "ok: guard reported INACTIVE under bash ${bash_major}"
+    exit 0
+    ;;
+  *)
+    echo "expected an INACTIVE systemMessage, got: ${out}" >&2
+    exit 1
+    ;;
+esac

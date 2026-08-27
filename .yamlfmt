@@ -1,0 +1,22 @@
+# yamlfmt configuration, read from the repo root by the treefmt-driven yamlfmt.
+#
+# The first two settings reconcile yamlfmt with `yamllint --strict`, which the
+# gate also runs. Neither relaxes a lint; they make the formatter emit what the
+# linter already demands.
+#
+# max_line_length keeps folded scalars folded. Without it yamlfmt re-emits
+# `allowed-endpoints: >-` as a single 300-character line, tripping yamllint's
+# line-length rule. A literal block scalar would keep the breaks but is NOT an
+# option: harden-runner splits allowed-endpoints on a literal space
+# (src/arc-runner.ts), so newline-separated endpoints would be read as one giant
+# hostname and the egress allowlist would silently be empty.
+#
+# pad_line_comments defaults to 1, which trips yamllint's `comments` rule
+# (min-spaces-from-content: 2) on every `uses: ...@<sha>  # vX.Y.Z` pin.
+formatter:
+  type: basic
+  max_line_length: 120
+  pad_line_comments: 2
+  # Purely for readability: keep the author's blank lines between jobs, rather
+  # than collapsing a multi-job workflow into one unbroken wall of YAML.
+  retain_line_breaks: true

@@ -1,0 +1,33 @@
+name: bats-ambient
+description: Install bats-core, bats-support and bats-assert at pinned SHAs, without Nix.
+runs:
+  using: composite
+  steps:
+    - name: Install bats and its libraries
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        libdir="${RUNNER_TEMP}/bats-libs"
+        mkdir -p "${libdir}"
+        # Pinned to commit SHAs, same policy as the actions themselves. Renovate
+        # tracks these through .github/renovate.json.
+        clone_at() {
+          local repo="$1" sha="$2" dest="$3"
+          git clone --quiet "https://github.com/${repo}.git" "${dest}"
+          git -C "${dest}" checkout --quiet "${sha}"
+        }
+        clone_at bats-core/bats-core    "${BATS_CORE_SHA}"    "${RUNNER_TEMP}/bats-core"
+        clone_at bats-core/bats-support "${BATS_SUPPORT_SHA}" "${libdir}/bats-support"
+        clone_at bats-core/bats-assert  "${BATS_ASSERT_SHA}"  "${libdir}/bats-assert"
+        "${RUNNER_TEMP}/bats-core/install.sh" "${RUNNER_TEMP}/bats-install"
+        echo "${RUNNER_TEMP}/bats-install/bin" >> "${GITHUB_PATH}"
+        # tests/test_helper/common.bash honours an externally-set BATS_LIB_PATH,
+        # which is the whole reason these legs can run without the flake wrapper.
+        echo "BATS_LIB_PATH=${libdir}" >> "${GITHUB_ENV}"
+      env:
+        # renovate: datasource=github-tags depName=bats-core/bats-core
+        BATS_CORE_SHA: 'ae4b94d7cc35f62468297791aa4ab8c3af7377ba'
+        # renovate: datasource=github-tags depName=bats-core/bats-support
+        BATS_SUPPORT_SHA: '0954abb9925cad550424cebca2b99255d4eabe96'
+        # renovate: datasource=github-tags depName=bats-core/bats-assert
+        BATS_ASSERT_SHA: '697471b7a89d3ab38571f38c6c7c4b460d1f5e35'

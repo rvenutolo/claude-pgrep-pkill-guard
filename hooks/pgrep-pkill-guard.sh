@@ -9,8 +9,16 @@ IFS=$'\n\t'
 # two index bases agree.
 export LC_ALL=C
 
+# Defined above the version guard below, which needs it: everything else in this
+# script is set up after that guard has already run.
+readonly HOOK_NAME='pgrep-pkill-guard'
+
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3))); then
-  printf '{}\n'
+  # Loud, not silent. A bare `{}` here would leave a coworker on stock macOS
+  # bash 3.2 with an installed plugin that quietly does nothing -- the exact
+  # failure the jq/awk branches further down spend a systemMessage to prevent.
+  printf '{"systemMessage":"%s"}\n' \
+    "${HOOK_NAME}: bash 4.3+ required (found ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}); the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash."
   exit 0
 fi
 
@@ -22,9 +30,10 @@ trap 'emit_allow; exit 0' ERR
 # which is not guaranteed to be exported into the hook's environment.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
-readonly SCANNER="${SCRIPT_DIR}/pgrep-scan.awk"
-
-readonly HOOK_NAME='block-pgrep-self-match'
+# Test seam: lets the suite point the hook at a deliberately broken scanner to
+# prove the integrity check deactivates the guard loudly. Production never sets
+# it; the default is resolved relative to this script.
+readonly SCANNER="${PGREP_GUARD_SCANNER_OVERRIDE:-${SCRIPT_DIR}/pgrep-scan.awk}"
 
 # Keywords after which the next word is in command position.
 readonly -a COMMAND_POSITION_KEYWORDS=(
@@ -310,12 +319,28 @@ function is_operator() {
   esac
 }
 
-# @description Tokenize a command, masking quoted regions.
+# @description Tokenize a command, masking quoted regions, and verify the
+#              scanner's integrity trailer before handing the stream back. See
+#              the trailer comment at the foot of pgrep-scan.awk for what the
+#              check catches and why it is in-band rather than an `exit 1`.
 # @arg $1 command the command string
-# @stdout offset and token pairs, separated by tab
+# @stdout offset and token pairs, separated by tab, trailer stripped
+# @exitcode 0 the stream is trustworthy
+# @exitcode 1 the scanner tokenized the command incorrectly; the caller must
+#             deactivate the guard rather than trust the stream
 function scan_command() {
   local -r command="$1"
-  printf '%s' "${command}" | LC_ALL=C awk -f "${SCANNER}"
+  local raw expected
+  raw="$(printf '%s' "${command}" | LC_ALL=C awk -f "${SCANNER}")" || return 1
+  # One record, and every byte accounted for. An empty command legitimately
+  # yields NR=0.
+  if ((${#command} == 0)); then
+    expected=$'\t''<SCAN:0:0>'
+  else
+    expected=$'\t'"<SCAN:1:${#command}>"
+  fi
+  [[ "${raw}" == *"${expected}"* ]] || return 1
+  printf '%s' "${raw%"${expected}"*}"
 }
 
 # @description Locate pgrep/pkill invocations that sit in command position. A quoted mention such as
@@ -1693,7 +1718,7 @@ session the same way. The limit is ${REPEAT_THRESHOLD} probes per target per ${R
 
 # @description The per-session repeat rule. State is one file per session,
 #              `<dir>/<session_id>`, of `<epoch>\t<key>` lines, where <dir> is
-#              BLOCK_PGREP_STATE_DIR, else $XDG_RUNTIME_DIR/block-pgrep-self-match, else the same
+#              PGREP_PKILL_GUARD_STATE_DIR, else $XDG_RUNTIME_DIR/pgrep-pkill-guard, else the same
 #              under $TMPDIR or /tmp. It is read and rewritten only by commands that carry a key,
 #              entries older than the window (or unparsable) are dropped on every write, and a
 #              denied command is not recorded. This is the one stateful rule in the guard, so it
@@ -1713,13 +1738,17 @@ session the same way. The limit is ${REPEAT_THRESHOLD} probes per target per ${R
 # @exitcode 0 always
 function repeat_check() {
   local -r session_id="$1" keys="$2"
-  local -r dir="${BLOCK_PGREP_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/block-pgrep-self-match}"
+  local -r dir="${PGREP_PKILL_GUARD_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/pgrep-pkill-guard}"
   local -r file="${dir}/${session_id}"
   local now
+  # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
+  # no long options at all (no `parents`, no `mode=`). hooks/ is the one
+  # directory in this repo exempt from the repo-wide long-options rule, for
+  # exactly that reason -- the guard has to run on whatever userland ships.
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
-  # intermediate ever missing here is a hand-set BLOCK_PGREP_STATE_DIR /
+  # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR /
   # TMPDIR, which the caller owns the mode of.
-  if ! mkdir --parents --mode=0700 "${dir}" 2> /dev/null; then return 0; fi
+  if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then return 0; fi
   # `mkdir -p` on a dir that already exists changes neither its owner nor its
   # mode, so under the /tmp fallback another local user who pre-creates this
   # directory (or replaces it with a symlink to one they control) would
@@ -1791,13 +1820,17 @@ function repeat_check() {
     kept+="${now}"$'\t'"${probe_key}"$'\n'
   done <<< "${keys}"
 
+  # POSIX short flags in the `rm` and `mv` calls below, deliberately: macOS
+  # ships BSD coreutils, where `--force` does not exist. hooks/ is the one
+  # directory in this repo exempt from the repo-wide long-options rule, for
+  # exactly that reason.
   if [[ -z "${kept}" ]]; then
     # `|| true` so a bare rm failure (e.g. the directory lost write
     # permission after the mkdir check above) can never trip errexit here --
     # this line is not itself guarded by an enclosing if/||, unlike every
     # other filesystem step in this function. `--` guards a session id that
     # happens to start with `-`.
-    rm --force -- "${file}" 2> /dev/null || true
+    rm -f -- "${file}" 2> /dev/null || true
     return 0
   fi
   local tmp
@@ -1812,14 +1845,14 @@ function repeat_check() {
   # reverse order bash still applies `>` first, so the open failure prints
   # to the ORIGINAL stderr before the stderr redirect ever takes effect.
   if ! printf '%s' "${kept}" 2> /dev/null > "${tmp}"; then
-    rm --force -- "${tmp}" 2> /dev/null
+    rm -f -- "${tmp}" 2> /dev/null
     return 0
   fi
-  if ! mv --force -- "${tmp}" "${file}" 2> /dev/null; then
+  if ! mv -f -- "${tmp}" "${file}" 2> /dev/null; then
     # Last command of this if-body, so unlike the sibling rm above its exit
     # status would otherwise become the if's status -- `|| true` for the
     # same reason.
-    rm --force -- "${tmp}" 2> /dev/null || true
+    rm -f -- "${tmp}" 2> /dev/null || true
   fi
   return 0
 }
@@ -1836,7 +1869,14 @@ function classify_command() {
     return 0
   fi
   local tokens
-  tokens="$(scan_command "${command}")"
+  # The scanner produced an untrustworthy stream (see the trailer comment in
+  # pgrep-scan.awk). Return a verdict rather than printing: this function runs
+  # inside a command substitution, so a printf here would be captured, not
+  # emitted, and the guard would go silently dead.
+  tokens="$(scan_command "${command}")" || {
+    printf 'inactive\n'
+    return 0
+  }
 
   # Parsed once and shared by every invocation in this command, instead of
   # each of feeds_a_kill / result_is_consumed / invocation_is_captured
@@ -1914,6 +1954,11 @@ function classify_command() {
     while IFS= read -r -d '' payload; do
       [[ -z "${payload}" ]] && continue
       payload_verdict="$(classify_command "${payload}" "$((depth + 1))")"
+      # An untrustworthy inner scan must not be reported as a clean allow.
+      if [[ "${payload_verdict}" == inactive* ]]; then
+        printf 'inactive\n'
+        return 0
+      fi
       case "${payload_verdict}" in
         deny:*)
           printf '%s\n' "${payload_verdict}"
@@ -1978,6 +2023,13 @@ function main() {
 
   local decision deny_detail
   IFS=$'\t' read -r decision deny_detail <<< "$(classify_command "${command}")"
+  # main owns stdout; classify_command does not, so it hands the condition up as
+  # a verdict and the message is emitted here.
+  if [[ "${decision}" == 'inactive' ]]; then
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+    return 0
+  fi
   if [[ "${decision}" == deny:* ]]; then
     emit_deny "$(deny_message "${decision#deny:}" "${deny_detail}")"
     return 0
@@ -1991,8 +2043,17 @@ function main() {
   local repeat_reason=''
   if [[ "${session_id}" =~ ^[A-Za-z0-9._-]+$ && "${session_id}" != '.' && "${session_id}" != '..' ]] \
     && [[ "${command}" == *pgrep* || "${command}" == *.output* ]]; then
-    local keys
-    keys="$(probe_keys "${command}" "$(scan_command "${command}")")" || keys=''
+    local keys rt_tokens
+    # Split out of the nested substitution deliberately: with the scan inlined
+    # into probe_keys' arguments, a scanner failure would be swallowed by the
+    # `|| keys=''` below and read as "this command carries no probe key".
+    if rt_tokens="$(scan_command "${command}")"; then
+      keys="$(probe_keys "${command}" "${rt_tokens}")" || keys=''
+    else
+      printf '{"systemMessage":"%s"}\n' \
+        "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+      return 0
+    fi
     if [[ -n "${keys}" ]]; then
       # The `||` is load-bearing beyond the obvious fallback: it is what
       # keeps this whole command substitution off errexit's radar for its

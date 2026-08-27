@@ -51,3 +51,16 @@ setup() {
   [ -f "${REPO_DIR}/hooks/pgrep-scan.awk" ]
   [ ! -x "${REPO_DIR}/hooks/pgrep-scan.awk" ]
 }
+
+@test "inactive: the old-bash branch emits a systemMessage, not a bare {}" {
+  # BASH_VERSINFO is read-only, so the branch cannot be driven in-process. The
+  # real behaviour is covered by the stock-macOS compat CI leg; this pins the
+  # source-level invariant so the branch can never silently regress to `{}`.
+  # -A6, not -A3: the replacement puts a three-line comment between the
+  # condition and the printf, which pushes INACTIVE outside a 3-line window.
+  run grep -A6 'BASH_VERSINFO\[0\] < 4' "${HOOK}"
+  assert_success
+  assert_output --partial 'systemMessage'
+  assert_output --partial 'INACTIVE'
+  refute_output --partial "printf '{}"
+}

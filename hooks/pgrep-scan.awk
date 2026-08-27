@@ -20,6 +20,7 @@ BEGIN { RS = "\0"; ORS = "" }
 {
   cmd = $0
   n = length(cmd)
+  total += n          # accumulated for the integrity trailer emitted in END
   masked = ""
   depth = 0
   ctx[0] = "N"          # N unquoted, S single-quoted, D double-quoted, H heredoc body
@@ -251,3 +252,15 @@ BEGIN { RS = "\0"; ORS = "" }
   # and nothing after) has no byte for the loop to reach.
   while (m < hb_n) { print (hb_start[m] - 1) "\t<HD:" hb_len[m] ">\n"; m++ }
 }
+
+# Integrity trailer. The hook checks this before trusting the stream. It catches
+# an awk whose RS handling differs from ours -- notably BWK awk on macOS, whose
+# C-string semantics truncate RS="\0" to RS="" and silently switch the program
+# into paragraph mode, which desyncs every byte offset while still producing
+# plausible-looking output. NR proves we saw exactly one record; total proves no
+# bytes were stripped. Do NOT replace this with `exit 1`: the hook calls the
+# scanner inside a command substitution, so a non-zero exit is swallowed by the
+# ERR trap and turns into a silent allow. `total+0` is not decoration either --
+# an unset awk variable concatenates as the empty string, so a bare `total`
+# would emit `<SCAN:0:>` for empty input and never match the expected trailer.
+END { print "\t<SCAN:" NR ":" total+0 ">" }

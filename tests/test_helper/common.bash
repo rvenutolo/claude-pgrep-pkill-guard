@@ -46,10 +46,11 @@ unset BASH_ENV
 # @description True when this platform's awk mishandles RS="\0" and silently
 #              falls into paragraph mode -- notably one-true-awk (BWK) on macOS,
 #              whose C-string semantics truncate RS="\0" to RS="". Under it the
-#              guard correctly reports itself INACTIVE for any command
-#              containing a blank line, so the handful of cases that DO contain
-#              one assert the INACTIVE message instead of their normal verdict.
-#              gawk and mawk both return false here.
+#              scanner's integrity trailer correctly reports the guard INACTIVE
+#              for input RS="" reshapes -- always for a blank line, and also for
+#              the leading/trailing newlines it strips -- so the affected cases
+#              assert or tolerate the INACTIVE message instead of their normal
+#              verdict. gawk and mawk both return false here.
 # @noargs
 # @exitcode 0 awk is in paragraph mode (degraded)
 # @exitcode 1 awk handles RS="\0" correctly
@@ -58,7 +59,13 @@ function awk_is_paragraph_mode() {
 }
 
 # @description True when a command contains a blank line, i.e. the shape that
-#              paragraph-mode awk tokenizes incorrectly.
+#              paragraph-mode awk is GUARANTEED to tokenize incorrectly: RS=""
+#              splits the record there, the integrity trailer reports NR>1, and
+#              the guard deactivates. Not the only shape it breaks -- RS="" also
+#              strips leading and trailing newlines, so a heredoc body (which
+#              the payload recursion re-scans with its trailing newline intact)
+#              trips the byte count too. Callers therefore assert INACTIVE for
+#              these commands and merely TOLERATE it for the rest.
 # @arg $1 command the command string
 function has_blank_line() {
   [[ "$1" == *$'\n\n'* ]]

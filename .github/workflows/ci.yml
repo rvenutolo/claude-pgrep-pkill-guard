@@ -166,3 +166,56 @@ jobs:
           persist-credentials: false
       - name: Assert the guard deactivates loudly
         run: ./.ci/check-inactive-on-old-bash
+
+  validate:
+    name: validate
+    # Outside the devShell on purpose: the Claude Code CLI is a Node package,
+    # and adding it as a flake input would pull a large dependency into every
+    # `just check` for a check that only matters at submission time.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # The pin is load-bearing, not tidiness. `--strict` treats an UNKNOWN
+      # field as an error, so a Claude Code release that renames or deprecates a
+      # manifest field would redden main on a day nothing here changed. Pinned,
+      # that release arrives as a renovate PR that goes red instead.
+      # renovate: datasource=npm depName=@anthropic-ai/claude-code
+      CLAUDE_CODE_VERSION: '2.1.251'
+      # The CLI validates manifests entirely offline -- verified with an empty
+      # HOME, which produced no login prompt and wrote no config. These keep it
+      # from trying anything else under a blocking egress policy.
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
+      DISABLE_AUTOUPDATER: '1'
+      DISABLE_ERROR_REPORTING: '1'
+      DISABLE_TELEMETRY: '1'
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+        with:
+          egress-policy: block
+          disable-sudo: true
+          allowed-endpoints: >-
+            api.github.com:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443 registry.npmjs.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Claude Code CLI
+        # The runner's bundled Node is used as-is. actions/setup-node would mean
+        # one more SHA to pin and one more thing to bump for no gain here.
+        run: |
+          set -Eeuo pipefail
+          npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Load-bearing, not a courtesy echo: the npm package ships a
+          # bin/claude.exe stub that exit 1s when its native optional
+          # dependency is skipped, so this is what turns a stubbed install
+          # into a red job instead of a `plugin validate` step that silently
+          # validates nothing.
+          claude --version
+      - name: Validate both manifests
+        # Both files by name. `claude plugin validate <directory>` resolves to
+        # the marketplace manifest only and never reaches plugin.json.
+        run: |
+          set -Eeuo pipefail
+          claude plugin validate --strict .claude-plugin/plugin.json
+          claude plugin validate --strict .claude-plugin/marketplace.json

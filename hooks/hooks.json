@@ -1,5 +1,5 @@
 {
-  "description": "Deny pgrep/pkill patterns that match the agent's own process or poll in a loop",
+  "description": "PreToolUse on the Bash tool only. Reads the command from the hook's stdin JSON and returns permissionDecision: deny for pattern-kills that would match the invoking shell, for pgrep and task-output poll loops, and for a probe already answered this session; returns additionalContext when a pgrep --full result is consumed; otherwise returns {}. It never rewrites the command. The 5 s timeout is generous on purpose: the hook is bash and awk with no network, so anything slower is a bug and letting the call proceed is the right failure mode.",
   "hooks": {
     "PreToolUse": [
       {

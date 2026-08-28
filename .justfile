@@ -13,6 +13,10 @@ test *ARGS:
 lint:
     ./.ci/in-devshell ./.ci/run-lint-checks
 
+# Validate both plugin manifests with the Claude Code CLI, when it is installed
+validate:
+    ./.ci/run-plugin-validate
+
 # Format every file via treefmt
 format:
     nix fmt

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# @description Validate both plugin manifests with the Claude Code CLI. This is
+#              the opt-in local half of the `validate` CI job; CI is what
+#              actually enforces the check, on a PINNED CLI version.
+#
+#              Deliberately NOT wired into run-all-checks. That gate is
+#              hermetic -- every tool in it comes from the flake -- and a step
+#              whose behaviour depends on what happens to be on the ambient PATH
+#              would make it non-deterministic. A contributor without the CLI
+#              installed must not be blocked, so a missing `claude` exits 0 with
+#              an explanation rather than failing.
+#
+#              Both files are named explicitly on purpose: `claude plugin
+#              validate <directory>` resolves to the MARKETPLACE manifest only
+#              and never reaches plugin.json, so a directory argument would
+#              silently check half of what it appears to.
+# @noargs
+# @exitcode 0 both manifests validate, or the CLI is not installed
+# @exitcode 1 at least one manifest failed validation
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+function log() {
+  local -r message="$1"
+  printf '[%s] %s\n' "${0##*/}" "${message}" >&2
+}
+
+function main() {
+  if ! command -v claude > /dev/null 2>&1; then
+    log 'claude is not on PATH; skipping.'
+    log 'the validate job in .github/workflows/ci.yml enforces this on every PR.'
+    return 0
+  fi
+
+  local rc=0 manifest
+  for manifest in '.claude-plugin/plugin.json' '.claude-plugin/marketplace.json'; do
+    log "validating ${manifest}"
+    claude plugin validate --strict "${REPO_DIR}/${manifest}" || rc=1
+  done
+  return "${rc}"
+}
+
+main "$@"

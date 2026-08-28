@@ -2,13 +2,11 @@
 
 ## 1.0.0 (2026-08-28)
 
-
 ### Features
 
 * add plugin, marketplace and hook manifests ([c89bebd](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/c89bebda6ae7f95fa6544e53870a7e2dc97baa02))
 * import guard hook and plugin manifests ([df27581](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/df27581c3231545ec9b739d8385ed9e3f604d4d3))
 * import the pgrep/pkill guard hook and scanner ([2b8fa01](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/2b8fa01c16f2eb7dcb7c8bc7473a5e2794839b10))
-
 
 ### Bug Fixes
 
@@ -22,7 +20,6 @@
 * use POSIX short flags in the guard for macOS support ([ee45d68](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/ee45d68ba99a4b9f2eb2daa364077b549512109b))
 * use the security category and sync the marketplace version ([a2f54a6](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/a2f54a626b2a5d46c50fd7ab87878bc383758005))
 * verify scanner integrity in-band instead of via the ERR trap ([5e3264f](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/5e3264f357cf110670a0d0868d7e99416a3075ea))
-
 
 ### Continuous Integration
 

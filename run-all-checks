@@ -57,6 +57,7 @@ function main() {
   "${REPO_DIR}/.ci/check-bats-no-shebang" || rc=1
   "${REPO_DIR}/.ci/check-uses-sha-pinned" || rc=1
   "${REPO_DIR}/.ci/check-versions-in-sync" || rc=1
+  "${REPO_DIR}/.ci/check-manifest-invariants" || rc=1
 
   log 'running lint checks'
   "${REPO_DIR}/.ci/run-lint-checks" || rc=1

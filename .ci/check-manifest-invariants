@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+
+# @description Assert the marketplace and plugin manifests satisfy the
+#              invariants the official community marketplace enforces on every
+#              submission -- I1-I4 and I9-I11 of
+#              claude-plugins-community/.github/actions/validate-plugins/11-validate-invariants.sh
+#              plus its step-41 parse of hooks.json. `claude plugin validate` is
+#              a schema check and waves every one of these through, so this
+#              script is what stands between a careless rename and a
+#              marketplace rejection.
+#
+#              I5-I8 are deliberately absent: they constrain external
+#              SHA-pinned `source` objects, and this marketplace's only source
+#              is the local `./`.
+#
+#              Nearly all of the checking happens inside one jq program rather
+#              than in bash. Two of the rules -- the character-class checks --
+#              cannot be done portably in shell: `grep -P` is not guaranteed on
+#              macOS, where the gate also runs.
+# @arg $1 root optional tree to check; defaults to the git repo root. It exists
+#         so the bats suite can point the script at a fixture holding one
+#         deliberately broken manifest and assert that it fails. Without it the
+#         only possible test would be "exits 0 on the real repo", which a script
+#         that always returned 0 would also pass.
+# @exitcode 0 every invariant holds
+# @exitcode 1 a file is missing or unparseable, or an invariant is violated
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+ROOT="${1:-$(git rev-parse --show-toplevel)}"
+readonly ROOT
+
+readonly PLUGIN_JSON="${ROOT}/.claude-plugin/plugin.json"
+readonly MARKET_JSON="${ROOT}/.claude-plugin/marketplace.json"
+readonly HOOKS_JSON="${ROOT}/hooks/hooks.json"
+
+# One jq program, emitting one line per violation. Single-quoted, so it must
+# contain no apostrophes -- including in its message strings.
+#
+# hidden_chars lists codepoints by decimal value: 8203-8205 are ZWSP/ZWNJ/ZWJ,
+# 65279 is the BOM, 8234-8238 are the bidi embedding/override controls, and
+# 8294-8297 are the bidi isolates. All of them render as nothing and can make
+# two different names look identical.
+# shellcheck disable=SC2016
+readonly JQ_PROGRAM='
+def hidden_chars:
+  explode | any(
+    . == 8203 or . == 8204 or . == 8205 or . == 65279
+    or (. >= 8234 and . <= 8238)
+    or (. >= 8294 and . <= 8297));
+
+def check_name($label):
+  ( if (test("^[a-z0-9][a-z0-9-]{1,63}$") | not)
+    then "I11: \($label) name is not ^[a-z0-9][a-z0-9-]{1,63}$: \(.)"
+    else empty end ),
+  ( if hidden_chars
+    then "I10: \($label) name contains a hidden Unicode codepoint"
+    else empty end );
+
+def check_description($label):
+  ( if (length < 10 or length > 2000)
+    then "I3: \($label) description is \(length) characters; must be 10-2000"
+    else empty end ),
+  ( if (test("^\\s") or test("\\s$"))
+    then "I3: \($label) description has leading or trailing whitespace"
+    else empty end ),
+  ( if hidden_chars
+    then "I10: \($label) description contains a hidden Unicode codepoint"
+    else empty end );
+
+def check_source($label):
+  ( if (test("^[A-Za-z0-9._/-]+$") | not)
+    then "I9: \($label) source is outside the [A-Za-z0-9._/-] allowlist: \(.)"
+    else empty end );
+
+def check_url($label):
+  select(. != null and type == "string")
+  | ( if (startswith("https://") | not)
+      then "I4: \($label) is not an https URL: \(.)"
+      else empty end );
+
+[ ( [.plugins[].name] as $names
+    | ( if $names != ($names | sort)
+        then "I1: plugins[] is not in ascending name order: \($names | join(", "))"
+        else empty end ),
+      ( if ($names | length) != ($names | unique | length)
+        then "I2: plugins[] has duplicate names: \($names | join(", "))"
+        else empty end ) ),
+
+  ( (.name // "") | check_name("marketplace") ),
+  ( ($plugin[0].name // "") | check_name("plugin.json") ),
+
+  ( .plugins | to_entries[]
+    | .key as $i
+    | .value
+    | ( (.name // "") | check_name("marketplace plugins[\($i)]") ),
+      ( (.description // "") | check_description("marketplace plugins[\($i)]") ),
+      ( (.source // "") | check_source("marketplace plugins[\($i)]") ),
+      ( .homepage | check_url("marketplace plugins[\($i)].homepage") ),
+      ( .author.url | check_url("marketplace plugins[\($i)].author.url") ),
+      ( .["$schema"] | check_url("marketplace plugins[\($i)].$schema") ) ),
+
+  ( ($plugin[0].description // "") | check_description("plugin.json") ),
+
+  ( .owner.url | check_url("marketplace owner.url") ),
+  ( .["$schema"] | check_url("marketplace $schema") ),
+  ( $plugin[0].homepage | check_url("plugin.json homepage") ),
+  ( $plugin[0].repository | check_url("plugin.json repository") ),
+  ( $plugin[0].author.url | check_url("plugin.json author.url") ),
+  ( $plugin[0]["$schema"] | check_url("plugin.json $schema") )
+] | .[]
+'
+
+# @description Print one violation to stderr, in the house format.
+# @arg $1 message the violation text
+function fail() {
+  printf 'FAIL: %s\n' "$1" >&2
+}
+
+# @description Assert a file exists and holds parseable JSON. The hooks manifest
+#              gets the same treatment as the other two because the runtime
+#              always probes it, and a malformed one is a crash rather than a
+#              degraded load.
+# @arg $1 file absolute path to the JSON file
+# @exitcode 0 the file exists and parses
+# @exitcode 1 it is missing or unparseable
+function check_parses() {
+  local -r file="$1"
+  local -r label="${file#"${ROOT}/"}"
+  if [[ ! -f "${file}" ]]; then
+    fail "${label} does not exist"
+    return 1
+  fi
+  if ! jq --exit-status type "${file}" > /dev/null 2>&1; then
+    fail "${label} is not parseable JSON"
+    return 1
+  fi
+}
+
+function main() {
+  local rc=0 file
+  for file in "${MARKET_JSON}" "${PLUGIN_JSON}" "${HOOKS_JSON}"; do
+    check_parses "${file}" || rc=1
+  done
+  # Every later check indexes into these documents. Running the jq program over
+  # a file that did not parse would report the parse error a second time, in a
+  # worse format.
+  if ((rc != 0)); then
+    return "${rc}"
+  fi
+
+  # Assigned, not read through a process substitution: inside `< <(...)` a jq
+  # that died on its own program would report nothing and this script would exit
+  # 0 for the wrong reason. Assignment keeps the exit status reachable.
+  local output=''
+  if ! output="$(jq --raw-output --slurpfile plugin "${PLUGIN_JSON}" \
+    "${JQ_PROGRAM}" "${MARKET_JSON}")"; then
+    fail 'the invariant program itself failed to run'
+    return 1
+  fi
+
+  local violation
+  if [[ -n "${output}" ]]; then
+    while IFS= read -r violation; do
+      fail "${violation}"
+      rc=1
+    done <<< "${output}"
+  fi
+
+  if ((rc == 0)); then
+    printf 'ok: manifests satisfy I1-I4, I9-I11 and the hooks.json parse\n' >&2
+  fi
+  return "${rc}"
+}
+
+main "$@"

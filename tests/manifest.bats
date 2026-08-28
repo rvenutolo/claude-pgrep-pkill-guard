@@ -121,3 +121,171 @@ setup() {
   [[ "${description}" == *'permissionDecision'* ]]
   [[ "${description}" == *'additionalContext'* ]]
 }
+
+# @description Build a minimal, VALID fixture tree so each negative case can
+#              corrupt exactly one thing. POSIX short flags on purpose: the
+#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              mkdir has no --parents.
+# @arg $1 root directory to populate
+function make_manifest_fixture() {
+  local -r root="$1"
+  mkdir -p "${root}/.claude-plugin" "${root}/hooks"
+  cat > "${root}/.claude-plugin/marketplace.json" << 'JSON'
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "rvenutolo",
+  "owner": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" },
+  "plugins": [
+    {
+      "name": "alpha-plugin",
+      "source": "./",
+      "description": "A description that is comfortably longer than ten characters.",
+      "homepage": "https://example.com/alpha"
+    },
+    {
+      "name": "beta-plugin",
+      "source": "./beta",
+      "description": "Another description that is comfortably longer than ten characters.",
+      "homepage": "https://example.com/beta"
+    }
+  ]
+}
+JSON
+  cat > "${root}/.claude-plugin/plugin.json" << 'JSON'
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "alpha-plugin",
+  "description": "A plugin description that is comfortably longer than ten characters.",
+  "homepage": "https://example.com/alpha",
+  "repository": "https://example.com/alpha.git",
+  "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
+}
+JSON
+  printf '{"description": "fixture", "hooks": {}}\n' > "${root}/hooks/hooks.json"
+}
+
+# @description Rewrite one fixture file through a jq filter, in place.
+# @arg $1 file the fixture file to edit
+# @arg $2 filter the jq program to apply
+function fixture_jq() {
+  local -r file="$1" filter="$2"
+  local -r tmp="${file}.tmp"
+  jq "${filter}" "${file}" > "${tmp}"
+  mv -f "${tmp}" "${file}"
+}
+
+@test "invariants: the real repo satisfies every ported invariant" {
+  # REPO_DIR explicitly rather than relying on the argument-less default: the
+  # default resolves through `git rev-parse`, and a bats test must not depend on
+  # the working directory the suite happened to be launched from. The
+  # argument-less path is exercised by run-all-checks on every gate run.
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${REPO_DIR}"
+  assert_success
+}
+
+@test "invariants: a valid fixture passes" {
+  make_manifest_fixture "${BATS_TEST_TMPDIR}/ok"
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${BATS_TEST_TMPDIR}/ok"
+  assert_success
+}
+
+@test "invariants: I1 rejects an out-of-order plugins array" {
+  local -r root="${BATS_TEST_TMPDIR}/i1"
+  make_manifest_fixture "${root}"
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins |= reverse'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I1'
+}
+
+@test "invariants: I2 rejects duplicate plugin names" {
+  local -r root="${BATS_TEST_TMPDIR}/i2"
+  make_manifest_fixture "${root}"
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[1].name = "alpha-plugin"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I2'
+}
+
+@test "invariants: I3 rejects a too-short description" {
+  local -r root="${BATS_TEST_TMPDIR}/i3-short"
+  make_manifest_fixture "${root}"
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].description = "tiny"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I3'
+}
+
+@test "invariants: I3 rejects leading or trailing whitespace in a description" {
+  local -r root="${BATS_TEST_TMPDIR}/i3-space"
+  make_manifest_fixture "${root}"
+  fixture_jq "${root}/.claude-plugin/plugin.json" '.description = "  A description with edge whitespace.  "'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I3'
+}
+
+@test "invariants: I4 rejects a non-https URL" {
+  local -r root="${BATS_TEST_TMPDIR}/i4"
+  make_manifest_fixture "${root}"
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.owner.url = "http://example.com"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I4'
+}
+
+@test "invariants: I9 rejects shell metacharacters in a source" {
+  local -r root="${BATS_TEST_TMPDIR}/i9"
+  make_manifest_fixture "${root}"
+  # An inert marker, never a real command: the point is that the string reaches
+  # the check, not that anything runs.
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].source = "./; echo PAYLOAD_RAN"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  # The I9 message quotes the offending value, so PAYLOAD_RAN appears in the
+  # output BY DESIGN -- a diagnostic that does not name the bad string is
+  # useless. What the marker proves is that it was only ever printed: it is an
+  # echo, so if the string had been evaluated anywhere the suite would still be
+  # green while the check was worthless.
+  assert_output --partial 'I9'
+  assert_output --partial './; echo PAYLOAD_RAN'
+}
+
+@test "invariants: I10 rejects a zero-width space in a name" {
+  local -r root="${BATS_TEST_TMPDIR}/i10"
+  make_manifest_fixture "${root}"
+  # \u200b, not a literal zero-width space: a literal one is invisible in this
+  # file and the first editor or copy-paste that eats it turns this into a test
+  # that silently checks nothing.
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].name = "alpha\u200bplugin"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I10'
+}
+
+@test "invariants: I11 rejects a name outside the allowed shape" {
+  local -r root="${BATS_TEST_TMPDIR}/i11"
+  make_manifest_fixture "${root}"
+  fixture_jq "${root}/.claude-plugin/plugin.json" '.name = "Alpha_Plugin"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I11'
+}
+
+@test "invariants: a malformed hooks.json is a failure, not a skip" {
+  local -r root="${BATS_TEST_TMPDIR}/hooks"
+  make_manifest_fixture "${root}"
+  printf '{"description": "truncated"\n' > "${root}/hooks/hooks.json"
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'hooks/hooks.json'
+}
+
+@test "invariants: a missing manifest is a failure, not a skip" {
+  local -r root="${BATS_TEST_TMPDIR}/missing"
+  make_manifest_fixture "${root}"
+  rm -f -- "${root}/.claude-plugin/plugin.json"
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'plugin.json'
+}

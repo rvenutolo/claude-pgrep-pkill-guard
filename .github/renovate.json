@@ -11,6 +11,13 @@
         "# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)\\s+BATS_[A-Z_]+_SHA:\\s*'(?<currentDigest>[0-9a-f]{40})'"
       ],
       "currentValueTemplate": "master"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)\\s+CLAUDE_CODE_VERSION:\\s*'(?<currentValue>[^']+)'"
+      ]
     }
   ]
 }

@@ -85,3 +85,27 @@ setup() {
   [ "${plugin_version}" = "${market_version}" ]
   [[ "${plugin_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
+
+@test "manifest: both files declare a schemastore \$schema" {
+  local plugin_schema market_schema
+  plugin_schema="$(jq --raw-output '.["$schema"]' "${PLUGIN_JSON}")"
+  market_schema="$(jq --raw-output '.["$schema"]' "${MARKET_JSON}")"
+  [ "${plugin_schema}" = 'https://json.schemastore.org/claude-code-plugin-manifest.json' ]
+  [ "${market_schema}" = 'https://json.schemastore.org/claude-code-marketplace.json' ]
+}
+
+@test "manifest: the plugin declares a displayName for the /plugin UI" {
+  local display_name
+  display_name="$(jq --raw-output '.displayName' "${PLUGIN_JSON}")"
+  [ "${display_name}" = 'pgrep/pkill Guard' ]
+}
+
+@test "manifest: the marketplace entry carries homepage and author" {
+  local homepage author_name author_url
+  homepage="$(jq --raw-output '.plugins[0].homepage' "${MARKET_JSON}")"
+  author_name="$(jq --raw-output '.plugins[0].author.name' "${MARKET_JSON}")"
+  author_url="$(jq --raw-output '.plugins[0].author.url' "${MARKET_JSON}")"
+  [ "${homepage}" = 'https://github.com/rvenutolo/claude-pgrep-pkill-guard' ]
+  [ "${author_name}" = 'Rick Venutolo' ]
+  [ "${author_url}" = 'https://github.com/rvenutolo' ]
+}

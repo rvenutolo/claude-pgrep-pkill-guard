@@ -1,5 +1,7 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "pgrep-pkill-guard",
+  "displayName": "pgrep/pkill Guard",
   "version": "1.0.0",
   "description": "Blocks pgrep/pkill commands that match the agent's own process or poll in a loop — the shapes that make an agent kill its own session or spin forever waiting on a process that can never exit.",
   "author": {

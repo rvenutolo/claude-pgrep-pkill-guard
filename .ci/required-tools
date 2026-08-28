@@ -42,3 +42,5 @@ shfmt
 typos
 # invoked by .ci/run-lint-checks
 yamllint
+# invoked by .ci/check-issue-forms
+yq

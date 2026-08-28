@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+
+# @description Assert every GitHub issue form under .github/ISSUE_TEMPLATE is
+#              one GitHub will actually render. GitHub validates these forms
+#              server-side and silently drops any it cannot parse -- a broken
+#              form does not error, it just stops appearing in the "New issue"
+#              chooser, so nothing short of opening the chooser by hand notices.
+#              This gate notices instead. Nothing else in the repo does:
+#              yamllint proves a file is YAML, not that it is a form, and
+#              `claude plugin validate` never looks at .github at all.
+#
+#              Nearly all of the checking happens inside two yq programs rather
+#              than in bash, the way .ci/check-manifest-invariants puts nearly
+#              everything in one jq program; bash only walks the directory,
+#              prefixes each emitted line with its filename, and counts.
+#
+#              Two yq behaviours shape how those programs are written, and both
+#              are traps rather than preferences:
+#
+#              1. `select(COND) | "message"` emits the message even when the
+#                 select matched NOTHING -- a string literal is a value operator
+#                 that yq still evaluates once against an empty context. Every
+#                 rule below therefore collects into an array first
+#                 (`[ ... ] | map("message") | .[]`), because map over an empty
+#                 array is genuinely empty. Rules joined with `,`, never with
+#                 `+`: array `+` here silently discards a mapped operand.
+#              2. yq binds `!=` and `==` looser than `or`/`and`, so an
+#                 unbracketed `tag != "!!str" or . == ""` collapses to a
+#                 constant true and the rule fires on every document. Every
+#                 operand is parenthesised for that reason.
+# @arg $1 dir optional directory to check; defaults to the repo root plus
+#         .github/ISSUE_TEMPLATE. It exists so the bats suite can point the
+#         script at a fixture holding one deliberately broken form and assert
+#         that it fails. Without it the only possible test would be "exits 0 on
+#         the real repo", which a script that always returned 0 would also pass.
+# @exitcode 0 every form and config.yml satisfy the schema
+# @exitcode 1 the directory is missing or holds no form, a file is unparseable,
+#             or a rule is violated
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+DIR="${1:-$(git rev-parse --show-toplevel)/.github/ISSUE_TEMPLATE}"
+readonly DIR
+
+# config.yml is the chooser configuration, not a form: it carries no name,
+# description or body, so it gets its own program below rather than being
+# checked as a form and failing all three.
+readonly CONFIG_NAME='config.yml'
+
+# One yq program per file kind, each emitting one line per violation. Both are
+# single-quoted, so neither may contain an apostrophe -- including in its
+# message strings.
+#
+# $items is a yq binding, not a shell variable; hence the SC2016 disable.
+# shellcheck disable=SC2016
+readonly FORM_PROGRAM='
+[ .body | select((. | tag) == "!!seq") | to_entries | .[] ] as $items
+| (
+    ( [ .name | select(((. | tag) != "!!str") or (. == "")) ]
+      | map("name is missing or is not a non-empty string") | .[] ),
+
+    ( [ .description | select(((. | tag) != "!!str") or (. == "")) ]
+      | map("description is missing or is not a non-empty string") | .[] ),
+
+    ( [ .body | select(((. | tag) != "!!seq") or ((. | length) == 0)) ]
+      | map("body is missing or is not a non-empty sequence") | .[] ),
+
+    ( [ $items | .[] | select((.value | tag) != "!!map") ]
+      | map("body[\(.key)] is not a mapping") | .[] ),
+
+    ( [ $items | .[]
+        | select((.value | tag) == "!!map")
+        | select((.value.type != "markdown") and (.value.type != "input")
+                 and (.value.type != "textarea") and (.value.type != "dropdown")
+                 and (.value.type != "checkboxes")) ]
+      | map("body[\(.key)] has an unrecognised type: \(.value.type)") | .[] ),
+
+    ( [ $items | .[]
+        | select((.value | tag) == "!!map")
+        | select(.value.type != "markdown")
+        | select(((.value.id | tag) != "!!str") or (.value.id == "")) ]
+      | map("body[\(.key)] has no non-empty id") | .[] ),
+
+    ( [ $items | .[]
+        | select((.value | tag) == "!!map")
+        | select(.value.type != "markdown")
+        | select(((.value.attributes.label | tag) != "!!str")
+                 or (.value.attributes.label == "")) ]
+      | map("body[\(.key)] has no non-empty attributes.label") | .[] ),
+
+    ( [ $items | .[]
+        | select((.value | tag) == "!!map")
+        | select(.value.type == "markdown")
+        | select(((.value.attributes.value | tag) != "!!str")
+                 or (.value.attributes.value == "")) ]
+      | map("body[\(.key)] is markdown with no non-empty attributes.value") | .[] ),
+
+    ( [ $items | .[]
+        | select((.value | tag) == "!!map")
+        | select(.value.type == "dropdown")
+        | select(((.value.attributes.options | tag) != "!!seq")
+                 or ((.value.attributes.options | length) == 0)) ]
+      | map("body[\(.key)] is a dropdown with no non-empty attributes.options") | .[] ),
+
+    ( [ $items | .[] | .value.id | select(((. | tag) == "!!str") and (. != "")) ]
+      | group_by(.) | map(select((. | length) > 1))
+      | map("body id is not unique within the file: \(.[0])") | .[] )
+  )
+'
+
+readonly CONFIG_PROGRAM='
+(
+  ( [ .blank_issues_enabled | select((. | tag) != "!!bool") ]
+    | map("blank_issues_enabled is missing or is not a boolean") | .[] )
+)
+'
+
+# @description Print one violation to stderr, in the house format.
+# @arg $1 message the violation text
+function fail() {
+  printf 'FAIL: %s\n' "$1" >&2
+}
+
+# @description Assert a file holds parseable YAML. Checked separately from the
+#              rule programs so an unparseable file reports as exactly that,
+#              rather than as the rule program blowing up on it.
+# @arg $1 file path to the YAML file
+# @exitcode 0 the file parses
+# @exitcode 1 it does not
+function check_parses() {
+  local -r file="$1"
+  if ! yq 'tag' "${file}" > /dev/null 2>&1; then
+    fail "${file##*/} is not parseable YAML"
+    return 1
+  fi
+}
+
+# @description Run one yq program over one file and report every line it emits
+#              as a violation of that file.
+# @arg $1 file path to the YAML file
+# @arg $2 program the yq expression to evaluate against it
+# @exitcode 0 the program emitted nothing
+# @exitcode 1 the program emitted at least one violation, or failed to run
+function report_violations() {
+  local -r file="$1"
+  local -r program="$2"
+  local -r label="${file##*/}"
+
+  # Assigned, not read through a process substitution: inside `< <(...)` a yq
+  # that died on its own program would report nothing and this script would
+  # exit 0 for the wrong reason. Assignment keeps the exit status reachable.
+  local output=''
+  if ! output="$(yq "${program}" "${file}")"; then
+    fail "${label}: the rule program itself failed to run"
+    return 1
+  fi
+
+  local rc=0 violation
+  if [[ -n "${output}" ]]; then
+    while IFS= read -r violation; do
+      fail "${label}: ${violation}"
+      rc=1
+    done <<< "${output}"
+  fi
+  return "${rc}"
+}
+
+function main() {
+  if [[ ! -d "${DIR}" ]]; then
+    fail "${DIR} does not exist or is not a directory"
+    return 1
+  fi
+
+  # `-e` on every candidate rather than `shopt -s nullglob`: an unmatched glob
+  # expands to itself, and this script must not depend on nullglob or dotglob
+  # state it did not set. Ordering is the shell glob sort, so output is stable.
+  local -a forms=()
+  local config='' candidate
+  for candidate in "${DIR}"/*.yml; do
+    [[ -e "${candidate}" ]] || continue
+    if [[ "${candidate##*/}" == "${CONFIG_NAME}" ]]; then
+      config="${candidate}"
+    else
+      forms+=("${candidate}")
+    fi
+  done
+
+  local rc=0
+
+  # An empty scan is a failure, never a vacuous pass -- the same guard as the
+  # `count == 0` one in .ci/check-devshell-provides. Without it this script
+  # exits 0 on a directory holding no forms at all, which is precisely the
+  # regression it exists to catch.
+  if ((${#forms[@]} == 0)); then
+    fail "${DIR} holds no issue form (a *.yml other than ${CONFIG_NAME})"
+    rc=1
+  fi
+
+  if [[ -z "${config}" ]]; then
+    fail "${DIR}/${CONFIG_NAME} does not exist"
+    rc=1
+  elif check_parses "${config}"; then
+    report_violations "${config}" "${CONFIG_PROGRAM}" || rc=1
+  else
+    rc=1
+  fi
+
+  local form
+  for form in "${forms[@]}"; do
+    if check_parses "${form}"; then
+      report_violations "${form}" "${FORM_PROGRAM}" || rc=1
+    else
+      rc=1
+    fi
+  done
+
+  if ((rc == 0)); then
+    printf 'ok: %s issue form(s) and %s satisfy the issue-forms schema\n' \
+      "${#forms[@]}" "${CONFIG_NAME}" >&2
+  fi
+  return "${rc}"
+}
+
+main "$@"

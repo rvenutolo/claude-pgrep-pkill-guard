@@ -1,0 +1,85 @@
+name: "False verdict: a wrong deny or a wrong allow"
+description: The guard denied a command it should have allowed, allowed one it should have denied, or named the wrong mitigation.
+labels: [false-verdict]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        A false verdict is any command the guard got wrong: a safe command it denied, a session-killing or never-terminating
+        command it allowed, a deny under the wrong kind, or a deny whose reason text names a mitigation that does not fit.
+        Every fix lands as a row in `tests/cases/verdicts.tsv`, so the command you paste below becomes a permanent regression
+        test. Please redact absolute paths from every field: write `<project>` for a checkout path and `~` for your home directory.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why should this have been allowed (or denied)?
+      description: >-
+        What the command actually does, and why the guard's verdict is wrong for it. This is first because it is the field
+        that makes triage possible.
+      placeholder: >-
+        The pattern is anchored to a PID file rather than a full command line, so it cannot match the invoking `bash -c`.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: The exact command
+      description: >-
+        Verbatim, exactly as it was run. Quoting and whitespace are load-bearing: the guard tokenizes the command string,
+        so a retyped or reflowed copy can classify differently from the original.
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of false verdict is this?
+      options:
+        - False positive (denied, should have been allowed)
+        - False negative (allowed, should have been denied)
+        - Wrong deny kind (denied for the wrong reason)
+        - Wrong reason text (right verdict, wrong mitigation named)
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: The hook's JSON output
+      description: >-
+        Capture it with: `jq --null-input --arg cmd '<your command>' '{tool_name:"Bash",tool_input:{command:$cmd}}' | "${CLAUDE_PLUGIN_ROOT}"/hooks/pgrep-pkill-guard.sh`
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: bash-version
+    attributes:
+      label: bash version
+      description: The first line of `bash --version`.
+      placeholder: GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)
+    validations:
+      required: true
+  - type: input
+    id: awk-version
+    attributes:
+      label: awk version
+      description: >-
+        The output of `awk --version`, or `awk -W version` for one-true-awk. Which awk you have is load-bearing on macOS,
+        where the stock `awk` is BWK rather than gawk.
+      placeholder: awk version 20240728
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+      placeholder: macOS 15.3, or Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Claude Code version and plugin version
+      description: The Claude Code version, plus the version of pgrep-pkill-guard you have installed.
+      placeholder: Claude Code 2.0.14, pgrep-pkill-guard 1.4.0
+    validations:
+      required: true

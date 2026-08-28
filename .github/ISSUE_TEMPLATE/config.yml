@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/rvenutolo/claude-pgrep-pkill-guard/security/advisories/new
+    about: >-
+      Privately report a flaw in the guard itself — the hook executing attacker-controlled input, a state-directory symlink
+      or TOCTOU issue, or forged JSON decision output. A command that slips past the guard is a false negative, not a vulnerability;
+      file that publicly.

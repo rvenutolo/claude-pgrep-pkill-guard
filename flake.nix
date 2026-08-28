@@ -60,6 +60,11 @@
             editorconfig-checker
             typos
             actionlint
+            # yq-go, whose binary is `yq`: .ci/check-issue-forms parses the
+            # issue forms with it. The `-go` suffix is the package name, not
+            # the command -- the Python-wrapper `yq` is a different tool with a
+            # different expression language.
+            yq-go
             # commitlint is invoked by .githooks/commit-msg. Without it here,
             # check-devshell-provides fails AND every git commit dies with
             # "commitlint: command not found" once activate-githooks has run.

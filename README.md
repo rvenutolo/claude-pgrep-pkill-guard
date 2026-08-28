@@ -172,19 +172,15 @@ unset or points somewhere unwritable, or to keep the state out of a shared
 The plugin's own test suite sets this variable, which is the main reason it
 exists.
 
-## Reporting a false positive
+## Reporting a false verdict
 
-A denied command that was actually safe is a bug worth reporting. Open an issue
-at
-[rvenutolo/claude-pgrep-pkill-guard/issues](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues)
-with:
+A denied command that was actually safe — or a session-killing command that got
+through — is a bug worth reporting. Use the **False verdict** option at
+[New issue](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/new/choose);
+the form asks for the exact command, the verdict you expected, and your bash and
+awk versions.
 
-1. **The exact command**, verbatim — quoting and whitespace both matter, since
-   the guard tokenizes the string.
-2. The reason text the guard returned.
-3. Your platform, plus `bash --version` and `awk --version`.
-
-The fastest way to capture the first two:
+Capture the command and the guard's own output with:
 
 ```console
 jq --null-input --arg cmd '<your command here>' \
@@ -192,8 +188,30 @@ jq --null-input --arg cmd '<your command here>' \
   | "${CLAUDE_PLUGIN_ROOT}"/hooks/pgrep-pkill-guard.sh
 ```
 
-Every fix lands as a row in `tests/cases/verdicts.tsv`, so a reported command
-becomes a permanent regression test.
+Paste both verbatim — quoting and whitespace matter, since the guard tokenizes
+the string. Every fix lands as a row in `tests/cases/verdicts.tsv`, so a
+reported command becomes a permanent regression test.
+
+## Security
+
+The guard is a guardrail, not a sandbox and not a privilege boundary. It reads
+only the command string handed to the Bash tool, so it never sees inside
+`bash script.sh`, never sees code written to a file in one call and run in the
+next, and stands down — allowing everything — whenever its own preconditions
+fail.
+
+[SECURITY.md](SECURITY.md) states that trust model in full and says what to
+report privately. **A command shape that slips past the guard is not one of
+those things:** it is a false negative, and it belongs in a public issue, using
+the form above.
+
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the Nix
+devShell, the gate, the commit convention and the rules the test suite is held
+to; [docs/architecture.md](docs/architecture.md) traces how a command moves
+through the guard and records the three design invariants that look like
+inconsistencies and are not.
 
 ## License
 

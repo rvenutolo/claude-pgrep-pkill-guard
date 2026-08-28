@@ -1,0 +1,70 @@
+name: Bug report
+description: The hook crashed, emitted invalid JSON, mishandled its state directory, or reported itself INACTIVE when it should
+  not have.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Use this form for the hook itself misbehaving: a crash, output that is not valid JSON, a problem with the `repeat`
+        rule's state directory, or an INACTIVE message that looks wrong. If the guard ran fine but reached the wrong verdict
+        — it denied a safe command, allowed a dangerous one, or named the wrong mitigation — use the **False verdict** form
+        instead. Please redact absolute paths from every field: write `<project>` for a checkout path and `~` for your home
+        directory.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected to see instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How can it be reproduced?
+      description: >-
+        The smallest sequence of steps that shows the problem, including any relevant environment such as `PGREP_PKILL_GUARD_STATE_DIR`
+        or `XDG_RUNTIME_DIR`.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: The hook's output
+      description: >-
+        Whatever the hook wrote, even if it is not valid JSON. Capture it with: `jq --null-input --arg cmd '<your command>'
+        '{tool_name:"Bash",tool_input:{command:$cmd}}' | "${CLAUDE_PLUGIN_ROOT}"/hooks/pgrep-pkill-guard.sh`
+      render: json
+  - type: input
+    id: bash-version
+    attributes:
+      label: bash version
+      description: The first line of `bash --version`.
+      placeholder: GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)
+    validations:
+      required: true
+  - type: input
+    id: awk-version
+    attributes:
+      label: awk version
+      description: >-
+        The output of `awk --version`, or `awk -W version` for one-true-awk. Which awk you have is load-bearing on macOS,
+        where the stock `awk` is BWK rather than gawk.
+      placeholder: awk version 20240728
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+      placeholder: macOS 15.3, or Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Claude Code version and plugin version
+      description: The Claude Code version, plus the version of pgrep-pkill-guard you have installed.
+      placeholder: Claude Code 2.0.14, pgrep-pkill-guard 1.4.0
+    validations:
+      required: true

@@ -109,3 +109,15 @@ setup() {
   [ "${author_name}" = 'Rick Venutolo' ]
   [ "${author_url}" = 'https://github.com/rvenutolo' ]
 }
+
+@test "manifest: the hooks description is behavioural, not a label" {
+  local description
+  description="$(jq --raw-output '.description' "${HOOKS_JSON}")"
+  # Anthropic's convention is to say what the hook fires on, what it returns and
+  # why the timeout is what it is -- not to restate the plugin name. A label
+  # fits in a tweet; this cannot.
+  [ "${#description}" -gt 200 ]
+  [[ "${description}" == *'PreToolUse'* ]]
+  [[ "${description}" == *'permissionDecision'* ]]
+  [[ "${description}" == *'additionalContext'* ]]
+}

@@ -1,0 +1,49 @@
+name: Feature request
+description: A command shape the guard does not cover, or a reason text that names the wrong way out.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Use this form to propose a new command shape for the guard to cover, or better wording for a reason text. If the guard
+        already got a specific command wrong, file it as a **False verdict** instead — that form collects the reproduction
+        the fix needs. Please redact absolute paths from every field: write `<project>` for a checkout path and `~` for your
+        home directory.
+  - type: textarea
+    id: shape
+    attributes:
+      label: What command shape or behaviour is unguarded or misworded?
+      description: >-
+        Describe the shape as generally as you can, and give a concrete example of it. Quoting and whitespace are load-bearing,
+        since the guard tokenizes the command string.
+      placeholder: >-
+        A `killall` invocation, which matches by process name rather than by full command line but can still reach the session
+        shell.
+    validations:
+      required: true
+  - type: textarea
+    id: why-wrong
+    attributes:
+      label: Why is the current behaviour wrong?
+      description: >-
+        What goes wrong today when an agent runs this — a killed session, a loop that never terminates, a mitigation the agent
+        cannot act on.
+    validations:
+      required: true
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: What mitigation should the reason text name?
+      description: >-
+        The reason text is this project's product, not the denial. A deny that does not tell the agent what to run instead
+        just earns a retry of the same command, so say what the correct command looks like.
+      placeholder: >-
+        Kill by PID recorded at start time (`kill "$pid"`), or probe liveness first with `kill -0 "$pid"`.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What alternatives did you consider?
+      description: >-
+        Other ways to reach the same outcome, including doing nothing, and why they are worse.

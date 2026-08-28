@@ -64,3 +64,24 @@ setup() {
   assert_output --partial 'INACTIVE'
   refute_output --partial "printf '{}"
 }
+
+@test "manifest: the marketplace category is a recognised value" {
+  local category
+  category="$(jq --raw-output '.plugins[0].category' "${MARKET_JSON}")"
+  # `safety` appears zero times across the 289 entries in
+  # anthropics/claude-plugins-official; `security` is the real vocabulary.
+  [ "${category}" = 'security' ]
+}
+
+@test "manifest: safety survives as a keyword" {
+  run jq --exit-status '.keywords | index("safety")' "${PLUGIN_JSON}"
+  assert_success
+}
+
+@test "manifest: plugin and marketplace advertise the same version" {
+  local plugin_version market_version
+  plugin_version="$(jq --raw-output '.version' "${PLUGIN_JSON}")"
+  market_version="$(jq --raw-output '.plugins[0].version' "${MARKET_JSON}")"
+  [ "${plugin_version}" = "${market_version}" ]
+  [[ "${plugin_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}

@@ -13,7 +13,8 @@
       "name": "pgrep-pkill-guard",
       "source": "./",
       "description": "Blocks pgrep/pkill commands that match the agent's own process or poll in a loop.",
-      "category": "safety",
+      "version": "1.0.0",
+      "category": "security",
       "keywords": ["hook", "safety", "pgrep", "pkill"]
     }
   ]

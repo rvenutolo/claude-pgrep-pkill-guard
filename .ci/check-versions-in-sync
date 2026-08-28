@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+# @description Assert the plugin version agrees across every file that carries
+#              one. `plugin.json` is what gates whether installed users receive
+#              updates, and the marketplace entry is what the /plugin Discover
+#              tab reads; release-please bumps both through `extra-files`, so a
+#              disagreement means a bump was lost rather than that a version was
+#              chosen.
+#
+#              `marketplace.json`'s `metadata.version` is deliberately NOT
+#              checked: it versions the marketplace catalogue, not the plugin,
+#              and nothing should couple it to the plugin's release cadence.
+# @noargs
+# @exitcode 0 every version field agrees
+# @exitcode 1 a file is missing or unparseable, or the versions disagree
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+readonly PLUGIN_JSON="${REPO_DIR}/.claude-plugin/plugin.json"
+readonly MARKET_JSON="${REPO_DIR}/.claude-plugin/marketplace.json"
+readonly RP_MANIFEST="${REPO_DIR}/.release-please-manifest.json"
+
+# release-please's record of the LAST RELEASED version. `0.0.0` means no release
+# has been cut yet, which is a legitimate bootstrap state rather than drift: the
+# manifest only catches up when the first release commit lands. After that first
+# release the value can never return to 0.0.0, so this exemption never fires
+# again. Setting the manifest to the advertised version before a tag exists
+# would make release-please skip that version entirely.
+readonly BOOTSTRAP_VERSION='0.0.0'
+
+# @description Read one jq path out of one file, failing loudly rather than
+#              yielding the string `null` when the field is absent.
+# @arg $1 file the JSON file to read
+# @arg $2 filter the jq filter to apply
+# @stdout the extracted value
+# @exitcode 0 the field exists and is a non-null scalar
+# @exitcode 1 the file is missing, unparseable, or the field is absent
+function read_version() {
+  local -r file="$1" filter="$2"
+  if [[ ! -f "${file}" ]]; then
+    printf 'FAIL: %s does not exist\n' "${file#"${REPO_DIR}/"}" >&2
+    return 1
+  fi
+  local value
+  if ! value="$(jq --raw-output --exit-status "${filter}" "${file}" 2> /dev/null)"; then
+    printf 'FAIL: %s has no %s\n' "${file#"${REPO_DIR}/"}" "${filter}" >&2
+    return 1
+  fi
+  if [[ ! "${value}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf 'FAIL: %s %s is not semver-shaped: %s\n' \
+      "${file#"${REPO_DIR}/"}" "${filter}" "${value}" >&2
+    return 1
+  fi
+  printf '%s\n' "${value}"
+}
+
+function main() {
+  local rc=0 plugin_version='' market_version='' manifest_version=''
+
+  plugin_version="$(read_version "${PLUGIN_JSON}" '.version')" || rc=1
+  market_version="$(read_version "${MARKET_JSON}" '.plugins[0].version')" || rc=1
+  manifest_version="$(read_version "${RP_MANIFEST}" '."."')" || rc=1
+
+  if ((rc != 0)); then
+    return "${rc}"
+  fi
+
+  if [[ "${plugin_version}" != "${market_version}" ]]; then
+    printf 'FAIL: plugin.json %s != marketplace.json plugins[0] %s\n' \
+      "${plugin_version}" "${market_version}" >&2
+    rc=1
+  fi
+
+  if [[ "${manifest_version}" != "${BOOTSTRAP_VERSION}" &&
+    "${manifest_version}" != "${plugin_version}" ]]; then
+    printf 'FAIL: .release-please-manifest.json %s != plugin.json %s\n' \
+      "${manifest_version}" "${plugin_version}" >&2
+    rc=1
+  fi
+
+  if ((rc == 0)); then
+    printf 'ok: plugin %s, marketplace %s, release-please manifest %s\n' \
+      "${plugin_version}" "${market_version}" "${manifest_version}" >&2
+  fi
+  return "${rc}"
+}
+
+main "$@"

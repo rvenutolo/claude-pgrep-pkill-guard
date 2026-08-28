@@ -2,6 +2,10 @@ name: Release
 on:
   push:
     branches: [main]
+  # The escape hatch. The App wiring cannot be fully proven until it runs — the
+  # APP_PRIVATE_KEY secret cannot be read back — and without a manual trigger
+  # the only way to retry a failed release job is an empty commit on main.
+  workflow_dispatch:
 permissions: {}
 concurrency:
   group: ${{ github.workflow }}
@@ -10,12 +14,95 @@ jobs:
   release-please:
     name: release-please
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 20, not 10: this job now installs Nix to reformat release-please's output.
+    timeout-minutes: 20
     permissions:
-      contents: write
-      pull-requests: write
+      # The App installation token does every write. The ambient GITHUB_TOKEN
+      # needs no scopes beyond reading this repo.
+      contents: read
     steps:
-      - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445  # v4.2.0
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
         with:
+          egress-policy: block
+          # Same allowlist as ci.yml's gate job, which already proves it covers
+          # a Nix install plus the GitHub API.
+          #
+          # No blank line may follow this folded scalar. yamlfmt's
+          # retain_line_breaks sentinel (`#magic___^_^___line`) leaks INTO the
+          # scalar when one does, and harden-runner splits allowed-endpoints on
+          # a literal space, so the sentinel would become a junk endpoint and
+          # the egress allowlist would be silently wrong. ci.yml has no blank
+          # line there either, for the same reason.
+          allowed-endpoints: >-
+            api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
+            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
+            releases.nixos.org:443 tarballs.nixos.org:443
+      # Pull requests created with the default GITHUB_TOKEN do not trigger
+      # workflows, so the release PR would never run the five required status
+      # checks and could only be merged by admin bypass. An App installation
+      # token is a real actor and its events do trigger workflows.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445  # v4.2.0
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # release-please re-serialises every file it touches, and two of this
+      # repo's own gates then reject the result: prettier collapses the
+      # `keywords` array it expands in the plugin and marketplace manifests, and
+      # markdownlint's MD012 rejects the double blank lines it writes into the
+      # changelog. Left alone, merging the release PR turns main red. So the
+      # release branch is reformatted in place before anyone can merge it.
+      #
+      # This cannot loop: the push targets the release branch, and this workflow
+      # fires only on push to main. It DOES re-trigger ci.yml through the PR's
+      # synchronize event, which is the entire point.
+      - name: Check out the release branch
+        if: steps.release.outputs.pr != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+          token: ${{ steps.app-token.outputs.token }}
+          # The one place in this repo where credentials must persist: this step
+          # pushes.
+          persist-credentials: true
+
+      - uses: ./.github/actions/setup
+        if: steps.release.outputs.pr != ''
+
+      - name: Apply repo formatting to the generated files
+        if: steps.release.outputs.pr != ''
+        shell: bash
+        env:
+          # Attribute the commit to the App rather than to a person. 322229312
+          # is the bot user's numeric id, from /users/<slug>[bot].
+          GIT_AUTHOR_NAME: claude-pgrep-pkill-guard-releaser[bot]
+          GIT_AUTHOR_EMAIL: 322229312+claude-pgrep-pkill-guard-releaser[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: claude-pgrep-pkill-guard-releaser[bot]
+          GIT_COMMITTER_EMAIL: 322229312+claude-pgrep-pkill-guard-releaser[bot]@users.noreply.github.com
+        run: |
+          set -Eeuo pipefail
+          # treefmt handles the JSON manifests. It does not touch markdown at
+          # all, so the changelog needs markdownlint's own fixer.
+          nix fmt
+          if [[ -f CHANGELOG.md ]]; then
+            # --fix exits non-zero if anything is left unfixable. Let that fail
+            # the job: a residual lint error here is a red main after merge.
+            nix develop --command markdownlint-cli2 --fix CHANGELOG.md
+          fi
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo 'release-please output already matches repo formatting'
+            exit 0
+          fi
+          git status --short
+          git add --all
+          # Conventional, so the PR's commitlint check stays green.
+          git commit --message 'chore: apply repo formatting to the release-please output'
+          git push

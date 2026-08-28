@@ -1,10 +1,27 @@
 # pgrep-pkill-guard
 
+[![CI](https://github.com/rvenutolo/claude-pgrep-pkill-guard/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rvenutolo/claude-pgrep-pkill-guard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/rvenutolo/claude-pgrep-pkill-guard?sort=semver)](https://github.com/rvenutolo/claude-pgrep-pkill-guard/releases)
+[![License: MIT](https://img.shields.io/github/license/rvenutolo/claude-pgrep-pkill-guard)](LICENSE)
+
 A Claude Code `PreToolUse` hook that blocks the `pgrep`/`pkill` command shapes
 that make an agent kill its own session or spin forever on a process that can
 never exit.
 
-## What it prevents
+![Claude Code denying a `pkill --full` call. The guard's reason explains that
+the pattern matches the invoking `bash -c` shell and would terminate the
+session, then lists three fixes: kill by PID, `--ignore-ancestors`, or the
+`"[p]attern"` bracket trick.](assets/deny-message.png)
+
+The reason leads with the Write tool on purpose: quoting a denied command in
+prose is the one legitimate way that shape reaches the Bash tool, and when that
+line trailed the fixes instead of opening the message it went unread.
+
+## Why this exists
+
+An agent runs `pkill --full java` to clean up a stuck JVM, and the session dies
+with it. The pattern matched the shell that was running the command, so the
+agent killed its own session.
 
 The Bash tool runs every command as `bash -c '<command>'`. The command text is
 therefore part of an **ancestor process command line**, and any pattern search
@@ -13,12 +30,12 @@ over full command lines finds it.
 Two things follow, and both happen in practice:
 
 - `pkill --full java` matches the `bash -c 'pkill --full java'` that is running
-  it. The agent kills its own session.
+  it.
 - `until ! pgrep --full myserver; do sleep 5; done` matches the `bash -c` that
   is running the loop. The loop always sees a live process, so it never exits —
   it spins until the tool call times out or a human intervenes.
 
-Before — the agent runs it, and the session dies:
+Before — the agent runs it:
 
 ```console
 $ pkill --full java
@@ -89,17 +106,67 @@ stateful rule:
 ```text
 /plugin marketplace add rvenutolo/claude-pgrep-pkill-guard
 /plugin install pgrep-pkill-guard@rvenutolo
+/reload-plugins
 ```
 
 The repo is its own marketplace, so there is no separate marketplace to add.
+The third line activates the newly installed hook in the running session.
 
-## Requirements
+If the install reports that the marketplace is not found, the first line has not
+taken effect yet. Run it, then `/reload-plugins`, then retry the install.
+
+The same two steps from the CLI, for scripting a machine or a dotfiles
+bootstrap:
+
+```console
+claude plugin marketplace add rvenutolo/claude-pgrep-pkill-guard
+claude plugin install pgrep-pkill-guard@rvenutolo
+```
+
+`claude plugin install` takes `-s`/`--scope` with the values `user`, `project`,
+or `local`, and defaults to `user`. `user` records the install for every project
+on this machine, `project` records it in the repo for the team, and `local`
+records it for this checkout only. `claude plugin marketplace add` takes its own
+`--scope`, with the same three values and the same `user` default, but no short
+form.
+
+## Compatibility
+
+The guard is bash and awk with no network calls, so "supported" means one thing
+here: the shells and awks CI actually runs it under. Every row below is a real
+job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+| Platform | bash | awk | CI job |
+| --- | --- | --- | --- |
+| Linux, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk | `gate (ubuntu-latest)` |
+| macOS, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk | `gate (macos-latest)` |
+| Linux, ambient distro tools | the runner image's own bash | whatever the image resolves `awk` to | `compat (ubuntu, ambient)` |
+| macOS, `brew install bash` | Homebrew bash | stock `/usr/bin/awk` (one-true-awk) | `compat (macos, homebrew bash)` |
+| macOS, stock bash 3.2 | 3.2 — the guard reports itself INACTIVE | not reached | `compat (macos, stock bash 3.2)` |
+
+The two `gate` legs run the whole gate — formatting, lints, the governance
+checks and the bats suite twice, once under gawk and once under one-true-awk —
+inside the flake's devShell, so both the bash and both awks come from
+`flake.lock` rather than from the runner. The two ambient `compat` legs run the
+test suite only, against the tools the runner ships: `compat (ubuntu, ambient)`
+takes the image's own bash, `jq` and `awk`, and prints which awk it got, since
+the image may resolve it to either gawk or mawk. `compat (macos, homebrew
+bash)` installs bash from Homebrew and nothing else, then asserts that `awk`
+still resolves to `/usr/bin/awk` before running the suite. `compat (macos,
+stock bash 3.2)` does not run the suite at all; it asserts the property that
+matters on a machine below the floor — that the guard says so out loud rather
+than quietly doing nothing.
+
+What that reduces to, for the machine you are installing on:
 
 - **bash 4.3 or newer** (the guard uses namerefs)
 - **`jq`**
 - **`awk`** — any POSIX awk: gawk, mawk, or one-true-awk (the stock `awk` on
-  macOS and the BSDs). The scanner depends on nothing awk-specific, and the
-  repo's own gate runs the whole suite under gawk *and* one-true-awk.
+  macOS and the BSDs). The scanner depends on nothing awk-specific.
+- **Claude Code** — any version with plugin marketplaces and `PreToolUse`
+  `permissionDecision` support. There is no verified numeric floor to quote, so
+  this README does not invent one; CI validates both plugin manifests against a
+  pinned CLI (`2.1.251`, in the `validate` job).
 
 **Linux works out of the box.** Distro bash is 4.3+.
 
@@ -132,6 +199,30 @@ hook that blocked on its own breakage would be worse than no hook; a hook that
 went quiet on its own breakage would be worse still, because you would never
 learn you were unprotected.
 
+## Limitations
+
+- **It reads one string.** The guard sees the command text handed to the Bash
+  tool and nothing else. `bash script.sh` is opaque to it — the invocation is
+  inspected, the file is not, so a `pkill --full java` on line 40 of that script
+  is never examined. The same goes for a script written to a file in one tool
+  call and run in the next: neither call carries the dangerous shape. Nothing
+  from any other tool reaches the guard at all; the hook matches `Bash` only.
+- **It stands down rather than guessing.** Every precondition listed under
+  [Compatibility](#compatibility) that fails — an old bash, a missing `jq` or
+  `awk`, an unreadable scanner, an awk that fails the integrity trailer — makes
+  the guard inactive for that command and says so. Any other unexpected failure
+  inside the hook is caught by an `ERR` trap that emits a bare allow. No
+  precondition failure ever produces a deny.
+- **The state rule is best-effort.** `repeat` needs two things it cannot create:
+  a `session_id` on the request, and a state directory it owns. Without either
+  it returns without a word, and the command proceeds. Unlike the precondition
+  failures above, this stand-down is silent — nothing tells you the third probe
+  went uncounted.
+- **Pattern rules are bypassable by construction.** The guard matches command
+  shapes, so a rewrite defeats it, and two of those rewrites are documented
+  escapes on purpose. It is a guardrail against a mistake, not a boundary
+  against an adversary — see [Security](#security).
+
 ## Opting one command out
 
 Add `--ignore-ancestors`. It is a real `pgrep`/`pkill` flag — it excludes the
@@ -154,7 +245,7 @@ literal appears nowhere else in the same command — a second copy silently
 defeats it, and the guard checks for that.
 
 There is no environment variable or config flag that disables the guard
-wholesale. Uninstall the plugin if you want it off.
+wholesale. [Uninstall](#uninstall) the plugin if you want it off.
 
 ## `PGREP_PKILL_GUARD_STATE_DIR`
 
@@ -171,6 +262,34 @@ unset or points somewhere unwritable, or to keep the state out of a shared
 
 The plugin's own test suite sets this variable, which is the main reason it
 exists.
+
+## Uninstall
+
+```text
+/plugin uninstall pgrep-pkill-guard@rvenutolo
+```
+
+Or from the CLI:
+
+```console
+claude plugin uninstall pgrep-pkill-guard@rvenutolo
+```
+
+`claude plugin uninstall` takes the same `-s`/`--scope` flag as `install`, with
+the same `user` default, so a plugin installed into `project` or `local` has to
+be removed with the scope it was installed with.
+
+Removing the marketplace is optional, and leaving it in place costs nothing. If
+you want it gone too:
+
+```text
+/plugin marketplace remove rvenutolo
+```
+
+Nothing else needs cleaning up. The `repeat` rule's state directory lives
+outside the plugin directory, so uninstalling leaves it in place; the files in
+it are throwaway, and deleting them by hand only resets probe counters. See
+[PGREP_PKILL_GUARD_STATE_DIR](#pgrep_pkill_guard_state_dir) for where it lives.
 
 ## Reporting a false verdict
 
@@ -194,16 +313,13 @@ reported command becomes a permanent regression test.
 
 ## Security
 
-The guard is a guardrail, not a sandbox and not a privilege boundary. It reads
-only the command string handed to the Bash tool, so it never sees inside
-`bash script.sh`, never sees code written to a file in one call and run in the
-next, and stands down — allowing everything — whenever its own preconditions
-fail.
-
-[SECURITY.md](SECURITY.md) states that trust model in full and says what to
-report privately. **A command shape that slips past the guard is not one of
+The guard's trust model is in [SECURITY.md](SECURITY.md), which also says what
+to report privately. **A command shape that slips past the guard is not one of
 those things:** it is a false negative, and it belongs in a public issue, using
 the form above.
+
+[Limitations](#limitations) is the short version of that model: what the guard
+does not see, and where it stands down.
 
 ## Contributing
 

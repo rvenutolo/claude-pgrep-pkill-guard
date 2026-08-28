@@ -206,6 +206,11 @@ jobs:
         run: |
           set -Eeuo pipefail
           npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Load-bearing, not a courtesy echo: the npm package ships a
+          # bin/claude.exe stub that exit 1s when its native optional
+          # dependency is skipped, so this is what turns a stubbed install
+          # into a red job instead of a `plugin validate` step that silently
+          # validates nothing.
           claude --version
       - name: Validate both manifests
         # Both files by name. `claude plugin validate <directory>` resolves to

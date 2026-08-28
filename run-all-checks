@@ -51,6 +51,14 @@ function main() {
   log 'running nix flake check (formatting)'
   nix flake check --no-eval-cache "${REPO_DIR}" || rc=1
 
+  # Repo-consistency checks: devshell inputs match flake outputs, executable
+  # bits and shebangs are correct on the right files, external sources are
+  # SHA-pinned, versions agree across manifests, and the marketplace/plugin
+  # manifests satisfy the ported invariants. Deliberately excluded from this
+  # list: .ci/run-plugin-validate. This gate is hermetic -- every tool in it
+  # comes from the flake -- and a step whose behaviour depends on an ambient
+  # `claude` would make the gate non-deterministic; see that script's own
+  # header for the full rationale.
   log 'running governance checks'
   "${REPO_DIR}/.ci/check-devshell-provides" || rc=1
   "${REPO_DIR}/.ci/check-executable-bit" || rc=1

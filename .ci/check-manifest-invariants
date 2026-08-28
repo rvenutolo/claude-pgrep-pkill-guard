@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 
 # @description Assert the marketplace and plugin manifests satisfy the
-#              invariants the official community marketplace enforces on every
-#              submission -- I1-I4 and I9-I11 of
-#              claude-plugins-community/.github/actions/validate-plugins/11-validate-invariants.sh
-#              plus its step-41 parse of hooks.json. `claude plugin validate` is
-#              a schema check and waves every one of these through, so this
-#              script is what stands between a careless rename and a
-#              marketplace rejection.
+#              invariants the official community marketplace checks -- I1-I4
+#              and I8-I11 of
+#              claude-plugins-community/.github/actions/validate-plugins/scripts/11-validate-invariants.sh
+#              plus its step-41 parse of hooks.json. Upstream only WARNS on I1,
+#              I3 and I8 by default (WARN_INVARIANTS="I1 I3 I5 I8"; they fail
+#              the run only with fail-on-warnings set) -- this port hard-fails
+#              every one of them, deliberately stricter than upstream's
+#              default. `claude plugin validate` is a schema check and waves
+#              every one of these through, so this script is what stands
+#              between a careless rename and a marketplace rejection.
 #
-#              I5-I8 are deliberately absent: they constrain external
+#              I5-I7 are deliberately absent: they constrain external
 #              SHA-pinned `source` objects, and this marketplace's only source
-#              is the local `./`.
+#              is the local `./`. I8 applies to a local string `source` --
+#              exactly this marketplace's `"./"` -- and is implemented below.
 #
 #              Nearly all of the checking happens inside one jq program rather
-#              than in bash. Two of the rules -- the character-class checks --
-#              cannot be done portably in shell: `grep -P` is not guaranteed on
-#              macOS, where the gate also runs.
+#              than in bash. I8 is the exception: it needs a filesystem check to
+#              confirm `<source>/.claude-plugin/plugin.json` exists, and jq
+#              cannot stat. Two of the jq rules -- the character-class checks --
+#              cannot be done portably in shell either: `grep -P` is not
+#              guaranteed on macOS, where the gate also runs.
 # @arg $1 root optional tree to check; defaults to the git repo root. It exists
 #         so the bats suite can point the script at a fixture holding one
 #         deliberately broken manifest and assert that it fails. Without it the
@@ -41,15 +47,16 @@ readonly HOOKS_JSON="${ROOT}/hooks/hooks.json"
 # One jq program, emitting one line per violation. Single-quoted, so it must
 # contain no apostrophes -- including in its message strings.
 #
-# hidden_chars lists codepoints by decimal value: 8203-8205 are ZWSP/ZWNJ/ZWJ,
-# 65279 is the BOM, 8234-8238 are the bidi embedding/override controls, and
-# 8294-8297 are the bidi isolates. All of them render as nothing and can make
-# two different names look identical.
+# hidden_chars lists codepoints by decimal value: 8203-8207 are ZWSP/ZWNJ/ZWJ
+# plus the LTR/RTL marks (LRM 8206, RLM 8207), 65279 is the BOM, 8234-8238 are
+# the bidi embedding/override controls, and 8294-8297 are the bidi isolates.
+# All of them render as nothing and can make two different names look
+# identical.
 # shellcheck disable=SC2016
 readonly JQ_PROGRAM='
 def hidden_chars:
   explode | any(
-    . == 8203 or . == 8204 or . == 8205 or . == 65279
+    (. >= 8203 and . <= 8207) or . == 65279
     or (. >= 8234 and . <= 8238)
     or (. >= 8294 and . <= 8297));
 
@@ -75,6 +82,9 @@ def check_description($label):
 def check_source($label):
   ( if (test("^[A-Za-z0-9._/-]+$") | not)
     then "I9: \($label) source is outside the [A-Za-z0-9._/-] allowlist: \(.)"
+    else empty end ),
+  ( if contains("..")
+    then "I9: \($label) source contains a path traversal (..): \(.)"
     else empty end );
 
 def check_url($label):
@@ -141,6 +151,39 @@ function check_parses() {
   fi
 }
 
+# @description Assert I8: every marketplace plugins[] entry whose source is a
+#              string names a directory that vendors its own plugin.json. jq
+#              cannot stat a path, so this is the one invariant that runs in
+#              bash rather than inside JQ_PROGRAM.
+# @exitcode 0 every string source has a vendored .claude-plugin/plugin.json
+# @exitcode 1 at least one is missing
+function check_i8_vendored_sources() {
+  local rc=0
+  local -a entries
+  mapfile -t entries < <(jq --raw-output \
+    '.plugins | to_entries[] | select(.value.source | type == "string") | "\(.key)\t\(.value.source)"' \
+    "${MARKET_JSON}")
+
+  local entry index source stripped dir candidate
+  for entry in "${entries[@]}"; do
+    IFS=$'\t' read -r index source <<< "${entry}"
+    # Strip a leading ./ the way upstream does, so "./" and "./beta" both
+    # resolve relative to ROOT rather than growing a doubled slash.
+    stripped="${source#./}"
+    if [[ -z "${stripped}" ]]; then
+      dir="${ROOT}"
+    else
+      dir="${ROOT}/${stripped}"
+    fi
+    candidate="${dir}/.claude-plugin/plugin.json"
+    if [[ ! -f "${candidate}" ]]; then
+      fail "I8: marketplace plugins[${index}] source \"${source}\" has no vendored ${candidate}"
+      rc=1
+    fi
+  done
+  return "${rc}"
+}
+
 function main() {
   local rc=0 file
   for file in "${MARKET_JSON}" "${PLUGIN_JSON}" "${HOOKS_JSON}"; do
@@ -171,8 +214,10 @@ function main() {
     done <<< "${output}"
   fi
 
+  check_i8_vendored_sources || rc=1
+
   if ((rc == 0)); then
-    printf 'ok: manifests satisfy I1-I4, I9-I11 and the hooks.json parse\n' >&2
+    printf 'ok: manifests satisfy I1-I4, I8-I11 and the hooks.json parse\n' >&2
   fi
   return "${rc}"
 }

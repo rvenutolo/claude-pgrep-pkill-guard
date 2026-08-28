@@ -129,7 +129,7 @@ setup() {
 # @arg $1 root directory to populate
 function make_manifest_fixture() {
   local -r root="$1"
-  mkdir -p "${root}/.claude-plugin" "${root}/hooks"
+  mkdir -p "${root}/.claude-plugin" "${root}/hooks" "${root}/beta/.claude-plugin"
   cat > "${root}/.claude-plugin/marketplace.json" << 'JSON'
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
@@ -158,6 +158,20 @@ JSON
   "description": "A plugin description that is comfortably longer than ten characters.",
   "homepage": "https://example.com/alpha",
   "repository": "https://example.com/alpha.git",
+  "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
+}
+JSON
+  # beta-plugin's marketplace entry points at "./beta", and I8 now requires
+  # every string source to vendor its own plugin.json -- so the fixture must
+  # provide one, or every test that reuses this fixture would fail on I8 for
+  # the wrong reason.
+  cat > "${root}/beta/.claude-plugin/plugin.json" << 'JSON'
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "beta-plugin",
+  "description": "A vendored plugin description that is comfortably longer than ten characters.",
+  "homepage": "https://example.com/beta",
+  "repository": "https://example.com/beta.git",
   "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
 }
 JSON
@@ -234,6 +248,17 @@ function fixture_jq() {
   assert_output --partial 'I4'
 }
 
+@test "invariants: I8 rejects a source with no vendored plugin.json" {
+  local -r root="${BATS_TEST_TMPDIR}/i8"
+  make_manifest_fixture "${root}"
+  # "./ghost" passes the I9 allowlist and has no ".." -- the only thing wrong
+  # with it is that ${root}/ghost/.claude-plugin/plugin.json does not exist.
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[1].source = "./ghost"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I8'
+}
+
 @test "invariants: I9 rejects shell metacharacters in a source" {
   local -r root="${BATS_TEST_TMPDIR}/i9"
   make_manifest_fixture "${root}"
@@ -251,6 +276,15 @@ function fixture_jq() {
   assert_output --partial './; echo PAYLOAD_RAN'
 }
 
+@test "invariants: I9 rejects a .. traversal in a source" {
+  local -r root="${BATS_TEST_TMPDIR}/i9-traversal"
+  make_manifest_fixture "${root}"
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].source = "../outside"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I9'
+}
+
 @test "invariants: I10 rejects a zero-width space in a name" {
   local -r root="${BATS_TEST_TMPDIR}/i10"
   make_manifest_fixture "${root}"
@@ -258,6 +292,18 @@ function fixture_jq() {
   # file and the first editor or copy-paste that eats it turns this into a test
   # that silently checks nothing.
   fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].name = "alpha\u200bplugin"'
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
+  assert_failure
+  assert_output --partial 'I10'
+}
+
+@test "invariants: I10 rejects a left-to-right mark in a name" {
+  local -r root="${BATS_TEST_TMPDIR}/i10-ltr-mark"
+  make_manifest_fixture "${root}"
+  # \u200e, not a literal LEFT-TO-RIGHT MARK: a literal one is invisible in
+  # this file and the first editor or copy-paste that eats it turns this into
+  # a test that silently checks nothing.
+  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].name = "alpha\u200eplugin"'
   run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
   assert_failure
   assert_output --partial 'I10'

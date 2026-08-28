@@ -15,7 +15,12 @@
       "description": "Blocks pgrep/pkill commands that match the agent's own process or poll in a loop.",
       "version": "1.0.0",
       "category": "security",
-      "keywords": ["hook", "safety", "pgrep", "pkill"]
+      "keywords": [
+        "hook",
+        "safety",
+        "pgrep",
+        "pkill"
+      ]
     }
   ]
 }

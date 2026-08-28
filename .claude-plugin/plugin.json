@@ -9,5 +9,11 @@
   "homepage": "https://github.com/rvenutolo/claude-pgrep-pkill-guard",
   "repository": "https://github.com/rvenutolo/claude-pgrep-pkill-guard",
   "license": "MIT",
-  "keywords": ["hook", "safety", "pgrep", "pkill", "pretooluse"]
+  "keywords": [
+    "hook",
+    "safety",
+    "pgrep",
+    "pkill",
+    "pretooluse"
+  ]
 }

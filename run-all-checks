@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 # @description Run the full local verification gate: the formatting check, the
-#              governance lints, the lint suite, and the BATS suite -- the last
-#              twice, under gawk and under one-true-awk, because the hook must
-#              behave identically on both (#7). Verify-only
+#              governance lints, the benchmark smoke run, the lint suite, and
+#              the BATS suite -- the last twice, under gawk and under
+#              one-true-awk, because the hook must behave identically on both
+#              (#7). Verify-only
 #              — it never rewrites the tree, which is why `nix fmt` is a separate
 #              step run before it. Exit codes are AGGREGATED rather than failing
 #              fast, so a single run surfaces every failing category instead of
@@ -56,6 +57,11 @@ function main() {
   # SHA-pinned, versions agree across manifests, the marketplace/plugin
   # manifests satisfy the ported invariants, and every .github/ISSUE_TEMPLATE
   # form is one GitHub will render rather than silently drop from the chooser.
+  # bench/run --smoke drives one payload per cohort through the hook and checks
+  # every response parses as JSON. It asserts NOTHING about timing -- a timing
+  # assertion would be flaky on a shared runner. Its only job is that the
+  # benchmark harness cannot rot silently when the hook's interface or the
+  # corpus's shape changes.
   # Deliberately excluded from this list: .ci/run-plugin-validate. This gate is
   # hermetic -- every tool in it comes from the flake -- and a step whose
   # behaviour depends on an ambient `claude` would make the gate
@@ -68,6 +74,7 @@ function main() {
   "${REPO_DIR}/.ci/check-versions-in-sync" || rc=1
   "${REPO_DIR}/.ci/check-manifest-invariants" || rc=1
   "${REPO_DIR}/.ci/check-issue-forms" || rc=1
+  "${REPO_DIR}/bench/run" --smoke || rc=1
 
   log 'running lint checks'
   "${REPO_DIR}/.ci/run-lint-checks" || rc=1

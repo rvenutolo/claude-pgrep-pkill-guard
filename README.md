@@ -228,7 +228,7 @@ learn you were unprotected.
 The guard is a `PreToolUse` hook, so it runs on every Bash tool call. On the
 author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
 6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — an ordinary command, one
-mentioning neither `pgrep` nor a task-output file, costs a median of
+mentioning none of `pgrep`, `kill` or a task-output file, costs a median of
 **13.12 ms**, p95 16.80 ms. About 1.55 ms of that is process spawn, which any
 hook at all would pay.
 

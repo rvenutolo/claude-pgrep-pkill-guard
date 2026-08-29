@@ -227,23 +227,18 @@ learn you were unprotected.
 
 The guard is a `PreToolUse` hook, so it runs on every Bash tool call. On the
 author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
-6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — an everyday command, one
-that mentions neither `pgrep` nor a task-output file, costs about **11.08 ms**.
-Roughly 1.74 ms of that is process spawn and would be paid by any hook at all.
+6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — an ordinary command, one
+mentioning neither `pgrep` nor a task-output file, costs a median of
+**13.12 ms**, p95 16.80 ms. About 1.55 ms of that is process spawn, which any
+hook at all would pay.
 
-That everyday figure is the bottom of a range whose top, on the same path, is
-24.59 ms, and what drives the spread is how awkward the command is to tokenize.
-The corpus behind these numbers is `tests/cases/verdicts.tsv`, which exists to
-be hard on the scanner: even its allowed rows are quoting tricks, `bash -c`
-wrappers and `ssh host '...'` shapes, picked because they are nasty to tokenize
-rather than because they are typical. So 11.08 ms is where the commands a
-session actually runs sit, 24.59 ms is the cost of a deliberately hostile one,
-and 32.93 ms is the p95 over that hostile corpus.
-
-The paths that do more work cost more, and only the commands that reach them
-pay: one the guard has to inspect closely — a `pgrep`/`pkill` shape, a loop, the
-`repeat` state file — has a corpus median of 44.28 ms, and a denied command
-28.77 ms.
+Commands that reach the deeper paths cost more, and only they pay it: one the
+guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
+state file — has a median of 41.90 ms, and a denied command 26.52 ms. Those
+figures, and the 22.91 ms alongside them for the same path the ordinary
+commands take, come from `tests/cases/verdicts.tsv`, which exists to be hard on
+the scanner rather than to be representative — read them as a ceiling, not as
+what a session pays.
 
 One machine, one moment. The full table, the method and the provenance are in
 [bench/RESULTS.md](bench/RESULTS.md); `just bench` regenerates it.

@@ -9,7 +9,10 @@
 #              runs. `main` in the hook takes three materially different paths,
 #              and this script reports them separately rather than averaging
 #              over unlike things -- an aggregate number would describe none of
-#              them. See bench/RESULTS.md for the published run.
+#              them. It also reports a `typical` cohort of ordinary commands,
+#              because the corpus below is adversarial and its medians are not
+#              what a real session pays. See bench/RESULTS.md for the published
+#              run.
 #
 #              Corpus is tests/cases/verdicts.tsv, the same 304 rows the bats
 #              suite asserts on, so the benchmark cannot drift from the tests
@@ -39,7 +42,23 @@ readonly CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
 readonly DEFAULT_REPS=15
 
 # Report order, and the only cohort names recognised anywhere in this script.
-readonly -a COHORTS=('baseline' 'quiet' 'inspect' 'deny')
+readonly -a COHORTS=('baseline' 'typical' 'quiet' 'inspect' 'deny')
+
+# Ordinary commands, deliberately NOT drawn from the corpus. verdicts.tsv exists
+# to be hard on the scanner, so even its cheapest rows are not what a session
+# mostly runs, and without this cohort the report has no honest answer to "what
+# does a normal command cost" -- a reader would be left taking the `quiet` min,
+# the luckiest sample of the cheapest row, as a stand-in for it. Every one of
+# these is an `allow` that reaches exactly the same code path as `quiet`; the
+# only difference is that they are representative rather than adversarial.
+readonly -a TYPICAL_COMMANDS=(
+  'ls -la'
+  'git status --short'
+  'cat README.md'
+  'npm test'
+  'grep --recursive TODO src/'
+  'mkdir --parents build && cd build'
+)
 
 # What each cohort actually exercises, printed as a table column so a reader can
 # tell why the numbers differ instead of guessing.
@@ -49,6 +68,7 @@ readonly -a COHORTS=('baseline' 'quiet' 'inspect' 'deny')
 # shellcheck disable=SC2016
 declare -rA COHORT_PATH=(
   [baseline]='process spawn and pipe only, no hook -- the floor'
+  [typical]='the `quiet` path, driven by ordinary commands rather than the corpus'
   [quiet]='bash startup, one `jq` spawn, one scanner pass'
   [inspect]='the above, plus a second scanner pass, `probe_keys` and `repeat_check`'
   [deny]='the stateless tiers plus `deny_message`; no state'
@@ -67,6 +87,9 @@ asserts on -- grouped into the code paths the hook's `main` actually takes:
 
   baseline  the quiet payloads fed to `cat` instead of the hook: process spawn
             and pipe only, the floor every other number sits on top of
+  typical   a short list of ORDINARY commands, defined in this script rather
+            than drawn from the corpus, because the corpus is adversarial. Same
+            code path as quiet; this is the "what does a normal call cost" row
   quiet     allow verdicts whose command matches neither `pgrep` nor `.output`,
             so the stateful tier is skipped
   inspect   allow/warn verdicts whose command does match, so the stateful tier
@@ -278,14 +301,13 @@ function write_report() {
   printf 'machine was doing. The `baseline` row is the floor: it runs the identical\n'
   printf 'pipeline against `cat`, so the hook'\''s real contribution is the difference\n'
   printf 'between a row and that one.\n\n'
-  printf 'These medians are an UPPER bound on what a typical Bash call costs, and\n'
-  printf 'the corpus is why. `tests/cases/verdicts.tsv` exists to be hard on the\n'
-  printf 'scanner: even its `allow` rows are quoting tricks, `bash -c` wrappers and\n'
-  printf '`ssh host '\''...'\''` shapes, picked because they are awkward to tokenize\n'
-  printf 'rather than because they are typical. Only a handful of rows look like\n'
-  printf 'the commands a session actually runs, and those sit near the `quiet`\n'
-  printf 'row'\''s **min**, not its p50. Read the min as the everyday cost and the\n'
-  printf 'p50 as the cost of a deliberately nasty command.\n\n'
+  printf '`typical` is the row to quote for what the guard costs a real session.\n'
+  printf 'The other three hook rows are driven by `tests/cases/verdicts.tsv`, which\n'
+  printf 'exists to be hard on the scanner: even its `allow` rows are quoting\n'
+  printf 'tricks, `bash -c` wrappers and `ssh host '\''...'\''` shapes, picked because\n'
+  printf 'they are awkward to tokenize rather than because anyone runs them. Read\n'
+  printf '`quiet` as the adversarial ceiling on the same code path `typical` takes,\n'
+  printf 'and the gap between the two as the cost of tokenizing a nasty command.\n\n'
   printf 'Percentiles are nearest-rank over every sample in the cohort. Regenerate\n'
   printf 'with `just bench`.\n'
 }
@@ -351,14 +373,25 @@ function main() {
   done < <(load_payloads "bench-$$")
   ((${#payload_of[@]} > 0)) || die "corpus produced no payloads: ${CASES}"
 
+  # Appended after the corpus, not mixed into it: these are the only commands in
+  # the run that were chosen for being ordinary. See TYPICAL_COMMANDS.
+  local typical_command
+  for typical_command in "${TYPICAL_COMMANDS[@]}"; do
+    cohort_of+=('typical')
+    payload_of+=("$(jq --null-input --compact-output \
+      --arg sid "bench-$$" --arg cmd "${typical_command}" \
+      '{ session_id: $sid, tool_name: "Bash", tool_input: { command: $cmd } }')")
+  done
+
   local -a indices=()
-  local i seen_quiet=0 seen_inspect=0 seen_deny=0
+  local i seen_typical=0 seen_quiet=0 seen_inspect=0 seen_deny=0
   if ((smoke == 1)); then
     # One payload per cohort, and validate rather than trust: the smoke run
     # exists to prove this script still drives the hook's real contract.
     reps=1
     for i in "${!payload_of[@]}"; do
       case "${cohort_of[i]}" in
+        typical) ((seen_typical++ > 0)) && continue ;;
         quiet) ((seen_quiet++ > 0)) && continue ;;
         inspect) ((seen_inspect++ > 0)) && continue ;;
         deny) ((seen_deny++ > 0)) && continue ;;

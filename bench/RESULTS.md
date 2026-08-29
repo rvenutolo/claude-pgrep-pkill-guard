@@ -9,24 +9,25 @@ hook that runs on every Bash tool call.
 
 | field | value |
 | --- | --- |
-| date | 2026-08-29T17:15:09+00:00 |
-| commit | `9794eca` |
+| date | 2026-08-29T17:21:49+00:00 |
+| commit | `11ca231` |
 | kernel | Linux 6.8.0-138-generic x86_64 |
 | cpu | 12th Gen Intel(R) Core(TM) i9-12900HK |
 | bash | 5.3.15(1)-release |
 | awk | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/ny5hzk3l36pldfsjkh56ia7y55xr23vd-gawk-5.4.1/bin/awk`) |
 | jq | jq-1.8.2 |
 | repetitions | 15 |
-| samples | 5565 |
+| samples | 5655 |
 
 ## Per-call cost
 
 | cohort | path exercised | n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `baseline` | process spawn and pipe only, no hook -- the floor | 1005 | 0.96 | 1.74 | 2.34 | 4.22 |
-| `quiet` | bash startup, one `jq` spawn, one scanner pass | 1005 | 11.08 | 24.59 | 32.93 | 46.62 |
-| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 1215 | 21.13 | 44.28 | 63.23 | 79.82 |
-| `deny` | the stateless tiers plus `deny_message`; no state | 2340 | 19.30 | 28.77 | 41.70 | 56.58 |
+| `baseline` | process spawn and pipe only, no hook -- the floor | 1005 | 0.96 | 1.55 | 2.05 | 4.05 |
+| `typical` | the `quiet` path, driven by ordinary commands rather than the corpus | 90 | 10.93 | 13.12 | 16.80 | 17.15 |
+| `quiet` | bash startup, one `jq` spawn, one scanner pass | 1005 | 9.61 | 22.91 | 29.64 | 40.70 |
+| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 1215 | 21.41 | 41.90 | 59.86 | 83.56 |
+| `deny` | the stateless tiers plus `deny_message`; no state | 2340 | 18.34 | 26.52 | 37.85 | 50.12 |
 
 ## How to read this
 
@@ -37,14 +38,13 @@ machine was doing. The `baseline` row is the floor: it runs the identical
 pipeline against `cat`, so the hook's real contribution is the difference
 between a row and that one.
 
-These medians are an UPPER bound on what a typical Bash call costs, and
-the corpus is why. `tests/cases/verdicts.tsv` exists to be hard on the
-scanner: even its `allow` rows are quoting tricks, `bash -c` wrappers and
-`ssh host '...'` shapes, picked because they are awkward to tokenize
-rather than because they are typical. Only a handful of rows look like
-the commands a session actually runs, and those sit near the `quiet`
-row's **min**, not its p50. Read the min as the everyday cost and the
-p50 as the cost of a deliberately nasty command.
+`typical` is the row to quote for what the guard costs a real session.
+The other three hook rows are driven by `tests/cases/verdicts.tsv`, which
+exists to be hard on the scanner: even its `allow` rows are quoting
+tricks, `bash -c` wrappers and `ssh host '...'` shapes, picked because
+they are awkward to tokenize rather than because anyone runs them. Read
+`quiet` as the adversarial ceiling on the same code path `typical` takes,
+and the gap between the two as the cost of tokenizing a nasty command.
 
 Percentiles are nearest-rank over every sample in the cohort. Regenerate
 with `just bench`.

@@ -10,8 +10,13 @@ setup() {
 # `pkill` is deliberately absent: it contains `kill`, so `kill` subsumes it.
 # `.output` covers TASK_OUTPUT_PATH_RE, which requires that literal suffix.
 #
+# The single source of truth is the array: TRIGGER_RE is built by joining it,
+# so the list is stated exactly once in this file.
+#
 # POSIX short flags on purpose -- see the header of tests/manifest.bats.
-readonly TRIGGER_RE='pgrep|kill|\.output'
+readonly -a TRIGGER_TOKENS=('pgrep' 'kill' '\.output')
+TRIGGER_RE="$(IFS='|'; echo "${TRIGGER_TOKENS[*]}")"
+readonly TRIGGER_RE
 
 @test "prefilter: every non-allow row carries a trigger token" {
   local cmd_json expected command missing=0 checked=0
@@ -36,7 +41,7 @@ readonly TRIGGER_RE='pgrep|kill|\.output'
   # Each token must earn its place: dropping any one of the three must leave at
   # least one non-allow row uncovered. This is what stops the set from growing
   # into an always-true filter that quietly restores the old cost.
-  local -r tokens=('pgrep' 'kill' '\.output')
+  local -ar tokens=("${TRIGGER_TOKENS[@]}")
   local i j reduced cmd_json expected command uncovered
   for i in "${!tokens[@]}"; do
     reduced=''

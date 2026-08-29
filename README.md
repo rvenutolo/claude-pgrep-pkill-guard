@@ -235,10 +235,10 @@ hook at all would pay.
 Commands that reach the deeper paths cost more, and only they pay it: one the
 guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
 state file — has a median of 41.90 ms, and a denied command 26.52 ms. Those
-figures, and the 22.91 ms alongside them for the same path the ordinary
-commands take, come from `tests/cases/verdicts.tsv`, which exists to be hard on
-the scanner rather than to be representative — read them as a ceiling, not as
-what a session pays.
+figures, and the 22.91 ms alongside them for a command the guard actually
+inspects, come from `tests/cases/verdicts.tsv`, which exists to be hard on the
+scanner rather than to be representative — read them as a ceiling, not as what
+a session pays.
 
 One machine, one moment. The full table, the method and the provenance are in
 [bench/RESULTS.md](bench/RESULTS.md); `just bench` regenerates it.

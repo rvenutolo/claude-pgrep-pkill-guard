@@ -2011,14 +2011,21 @@ function main() {
   # one `awk` scanner pass, and on an ordinary Bash call both find nothing:
   # #32 measured 13.12 ms per call against a 1.55 ms spawn floor.
   #
-  # This is sound because the guard reaches a non-allow verdict by exactly two
-  # routes, and both leave one of these three substrings in the raw payload:
+  # This is sound because it is provably weaker than a gate the guard already
+  # applies to the parsed command:
   #
-  #   - the scanner recognises a command-name token equal to `pgrep`, `pkill`
-  #     or `kill` -- the only three names compared anywhere in this file. A
-  #     token equal to `pkill` contains `kill`, which is why `pkill` is not in
-  #     the pattern below and must not be added.
-  #   - a path matches TASK_OUTPUT_PATH_RE, which requires a literal `.output`.
+  #   - classify_command opens with an early `allow` unless the command
+  #     contains `pgrep`, `pkill`, or `.output` -- every stateless deny/warn/
+  #     inactive verdict has to pass through that gate on its way out.
+  #   - the repeat tier below is separately restricted to commands containing
+  #     `pgrep` or `.output` (see the comment above the repeat_check call), so
+  #     no verdict can arise from the state file alone either.
+  #
+  # `pkill` contains `kill`, which is why `pkill` is not in the pattern below
+  # and must not be added, and the command is itself a substring of the
+  # payload it was extracted from. So this raw-payload check is a strictly
+  # weaker version of a gate the hook already runs on the parsed command --
+  # it cannot hide a verdict the hook would otherwise reach.
   #
   # Testing the RAW PAYLOAD rather than the parsed command is the whole point.
   # A substring test does not care that `pkill` sits behind `sudo`, inside
@@ -2033,7 +2040,10 @@ function main() {
   # The proof assumes the scanner never recognises a name that is not a literal
   # substring of the payload -- true because it does not unquote (#52). If that
   # ever changes, revisit this pattern in the same commit; tests/prefilter.bats
-  # is what will catch the drift.
+  # is what will catch the drift. It also assumes the payload spells the
+  # command's characters out literally rather than escaping them -- true today
+  # because Claude Code's payloads come from Node's JSON.stringify, which
+  # never \u-escapes ASCII letters.
   #
   # Bash pattern matching, not `printf ... | grep`: a grep would spawn a process
   # and hand back a third of what this saves. `[[ ]]` glob matching is a builtin

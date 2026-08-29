@@ -239,13 +239,19 @@ stdout. `tests/scanner.bats` may drive it directly with `awk -f`, always under
 ### 4. The prefilter's token set is `pgrep`, `kill`, `.output` — and is a proof
 
 `main` returns `{}` without spawning `jq` or `awk` when the raw hook payload
-contains none of those three substrings. That is sound because the guard
-reaches a non-`allow` verdict by exactly two routes: the scanner recognises a
-command-name token equal to `pgrep`, `pkill` or `kill` — the only three names
-compared anywhere in `hooks/pgrep-pkill-guard.sh` — or a path matches
-`TASK_OUTPUT_PATH_RE`, which requires a literal `.output`. A token equal to
-`pkill` contains `kill`, so `kill` subsumes it and `pkill` is deliberately not
-in the pattern.
+contains none of those three substrings. The proof is containment, not
+enumeration. `classify_command` itself opens with an early `allow` unless the
+COMMAND contains `pgrep`, `pkill`, or `.output`, and every stateless `deny`,
+`warn`, or `inactive` verdict has to pass through that gate on its way out.
+`main` separately restricts the stateful repeat tier to commands containing
+`pgrep` or `.output`, so no verdict can arise from the per-session state file
+alone either. The guard, in other words, already prefilters on the parsed
+command before this prefilter ever runs. The new check applies the identical
+predicate to the raw payload, with `pkill` widened to `kill`. Since `pkill` is
+a substring of `kill`, and the command is itself a substring of the payload it
+was extracted from, this prefilter is provably weaker than a gate the hook
+already applies — it cannot suppress a verdict the hook would otherwise
+reach.
 
 **Why the test states the list instead of reading it.**
 `tests/prefilter.bats` hardcodes the same three tokens. That duplication is the
@@ -255,7 +261,7 @@ loop — `tests/prefilter.bats` pins corpus against specification, and the 310
 rows of `tests/classify.bats` pin the hook against the corpus. Neither reaches
 inside the hook, so invariant 3 still holds.
 
-**The assumption it rests on.** The proof needs every token the scanner
+**The assumptions it rests on.** The proof needs every token the scanner
 recognises to be a literal substring of the payload. That is true only because
 the scanner does not unquote: `"pkill" --full x` and `pk\ill --full x` are
 allowed today, which is filed as issue #52 and pinned by corpus rows. If #52 is
@@ -263,6 +269,16 @@ ever closed by teaching the scanner to unquote, this token set must be
 revisited in the same change — an unquoting scanner could recognise `pk\ill`
 in a payload containing no `kill` substring. `tests/prefilter.bats` is what
 catches it.
+
+A second assumption sits alongside the first: the prefilter matches raw
+payload bytes, so it also assumes the payload spells the command's characters
+out literally. A serializer that `\u`-escaped ASCII letters could hide a
+trigger token from it — a payload spelling `pgrep` as `\u0070grep` would
+return `{}` where the pre-change hook still denied. This is not reachable in
+practice: Claude Code's payloads come from Node's `JSON.stringify`, which
+never escapes ASCII letters, and reaching it would additionally require the
+model to obfuscate its own command. It is recorded here because it is an
+assumption the prefilter makes, not because it is a live risk.
 
 **Why not Claude Code's own `if:` handler filter.** Because it matches a
 parsed command tree. Measured against this corpus, an `if:` of `Bash(pgrep *)`

@@ -126,7 +126,17 @@ state failure allows the command**, and the ones a user could act on emit a
 `systemMessage` saying the guard is INACTIVE for that command.
 
 The loud path covers bash below 4.3, a missing `jq` or `awk`, an unreadable
-scanner, and an awk that fails the integrity trailer. The silent path covers
+scanner, and an awk that fails the integrity trailer.
+
+Since the payload prefilter landed, those three loud warnings fire only for
+commands that carry a trigger token. A command mentioning neither `pgrep`, nor
+`kill`, nor a task-output file returns `{}` whether or not `jq` is installed,
+so warning about an inactive guard on that call describes a decision the guard
+was never going to make. The user still learns they are unprotected the first
+time they type something the guard would have looked at, which is the moment
+the warning is worth anything.
+
+The silent path covers
 the `repeat` rule's state: no directory, unreadable, not a regular file, not
 owned by the caller, a symlinked directory, an oversized file — each returns
 quietly and the command proceeds, because the state is a heuristic and is never
@@ -141,7 +151,7 @@ a long sequence of `|| return 0` guards rather than as assertions.
 
 ## Design invariants
 
-Three rules the code depends on and cannot enforce. Each is repeated as a
+Four rules the code depends on and cannot enforce. Each is repeated as a
 comment in the source it constrains; if one changes here, change the comment
 too.
 
@@ -225,3 +235,41 @@ exactly that.
 interface: a command on stdin, offset/token records and an integrity trailer on
 stdout. `tests/scanner.bats` may drive it directly with `awk -f`, always under
 `LC_ALL=C`, because that is precisely how the hook itself calls it.
+
+### 4. The prefilter's token set is `pgrep`, `kill`, `.output` — and is a proof
+
+`main` returns `{}` without spawning `jq` or `awk` when the raw hook payload
+contains none of those three substrings. That is sound because the guard
+reaches a non-`allow` verdict by exactly two routes: the scanner recognises a
+command-name token equal to `pgrep`, `pkill` or `kill` — the only three names
+compared anywhere in `hooks/pgrep-pkill-guard.sh` — or a path matches
+`TASK_OUTPUT_PATH_RE`, which requires a literal `.output`. A token equal to
+`pkill` contains `kill`, so `kill` subsumes it and `pkill` is deliberately not
+in the pattern.
+
+**Why the test states the list instead of reading it.**
+`tests/prefilter.bats` hardcodes the same three tokens. That duplication is the
+point: a test that extracted the list from the hook would agree with it by
+construction and assert nothing. Instead two independent assertions close the
+loop — `tests/prefilter.bats` pins corpus against specification, and the 310
+rows of `tests/classify.bats` pin the hook against the corpus. Neither reaches
+inside the hook, so invariant 3 still holds.
+
+**The assumption it rests on.** The proof needs every token the scanner
+recognises to be a literal substring of the payload. That is true only because
+the scanner does not unquote: `"pkill" --full x` and `pk\ill --full x` are
+allowed today, which is filed as issue #52 and pinned by corpus rows. If #52 is
+ever closed by teaching the scanner to unquote, this token set must be
+revisited in the same change — an unquoting scanner could recognise `pk\ill`
+in a payload containing no `kill` substring. `tests/prefilter.bats` is what
+catches it.
+
+**Why not Claude Code's own `if:` handler filter.** Because it matches a
+parsed command tree. Measured against this corpus, an `if:` of `Bash(pgrep *)`
+plus `Bash(pkill *)` misses 39 of 180 non-`allow` rows: `sudo` is not in
+Claude Code's stripped-wrapper list, `bash -c '…'` is not descended into, and
+the `deny:task-poll` shapes contain no matchable command name at all. A
+substring test over the raw payload sees all three. See issue #29 for the
+probe matrix.
+
+Tracked counterpart: the prefilter comment block in `main`.

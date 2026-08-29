@@ -1,0 +1,407 @@
+#!/usr/bin/env bash
+
+# @description Micro-benchmark hooks/pgrep-pkill-guard.sh: replay the recorded
+#              command corpus through the hook as a subprocess, time each call,
+#              and print a markdown report of the per-call cost.
+#
+#              The hook is a PreToolUse hook on the Bash tool, so it runs on
+#              EVERY Bash call and its cost is paid by every command the model
+#              runs. `main` in the hook takes three materially different paths,
+#              and this script reports them separately rather than averaging
+#              over unlike things -- an aggregate number would describe none of
+#              them. See bench/RESULTS.md for the published run.
+#
+#              Corpus is tests/cases/verdicts.tsv, the same 304 rows the bats
+#              suite asserts on, so the benchmark cannot drift from the tests
+#              and no second corpus has to be maintained. This script never
+#              asserts a verdict -- that is tests/classify.bats's job.
+# @arg $@ args optional --reps N, --output PATH, --smoke, --help
+# @exitcode 0 the run completed (or --help was printed)
+# @exitcode 1 a bad argument, a missing corpus, or (under --smoke) a hook
+#             response that is not valid JSON
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+# EPOCHREALTIME renders its fractional part with the LOCALE's decimal
+# separator. Under a comma locale every delta below would fail to parse and the
+# whole report would be zeros. Forced here for the same reason the hook forces
+# it: the arithmetic and the string form have to agree.
+export LC_ALL=C
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+readonly HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"
+readonly CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
+readonly DEFAULT_REPS=15
+
+# Report order, and the only cohort names recognised anywhere in this script.
+readonly -a COHORTS=('baseline' 'quiet' 'inspect' 'deny')
+
+# What each cohort actually exercises, printed as a table column so a reader can
+# tell why the numbers differ instead of guessing.
+#
+# Every backtick below is a markdown code span in the generated report, not a
+# command substitution; hence the SC2016 disable.
+# shellcheck disable=SC2016
+declare -rA COHORT_PATH=(
+  [baseline]='process spawn and pipe only, no hook -- the floor'
+  [quiet]='bash startup, one `jq` spawn, one scanner pass'
+  [inspect]='the above, plus a second scanner pass, `probe_keys` and `repeat_check`'
+  [deny]='the stateless tiers plus `deny_message`; no state'
+)
+
+# @description Print usage on stdout.
+# @noargs
+function usage() {
+  cat << 'USAGE'
+Usage: bench/run [--reps N] [--output PATH] [--smoke] [--help]
+
+Measure the per-call wall-clock cost of the pgrep-pkill-guard PreToolUse hook.
+
+Commands come from tests/cases/verdicts.tsv -- the same corpus the bats suite
+asserts on -- grouped into the code paths the hook's `main` actually takes:
+
+  baseline  the quiet payloads fed to `cat` instead of the hook: process spawn
+            and pipe only, the floor every other number sits on top of
+  quiet     allow verdicts whose command matches neither `pgrep` nor `.output`,
+            so the stateful tier is skipped
+  inspect   allow/warn verdicts whose command does match, so the stateful tier
+            runs: a second scanner pass, probe_keys and repeat_check
+  deny      deny verdicts: the stateless tiers plus deny_message, no state
+
+Options:
+  --reps N        repetitions over the corpus (default 15)
+  --output PATH   write the markdown report to PATH instead of stdout
+  --smoke         one repetition over one payload per cohort, validating every
+                  response as JSON. Timings are printed but are NOT publishable.
+                  This is the mode run-all-checks runs to keep this script from
+                  rotting silently; it asserts nothing about timing.
+  --help, -h      print this help and exit, ignoring every other argument
+
+Regenerate the tracked report with:
+
+  just bench
+USAGE
+}
+
+# @description Print a fatal message and exit non-zero.
+# @arg $1 message the text to print
+# @exitcode 1 always
+function die() {
+  printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
+  exit 1
+}
+
+# @description Convert every corpus row into one `<cohort>\t<payload>` line,
+#              where <payload> is the compact PreToolUse hook JSON for that
+#              command. One jq pass, run BEFORE any timing starts: jq must never
+#              run inside the timed region.
+#
+#              Deliberately NOT jq's @tsv: @tsv escapes backslashes as well as
+#              tabs, and the payload is JSON full of `\"` -- @tsv would double
+#              every one of them and hand the hook corrupted input. A raw join
+#              on a literal tab is safe instead, because `tojson` has already
+#              escaped every control character, so the payload can contain
+#              neither a tab nor a newline.
+#
+#              The quiet/inspect split uses the hook's OWN branch predicate
+#              (`*pgrep*` or `*.output*`), not "mentions pgrep or pkill", so a
+#              command like `pkill --ignore-ancestors --full java` lands in
+#              quiet -- which is the path it really takes.
+# @arg $1 session_id the session id embedded in every payload
+# @stdout one `<cohort>\t<compact JSON>` line per corpus row
+function load_payloads() {
+  local -r session_id="$1"
+  jq --raw-input --raw-output --arg sid "${session_id}" '
+    select(length > 0)
+    | split("\t") as [$cmd_json, $verdict]
+    | ($cmd_json | fromjson) as $cmd
+    | (if ($verdict | startswith("deny:")) then "deny"
+       elif ($cmd | test("pgrep|\\.output")) then "inspect"
+       else "quiet" end) as $cohort
+    | $cohort + "\t"
+      + ({ session_id: $sid, tool_name: "Bash", tool_input: { command: $cmd } } | tojson)
+  ' "${CASES}"
+}
+
+# @description Time one invocation and append the sample, in microseconds, to
+#              that cohort's sample file.
+#
+#              The delta is integer microsecond arithmetic on EPOCHREALTIME with
+#              the decimal point deleted: bash has no float arithmetic, and an
+#              awk spawn per sample would cost several times the thing being
+#              measured. Samples are bucketed by FILE rather than by a cohort
+#              column so the reducer needs no `-v`/`--assign`, which is the one
+#              awk option whose long form is not portable across gawk and
+#              one-true-awk.
+# @arg $1 payload the hook JSON to feed on stdin
+# @arg $2 target the executable to run: the hook, or `cat` for the baseline
+# @arg $3 sample_file the file to append the microsecond sample to
+function time_one() {
+  local -r payload="$1" target="$2" sample_file="$3"
+  local start end
+  start="${EPOCHREALTIME}"
+  printf '%s' "${payload}" | "${target}" > /dev/null
+  end="${EPOCHREALTIME}"
+  printf '%s\n' "$((10#${end/./} - 10#${start/./}))" >> "${sample_file}"
+}
+
+# @description Assert the hook answers one payload with parseable JSON. Used
+#              only by --smoke: the point of the smoke run is that this script
+#              still drives the hook's real contract, not that it is fast.
+# @arg $1 payload the hook JSON to feed on stdin
+# @exitcode 0 the response parsed
+# @exitcode 1 it did not (via die)
+function validate_one() {
+  local -r payload="$1"
+  local response
+  response="$(printf '%s' "${payload}" | "${HOOK}")"
+  jq --exit-status . > /dev/null 2>&1 <<< "${response}" \
+    || die "hook response is not valid JSON for payload: ${payload}"
+}
+
+# @description Reduce one cohort's samples to a tab-separated
+#              `n\tmin\tp50\tp95\tmax` row, microseconds rendered as
+#              milliseconds to two decimals.
+#
+#              Percentiles are nearest-rank on the sorted samples,
+#              p(q) = a[ceil(q*n)] 1-indexed. Mean and standard deviation are
+#              deliberately absent: the distribution is right-skewed by
+#              scheduler noise, so a mean overstates the typical call.
+# @arg $1 sample_file the cohort's microsecond samples, one per line
+# @stdout one tab-separated stats row
+function cohort_stats() {
+  local -r sample_file="$1"
+  if [[ ! -s "${sample_file}" ]]; then
+    printf '0\t-\t-\t-\t-\n'
+    return 0
+  fi
+  sort --numeric-sort "${sample_file}" | awk '
+    function rank(q, n,   r) {
+      r = int(q * n)
+      if (r < q * n) { r++ }
+      if (r < 1) { r = 1 }
+      return r
+    }
+    { a[NR] = $1 }
+    END {
+      printf "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", \
+        NR, a[1] / 1000, a[rank(0.50, NR)] / 1000, a[rank(0.95, NR)] / 1000, a[NR] / 1000
+    }
+  '
+}
+
+# @description Print the CPU model, best effort. Every probe is optional: a
+#              missing /proc and a missing sysctl degrade the provenance row
+#              rather than failing the run.
+# @noargs
+# @stdout the CPU model, or `unknown`
+function cpu_model() {
+  local model=''
+  if [[ -r /proc/cpuinfo ]]; then
+    model="$(awk -F ': ' '/^model name/ { print $2; exit }' /proc/cpuinfo || true)"
+  fi
+  if [[ -z "${model}" ]] && command -v sysctl > /dev/null 2>&1; then
+    model="$(sysctl -n machdep.cpu.brand_string 2> /dev/null || true)"
+  fi
+  printf '%s\n' "${model:-unknown}"
+}
+
+# @description Print the first line of a tool's --version, or `unknown`.
+# @arg $1 tool the executable to interrogate
+# @stdout one line
+function tool_version() {
+  local -r tool="$1"
+  local line=''
+  line="$("${tool}" --version 2> /dev/null | head -n 1 || true)"
+  printf '%s\n' "${line:-unknown}"
+}
+
+# @description Print the markdown report: the generated-file notice, the
+#              provenance table, the cohort table, and how to read it.
+# @arg $1 samples_dir the directory holding one sample file per cohort
+# @arg $2 reps the repetition count the run used
+# @arg $3 smoke 1 when this was a --smoke run, 0 otherwise
+# @stdout the full markdown report
+#
+# Single quotes throughout, and the backticks inside them are markdown code
+# spans in the generated report, not command substitutions. Double quotes here
+# would turn every one of them into one; hence the function-wide SC2016 disable.
+# shellcheck disable=SC2016
+function write_report() {
+  local -r samples_dir="$1" reps="$2" smoke="$3"
+  local cohort n min p50 p95 max total=0
+
+  printf '# Hook benchmark results\n\n'
+  printf '<!-- Generated by `bench/run`; regenerate with `just bench`. Do not edit by hand. -->\n\n'
+  if [[ "${smoke}" == '1' ]]; then
+    printf '**SMOKE RUN — not publishable.** One repetition over one payload per\n'
+    printf 'cohort, run by `run-all-checks` to prove the harness still drives the hook.\n\n'
+  fi
+  printf 'Per-call wall-clock cost of `hooks/pgrep-pkill-guard.sh`, the `PreToolUse`\n'
+  printf 'hook that runs on every Bash tool call.\n\n'
+
+  printf '## Provenance\n\n'
+  printf '| field | value |\n| --- | --- |\n'
+  printf '| date | %s |\n' "$(date --utc --iso-8601=seconds)"
+  printf '| commit | `%s` |\n' "$(git -C "${REPO_DIR}" rev-parse --short HEAD)"
+  printf '| kernel | %s |\n' "$(uname --kernel-name --kernel-release --machine)"
+  printf '| cpu | %s |\n' "$(cpu_model)"
+  printf '| bash | %s |\n' "${BASH_VERSION}"
+  printf '| awk | %s (`%s`) |\n' "$(tool_version awk)" "$(command -v awk)"
+  printf '| jq | %s |\n' "$(tool_version jq)"
+  printf '| repetitions | %s |\n' "${reps}"
+  for cohort in "${COHORTS[@]}"; do
+    IFS=$'\t' read -r n _ _ _ _ < <(cohort_stats "${samples_dir}/${cohort}")
+    total=$((total + n))
+  done
+  printf '| samples | %s |\n\n' "${total}"
+
+  printf '## Per-call cost\n\n'
+  printf '| cohort | path exercised | n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |\n'
+  printf '| --- | --- | ---: | ---: | ---: | ---: | ---: |\n'
+  for cohort in "${COHORTS[@]}"; do
+    IFS=$'\t' read -r n min p50 p95 max < <(cohort_stats "${samples_dir}/${cohort}")
+    printf '| `%s` | %s | %s | %s | %s | %s | %s |\n' \
+      "${cohort}" "${COHORT_PATH[${cohort}]}" "${n}" "${min}" "${p50}" "${p95}" "${max}"
+  done
+  printf '\n'
+
+  printf '## How to read this\n\n'
+  printf 'One machine, one moment. These are wall-clock times for the whole\n'
+  printf 'invocation — process spawn, `jq`, the awk scanner and the hook'\''s own bash —\n'
+  printf 'not CPU time, and they include the scheduler noise of whatever else the\n'
+  printf 'machine was doing. The `baseline` row is the floor: it runs the identical\n'
+  printf 'pipeline against `cat`, so the hook'\''s real contribution is the difference\n'
+  printf 'between a row and that one.\n\n'
+  printf 'Percentiles are nearest-rank over every sample in the cohort. Regenerate\n'
+  printf 'with `just bench`.\n'
+}
+
+function main() {
+  local reps="${DEFAULT_REPS}" output='' smoke=0 arg
+
+  # clig.dev: --help wins over every other argument and prints on stdout.
+  for arg in "$@"; do
+    if [[ "${arg}" == '--help' || "${arg}" == '-h' ]]; then
+      usage
+      return 0
+    fi
+  done
+
+  while (($# > 0)); do
+    case "$1" in
+      --reps)
+        (($# >= 2)) || die '--reps needs a value'
+        reps="$2"
+        shift 2
+        ;;
+      --output)
+        (($# >= 2)) || die '--output needs a path'
+        output="$2"
+        shift 2
+        ;;
+      --smoke)
+        smoke=1
+        shift
+        ;;
+      *)
+        die "unknown argument: $1 (try --help)"
+        ;;
+    esac
+  done
+  [[ "${reps}" =~ ^[1-9][0-9]*$ ]] || die "--reps must be a positive integer, got: ${reps}"
+  [[ -r "${CASES}" ]] || die "corpus not readable: ${CASES}"
+  [[ -x "${HOOK}" ]] || die "hook not executable: ${HOOK}"
+
+  # Deliberately a global, not a local: the EXIT trap below runs after `main`
+  # has returned, when a local would already be out of scope and `set -u` would
+  # abort the trap instead of removing the scratch tree. Created here rather
+  # than at the top of the script so --help and a bad argument stay side-effect
+  # free.
+  WORK="$(mktemp --directory)"
+  readonly WORK
+  # The state dir is inside the same scratch tree, so the EXIT trap takes both.
+  # Overwriting the ERR trap is deliberate: from here on a failure must still
+  # clean up, and the ERR trap above only reports.
+  trap 'rm --recursive --force -- "${WORK}"' EXIT
+
+  local -r state_dir="${WORK}/state"
+  local -r samples_dir="${WORK}/samples"
+  mkdir --parents "${samples_dir}"
+  export PGREP_PKILL_GUARD_STATE_DIR="${state_dir}"
+
+  local -a cohort_of=() payload_of=()
+  local cohort payload
+  while IFS=$'\t' read -r cohort payload; do
+    cohort_of+=("${cohort}")
+    payload_of+=("${payload}")
+  done < <(load_payloads "bench-$$")
+  ((${#payload_of[@]} > 0)) || die "corpus produced no payloads: ${CASES}"
+
+  local -a indices=()
+  local i seen_quiet=0 seen_inspect=0 seen_deny=0
+  if ((smoke == 1)); then
+    # One payload per cohort, and validate rather than trust: the smoke run
+    # exists to prove this script still drives the hook's real contract.
+    reps=1
+    for i in "${!payload_of[@]}"; do
+      case "${cohort_of[i]}" in
+        quiet) ((seen_quiet++ > 0)) && continue ;;
+        inspect) ((seen_inspect++ > 0)) && continue ;;
+        deny) ((seen_deny++ > 0)) && continue ;;
+        *) continue ;;
+      esac
+      indices+=("${i}")
+      validate_one "${payload_of[i]}"
+    done
+  else
+    for i in "${!payload_of[@]}"; do
+      indices+=("${i}")
+    done
+  fi
+
+  local rep
+  for rep in $(seq 0 "${reps}"); do
+    # Rep 0 is a discarded warm-up pass: cold page cache and cold filesystem
+    # metadata must not land in the published numbers.
+    local recording=1
+    ((rep == 0)) && recording=0
+
+    # Wiped between repetitions, OUTSIDE the timed region. The repeat rule
+    # denies at 3 probes per key per 300 s window and one pass touches each key
+    # once, so without this, repetition 3 onward would silently stop timing the
+    # `inspect` path and start timing `deny:repeat`. Wiping per COMMAND was
+    # rejected instead: it would never exercise the read-and-prune half of
+    # repeat_check, which is most of that function's cost.
+    rm --recursive --force -- "${state_dir}"
+
+    for i in "${indices[@]}"; do
+      cohort="${cohort_of[i]}"
+      if ((recording == 1)); then
+        time_one "${payload_of[i]}" "${HOOK}" "${samples_dir}/${cohort}"
+        # The baseline runs the identical pipeline against `cat`, on the same
+        # payloads, interleaved rather than in a separate phase so both see the
+        # same machine conditions.
+        if [[ "${cohort}" == 'quiet' ]]; then
+          time_one "${payload_of[i]}" 'cat' "${samples_dir}/baseline"
+        fi
+      else
+        printf '%s' "${payload_of[i]}" | "${HOOK}" > /dev/null
+      fi
+    done
+  done
+
+  if [[ -n "${output}" ]]; then
+    write_report "${samples_dir}" "${reps}" "${smoke}" > "${output}"
+    printf '[%s] wrote %s\n' "${0##*/}" "${output}" >&2
+  else
+    write_report "${samples_dir}" "${reps}" "${smoke}"
+  fi
+}
+
+main "$@"

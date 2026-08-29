@@ -28,6 +28,7 @@ readonly EXPECT_EXECUTABLE=(
   '.githooks/*'
   'run-all-checks'
   'run-tests'
+  'bench/run'
 )
 readonly EXPECT_NON_EXECUTABLE=(
   'hooks/pgrep-scan.awk'

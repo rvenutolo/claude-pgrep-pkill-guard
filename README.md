@@ -223,6 +223,26 @@ learn you were unprotected.
   escapes on purpose. It is a guardrail against a mistake, not a boundary
   against an adversary — see [Security](#security).
 
+## Performance
+
+The guard is a `PreToolUse` hook, so it runs on every Bash tool call. On the
+author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
+6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — an ordinary command, one
+mentioning neither `pgrep` nor a task-output file, costs a median of
+**13.12 ms**, p95 16.80 ms. About 1.55 ms of that is process spawn, which any
+hook at all would pay.
+
+Commands that reach the deeper paths cost more, and only they pay it: one the
+guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
+state file — has a median of 41.90 ms, and a denied command 26.52 ms. Those
+figures, and the 22.91 ms alongside them for the same path the ordinary
+commands take, come from `tests/cases/verdicts.tsv`, which exists to be hard on
+the scanner rather than to be representative — read them as a ceiling, not as
+what a session pays.
+
+One machine, one moment. The full table, the method and the provenance are in
+[bench/RESULTS.md](bench/RESULTS.md); `just bench` regenerates it.
+
 ## Opting one command out
 
 Add `--ignore-ancestors`. It is a real `pgrep`/`pkill` flag — it excludes the

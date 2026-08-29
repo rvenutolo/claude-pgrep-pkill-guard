@@ -9,6 +9,10 @@ check:
 test *ARGS:
     ./.ci/in-devshell ./run-tests {{ARGS}}
 
+# Re-measure the hook's per-call cost and rewrite bench/RESULTS.md
+bench:
+    ./.ci/in-devshell ./bench/run --output bench/RESULTS.md
+
 # Run the config/markup/shell lint suite
 lint:
     ./.ci/in-devshell ./.ci/run-lint-checks

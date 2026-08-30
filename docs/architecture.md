@@ -33,18 +33,32 @@ The guard itself. In execution order:
    shell.
 3. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
    on every Bash call, and exit 2 would block the tool outright.
-4. `main` reads the hook JSON from stdin into `input` before doing anything
-   else with it.
+4. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
+   `IFS= read -r -d '' input || :` — rather than the `input="$(cat)"` it used
+   to, which was a fork and an exec on every Bash tool call before the guard
+   had looked at anything. The empty delimiter reads to EOF, so `read` returns
+   1 having stored the whole payload; the `|| :` is what makes that normal case
+   a success rather than an `ERR` trip. Two differences from `$(cat)`, both
+   inert: a trailing newline now survives, which neither the prefilter's
+   substring test nor `jq` cares about, and a raw NUL would truncate the
+   payload — which Claude Code's payloads, serialized by Node's
+   `JSON.stringify`, cannot contain.
 5. The prefilter: `input` is tested for the raw substrings `pgrep`, `kill` and
    `.output`, and a payload carrying none of them returns `{}` immediately,
    before `jq` or the awk scanner ever spawn. See invariant 4 below for why a
    raw-payload substring test cannot suppress a verdict the rest of the guard
    would otherwise reach.
-6. Precondition guards, each of which stands down loudly: `jq` missing from
-   `PATH`, `awk` missing from `PATH`, the scanner file unreadable. These run
-   only once the prefilter has let a payload through, since a payload the
-   prefilter would have returned `{}` for was never going to reach `jq` or the
-   scanner either way.
+6. `resolve_scanner`, then the precondition guards, each of which stands down
+   loudly: `jq` missing from `PATH`, `awk` missing from `PATH`, the scanner file
+   unreadable. These run only once the prefilter has let a payload through,
+   since a payload the prefilter would have returned `{}` for was never going to
+   reach `jq` or the scanner either way. The scanner path is resolved here, at
+   the top of this step, rather than at the top of the script: both readers of
+   `SCANNER` — `scan_command` and the readability guard in this same step — sit
+   downstream of the short-circuit, and resolving it costs a `dirname` fork and
+   exec that an ordinary Bash call has no reason to pay. `resolve_scanner`
+   declares the global `readonly` once it sets it, so the path is still frozen
+   for the rest of the call.
 7. Extract `tool_name`, `tool_input.command` and `session_id` in a **single**
    `jq ... | @tsv` call — one jq spawn, since this runs on every payload that
    survives the prefilter. `@tsv` escapes literal tabs and newlines in the

@@ -9,25 +9,26 @@ hook that runs on every Bash tool call.
 
 | field | value |
 | --- | --- |
-| date | 2026-08-29T17:21:49+00:00 |
-| commit | `11ca231` |
+| date | 2026-08-30T03:51:36+00:00 |
+| commit | `d72cb4a` |
 | kernel | Linux 6.8.0-138-generic x86_64 |
 | cpu | 12th Gen Intel(R) Core(TM) i9-12900HK |
 | bash | 5.3.15(1)-release |
 | awk | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/ny5hzk3l36pldfsjkh56ia7y55xr23vd-gawk-5.4.1/bin/awk`) |
 | jq | jq-1.8.2 |
-| repetitions | 15 |
-| samples | 5655 |
+| repetitions | 45 |
+| samples | 14805 |
 
 ## Per-call cost
 
 | cohort | path exercised | n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `baseline` | process spawn and pipe only, no hook -- the floor | 1005 | 0.96 | 1.55 | 2.05 | 4.05 |
-| `typical` | the `quiet` path, driven by ordinary commands rather than the corpus | 90 | 10.93 | 13.12 | 16.80 | 17.15 |
-| `quiet` | bash startup, one `jq` spawn, one scanner pass | 1005 | 9.61 | 22.91 | 29.64 | 40.70 |
-| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 1215 | 21.41 | 41.90 | 59.86 | 83.56 |
-| `deny` | the stateless tiers plus `deny_message`; no state | 2340 | 18.34 | 26.52 | 37.85 | 50.12 |
+| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 0.85 | 1.84 | 2.99 | 4.29 |
+| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 5.55 | 12.27 | 17.34 | 22.44 |
+| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 6.35 | 11.65 | 17.56 | 21.96 |
+| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2655 | 14.21 | 34.68 | 48.33 | 72.97 |
+| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 19.47 | 57.33 | 94.01 | 130.37 |
+| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 14.27 | 39.90 | 60.46 | 79.76 |
 
 ## How to read this
 
@@ -38,13 +39,17 @@ machine was doing. The `baseline` row is the floor: it runs the identical
 pipeline against `cat`, so the hook's real contribution is the difference
 between a row and that one.
 
-`typical` is the row to quote for what the guard costs a real session.
-The other three hook rows are driven by `tests/cases/verdicts.tsv`, which
+`typical` is the row to quote for what the guard costs a real session; it
+takes the same `skipped` short-circuit an ordinary command does, since none
+of `TYPICAL_COMMANDS` mentions `pgrep`, `kill`, or `.output`.
+
+The other four hook rows are driven by `tests/cases/verdicts.tsv`, which
 exists to be hard on the scanner: even its `allow` rows are quoting
 tricks, `bash -c` wrappers and `ssh host '...'` shapes, picked because
 they are awkward to tokenize rather than because anyone runs them. Read
-`quiet` as the adversarial ceiling on the same code path `typical` takes,
-and the gap between the two as the cost of tokenizing a nasty command.
+`quiet` as the adversarial ceiling on the path a command that merely
+mentions `kill` takes, and the gap between `skipped` and `quiet` as the
+cost of reaching the scanner at all.
 
 Percentiles are nearest-rank over every sample in the cohort. Regenerate
 with `just bench`.

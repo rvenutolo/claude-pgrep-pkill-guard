@@ -26,29 +26,43 @@ The guard itself. In execution order:
    `${command:offset:length}`. Bash string operations are locale-aware, so under
    a UTF-8 locale a single multibyte character earlier in the command shifts
    every later slice and silently voids the bracket mitigation.
-2. Precondition guards, each of which stands down loudly: bash older than 4.3,
-   `jq` missing from `PATH`, `awk` missing from `PATH`, the scanner file
-   unreadable. The bash check comes first because it is the only one that can
-   run on a shell too old for the rest of the script.
+2. The bash-version guard: bash older than 4.3 prints the INACTIVE
+   `systemMessage` and exits immediately. It runs before everything else
+   because it is the one guard that has to: the rest of the script leans on
+   4.3+ features, so nothing after this point is safe to run on an older
+   shell.
 3. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
    on every Bash call, and exit 2 would block the tool outright.
-4. Read the hook JSON from stdin, and extract `tool_name`,
-   `tool_input.command` and `session_id` in a **single** `jq ... | @tsv` call —
-   one jq spawn, since this runs on every Bash call. `@tsv` escapes literal tabs
-   and newlines in the command, which `printf '%b'` then decodes in one
-   left-to-right pass. A `tool_name` other than `Bash` allows immediately.
-5. `classify_command` runs the stateless tiers and prints a verdict plus a tab
+4. `main` reads the hook JSON from stdin into `input` before doing anything
+   else with it.
+5. The prefilter: `input` is tested for the raw substrings `pgrep`, `kill` and
+   `.output`, and a payload carrying none of them returns `{}` immediately,
+   before `jq` or the awk scanner ever spawn. See invariant 4 below for why a
+   raw-payload substring test cannot suppress a verdict the rest of the guard
+   would otherwise reach.
+6. Precondition guards, each of which stands down loudly: `jq` missing from
+   `PATH`, `awk` missing from `PATH`, the scanner file unreadable. These run
+   only once the prefilter has let a payload through, since a payload the
+   prefilter would have returned `{}` for was never going to reach `jq` or the
+   scanner either way.
+7. Extract `tool_name`, `tool_input.command` and `session_id` in a **single**
+   `jq ... | @tsv` call — one jq spawn, since this runs on every payload that
+   survives the prefilter. `@tsv` escapes literal tabs and newlines in the
+   command, which `printf '%b'` then decodes in one left-to-right pass. A
+   `tool_name` other than `Bash` allows immediately.
+8. `classify_command` runs the stateless tiers and prints a verdict plus a tab
    and the detail its message needs (the invoked tool, or the polled path).
    `main` owns stdout; the classifier hands the verdict up rather than writing
    the decision itself.
-6. The stateful `repeat` tier, which runs only after the stateless tiers have
+9. The stateful `repeat` tier, which runs only after the stateless tiers have
    allowed or warned.
-7. Emission. `emit_allow` prints a bare `{}`; `emit_warn` prints an `allow`
-   decision carrying `additionalContext`; `emit_deny` prints a `deny` decision
-   carrying `permissionDecisionReason`, built by `deny_message` from the kind
-   and its detail. `additionalContext` is the only `PreToolUse` field verified
-   to reach the model on an allowed call — `systemMessage` renders to the user
-   only, and `permissionDecisionReason` is fed back under deny alone.
+10. Emission. `emit_allow` prints a bare `{}`; `emit_warn` prints an `allow`
+    decision carrying `additionalContext`; `emit_deny` prints a `deny`
+    decision carrying `permissionDecisionReason`, built by `deny_message` from
+    the kind and its detail. `additionalContext` is the only `PreToolUse`
+    field verified to reach the model on an allowed call — `systemMessage`
+    renders to the user only, and `permissionDecisionReason` is fed back under
+    deny alone.
 
 ### `hooks/pgrep-scan.awk`
 
@@ -108,16 +122,21 @@ Two tab-separated tables drive most of the suite, both with shell-visible
 strings stored as JSON so quoting and whitespace survive:
 
 - `verdicts.tsv` — `<command>\t<verdict>`, read by `tests/classify.bats` (which
-  asserts the decision plus the mitigation needle that identifies the kind) and
-  by `tests/deny-sweep.bats`.
+  asserts the decision plus the mitigation needle that identifies the kind),
+  by `tests/deny-sweep.bats`, and by `tests/prefilter.bats`, which asserts that
+  every non-`allow` row carries one of the prefilter's trigger tokens and that
+  the three-token set is minimal (dropping any one leaves some row uncovered).
 - `messages.tsv` — `<command>\t<field>\t<mode>\t<needle>`, read by
   `tests/messages.bats`, where `field` is `reason`, `context` or `decision` and
   `mode` is `contains`, `lacks` or `equals`. `lacks` asserts absence, which is
   how the tables pin that a `loop` deny does *not* offer `--ignore-ancestors`.
 
-The remaining bats files cover the parts no table can express:
-`tests/scanner.bats` (the awk scanner directly), `tests/repeat.bats` (the
-stateful tier and its state-directory failure modes) and `tests/manifest.bats`.
+Of the remaining bats files, the ones that exercise the guard cover the parts
+no table can express: `tests/scanner.bats` (the awk scanner directly),
+`tests/repeat.bats` (the stateful tier and its state-directory failure modes)
+and `tests/manifest.bats`. `tests/issue-forms.bats` is unrelated to the guard
+entirely — it drives `.ci/check-issue-forms` against fixture issue templates,
+not anything in `hooks/`.
 
 ## Fail open, loudly
 
@@ -126,7 +145,17 @@ state failure allows the command**, and the ones a user could act on emit a
 `systemMessage` saying the guard is INACTIVE for that command.
 
 The loud path covers bash below 4.3, a missing `jq` or `awk`, an unreadable
-scanner, and an awk that fails the integrity trailer. The silent path covers
+scanner, and an awk that fails the integrity trailer.
+
+Since the payload prefilter landed, those three loud warnings fire only for
+commands that carry a trigger token. A command mentioning neither `pgrep`, nor
+`kill`, nor a task-output file returns `{}` whether or not `jq` is installed,
+so warning about an inactive guard on that call describes a decision the guard
+was never going to make. The user still learns they are unprotected the first
+time they type something the guard would have looked at, which is the moment
+the warning is worth anything.
+
+The silent path covers
 the `repeat` rule's state: no directory, unreadable, not a regular file, not
 owned by the caller, a symlinked directory, an oversized file — each returns
 quietly and the command proceeds, because the state is a heuristic and is never
@@ -141,7 +170,7 @@ a long sequence of `|| return 0` guards rather than as assertions.
 
 ## Design invariants
 
-Three rules the code depends on and cannot enforce. Each is repeated as a
+Four rules the code depends on and cannot enforce. Each is repeated as a
 comment in the source it constrains; if one changes here, change the comment
 too.
 
@@ -225,3 +254,57 @@ exactly that.
 interface: a command on stdin, offset/token records and an integrity trailer on
 stdout. `tests/scanner.bats` may drive it directly with `awk -f`, always under
 `LC_ALL=C`, because that is precisely how the hook itself calls it.
+
+### 4. The prefilter's token set is `pgrep`, `kill`, `.output` — and is a proof
+
+`main` returns `{}` without spawning `jq` or `awk` when the raw hook payload
+contains none of those three substrings. The proof is containment, not
+enumeration. `classify_command` itself opens with an early `allow` unless the
+COMMAND contains `pgrep`, `pkill`, or `.output`, and every stateless `deny`,
+`warn`, or `inactive` verdict has to pass through that gate on its way out.
+`main` separately restricts the stateful repeat tier to commands containing
+`pgrep` or `.output`, so no verdict can arise from the per-session state file
+alone either. The guard, in other words, already prefilters on the parsed
+command before this prefilter ever runs. The new check applies the identical
+predicate to the raw payload, with `pkill` widened to `kill`. Since `pkill` is
+a substring of `kill`, and the command is itself a substring of the payload it
+was extracted from, this prefilter is provably weaker than a gate the hook
+already applies — it cannot suppress a verdict the hook would otherwise
+reach.
+
+**Why the test states the list instead of reading it.**
+`tests/prefilter.bats` hardcodes the same three tokens. That duplication is the
+point: a test that extracted the list from the hook would agree with it by
+construction and assert nothing. Instead two independent assertions close the
+loop — `tests/prefilter.bats` pins corpus against specification, and the 310
+rows of `tests/classify.bats` pin the hook against the corpus. Neither reaches
+inside the hook, so invariant 3 still holds.
+
+**The assumptions it rests on.** The proof needs every token the scanner
+recognises to be a literal substring of the payload. That is true only because
+the scanner does not unquote: `"pkill" --full x` and `pk\ill --full x` are
+allowed today, which is filed as issue #52 and pinned by corpus rows. If #52 is
+ever closed by teaching the scanner to unquote, this token set must be
+revisited in the same change — an unquoting scanner could recognise `pk\ill`
+in a payload containing no `kill` substring. `tests/prefilter.bats` is what
+catches it.
+
+A second assumption sits alongside the first: the prefilter matches raw
+payload bytes, so it also assumes the payload spells the command's characters
+out literally. A serializer that `\u`-escaped ASCII letters could hide a
+trigger token from it — a payload spelling `pgrep` as `\u0070grep` would
+return `{}` where the pre-change hook still denied. This is not reachable in
+practice: Claude Code's payloads come from Node's `JSON.stringify`, which
+never escapes ASCII letters, and reaching it would additionally require the
+model to obfuscate its own command. It is recorded here because it is an
+assumption the prefilter makes, not because it is a live risk.
+
+**Why not Claude Code's own `if:` handler filter.** Because it matches a
+parsed command tree. Measured against this corpus, an `if:` of `Bash(pgrep *)`
+plus `Bash(pkill *)` misses 39 of 180 non-`allow` rows: `sudo` is not in
+Claude Code's stripped-wrapper list, `bash -c '…'` is not descended into, and
+the `deny:task-poll` shapes contain no matchable command name at all. A
+substring test over the raw payload sees all three. See issue #29 for the
+probe matrix.
+
+Tracked counterpart: the prefilter comment block in `main`.

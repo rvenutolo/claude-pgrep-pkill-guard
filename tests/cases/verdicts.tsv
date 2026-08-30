@@ -302,3 +302,9 @@
 "while true; do for f in *; do pgrep --full zztermouter || sleep 5; done; break; done"	warn
 "while true; do p=$(pgrep --full zzsubdone); x=$(echo; done); [ -z \"$p\" ] && break; sleep 1; done"	deny:loop
 "while true; do p=$(pgrep --full zzsubdone); x=$(echo; done); sleep 1; done"	warn
+"pkill --full zzznoproc"	deny:kill
+"\"pkill\" --full zzznoproc"	allow
+"p'k'ill --full zzznoproc"	allow
+"pk\\ill --full zzznoproc"	allow
+"$'pkill' --full zzznoproc"	allow
+"'pk''ill' --full zzznoproc"	allow

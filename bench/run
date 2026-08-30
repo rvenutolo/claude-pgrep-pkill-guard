@@ -39,18 +39,24 @@ REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR
 readonly HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"
 readonly CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
-readonly DEFAULT_REPS=15
+# 45 rather than 15. `typical` is only six commands, so at 15 reps it carries 90
+# samples and its p50 swung 10.3-13.5 ms across two back-to-back runs -- too
+# noisy for the figure the README quotes as what a session actually pays. 45
+# puts `typical` at 270 samples and `skipped`, the cohort it shares a code path
+# with, at 585. The whole run costs a few minutes and nothing in CI calls it:
+# run-all-checks uses --smoke, which is one repetition of one payload per cohort.
+readonly DEFAULT_REPS=45
 
 # Report order, and the only cohort names recognised anywhere in this script.
-readonly -a COHORTS=('baseline' 'typical' 'quiet' 'inspect' 'deny')
+readonly -a COHORTS=('baseline' 'skipped' 'typical' 'quiet' 'inspect' 'deny')
 
 # Ordinary commands, deliberately NOT drawn from the corpus. verdicts.tsv exists
 # to be hard on the scanner, so even its cheapest rows are not what a session
 # mostly runs, and without this cohort the report has no honest answer to "what
-# does a normal command cost" -- a reader would be left taking the `quiet` min,
-# the luckiest sample of the cheapest row, as a stand-in for it. Every one of
-# these is an `allow` that reaches exactly the same code path as `quiet`; the
-# only difference is that they are representative rather than adversarial.
+# does a normal command cost" -- a reader would be left taking the `skipped`
+# min, the luckiest sample of the cheapest row, as a stand-in for it. Every one
+# of these is an `allow` that reaches exactly the same code path as `skipped`;
+# the only difference is that they are representative rather than adversarial.
 readonly -a TYPICAL_COMMANDS=(
   'ls -la'
   'git status --short'
@@ -68,7 +74,8 @@ readonly -a TYPICAL_COMMANDS=(
 # shellcheck disable=SC2016
 declare -rA COHORT_PATH=(
   [baseline]='process spawn and pipe only, no hook -- the floor'
-  [typical]='the `quiet` path, driven by ordinary commands rather than the corpus'
+  [skipped]='the prefilter short-circuit -- no `jq`, no scanner pass'
+  [typical]='the `skipped` path, driven by ordinary commands rather than the corpus'
   [quiet]='bash startup, one `jq` spawn, one scanner pass'
   [inspect]='the above, plus a second scanner pass, `probe_keys` and `repeat_check`'
   [deny]='the stateless tiers plus `deny_message`; no state'
@@ -85,15 +92,19 @@ Measure the per-call wall-clock cost of the pgrep-pkill-guard PreToolUse hook.
 Commands come from tests/cases/verdicts.tsv -- the same corpus the bats suite
 asserts on -- grouped into the code paths the hook's `main` actually takes:
 
-  baseline  the quiet payloads fed to `cat` instead of the hook: process spawn
-            and pipe only, the floor every other number sits on top of
+  baseline  the skipped payloads fed to `cat` instead of the hook: process
+            spawn and pipe only, the floor every other number sits on top of
+  skipped   verdicts whose command matches none of `pgrep`, `kill`, `.output`:
+            the prefilter short-circuits before `jq` or the scanner run
   typical   a short list of ORDINARY commands, defined in this script rather
             than drawn from the corpus, because the corpus is adversarial. Same
-            code path as quiet; this is the "what does a normal call cost" row
-  quiet     allow verdicts whose command matches neither `pgrep` nor `.output`,
-            so the stateful tier is skipped
-  inspect   allow/warn verdicts whose command does match, so the stateful tier
-            runs: a second scanner pass, probe_keys and repeat_check
+            code path as skipped; this is the "what does a normal call cost" row
+  quiet     allow verdicts whose command matches `kill` but neither `pgrep`
+            nor `.output`, so it reaches the scanner but the stateful tier
+            is skipped
+  inspect   allow/warn verdicts whose command matches `pgrep` or `.output`, so
+            the stateful tier runs: a second scanner pass, probe_keys and
+            repeat_check
   deny      deny verdicts: the stateless tiers plus deny_message, no state
 
 Options:
@@ -131,10 +142,15 @@ function die() {
 #              escaped every control character, so the payload can contain
 #              neither a tab nor a newline.
 #
-#              The quiet/inspect split uses the hook's OWN branch predicate
-#              (`*pgrep*` or `*.output*`), not "mentions pgrep or pkill", so a
-#              command like `pkill --ignore-ancestors --full java` lands in
-#              quiet -- which is the path it really takes.
+#              The split now mirrors the hook's prefilter, not the old
+#              quiet/inspect branch. `inspect` is a command containing `pgrep`
+#              or `.output`, which also runs the stateful tier. `quiet` is a
+#              command containing `kill` but neither of those -- for example
+#              `pkill --ignore-ancestors --full java` -- which passes the
+#              prefilter and reaches the scanner but never the stateful tier.
+#              `skipped` is everything else: it matches none of `pgrep`,
+#              `kill`, `.output` and short-circuits in `main` before `jq` or
+#              the scanner ever run.
 # @arg $1 session_id the session id embedded in every payload
 # @stdout one `<cohort>\t<compact JSON>` line per corpus row
 function load_payloads() {
@@ -145,7 +161,8 @@ function load_payloads() {
     | ($cmd_json | fromjson) as $cmd
     | (if ($verdict | startswith("deny:")) then "deny"
        elif ($cmd | test("pgrep|\\.output")) then "inspect"
-       else "quiet" end) as $cohort
+       elif ($cmd | test("kill")) then "quiet"
+       else "skipped" end) as $cohort
     | $cohort + "\t"
       + ({ session_id: $sid, tool_name: "Bash", tool_input: { command: $cmd } } | tojson)
   ' "${CASES}"
@@ -301,13 +318,16 @@ function write_report() {
   printf 'machine was doing. The `baseline` row is the floor: it runs the identical\n'
   printf 'pipeline against `cat`, so the hook'\''s real contribution is the difference\n'
   printf 'between a row and that one.\n\n'
-  printf '`typical` is the row to quote for what the guard costs a real session.\n'
-  printf 'The other three hook rows are driven by `tests/cases/verdicts.tsv`, which\n'
+  printf '`typical` is the row to quote for what the guard costs a real session; it\n'
+  printf 'takes the same `skipped` short-circuit an ordinary command does, since none\n'
+  printf 'of `TYPICAL_COMMANDS` mentions `pgrep`, `kill`, or `.output`.\n\n'
+  printf 'The other four hook rows are driven by `tests/cases/verdicts.tsv`, which\n'
   printf 'exists to be hard on the scanner: even its `allow` rows are quoting\n'
   printf 'tricks, `bash -c` wrappers and `ssh host '\''...'\''` shapes, picked because\n'
   printf 'they are awkward to tokenize rather than because anyone runs them. Read\n'
-  printf '`quiet` as the adversarial ceiling on the same code path `typical` takes,\n'
-  printf 'and the gap between the two as the cost of tokenizing a nasty command.\n\n'
+  printf '`quiet` as the adversarial ceiling on the path a command that merely\n'
+  printf 'mentions `kill` takes, and the gap between `skipped` and `quiet` as the\n'
+  printf 'cost of reaching the scanner at all.\n\n'
   printf 'Percentiles are nearest-rank over every sample in the cohort. Regenerate\n'
   printf 'with `just bench`.\n'
 }
@@ -384,7 +404,7 @@ function main() {
   done
 
   local -a indices=()
-  local i seen_typical=0 seen_quiet=0 seen_inspect=0 seen_deny=0
+  local i seen_typical=0 seen_quiet=0 seen_inspect=0 seen_deny=0 seen_skipped=0
   if ((smoke == 1)); then
     # One payload per cohort, and validate rather than trust: the smoke run
     # exists to prove this script still drives the hook's real contract.
@@ -395,6 +415,7 @@ function main() {
         quiet) ((seen_quiet++ > 0)) && continue ;;
         inspect) ((seen_inspect++ > 0)) && continue ;;
         deny) ((seen_deny++ > 0)) && continue ;;
+        skipped) ((seen_skipped++ > 0)) && continue ;;
         *) continue ;;
       esac
       indices+=("${i}")
@@ -427,8 +448,11 @@ function main() {
         time_one "${payload_of[i]}" "${HOOK}" "${samples_dir}/${cohort}"
         # The baseline runs the identical pipeline against `cat`, on the same
         # payloads, interleaved rather than in a separate phase so both see the
-        # same machine conditions.
-        if [[ "${cohort}" == 'quiet' ]]; then
+        # same machine conditions. Paired with `skipped` rather than `quiet`:
+        # `skipped` is the cohort whose hook cost sits closest to the floor
+        # (no `jq` spawn, no scanner pass), so it is the fair comparison for
+        # a measurement that itself does nothing but spawn and pipe.
+        if [[ "${cohort}" == 'skipped' ]]; then
           time_one "${payload_of[i]}" 'cat' "${samples_dir}/baseline"
         fi
       else

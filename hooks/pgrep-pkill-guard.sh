@@ -2004,6 +2004,61 @@ function classify_command() {
 # @description Entry point.
 # @noargs
 function main() {
+  local input
+  input="$(cat)"
+
+  # The prefilter. Everything below this point costs a `jq` spawn and at least
+  # one `awk` scanner pass, and on an ordinary Bash call both find nothing:
+  # #32 measured 13.12 ms per call against a 1.55 ms spawn floor.
+  #
+  # This is sound because it is provably weaker than a gate the guard already
+  # applies to the parsed command:
+  #
+  #   - classify_command opens with an early `allow` unless the command
+  #     contains `pgrep`, `pkill`, or `.output` -- every stateless deny/warn/
+  #     inactive verdict has to pass through that gate on its way out.
+  #   - the repeat tier below is separately restricted to commands containing
+  #     `pgrep` or `.output` (see the comment above the repeat_check call), so
+  #     no verdict can arise from the state file alone either.
+  #
+  # `pkill` contains `kill`, which is why `pkill` is not in the pattern below
+  # and must not be added, and the command is itself a substring of the
+  # payload it was extracted from. So this raw-payload check is a strictly
+  # weaker version of a gate the hook already runs on the parsed command --
+  # it cannot hide a verdict the hook would otherwise reach.
+  #
+  # Testing the RAW PAYLOAD rather than the parsed command is the whole point.
+  # A substring test does not care that `pkill` sits behind `sudo`, inside
+  # `bash -c '...'`, or in a heredoc body -- the shapes that made Claude Code's
+  # own `if:` handler filter unusable here (#29: 39 of 180 deny rows missed).
+  #
+  # The test is a superset, so it fails in the safe direction: a payload that
+  # matches merely takes today's path at today's cost. A `cwd` or
+  # `transcript_path` containing `kill` makes every call in that tree a false
+  # positive, which is a performance non-event.
+  #
+  # The proof assumes the scanner never recognises a name that is not a literal
+  # substring of the payload -- true because it does not unquote (#52). If that
+  # ever changes, revisit this pattern in the same commit; tests/prefilter.bats
+  # is what will catch the drift. It also assumes the payload spells the
+  # command's characters out literally rather than escaping them -- true today
+  # because Claude Code's payloads come from Node's JSON.stringify, which
+  # never \u-escapes ASCII letters.
+  #
+  # Bash pattern matching, not `printf ... | grep`: a grep would spawn a process
+  # and hand back a third of what this saves. `[[ ]]` glob matching is a builtin
+  # and costs nothing measurable. In a glob `.` is an ordinary character, so
+  # `*.output*` is the literal substring test it looks like.
+  if [[ "${input}" != *pgrep* && "${input}" != *kill* && "${input}" != *.output* ]]; then
+    emit_allow
+    return 0
+  fi
+
+  # Below here the guard is actually going to look at the command, so the
+  # preconditions matter. These sit AFTER the prefilter on purpose: a command
+  # with no trigger token returns `{}` whether or not `jq` exists, so warning
+  # about an inactive guard on those calls is noise about a call the guard was
+  # never going to act on. The first pgrep loop the user types still warns them.
   if ! command -v jq > /dev/null 2>&1; then
     printf '{"systemMessage":"%s"}\n' \
       "${HOOK_NAME}: jq not found on PATH; the pgrep poll-loop guard is INACTIVE for this command."
@@ -2024,9 +2079,6 @@ function main() {
       "${HOOK_NAME}: scanner pgrep-scan.awk is missing; the pgrep poll-loop guard is INACTIVE for this command."
     return 0
   fi
-
-  local input
-  input="$(cat)"
 
   # One jq spawn instead of two, since it runs on every Bash call. The command
   # can contain literal tabs and newlines, which @tsv escapes as `\t` / `\n`

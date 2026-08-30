@@ -39,7 +39,13 @@ REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR
 readonly HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"
 readonly CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
-readonly DEFAULT_REPS=15
+# 45 rather than 15. `typical` is only six commands, so at 15 reps it carries 90
+# samples and its p50 swung 10.3-13.5 ms across two back-to-back runs -- too
+# noisy for the figure the README quotes as what a session actually pays. 45
+# puts `typical` at 270 samples and `skipped`, the cohort it shares a code path
+# with, at 585. The whole run costs a few minutes and nothing in CI calls it:
+# run-all-checks uses --smoke, which is one repetition of one payload per cohort.
+readonly DEFAULT_REPS=45
 
 # Report order, and the only cohort names recognised anywhere in this script.
 readonly -a COHORTS=('baseline' 'skipped' 'typical' 'quiet' 'inspect' 'deny')

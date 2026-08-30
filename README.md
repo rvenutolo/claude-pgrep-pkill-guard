@@ -225,20 +225,45 @@ learn you were unprotected.
 
 ## Performance
 
-The guard is a `PreToolUse` hook, so it runs on every Bash tool call. On the
-author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
-6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — an ordinary command, one
-mentioning none of `pgrep`, `kill` or a task-output file, costs a median of
-**13.12 ms**, p95 16.80 ms. About 1.55 ms of that is process spawn, which any
-hook at all would pay.
+The guard is a `PreToolUse` hook, so it runs on every Bash tool call. A command
+mentioning none of `pgrep`, `kill` or a task-output file is answered before the
+hook spawns `jq` or the scanner — which is what almost every command in a
+session does.
+
+On the author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
+6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — such a command costs a
+median of **11.65 ms**, p95 17.56 ms. Driven by the wider verdicts corpus
+instead of a handful of curated ordinary commands, the same path costs
+12.27 ms; the two agreeing is what says the first figure is not an artifact of
+which commands were picked.
+
+That early exit is worth about a third of the call. Benchmarking the hook
+immediately before and after the change — same machine, same payloads, minutes
+apart — moved an ordinary command from 18.93 ms to 11.65 ms, a 38% cut, while
+the cohorts that carry a trigger token and so take an identical path in both
+versions moved by less than 6%. Those unmoved cohorts are the control, and
+they are why the comparison is worth quoting.
+
+What is left is not `jq` and not the scanner. About 1.84 ms is process spawn,
+which any hook at all would pay; most of the remainder is this script's own
+startup — bash parsing 2100 lines before it runs any of them, plus the two
+helper processes the hook spawns before it can reach a decision.
 
 Commands that reach the deeper paths cost more, and only they pay it: one the
 guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
-state file — has a median of 41.90 ms, and a denied command 26.52 ms. Those
-figures, and the 22.91 ms alongside them for a command the guard actually
-inspects, come from `tests/cases/verdicts.tsv`, which exists to be hard on the
-scanner rather than to be representative — read them as a ceiling, not as what
-a session pays.
+state file — has a median of 57.33 ms, and a denied command 39.90 ms. Those
+figures, and the 34.68 ms alongside them, are for a command the guard actually
+inspects — one carrying `pgrep`, `kill` or a task-output path, past the
+prefilter and into the `jq` spawn and scanner pass. They come from
+`tests/cases/verdicts.tsv`, which exists to be hard on the scanner rather than
+to be representative — read them as a ceiling, not as what a session pays.
+
+The benchmark's payloads carry no `cwd` or `transcript_path`, so a real
+session's hook payload is longer than any measured here; since the prefilter is
+a raw substring test over the whole payload, a longer payload can only help it.
+The same test cuts the other way for one shape: a repository path containing
+`kill` defeats the short-circuit for every command run inside that tree, and
+those calls pay the full `jq`-and-scanner cost whatever the command itself is.
 
 One machine, one moment. The full table, the method and the provenance are in
 [bench/RESULTS.md](bench/RESULTS.md); `just bench` regenerates it.

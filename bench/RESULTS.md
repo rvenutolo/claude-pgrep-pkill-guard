@@ -9,8 +9,8 @@ hook that runs on every Bash tool call.
 
 | field | value |
 | --- | --- |
-| date | 2026-08-30T03:51:36+00:00 |
-| commit | `d72cb4a` |
+| date | 2026-08-30T20:54:10+00:00 |
+| commit | `17dcd50` |
 | kernel | Linux 6.8.0-138-generic x86_64 |
 | cpu | 12th Gen Intel(R) Core(TM) i9-12900HK |
 | bash | 5.3.15(1)-release |
@@ -23,12 +23,12 @@ hook that runs on every Bash tool call.
 
 | cohort | path exercised | n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 0.85 | 1.84 | 2.99 | 4.29 |
-| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 5.55 | 12.27 | 17.34 | 22.44 |
-| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 6.35 | 11.65 | 17.56 | 21.96 |
-| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2655 | 14.21 | 34.68 | 48.33 | 72.97 |
-| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 19.47 | 57.33 | 94.01 | 130.37 |
-| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 14.27 | 39.90 | 60.46 | 79.76 |
+| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 0.94 | 1.47 | 2.78 | 3.66 |
+| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 3.33 | 5.35 | 9.58 | 14.64 |
+| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 3.37 | 5.19 | 9.39 | 10.24 |
+| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2655 | 14.29 | 23.52 | 42.79 | 61.80 |
+| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 17.46 | 44.07 | 85.19 | 121.97 |
+| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 16.10 | 29.08 | 53.81 | 79.30 |
 
 ## How to read this
 

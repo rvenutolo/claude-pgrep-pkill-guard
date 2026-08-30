@@ -227,32 +227,40 @@ learn you were unprotected.
 
 The guard is a `PreToolUse` hook, so it runs on every Bash tool call. A command
 mentioning none of `pgrep`, `kill` or a task-output file is answered before the
-hook spawns `jq` or the scanner — which is what almost every command in a
-session does.
+hook spawns `jq`, the scanner, or anything else at all — which is what almost
+every command in a session does.
 
 On the author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
 6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — such a command costs a
-median of **11.65 ms**, p95 17.56 ms. Driven by the wider verdicts corpus
-instead of a handful of curated ordinary commands, the same path costs
-12.27 ms; the two agreeing is what says the first figure is not an artifact of
-which commands were picked.
+median of **5.19 ms**, p95 9.39 ms. Driven by the wider verdicts corpus instead
+of a handful of curated ordinary commands, the same path costs 5.35 ms; the two
+agreeing is what says the first figure is not an artifact of which commands were
+picked.
 
-That early exit is worth about a third of the call. Benchmarking the hook
-immediately before and after the change — same machine, same payloads, minutes
-apart — moved an ordinary command from 18.93 ms to 11.65 ms, a 38% cut, while
-the cohorts that carry a trigger token and so take an identical path in both
-versions moved by less than 6%. Those unmoved cohorts are the control, and
-they are why the comparison is worth quoting.
+Getting there took two changes. The prefilter came first and moved an ordinary
+command from about 19 ms to somewhere in the 9-12 ms range. What was left in
+front of it were two helper processes the hook ran before it had looked at
+anything — a `cat` to read the payload, a `dirname` to locate the scanner — and
+removing both took it the rest of the way. That second change was measured as an
+interleaved alternation rather than as two runs minutes apart: before, after,
+before, after, three rounds each, one machine inside one hour, `bench/run
+--reps 15` every time. An ordinary command went 9.03 to 4.86 ms, then 10.39 to
+4.98, then 8.33 to 5.47 — about a 45% cut. The control is `baseline`, the empty
+hook, which sat between 1.40 and 1.82 ms across all six runs and moved in no
+direction; that it did not move is why the comparison is worth quoting. The
+cohorts carrying a trigger token gained a little too, since they had been paying
+for the same two spawns before reaching the paths that actually differ.
 
-What is left is not `jq` and not the scanner. About 1.84 ms is process spawn,
-which any hook at all would pay; most of the remainder is this script's own
-startup — bash parsing 2100 lines before it runs any of them, plus the two
-helper processes the hook spawns before it can reach a decision.
+What is left is not `jq`, not the scanner, and no longer a helper process. About
+1.47 ms is process spawn, which any hook at all would pay. The rest is now
+dominated by this script's own parse — bash reading roughly 2200 lines before it
+runs one of them. Shrinking that is a separate question, and it is tracked as
+one rather than guessed at here.
 
 Commands that reach the deeper paths cost more, and only they pay it: one the
 guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
-state file — has a median of 57.33 ms, and a denied command 39.90 ms. Those
-figures, and the 34.68 ms alongside them, are for a command the guard actually
+state file — has a median of 44.07 ms, and a denied command 29.08 ms. Those
+figures, and the 23.52 ms alongside them, are for a command the guard actually
 inspects — one carrying `pgrep`, `kill` or a task-output path, past the
 prefilter and into the `jq` spawn and scanner pass. They come from
 `tests/cases/verdicts.tsv`, which exists to be hard on the scanner rather than

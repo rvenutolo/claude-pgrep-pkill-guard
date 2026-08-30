@@ -26,14 +26,15 @@ fi
 # surfaces an error on every Bash call; exit 2 would block the tool outright.
 trap 'emit_allow; exit 0' ERR
 
-# Resolve the scanner relative to this script rather than via CLAUDE_CONFIG_DIR,
-# which is not guaranteed to be exported into the hook's environment.
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-readonly SCRIPT_DIR
-# Test seam: lets the suite point the hook at a deliberately broken scanner to
-# prove the integrity check deactivates the guard loudly. Production never sets
-# it; the default is resolved relative to this script.
-readonly SCANNER="${PGREP_GUARD_SCANNER_OVERRIDE:-${SCRIPT_DIR}/pgrep-scan.awk}"
+# Resolved lazily by resolve_scanner, which main calls only once the prefilter
+# has let a payload through. Both readers of SCANNER -- scan_command, and the
+# readability guard in main -- sit downstream of that short-circuit, and the
+# resolution costs a `dirname` fork and exec (~1.6 ms, #54) that an ordinary
+# Bash call has no reason to pay.
+#
+# Declared here rather than only inside the function so `set -u` has a
+# definition to see on any path that never resolves it.
+SCANNER=''
 
 # Keywords after which the next word is in command position.
 readonly -a COMMAND_POSITION_KEYWORDS=(
@@ -317,6 +318,25 @@ function is_operator() {
     ';' | '&' | '|' | '(' | ')' | '{' | '}' | '<NL>' | '`') return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# @description Resolve the path to the awk scanner and freeze it. Called once, from main,
+#              after the prefilter -- see the SCANNER declaration at the top of this script for
+#              why it is not resolved there.
+# @set SCANNER the absolute path to pgrep-scan.awk, or the test override
+# @noargs
+function resolve_scanner() {
+  # Resolve relative to this script rather than via CLAUDE_CONFIG_DIR, which is
+  # not guaranteed to be exported into the hook's environment.
+  local script_dir
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+  # Test seam: lets the suite point the hook at a deliberately broken scanner to
+  # prove the integrity check deactivates the guard loudly. Production never sets
+  # it; the default is resolved relative to this script.
+  SCANNER="${PGREP_GUARD_SCANNER_OVERRIDE:-${script_dir}/pgrep-scan.awk}"
+  # `readonly` inside a function still freezes the GLOBAL, which is what keeps
+  # the immutability this had when it was a top-level `readonly SCANNER=...`.
+  readonly SCANNER
 }
 
 # @description Tokenize a command, masking quoted regions, and verify the
@@ -2004,8 +2024,21 @@ function classify_command() {
 # @description Entry point.
 # @noargs
 function main() {
-  local input
-  input="$(cat)"
+  # A builtin read rather than `input="$(cat)"`, which is a fork and an exec on
+  # every Bash tool call and measured ~2.4 ms of one (#54). The empty delimiter
+  # reads to EOF, so `read` returns 1 having stored the whole payload -- that is
+  # the normal case here, not a failure, which is what the `|| :` is for. `IFS=`
+  # with an empty delimiter keeps the payload byte for byte: no word splitting,
+  # no whitespace trimmed.
+  #
+  # Two differences from `$(cat)`, both inert. A trailing newline survives
+  # rather than being stripped: the prefilter is a substring test and `jq`
+  # accepts trailing whitespace. And a raw NUL byte would truncate the payload,
+  # which Claude Code's payloads cannot contain -- Node's JSON.stringify escapes
+  # it rather than emitting it raw, the same class of assumption invariant 4
+  # already rests on.
+  local input=''
+  IFS= read -r -d '' input || :
 
   # The prefilter. Everything below this point costs a `jq` spawn and at least
   # one `awk` scanner pass, and on an ordinary Bash call both find nothing:
@@ -2053,6 +2086,11 @@ function main() {
     emit_allow
     return 0
   fi
+
+  # Past the short-circuit the scanner is about to be needed, so resolve it now.
+  # This is the first thing below the prefilter because the scanner readability
+  # guard a few lines down is one of its two readers.
+  resolve_scanner
 
   # Below here the guard is actually going to look at the command, so the
   # preconditions matter. These sit AFTER the prefilter on purpose: a command

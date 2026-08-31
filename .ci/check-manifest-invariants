@@ -29,7 +29,7 @@
 #         only possible test would be "exits 0 on the real repo", which a script
 #         that always returned 0 would also pass.
 # @exitcode 0 every invariant holds
-# @exitcode 1 a file is missing or unparseable, or an invariant is violated
+# @exitcode 1 a file is missing or unparsable, or an invariant is violated
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -137,7 +137,7 @@ function fail() {
 #              degraded load.
 # @arg $1 file absolute path to the JSON file
 # @exitcode 0 the file exists and parses
-# @exitcode 1 it is missing or unparseable
+# @exitcode 1 it is missing or unparsable
 function check_parses() {
   local -r file="$1"
   local -r label="${file#"${ROOT}/"}"

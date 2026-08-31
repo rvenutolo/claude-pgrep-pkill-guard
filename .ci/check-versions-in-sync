@@ -12,7 +12,7 @@
 #              and nothing should couple it to the plugin's release cadence.
 # @noargs
 # @exitcode 0 every version field agrees
-# @exitcode 1 a file is missing or unparseable, or the versions disagree
+# @exitcode 1 a file is missing or unparsable, or the versions disagree
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -41,7 +41,7 @@ readonly BOOTSTRAP_VERSION='0.0.0'
 # @arg $2 filter the jq filter to apply
 # @stdout the extracted value
 # @exitcode 0 the field exists and is a non-null scalar
-# @exitcode 1 the file is missing, unparseable, or the field is absent
+# @exitcode 1 the file is missing, unparsable, or the field is absent
 function read_version() {
   local -r file="$1" filter="$2"
   if [[ ! -f "${file}" ]]; then

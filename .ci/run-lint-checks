@@ -86,7 +86,25 @@ function main() {
   fi
 
   log 'running typos'
-  typos || rc=1
+  # Explicit file list, not a bare `typos`. Bare `typos` walks the tree and
+  # SKIPS HIDDEN PATHS, so it silently covered 22 of ~50 tracked files: none of
+  # .ci/, .github/, .claude-plugin/ or .githooks/ was ever spell-checked, and
+  # the gate reported a clean pass regardless (#46). `--hidden` is the wrong fix
+  # -- it also picks up UNTRACKED hidden paths, which here means the author's
+  # docs/superpowers/ and .claude/ trees.
+  #
+  # `git grep -I --files-with-matches ''` is every tracked file git considers
+  # text: it matches every line, so it names every file, and -I drops the
+  # binaries. Passing assets/deny-message.png explicitly would make typos read
+  # compressed bytes as prose and report a dozen findings from them.
+  local -a typo_files=()
+  mapfile -t typo_files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '')
+  if ((${#typo_files[@]} > 0)); then
+    typos "${typo_files[@]}" || rc=1
+  else
+    log 'no text files found for typos - this is a failure, not a clean pass'
+    rc=1
+  fi
 
   log 'running editorconfig-checker'
   editorconfig-checker || rc=1

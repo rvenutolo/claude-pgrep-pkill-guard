@@ -226,6 +226,47 @@ learn they were unprotected. That trade-off is why the `ERR` trap allows, why
 the scanner's integrity check is in-band, and why `repeat_check` is written as
 a long sequence of `|| return 0` guards rather than as assertions.
 
+## Known limitations
+
+Behaviour the guard does not have, recorded deliberately rather than left to be
+rediscovered. Each entry is pinned by rows in `tests/cases/verdicts.tsv`, so the
+limitation is a tested decision rather than an accident, and closing one means
+changing a recorded verdict on purpose.
+
+### Quote-split command names are not recognised
+
+The scanner compares a command-name token against the literal strings `pgrep`,
+`pkill` and `kill`. It does not unquote, so any shell quoting that survives into
+the token makes the comparison fail and the command is allowed. Every form below
+is a valid invocation of `pkill`, and `zzznoproc` matches no process, so the
+rows that pin them can be run without killing anything:
+
+| command | verdict |
+| --- | --- |
+| `pkill --full zzznoproc` | `deny:kill` |
+| `"pkill" --full zzznoproc` | `allow` |
+| `$'pkill' --full zzznoproc` | `allow` |
+| `p'k'ill --full zzznoproc` | `allow` |
+| `'pk''ill' --full zzznoproc` | `allow` |
+| `pk\ill --full zzznoproc` | `allow` |
+| `PATH=/bin p\kill --full zzznoproc` | `allow` |
+
+This is intended, on the threat model. The guard exists for an agent that does
+not realise a pattern-kill will match the session running it — not for an
+adversary trying to slip a kill past it. None of these forms is something a
+model writes by accident; each is deliberate obfuscation, and anyone typing
+`pk\ill` has already decided to bypass the guard, which they could do more
+easily by disabling the plugin.
+
+It is not free to close. The prefilter's soundness argument in invariant 4
+depends on this exact property: every token the scanner recognises is a literal
+substring of the raw payload. A scanner that unquoted could recognise `pk\ill`
+in a payload containing no `kill` substring, so teaching it to unquote means
+revisiting the prefilter's token set in the same change.
+`tests/prefilter.bats` is what would catch that being forgotten.
+
+Filed as #52.
+
 ## Design invariants
 
 Five rules the code depends on and cannot enforce. Each is repeated as a
@@ -370,18 +411,18 @@ reach.
 `tests/prefilter.bats` hardcodes the same three tokens. That duplication is the
 point: a test that extracted the list from the hook would agree with it by
 construction and assert nothing. Instead two independent assertions close the
-loop — `tests/prefilter.bats` pins corpus against specification, and the 310
+loop — `tests/prefilter.bats` pins corpus against specification, and the 311
 rows of `tests/classify.bats` pin the hook against the corpus. Neither reaches
 inside the hook, so invariant 3 still holds.
 
 **The assumptions it rests on.** The proof needs every token the scanner
 recognises to be a literal substring of the payload. That is true only because
-the scanner does not unquote: `"pkill" --full x` and `pk\ill --full x` are
-allowed today, which is filed as issue #52 and pinned by corpus rows. If #52 is
-ever closed by teaching the scanner to unquote, this token set must be
-revisited in the same change — an unquoting scanner could recognise `pk\ill`
-in a payload containing no `kill` substring. `tests/prefilter.bats` is what
-catches it.
+the scanner does not unquote — see **Quote-split command names are not
+recognised** above for the seven forms this allows and why that is intended. If
+that limitation is ever closed by teaching the scanner to unquote, this token
+set must be revisited in the same change — an unquoting scanner could
+recognise `pk\ill` in a payload containing no `kill` substring.
+`tests/prefilter.bats` is what catches it.
 
 A second assumption sits alongside the first: the prefilter matches raw
 payload bytes, so it also assumes the payload spells the command's characters

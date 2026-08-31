@@ -308,3 +308,4 @@
 "pk\\ill --full zzznoproc"	allow
 "$'pkill' --full zzznoproc"	allow
 "'pk''ill' --full zzznoproc"	allow
+"PATH=/bin p\\kill --full zzznoproc"	allow

@@ -3,6 +3,24 @@
 # names) that typos flags as misspellings.
 extend-exclude = ["tests/cases/*.tsv", "flake.lock"]
 
+[default]
+# release-please writes each entry's ABBREVIATED commit SHA into CHANGELOG.md as
+# markdown link text -- `([33ba166](https://.../commit/33ba166079...))`. typos
+# reads a 7-character hex string as an identifier and splits it into words, so
+# `33ba166` reports as `ba` -> `by`/`be` and reds the release job. Whether that
+# fires depends only on which hex characters a release's SHAs happen to contain,
+# so every release was a coin flip -- and it cannot self-heal, because `ba` has
+# two suggestions and `typos --write-changes` will not guess between them (#61).
+#
+# The 40-character form in the URL beside it needs no entry: typos' own
+# hash-shaped-string heuristic already ignores it. Only the abbreviated form is
+# short enough to be mistaken for prose.
+#
+# Narrower than excluding CHANGELOG.md, deliberately: the commit subjects there
+# ARE prose, they are what a reader of the changelog sees, and they should keep
+# being spell-checked.
+extend-ignore-re = ['\[[0-9a-f]{7,40}\]']
+
 [default.extend-words]
 # Real command names that typos mistakes for typos of English words.
 doas = "doas"

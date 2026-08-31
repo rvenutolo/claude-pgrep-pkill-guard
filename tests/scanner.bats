@@ -334,6 +334,10 @@ build_inactive_fixture() {
   done
   cp "${HOOK}" "${PROBE_DIR}/hook.sh"
   chmod +x "${PROBE_DIR}/hook.sh"
+  # The body too, or the entry script stops at its own missing-sibling branch and
+  # never reaches the awk and scanner checks these probes exist to exercise --
+  # they would report `inactive` for the wrong reason and pass regardless (#55).
+  cp "${BODY}" "${PROBE_DIR}/pgrep-pkill-guard-body.sh"
   cp "${SCANNER}" "${PROBE_DIR}/pgrep-scan.awk"
 }
 
@@ -350,6 +354,47 @@ build_inactive_fixture() {
   rm -f -- "${PROBE_DIR}/pgrep-scan.awk"
   run inactive_probe "${PROBE_DIR}/hook.sh" "${PATH}"
   assert_output 'inactive'
+}
+
+# @description Copy ONLY the entry script into the per-test tmpdir and run it
+#              there. `resolve_hook_dir` derives HOOK_DIR from ${BASH_SOURCE[0]},
+#              so the copy looks for `pgrep-pkill-guard-body.sh` beside ITSELF
+#              and finds whatever the caller did -- or did not -- drop in that
+#              directory first. The probe command must contain `pgrep` or
+#              `pkill` or the prefilter short-circuits before the sibling is ever
+#              sourced; `zzznoproc` matches no process, so nothing can be killed
+#              if the guard fails to fire. Invoked directly, not as
+#              `bash <script>`, matching the hooks.json contract (spec amendment
+#              A12). stderr is discarded because a sibling that fails to parse
+#              makes bash print a syntax error, and only stdout is the contract.
+# @noargs
+# @stdout the hook's JSON verdict
+orphan_probe() {
+  local -r copy="${BATS_TEST_TMPDIR}/pgrep-pkill-guard.sh"
+  cp "${HOOK}" "${copy}"
+  chmod +x "${copy}"
+  printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full zzznoproc"}}' \
+    | "${copy}" 2> /dev/null
+}
+
+@test "scanner: a missing sibling body announces the guard inactive" {
+  local out
+  out="$(orphan_probe)"
+  [[ "${out}" == *'INACTIVE'* ]]
+  # Pinned to the branch under test: without this the sibling-fails-to-load case
+  # below would still pass if its broken file never got written.
+  [[ "${out}" == *'is missing'* ]]
+}
+
+@test "scanner: a sibling body that fails to load announces the guard inactive" {
+  # Syntactically broken on purpose, so `source` returns non-zero. The `||` on
+  # the source call is what keeps that off the ERR trap, turning a corrupt
+  # sibling into this message rather than the trap's silent allow.
+  printf 'function {{{\n' > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
+  local out
+  out="$(orphan_probe)"
+  [[ "${out}" == *'INACTIVE'* ]]
+  [[ "${out}" == *'failed to load'* ]]
 }
 
 # --- The jq @tsv / printf %b round-trip -------------------------------------

@@ -31,6 +31,9 @@ readonly EXPECT_EXECUTABLE=(
   'bench/run'
 )
 readonly EXPECT_NON_EXECUTABLE=(
+  # Sourced by the guard's entry script once a payload looks worth inspecting,
+  # never run on its own: no shebang, so no exec bit either.
+  'hooks/pgrep-pkill-guard-body.sh'
   'hooks/pgrep-scan.awk'
   'hooks/hooks.json'
   '.ci/required-tools'

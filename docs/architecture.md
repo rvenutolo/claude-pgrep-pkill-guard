@@ -19,21 +19,37 @@ failure mode.
 
 ### `hooks/pgrep-pkill-guard.sh`
 
-The guard itself. In execution order:
+The entry script, and the only file `hooks/hooks.json` names. It holds the work
+an ordinary Bash tool call has to pay for, and nothing else. Bash parses a whole
+script before it executes a line of it, at roughly 1.2 us per line, and this
+hook runs on every Bash call in every session — so the file's length is a
+latency tax paid even by the commands the guard has no opinion about. At 2203
+lines that was ~2.4 ms of pure parse per call, four fifths of what the guard
+cost, almost all of it spent on code the call would never reach. Everything past
+the prefilter therefore lives in the sibling below (#55), and invariant 5 is the
+ceiling that keeps it there.
+
+In execution order:
 
 1. `export LC_ALL=C`, before anything else. The scanner emits **byte** offsets
-   and this script slices the raw command back out with
+   and the guard slices the raw command back out with
    `${command:offset:length}`. Bash string operations are locale-aware, so under
    a UTF-8 locale a single multibyte character earlier in the command shifts
-   every later slice and silently voids the bracket mitigation.
-2. The bash-version guard: bash older than 4.3 prints the INACTIVE
+   every later slice and silently voids the bracket mitigation. Exported rather
+   than merely set, so it also covers the sourced body and the awk that body
+   spawns.
+2. `readonly HOOK_NAME`, which sits this high only because the version guard
+   below names it. Every other constant is in the body.
+3. The bash-version guard: bash older than 4.3 prints the INACTIVE
    `systemMessage` and exits immediately. It runs before everything else
-   because it is the one guard that has to: the rest of the script leans on
+   because it is the one guard that has to: the rest of the guard leans on
    4.3+ features, so nothing after this point is safe to run on an older
-   shell.
-3. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
-   on every Bash call, and exit 2 would block the tool outright.
-4. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
+   shell. It is also the only loud failure that fires ahead of the prefilter.
+4. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
+   on every Bash call, and exit 2 would block the tool outright. The trap is
+   installed once, here; the body is sourced into this same shell and inherits
+   it rather than setting one of its own (invariant 2).
+5. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
    `IFS= read -r -d '' input || :` — rather than the `input="$(cat)"` it used
    to, which was a fork and an exec on every Bash tool call before the guard
    had looked at anything. The empty delimiter reads to EOF, so `read` returns
@@ -43,40 +59,63 @@ The guard itself. In execution order:
    substring test nor `jq` cares about, and a raw NUL would truncate the
    payload — which Claude Code's payloads, serialized by Node's
    `JSON.stringify`, cannot contain.
-5. The prefilter: `input` is tested for the raw substrings `pgrep`, `kill` and
+6. The prefilter: `input` is tested for the raw substrings `pgrep`, `kill` and
    `.output`, and a payload carrying none of them returns `{}` immediately,
-   before `jq` or the awk scanner ever spawn. See invariant 4 below for why a
-   raw-payload substring test cannot suppress a verdict the rest of the guard
-   would otherwise reach.
-6. `resolve_scanner`, then the precondition guards, each of which stands down
+   before `jq` or the awk scanner ever spawn — and, since everything downstream
+   is in the sibling, having parsed and executed nothing beyond this file. See
+   invariant 4 below for why a raw-payload substring test cannot suppress a
+   verdict the rest of the guard would otherwise reach.
+7. Past the prefilter, `resolve_hook_dir` freezes `HOOK_DIR`: one `dirname`
+   fork and exec, which locates both the sibling and — through the sibling's
+   `resolve_scanner` — the awk scanner, so no path pays a second process for
+   the second lookup. Two branches then stand down loudly, exactly as the
+   precondition guards inside the body do: the sibling missing or unreadable,
+   and the `source` itself failing. The `||` on that `source` is what keeps a
+   corrupt sibling off the `ERR` trap, which would otherwise answer a broken
+   install with a bare `{}`. With the body loaded, `main` calls
+   `inspect_command "${input}"`.
+
+### `hooks/pgrep-pkill-guard-body.sh`
+
+The rest of the guard: every constant except `HOOK_NAME`, every function except
+`emit_allow`, `resolve_hook_dir` and `main`, and `inspect_command`, which is
+what used to be the second half of `main`. A call the prefilter short-circuits
+never parses a line of it, which is the entire reason the file exists.
+
+It is **sourced, never executed** — no shebang, no exec bit — and it sets no
+`set -Eeuo pipefail`, no `IFS` and no `ERR` trap, because it runs in the entry
+script's shell and would be reconfiguring its caller rather than itself
+(invariant 2).
+
+Picking up where step 7 above left off, `inspect_command`:
+
+1. `resolve_scanner`, then the precondition guards, each of which stands down
    loudly: `jq` missing from `PATH`, `awk` missing from `PATH`, the scanner file
    unreadable. These run only once the prefilter has let a payload through,
    since a payload the prefilter would have returned `{}` for was never going to
-   reach `jq` or the scanner either way. The scanner path is resolved here, at
-   the top of this step, rather than at the top of the script: both readers of
-   `SCANNER` — `scan_command` and the readability guard in this same step — sit
-   downstream of the short-circuit, and resolving it costs a `dirname` fork and
-   exec that an ordinary Bash call has no reason to pay. `resolve_scanner`
-   declares the global `readonly` once it sets it, so the path is still frozen
-   for the rest of the call.
-7. Extract `tool_name`, `tool_input.command` and `session_id` in a **single**
+   reach `jq` or the scanner either way. `resolve_scanner` costs no process of
+   its own: it reads the `HOOK_DIR` the entry script resolved before sourcing
+   this file, and declares the global `readonly` once it sets it, so the path is
+   frozen for the rest of the call.
+2. Extract `tool_name`, `tool_input.command` and `session_id` in a **single**
    `jq ... | @tsv` call — one jq spawn, since this runs on every payload that
    survives the prefilter. `@tsv` escapes literal tabs and newlines in the
    command, which `printf '%b'` then decodes in one left-to-right pass. A
    `tool_name` other than `Bash` allows immediately.
-8. `classify_command` runs the stateless tiers and prints a verdict plus a tab
+3. `classify_command` runs the stateless tiers and prints a verdict plus a tab
    and the detail its message needs (the invoked tool, or the polled path).
-   `main` owns stdout; the classifier hands the verdict up rather than writing
-   the decision itself.
-9. The stateful `repeat` tier, which runs only after the stateless tiers have
+   `inspect_command` owns stdout; the classifier hands the verdict up rather
+   than writing the decision itself.
+4. The stateful `repeat` tier, which runs only after the stateless tiers have
    allowed or warned.
-10. Emission. `emit_allow` prints a bare `{}`; `emit_warn` prints an `allow`
-    decision carrying `additionalContext`; `emit_deny` prints a `deny`
-    decision carrying `permissionDecisionReason`, built by `deny_message` from
-    the kind and its detail. `additionalContext` is the only `PreToolUse`
-    field verified to reach the model on an allowed call — `systemMessage`
-    renders to the user only, and `permissionDecisionReason` is fed back under
-    deny alone.
+5. Emission. `emit_allow` — which lives in the entry script, because the
+   prefilter needs it there — prints a bare `{}`; `emit_warn` prints an `allow`
+   decision carrying `additionalContext`; `emit_deny` prints a `deny`
+   decision carrying `permissionDecisionReason`, built by `deny_message` from
+   the kind and its detail. `additionalContext` is the only `PreToolUse`
+   field verified to reach the model on an allowed call — `systemMessage`
+   renders to the user only, and `permissionDecisionReason` is fed back under
+   deny alone.
 
 ### `hooks/pgrep-scan.awk`
 
@@ -112,10 +151,10 @@ otherwise tell `foo` from `foo\n` at end of input.
 | `deny:task-poll` | a loop whose termination test reads a harness task-output file |
 | `warn` | a `pgrep --full` whose result is consumed but which is neither a loop nor a kill |
 | `allow` | everything else |
-| `inactive` | the scanner failed its integrity trailer; `main` emits the INACTIVE `systemMessage` |
+| `inactive` | the scanner failed its integrity trailer; `inspect_command` emits the INACTIVE `systemMessage` |
 
 `repeat` is the fifth deny kind and is not one of these: it is decided after
-classification, in `main`, because it is the only stateful rule.
+classification, in `inspect_command`, because it is the only stateful rule.
 
 ### The per-session state file
 
@@ -158,14 +197,19 @@ One rule explains most of the code. **Every precondition failure and every
 state failure allows the command**, and the ones a user could act on emit a
 `systemMessage` saying the guard is INACTIVE for that command.
 
-The loud path covers bash below 4.3, a missing `jq` or `awk`, an unreadable
-scanner, and an awk that fails the integrity trailer.
+The loud path covers bash below 4.3, a missing or unloadable
+`hooks/pgrep-pkill-guard-body.sh`, a missing `jq` or `awk`, an unreadable
+scanner, and an awk that fails the integrity trailer. The two sibling branches
+are the split's own contribution to the list: an entry script that could not
+find or load its body would otherwise be an installed plugin that quietly does
+nothing.
 
-Since the payload prefilter landed, those three loud warnings fire only for
-commands that carry a trigger token. A command mentioning neither `pgrep`, nor
-`kill`, nor a task-output file returns `{}` whether or not `jq` is installed,
-so warning about an inactive guard on that call describes a decision the guard
-was never going to make. The user still learns they are unprotected the first
+The bash-version guard is the only one of those that runs before the payload
+prefilter. Every other loud warning fires only for commands that carry a
+trigger token. A command mentioning neither `pgrep`, nor `kill`, nor a
+task-output file returns `{}` whether or not `jq` is installed, so warning
+about an inactive guard on that call describes a decision the guard was never
+going to make. The user still learns they are unprotected the first
 time they type something the guard would have looked at, which is the moment
 the warning is worth anything.
 
@@ -184,7 +228,7 @@ a long sequence of `|| return 0` guards rather than as assertions.
 
 ## Design invariants
 
-Four rules the code depends on and cannot enforce. Each is repeated as a
+Five rules the code depends on and cannot enforce. Each is repeated as a
 comment in the source it constrains; if one changes here, change the comment
 too.
 
@@ -192,7 +236,9 @@ too.
 
 The rest of the repo uses GNU long options (`mkdir --parents`, `rm --force`).
 `hooks/` is exempt and must use POSIX short flags — `mkdir -p -m 0700`,
-`rm -f`, `mv -f`.
+`rm -f`, `mv -f`. The exemption covers both halves of the split guard: the entry
+script and the body it sources ship to the same machines and run in the same
+shell.
 
 **Why:** the hook runs on whatever userland the user's machine ships. macOS
 ships BSD coreutils, whose `mkdir` has no long options at all — no `--parents`,
@@ -203,13 +249,22 @@ Everything else in the repo — `.ci/`, `run-all-checks`, `run-tests`,
 only inside the hermetic Nix devShell where GNU coreutils is guaranteed.
 
 **Tracked comments:** the two `POSIX short flags, deliberately` comments in
-`hooks/pgrep-pkill-guard.sh`, in `repeat_check` and in its write path:
+`hooks/pgrep-pkill-guard-body.sh`, in `repeat_check` and in its write path:
 
 ```text
 # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
 # no long options at all (no `parents`, no `mode=`). hooks/ is the one
 # directory in this repo exempt from the repo-wide long-options rule, for
 # exactly that reason -- the guard has to run on whatever userland ships.
+```
+
+and a third in `resolve_hook_dir` in `hooks/pgrep-pkill-guard.sh`, which is the
+entry script's one and only external command:
+
+```text
+# Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is
+# not guaranteed to be exported into the hook's environment. POSIX short flags,
+# deliberately: macOS ships BSD userland, whose `dirname` has no long options.
 ```
 
 **Same cause, different scope:** `tests/*.bats` and `tests/test_helper/` carry
@@ -224,8 +279,8 @@ tracked counterpart is the `POSIX short flags on purpose` comment above
 
 ### 2. `hooks/` never sets `shopt -s inherit_errexit`
 
-Every gate script in the repo sets it. The hook must not, and no one may turn
-the assignment below into a plain one.
+Every gate script in the repo sets it. Neither of the hook's two files may, and
+no one may turn the assignment below into a plain one.
 
 ```bash
 repeat_reason="$(repeat_check "${session_id}" "${keys}")" || repeat_reason=''
@@ -238,17 +293,35 @@ errexit's radar for its whole dynamic extent, so nothing inside `repeat_check`
 reintroduces exactly the failure path the guard exists to avoid: a transient
 filesystem condition becoming a trapped error on an unrelated command. The
 `||` is load-bearing well beyond its visible role as a fallback, and the
-fallback is also why `main` accepts the result as a deny only when it is shaped
-like `repeat_message`'s output.
+fallback is also why `inspect_command` accepts the result as a deny only when it
+is shaped like `repeat_message`'s output.
 
-**Tracked comment:** `The || is load-bearing beyond the obvious fallback` in
-`hooks/pgrep-pkill-guard.sh`, in `main` directly above that assignment:
+**And the body sets none of the four.** `hooks/pgrep-pkill-guard-body.sh` is
+sourced into the entry script's shell rather than run in one of its own, so on
+top of `inherit_errexit` it must never set `set -Eeuo pipefail`, `IFS`, or the
+`ERR` trap either. The entry script owns all four and they are already in force
+by the time the `source` runs; a sourced file that sets them is not configuring
+itself, it is reconfiguring its caller. That is also why the body carries no
+shebang and no executable bit — it is not a script that can be run.
+
+**Tracked comment:** `The || is load-bearing beyond the obvious fallback`, which
+now appears twice. In `hooks/pgrep-pkill-guard-body.sh`, in `inspect_command`
+directly above that assignment:
 
 ```text
 # The `||` is load-bearing beyond the obvious fallback: it is what
 # keeps this whole command substitution off errexit's radar for its
 # entire dynamic extent, so nothing inside repeat_check can trip the
 # top-level ERR trap. Do not turn this into a plain assignment.
+```
+
+And in `hooks/pgrep-pkill-guard.sh`, above the `source` of the body, where the
+same construct does the same job for a corrupt sibling:
+
+```text
+# The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
+# repeat_check call inside the body: it keeps a failing `source` off the ERR
+# trap, so a corrupt sibling produces this message rather than a bare `{}`.
 ```
 
 ### 3. No test sources the hook or calls an internal function
@@ -264,6 +337,13 @@ test that reaches inside pins an implementation detail and blocks refactoring �
 and the roughly 1450 lines of embedded self-test that this suite replaced did
 exactly that.
 
+`hooks/pgrep-pkill-guard-body.sh` is not a loophole in this. It exists to be
+sourced, but that is the entry script's business alone — no test may source it
+either. The two tests that cover the split, in `tests/scanner.bats`, copy the
+entry script into a temporary directory and run it there with no sibling beside
+it, and then with a deliberately broken one; both assert on the INACTIVE JSON
+the subprocess writes, and neither sources anything.
+
 **The one exception** is `hooks/pgrep-scan.awk`, which has its own public
 interface: a command on stdin, offset/token records and an integrity trailer on
 stdout. `tests/scanner.bats` may drive it directly with `awk -f`, always under
@@ -276,9 +356,9 @@ contains none of those three substrings. The proof is containment, not
 enumeration. `classify_command` itself opens with an early `allow` unless the
 COMMAND contains `pgrep`, `pkill`, or `.output`, and every stateless `deny`,
 `warn`, or `inactive` verdict has to pass through that gate on its way out.
-`main` separately restricts the stateful repeat tier to commands containing
-`pgrep` or `.output`, so no verdict can arise from the per-session state file
-alone either. The guard, in other words, already prefilters on the parsed
+`inspect_command` separately restricts the stateful repeat tier to commands
+containing `pgrep` or `.output`, so no verdict can arise from the per-session
+state file alone either. The guard, in other words, already prefilters on the parsed
 command before this prefilter ever runs. The new check applies the identical
 predicate to the raw payload, with `pkill` widened to `kill`. Since `pkill` is
 a substring of `kill`, and the command is itself a substring of the payload it
@@ -322,3 +402,29 @@ substring test over the raw payload sees all three. See issue #29 for the
 probe matrix.
 
 Tracked counterpart: the prefilter comment block in `main`.
+
+### 5. The entry script stays under 200 lines
+
+`hooks/pgrep-pkill-guard.sh` must stay under 200 lines.
+`.ci/check-fast-path-size` enforces it, and `run-all-checks` runs that gate
+with the rest.
+
+**Why:** bash parses a whole script before it executes any of it, at roughly
+1.2 us per line, and this hook runs on every Bash tool call in every session —
+including the overwhelming majority the guard has no opinion about. Measured
+with `bash -n` over valid prefixes of the pre-split 2203-line guard (400 reps,
+`env -u BASH_ENV`): 4426 us for an empty script, 4559 at 120 lines, 5096 at
+300, 5807 at 1100, and 7099 at 2203. That last figure is ~2.4 ms of pure parse
+on every call, four fifths of what the guard cost, and it is why #55 split the
+file in two.
+
+**The ceiling is the point, not an obstacle to it.** A new helper belongs in
+`hooks/pgrep-pkill-guard-body.sh`, which the fast path never parses; raising the
+number spends those milliseconds again, a few dozen microseconds at a time. The
+win is invisible to every other check in this repo, so without the gate it would
+regress one helper at a time and nobody would notice. The gate also fails on a
+zero-line count: an empty read is a broken measurement, not a very fast hook.
+
+**Tracked comments:** the header of `.ci/check-fast-path-size`, which carries
+the measurement above, and the header of `hooks/pgrep-pkill-guard-body.sh`,
+which points back to this invariant.

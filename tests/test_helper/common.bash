@@ -5,13 +5,15 @@
 #
 # Globals exported:
 #   REPO_DIR — repo root, resolved from BATS_TEST_DIRNAME
-#   HOOK     — absolute path to the guard under test
+#   HOOK     — absolute path to the guard's entry script, the thing under test
+#   BODY     — absolute path to the sibling the entry script sources
 #   SCANNER  — absolute path to the awk scanner
 
 REPO_DIR="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"
+BODY="${REPO_DIR}/hooks/pgrep-pkill-guard-body.sh"
 SCANNER="${REPO_DIR}/hooks/pgrep-scan.awk"
-export REPO_DIR HOOK SCANNER
+export REPO_DIR HOOK BODY SCANNER
 
 # bats-support / bats-assert normally resolve through the BATS_LIB_PATH that the
 # flake's bats wrapper exports. The non-hermetic compat CI legs have no flake, so

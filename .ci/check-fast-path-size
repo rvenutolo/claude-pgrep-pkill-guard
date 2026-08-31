@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+# @description Assert the guard's entry script stays under a hard line ceiling.
+#              bash parses the WHOLE file before it executes any of it, at
+#              roughly 1.2 us per line, and this hook runs on EVERY Bash tool
+#              call in every session -- so the file's length is a latency tax
+#              paid even by the commands the guard has no opinion about.
+#              Measured with `bash -n` over valid prefixes of the pre-split
+#              2203-line guard (400 reps, `env -u BASH_ENV`): 4426 us for an
+#              empty script, 4559 at 120 lines, 5096 at 300, 5807 at 1100,
+#              7099 at 2203. That is ~2.4 ms of pure parse on every call, four
+#              fifths of what the guard cost.
+#
+#              #55 fixed it by splitting the guard in two: a small entry script
+#              that runs the payload prefilter, and
+#              hooks/pgrep-pkill-guard-body.sh -- 2000+ lines with no shebang
+#              and no exec bit -- which the entry script sources only once a
+#              payload looks worth inspecting. That win is invisible to every
+#              other check in this repo, so without this gate it would regress
+#              one helper at a time and nobody would notice.
+#
+#              The ceiling is the point, not an obstacle to it. If a new helper
+#              does not fit, put it in the body: raising the number spends the
+#              milliseconds again.
+# @noargs
+# @exitcode 0 the entry script is within the ceiling
+# @exitcode 1 it is over the ceiling, or missing/unreadable
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+readonly FAST_PATH='hooks/pgrep-pkill-guard.sh'
+readonly BODY_PATH='hooks/pgrep-pkill-guard-body.sh'
+readonly MAX_LINES=200
+
+function main() {
+  local -r file="${REPO_DIR}/${FAST_PATH}"
+  if [[ ! -r "${file}" ]]; then
+    printf 'FAIL: %s is missing or unreadable\n' "${FAST_PATH}" >&2
+    return 1
+  fi
+
+  local rc=0 lines
+  lines="$(wc -l < "${file}")"
+  # BSD wc pads its count with leading blanks; GNU does not.
+  lines="${lines//[[:space:]]/}"
+
+  # A zero-line entry script means the read went wrong, not that the hook got
+  # very fast. An empty scan is never a clean pass.
+  if ((lines == 0)); then
+    printf 'FAIL: %s is empty — the line count looks broken\n' "${FAST_PATH}" >&2
+    return 1
+  fi
+
+  if ((lines > MAX_LINES)); then
+    printf 'FAIL: %s is %s lines, over the %s-line ceiling by %s\n' \
+      "${FAST_PATH}" "${lines}" "${MAX_LINES}" "$((lines - MAX_LINES))" >&2
+    printf '      bash parses every one of those lines on every Bash tool\n' >&2
+    printf '      call (#55, ~1.2 us/line). Move the new code into %s\n' \
+      "${BODY_PATH}" >&2
+    printf '      rather than raising the ceiling.\n' >&2
+    rc=1
+  else
+    printf 'ok: %s is %s lines (ceiling %s)\n' "${FAST_PATH}" "${lines}" "${MAX_LINES}" >&2
+  fi
+  return "${rc}"
+}
+
+main "$@"

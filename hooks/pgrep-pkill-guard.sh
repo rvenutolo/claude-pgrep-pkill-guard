@@ -54,9 +54,63 @@ function resolve_hook_dir() {
   readonly HOOK_DIR
 }
 
+# @description Bring in the sourced body: the whole guard past the prefilter, and human_mode with
+#              it. Two callers need it -- the human-mode dispatch and the JSON path -- so the
+#              resolution and both fail-open branches live here, not twice over (invariant 5).
+# @noargs
+# @exitcode 0 the body is loaded and its functions are callable
+# @exitcode 1 it was missing or would not load; the systemMessage saying so is already on stdout
+function load_body() {
+  resolve_hook_dir
+  local -r body="${HOOK_DIR}/pgrep-pkill-guard-body.sh"
+
+  # Fail open, loudly, the same way the jq/awk/scanner branches inside the body
+  # do. A missing or broken sibling would otherwise leave an installed plugin
+  # that silently does nothing -- the exact failure this hook exists to prevent.
+  if [[ ! -r "${body}" ]]; then
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: pgrep-pkill-guard-body.sh is missing; the pgrep/pkill guard is INACTIVE for this command."
+    return 1
+  fi
+  # The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
+  # repeat_check call inside the body: it keeps a failing `source` off the ERR
+  # trap, so a corrupt sibling produces this message rather than a bare `{}`.
+  # shellcheck source=/dev/null # the sibling is linted on its own as hooks/*.sh; following it
+  # from here would re-lint 2100 lines against a context it never sees in isolation.
+  source "${body}" || {
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: pgrep-pkill-guard-body.sh failed to load; the pgrep/pkill guard is INACTIVE for this command."
+    return 1
+  }
+  # Explicit, because `source` yields the sourced file's last status and this
+  # function's own is now a decision, not a value nobody reads.
+  return 0
+}
+
 # @description Entry point.
 # @noargs
 function main() {
+  # Human mode. Both tests are builtins, so the fast path pays no fork and
+  # nothing measurable to ask them. Claude Code invokes the hook with no
+  # arguments (hooks/hooks.json passes none) and with stdin on a pipe, so neither
+  # can fire on a real hook call: what reaches human_mode came from a person.
+  #
+  # Sitting AFTER the bash-version guard is deliberate: on stock macOS bash 3.2
+  # `--help` prints that guard's INACTIVE message instead of help. Fixing that
+  # needs a third, bash-3.2-safe file in hooks/ -- a large structural price for a
+  # message that already names that reader's exact problem. Known limitation.
+  if (($# > 0)) || [[ -t 0 ]]; then
+    load_body || return 0
+    # `|| exit` rather than a bare call plus `return`: human_mode returns 2 on a
+    # usage error (its own comment says why that is the one deliberate non-zero
+    # exit here), and a plain non-zero command would trip the ERR trap above and
+    # be rewritten into an allow. The `||` keeps human_mode off errexit's radar
+    # for its whole dynamic extent, the same trick the body's repeat_check call
+    # uses; the `exit` is what carries the status out to the shell.
+    human_mode "$@" || exit "$?"
+    return 0
+  fi
+
   # A builtin read rather than `input="$(cat)"`, which is a fork and an exec on
   # every Bash tool call and measured ~2.4 ms of one (#54). The empty delimiter
   # reads to EOF, so `read` returns 1 having stored the whole payload -- that is
@@ -120,31 +174,10 @@ function main() {
     return 0
   fi
 
-  # Past the short-circuit the guard is going to look at the command, so bring
-  # in the machinery that does it. Everything below this point lives in the
-  # sibling file, which is why an ordinary Bash call parses ~150 lines instead
-  # of 2200 (#55).
-  resolve_hook_dir
-  local -r body="${HOOK_DIR}/pgrep-pkill-guard-body.sh"
-
-  # Fail open, loudly, the same way the jq/awk/scanner branches inside the body
-  # do. A missing or broken sibling would otherwise leave an installed plugin
-  # that silently does nothing -- the exact failure this hook exists to prevent.
-  if [[ ! -r "${body}" ]]; then
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: pgrep-pkill-guard-body.sh is missing; the pgrep/pkill guard is INACTIVE for this command."
-    return 0
-  fi
-  # The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
-  # repeat_check call inside the body: it keeps a failing `source` off the ERR
-  # trap, so a corrupt sibling produces this message rather than a bare `{}`.
-  # shellcheck source=/dev/null # the sibling is linted on its own as hooks/*.sh; following it
-  # from here would re-lint 2100 lines against a context it never sees in isolation.
-  source "${body}" || {
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: pgrep-pkill-guard-body.sh failed to load; the pgrep/pkill guard is INACTIVE for this command."
-    return 0
-  }
+  # Past the short-circuit the guard is going to look at the command, so bring in
+  # the machinery that does it. Everything below this point lives in the sibling
+  # file, which is why an ordinary Bash call parses ~190 lines, not 2200 (#55).
+  load_body || return 0
 
   inspect_command "${input}"
 }

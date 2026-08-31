@@ -249,12 +249,13 @@ remained. Splitting the file took an ordinary command from about 5.6 ms to about
 2.5.
 
 The split is the reason `hooks/` holds two scripts.
-`hooks/pgrep-pkill-guard.sh` is a 152-line entry script carrying only what an
-ordinary call actually executes: the locale, the bash-version guard, the `ERR`
-trap, `emit_allow`, the builtin read of stdin, and the prefilter. Everything the
-prefilter short-circuits past lives in `hooks/pgrep-pkill-guard-body.sh`, which
-the entry script sources only after the prefilter has failed to decide, and
-which an ordinary command never reads. Parse cost alone, measured with `bash -n`
+`hooks/pgrep-pkill-guard.sh` is the entry script — 152 lines when the split
+landed, 185 today — carrying only what an ordinary call actually executes: the
+locale, the bash-version guard, the `ERR` trap, `emit_allow`, the
+`--help`/`--version` dispatch, the builtin read of stdin, and the prefilter.
+Everything the prefilter short-circuits past lives in
+`hooks/pgrep-pkill-guard-body.sh`, which the entry script sources only after the
+prefilter has failed to decide, and which an ordinary command never reads. Parse cost alone, measured with `bash -n`
 over 400 repetitions: an empty script costs 4.12 ms, the entry script 4.25 ms
 (+0.13), the old single file 6.49 ms (+2.38). A smaller split was measured and
 rejected — moving only `deny_message`, the wrapper recursion and `repeat_check`
@@ -381,6 +382,13 @@ Paste both verbatim — quoting and whitespace matter, since the guard tokenizes
 the string. Every fix lands as a row in `tests/cases/verdicts.tsv`, so a
 reported command becomes a permanent regression test.
 
+Include what `"${CLAUDE_PLUGIN_ROOT}"/hooks/pgrep-pkill-guard.sh --version`
+prints — one line, `pgrep-pkill-guard <version>`. It names the release you are
+running, and a gate asserts it equals `.claude-plugin/plugin.json`, so it cannot
+drift from what was published. `--help` restates the recipe above along with the
+stdin/stdout contract, so reproducing a verdict needs neither this page nor a
+network connection.
+
 ## Security
 
 The guard's trust model is in [SECURITY.md](SECURITY.md), which also says what
@@ -396,7 +404,7 @@ does not see, and where it stands down.
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the Nix
 devShell, the gate, the commit convention and the rules the test suite is held
 to; [docs/architecture.md](docs/architecture.md) traces how a command moves
-through the guard and records the three design invariants that look like
+through the guard and records the five design invariants that look like
 inconsistencies and are not.
 
 ## License

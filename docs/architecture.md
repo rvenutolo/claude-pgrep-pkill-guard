@@ -2,8 +2,9 @@
 
 This document is for contributors. It traces the path a command takes through
 the guard and records the decisions that the code cannot explain on its own —
-in particular three invariants defined by absence, where a reasonable-looking
-cleanup breaks the plugin on half the platforms it supports. The user-facing
+in particular the five design invariants — three of them defined by absence,
+where a reasonable-looking cleanup breaks the plugin on half the platforms it
+supports. The user-facing
 documentation is [the README](../README.md); nothing here is needed to install
 or use the plugin.
 
@@ -49,7 +50,31 @@ In execution order:
    on every Bash call, and exit 2 would block the tool outright. The trap is
    installed once, here; the body is sourced into this same shell and inherits
    it rather than setting one of its own (invariant 2).
-5. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
+5. The human-mode dispatch, `main`'s first act: `if (($# > 0)) || [[ -t 0 ]]`,
+   which loads the body and hands the arguments to `human_mode` — `--help`,
+   `--version` and the usage errors, none of which live here, because fifty
+   lines of help text on the fast path is fifty lines of parse on every call
+   that will never read them. Both tests are builtins, so an ordinary call pays
+   no fork and nothing measurable to ask them, and neither can fire on a real
+   hook call: `hooks/hooks.json` passes no arguments and Claude Code hands the
+   hook stdin on a pipe, so anything reaching `human_mode` came from a person.
+   Without the dispatch, running the script by hand hangs on the `read` at
+   step 6, waiting for an EOF a terminal does not send until the user finds
+   Ctrl-D (#34).
+
+   The call is written `human_mode "$@" || exit "$?"`, not as a bare call
+   followed by `return`. `human_mode` returns 2 on a usage error, and a bare
+   non-zero command is exactly what the `ERR` trap at step 4 catches: probed
+   with a reduced copy of this script, the bare form turned that 2 into
+   `emit_allow; exit 0`, so the guard answered a mistyped flag with `{}` and a
+   success. The `||` keeps `human_mode` off errexit's radar for its whole
+   dynamic extent — the same construct invariant 2 protects on the
+   `repeat_check` call — and the `exit` is what carries the status out to the
+   shell.
+
+   Sitting after the version guard at step 3 is deliberate, and it costs
+   `--help` on bash below 4.3; see **Known limitations** below.
+6. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
    `IFS= read -r -d '' input || :` — rather than the `input="$(cat)"` it used
    to, which was a fork and an exec on every Bash tool call before the guard
    had looked at anything. The empty delimiter reads to EOF, so `read` returns
@@ -59,35 +84,73 @@ In execution order:
    substring test nor `jq` cares about, and a raw NUL would truncate the
    payload — which Claude Code's payloads, serialized by Node's
    `JSON.stringify`, cannot contain.
-6. The prefilter: `input` is tested for the raw substrings `pgrep`, `kill` and
+7. The prefilter: `input` is tested for the raw substrings `pgrep`, `kill` and
    `.output`, and a payload carrying none of them returns `{}` immediately,
    before `jq` or the awk scanner ever spawn — and, since everything downstream
    is in the sibling, having parsed and executed nothing beyond this file. See
    invariant 4 below for why a raw-payload substring test cannot suppress a
    verdict the rest of the guard would otherwise reach.
-7. Past the prefilter, `resolve_hook_dir` freezes `HOOK_DIR`: one `dirname`
-   fork and exec, which locates both the sibling and — through the sibling's
+8. Past the prefilter, `main` calls `load_body` — the same function step 5
+   calls. It runs `resolve_hook_dir` to freeze `HOOK_DIR`: one `dirname` fork
+   and exec, which locates both the sibling and — through the sibling's
    `resolve_scanner` — the awk scanner, so no path pays a second process for
    the second lookup. Two branches then stand down loudly, exactly as the
    precondition guards inside the body do: the sibling missing or unreadable,
    and the `source` itself failing. The `||` on that `source` is what keeps a
    corrupt sibling off the `ERR` trap, which would otherwise answer a broken
-   install with a bare `{}`. With the body loaded, `main` calls
-   `inspect_command "${input}"`.
+   install with a bare `{}`. It is a function rather than the inline block it
+   was before #34 because two call sites now need it, and a second copy of
+   ~15 lines would spend the fast-path budget invariant 5 exists to protect.
+   Both callers read it as `load_body || return 0`: the `systemMessage` is
+   already on stdout by then, so the caller's only remaining job is to stop.
+   With the body loaded, `main` calls `inspect_command "${input}"`.
 
 ### `hooks/pgrep-pkill-guard-body.sh`
 
 The rest of the guard: every constant except `HOOK_NAME`, every function except
-`emit_allow`, `resolve_hook_dir` and `main`, and `inspect_command`, which is
-what used to be the second half of `main`. A call the prefilter short-circuits
-never parses a line of it, which is the entire reason the file exists.
+`emit_allow`, `resolve_hook_dir`, `load_body` and `main`, and `inspect_command`,
+which is what used to be the second half of `main`. A call the prefilter
+short-circuits never parses a line of it, which is the entire reason the file
+exists.
 
 It is **sourced, never executed** — no shebang, no exec bit — and it sets no
 `set -Eeuo pipefail`, no `IFS` and no `ERR` trap, because it runs in the entry
 script's shell and would be reconfiguring its caller rather than itself
 (invariant 2).
 
-Picking up where step 7 above left off, `inspect_command`:
+Three of its members sit off the hook's path entirely, reached only from the
+dispatch at step 5. `print_help` holds the help text as a single quoted heredoc
+— usage, the stdin/stdout contract, the options, the `jq --null-input` probe
+recipe the README also carries, `PGREP_PKILL_GUARD_STATE_DIR` and its
+resolution order, the exit codes, and the project URL. `human_mode` is what the
+dispatch actually calls: it scans **every** argument for `-h` or `--help` first
+and prints help whatever else was passed (clig.dev, so `--bogus --help` still
+helps), accepts `--version` only as the lone argument, answers a bare run on a
+terminal by naming stdin rather than blocking on it, and otherwise writes one
+error line plus a `--help` hint to stderr and returns 2. `HOOK_VERSION` is the
+literal `--version` prints, as `pgrep-pkill-guard <version>` — GNU style,
+one line, nothing else on it, because that line is what gets pasted into a bug
+report.
+
+A literal rather than a runtime read of `.claude-plugin/plugin.json`: reading
+it would need path resolution up out of `hooks/`, a `jq` spawn and its own
+fail-open story for an unparsable manifest, all to print a string fixed at
+release time. Two things outside this file keep the literal honest. Its
+`# x-release-please-version` comment must stay on the same line as the value —
+that is the form release-please's generic updater rewrites, not the
+`x-release-please-start-version` block syntax — and `release-please-config.json`
+names the body as a third `extra-files` entry of `type: "generic"`, so a release
+bumps it alongside `plugin.json` and `marketplace.json`.
+`.ci/check-versions-in-sync` then reads it as a fourth version source, failing
+loudly if the line is missing, unannotated or not semver-shaped, and asserts it
+equals `plugin.json`'s `.version`. That assertion has **no `BOOTSTRAP_VERSION`
+exemption**, unlike the `.release-please-manifest.json` arm beside it: the
+exemption exists because an unreleased repo legitimately reports `0.0.0`, and
+extending it here would let `--version` print a confidently wrong number into a
+bug report. A missing version is an inconvenience; a wrong one sends the
+maintainer to the wrong commit.
+
+Picking up where step 8 above left off, `inspect_command`:
 
 1. `resolve_scanner`, then the precondition guards, each of which stands down
    loudly: `jq` missing from `PATH`, `awk` missing from `PATH`, the scanner file
@@ -226,12 +289,25 @@ learn they were unprotected. That trade-off is why the `ERR` trap allows, why
 the scanner's integrity check is in-band, and why `repeat_check` is written as
 a long sequence of `|| return 0` guards rather than as assertions.
 
+**There is exactly one exception, and it is on argv.** `human_mode` returns 2
+for an unrecognized argument and for a bare run with stdin on a terminal, and
+the entry script's `human_mode "$@" || exit "$?"` is written precisely so that
+2 survives the `ERR` trap and becomes the process's exit status. A `PreToolUse`
+hook exiting 2 means *block the tool call*, so this is the one path in the repo
+that does not fail open. It is safe because arguments cannot reach the script
+from Claude Code: `hooks/hooks.json` passes none, so the 2 lands in a terminal
+next to the stderr line explaining it. Someone who hand-edited
+`hooks/hooks.json` to pass an argument would have every Bash call blocked with
+a loud message rather than silently unguarded — the right answer for a broken
+configuration, and the reason the exception is acceptable rather than merely
+tolerated (#34).
+
 ## Known limitations
 
 Behaviour the guard does not have, recorded deliberately rather than left to be
-rediscovered. Each entry is pinned by rows in `tests/cases/verdicts.tsv`, so the
-limitation is a tested decision rather than an accident, and closing one means
-changing a recorded verdict on purpose.
+rediscovered. Where the limitation is about a command shape it is pinned by rows
+in `tests/cases/verdicts.tsv`, so the limitation is a tested decision rather than
+an accident, and closing one means changing a recorded verdict on purpose.
 
 ### Quote-split command names are not recognised
 
@@ -266,6 +342,27 @@ revisiting the prefilter's token set in the same change.
 `tests/prefilter.bats` is what would catch that being forgotten.
 
 Filed as #52.
+
+### `--help` and `--version` are unavailable on bash below 4.3
+
+The human-mode dispatch sits after the bash-version guard, so on stock macOS
+bash 3.2 both flags get that guard's `bash 4.3+ required … INACTIVE`
+`systemMessage` and exit 0 — the guard answers the install question rather than
+the question that was asked. `.ci/check-inactive-on-old-bash`, the stock-bash
+compat leg, pins the guard answering first on that shell; the flags take the
+same branch by construction, since the version guard runs before `main` is ever
+called.
+
+Answering the asked question would mean a third file in `hooks/`, written
+bash-3.2-safe, sourced ahead of the version guard, carrying its own codemap
+entry here and its own two fail-open branches for being missing or unloadable —
+a large structural price on the one file whose length is a per-call latency tax
+(invariant 5). And it would buy little: the message that reader already gets
+names their exact problem and its exact fix, `brew install bash`, which beats
+both help for a guard that is not running and a version number for one.
+Declined on that trade, deliberately.
+
+Recorded as part of #34.
 
 ## Design invariants
 
@@ -448,7 +545,8 @@ Tracked counterpart: the prefilter comment block in `main`.
 
 `hooks/pgrep-pkill-guard.sh` must stay under 200 lines.
 `.ci/check-fast-path-size` enforces it, and `run-all-checks` runs that gate
-with the rest.
+with the rest. It is **185 lines** today: 152 immediately after the #55 split,
+plus the human-mode dispatch and the `load_body` extraction from #34.
 
 **Why:** bash parses a whole script before it executes any of it, at roughly
 1.2 us per line, and this hook runs on every Bash tool call in every session —
@@ -461,7 +559,10 @@ file in two.
 
 **The ceiling is the point, not an obstacle to it.** A new helper belongs in
 `hooks/pgrep-pkill-guard-body.sh`, which the fast path never parses; raising the
-number spends those milliseconds again, a few dozen microseconds at a time. The
+number spends those milliseconds again, a few dozen microseconds at a time. #34
+is the worked example: the dispatch and the `load_body` extraction cost the
+entry script 33 lines because they have to sit there, and the 140 lines of help
+text, version constant and usage handling they dispatch to went to the body. The
 win is invisible to every other check in this repo, so without the gate it would
 regress one helper at a time and nobody would notice. The gate also fails on a
 zero-line count: an empty read is a broken measurement, not a very fast hook.

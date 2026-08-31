@@ -7,6 +7,17 @@
 #              disagreement means a bump was lost rather than that a version was
 #              chosen.
 #
+#              The fourth source is the `HOOK_VERSION` constant in
+#              hooks/pgrep-pkill-guard-body.sh -- the string the guard's
+#              `--version` prints. release-please rewrites it through a third
+#              `extra-files` entry (`type: "generic"`), which keys off the
+#              `# x-release-please-version` comment sitting on that same line.
+#              Unlike the manifest it gets NO `BOOTSTRAP_VERSION` exemption and
+#              never will: `--version` is what a user pastes into a bug report,
+#              and a confidently wrong version there sends the maintainer to the
+#              wrong commit. A missing version is an inconvenience; a wrong one
+#              is a wasted triage.
+#
 #              `marketplace.json`'s `metadata.version` is deliberately NOT
 #              checked: it versions the marketplace catalogue, not the plugin,
 #              and nothing should couple it to the plugin's release cadence.
@@ -26,6 +37,7 @@ readonly REPO_DIR
 readonly PLUGIN_JSON="${REPO_DIR}/.claude-plugin/plugin.json"
 readonly MARKET_JSON="${REPO_DIR}/.claude-plugin/marketplace.json"
 readonly RP_MANIFEST="${REPO_DIR}/.release-please-manifest.json"
+readonly BODY_SH="${REPO_DIR}/hooks/pgrep-pkill-guard-body.sh"
 
 # release-please's record of the LAST RELEASED version. `0.0.0` means no release
 # has been cut yet, which is a legitimate bootstrap state rather than drift: the
@@ -33,6 +45,9 @@ readonly RP_MANIFEST="${REPO_DIR}/.release-please-manifest.json"
 # release the value can never return to 0.0.0, so this exemption never fires
 # again. Setting the manifest to the advertised version before a tag exists
 # would make release-please skip that version entirely.
+#
+# Scoped to the manifest, and only the manifest. Do not extend it to the hook
+# constant: see the header for why that one has no escape hatch.
 readonly BOOTSTRAP_VERSION='0.0.0'
 
 # @description Read one jq path out of one file, failing loudly rather than
@@ -61,12 +76,58 @@ function read_version() {
   printf '%s\n' "${value}"
 }
 
+# @description Read the guard's `HOOK_VERSION` constant out of its body. Same
+#              contract as read_version, over a bash file rather than JSON: a
+#              constant that is absent, unannotated or malformed is a broken
+#              `--version`, so it fails loudly here instead of degrading to an
+#              empty string that would then "agree" with nothing.
+# @arg $1 file the bash file to read
+# @stdout the extracted version
+# @exitcode 0 the constant exists, is annotated, and is semver-shaped
+# @exitcode 1 the file is missing, or the constant is absent, unannotated or malformed
+function read_hook_version() {
+  local -r file="$1"
+  local -r label="${file#"${REPO_DIR}/"}"
+  if [[ ! -f "${file}" ]]; then
+    printf 'FAIL: %s does not exist\n' "${label}" >&2
+    return 1
+  fi
+  local line
+  if ! line="$(grep --max-count=1 --extended-regexp \
+    '^readonly[[:space:]]+HOOK_VERSION=' "${file}")"; then
+    printf 'FAIL: %s has no "readonly HOOK_VERSION=" line\n' "${label}" >&2
+    return 1
+  fi
+  # The trailing comment is what release-please's generic updater keys off, and
+  # it must sit on this same line -- the preceding-line form is the
+  # `x-release-please-start-version` block syntax, which this does not use. Lose
+  # the annotation and the constant silently stops being bumped, so every
+  # release after that would red this gate rather than ship a stale version.
+  if [[ "${line}" != *'# x-release-please-version'* ]]; then
+    printf 'FAIL: %s HOOK_VERSION has no "# x-release-please-version" comment\n' \
+      "${label}" >&2
+    return 1
+  fi
+  # Strip up to the opening quote, then from the closing one. A line carrying no
+  # quotes at all survives both expansions unchanged and falls into the semver
+  # check below, which reports it verbatim.
+  local value="${line#*\'}"
+  value="${value%%\'*}"
+  if [[ ! "${value}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf 'FAIL: %s HOOK_VERSION is not semver-shaped: %s\n' "${label}" "${value}" >&2
+    return 1
+  fi
+  printf '%s\n' "${value}"
+}
+
 function main() {
-  local rc=0 plugin_version='' market_version='' manifest_version=''
+  local rc=0 plugin_version='' market_version=''
+  local manifest_version='' hook_version=''
 
   plugin_version="$(read_version "${PLUGIN_JSON}" '.version')" || rc=1
   market_version="$(read_version "${MARKET_JSON}" '.plugins[0].version')" || rc=1
   manifest_version="$(read_version "${RP_MANIFEST}" '."."')" || rc=1
+  hook_version="$(read_hook_version "${BODY_SH}")" || rc=1
 
   if ((rc != 0)); then
     return "${rc}"
@@ -85,9 +146,17 @@ function main() {
     rc=1
   fi
 
+  # No BOOTSTRAP_VERSION arm on this one, deliberately -- an exact match on
+  # every commit, bootstrap included. See the header.
+  if [[ "${hook_version}" != "${plugin_version}" ]]; then
+    printf 'FAIL: hooks/pgrep-pkill-guard-body.sh HOOK_VERSION %s != plugin.json %s\n' \
+      "${hook_version}" "${plugin_version}" >&2
+    rc=1
+  fi
+
   if ((rc == 0)); then
-    printf 'ok: plugin %s, marketplace %s, release-please manifest %s\n' \
-      "${plugin_version}" "${market_version}" "${manifest_version}" >&2
+    printf 'ok: plugin %s, marketplace %s, release-please manifest %s, hook constant %s\n' \
+      "${plugin_version}" "${market_version}" "${manifest_version}" "${hook_version}" >&2
   fi
   return "${rc}"
 }

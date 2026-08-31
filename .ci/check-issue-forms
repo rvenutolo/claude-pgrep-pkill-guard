@@ -34,7 +34,7 @@
 #         that it fails. Without it the only possible test would be "exits 0 on
 #         the real repo", which a script that always returned 0 would also pass.
 # @exitcode 0 every form and config.yml satisfy the schema
-# @exitcode 1 the directory is missing or holds no form, a file is unparseable,
+# @exitcode 1 the directory is missing or holds no form, a file is unparsable,
 #             or a rule is violated
 
 set -Eeuo pipefail
@@ -126,7 +126,7 @@ function fail() {
 }
 
 # @description Assert a file holds parseable YAML. Checked separately from the
-#              rule programs so an unparseable file reports as exactly that,
+#              rule programs so an unparsable file reports as exactly that,
 #              rather than as the rule program blowing up on it.
 # @arg $1 file path to the YAML file
 # @exitcode 0 the file parses

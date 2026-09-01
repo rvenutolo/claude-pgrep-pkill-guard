@@ -7,7 +7,7 @@ check:
 
 # Run the BATS suite
 test *ARGS:
-    ./.ci/in-devshell ./run-tests {{ARGS}}
+    ./.ci/in-devshell ./run-tests {{ ARGS }}
 
 # Re-measure the hook's per-call cost and rewrite bench/RESULTS.md
 bench:
@@ -40,5 +40,5 @@ hooks:
 # Add this working copy as a local marketplace, for dogfooding
 install:
     @echo "In Claude Code, run:"
-    @echo "  /plugin marketplace add {{justfile_directory()}}"
+    @echo "  /plugin marketplace add {{ justfile_directory() }}"
     @echo "  /plugin install pgrep-pkill-guard@rvenutolo"

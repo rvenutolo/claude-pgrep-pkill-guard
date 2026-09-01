@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-# @description Run the config/markup lint suite: actionlint, yamllint,
-#              renovate-config-validator, markdownlint, typos,
-#              editorconfig-checker, and shellcheck over every tracked shell
-#              script. Aggregates exit codes rather than failing fast, so one
-#              run surfaces every failing category.
+# @description Run the config/markup lint suite: shellcheck and shfmt over every
+#              tracked shell script, plus just --fmt, actionlint, yamllint,
+#              renovate-config-validator, markdownlint, typos and
+#              editorconfig-checker. Aggregates exit codes rather than failing
+#              fast, so one run surfaces every failing category.
 # @noargs
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed
@@ -68,6 +68,12 @@ function main() {
   if ((${#files[@]} > 0)); then
     shfmt --list --diff "${files[@]}" || rc=1
   fi
+
+  log 'running just --fmt (verify only)'
+  # --unstable is mandatory: `--fmt` is still an unstable subcommand and just
+  # refuses to run it without the flag. Drop it when just stabilises --fmt.
+  # --check makes it verify-only, matching every other step in this gate.
+  just --fmt --check --unstable --justfile "${REPO_DIR}/.justfile" || rc=1
 
   log 'running actionlint'
   if [[ -d "${REPO_DIR}/.github/workflows" ]]; then

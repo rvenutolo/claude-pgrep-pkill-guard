@@ -104,6 +104,9 @@ function main() {
   if [[ "${before}" != "${after}" ]]; then
     die "test suite mutated the real repo — before: [${before//$'\n'/ }] after: [${after//$'\n'/ }]"
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # bats output above is the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${status}"
 }
 

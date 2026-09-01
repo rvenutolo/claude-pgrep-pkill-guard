@@ -25,6 +25,9 @@ readonly TOOLS_FILE="${REPO_DIR}/.ci/required-tools"
 function main() {
   if [[ ! -r "${TOOLS_FILE}" ]]; then
     printf 'FAIL: %s is missing or unreadable\n' "${TOOLS_FILE}" >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
     return 1
   fi
 
@@ -45,6 +48,9 @@ function main() {
     printf 'FAIL: no tools declared in %s\n' "${TOOLS_FILE}" >&2
     rc=1
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

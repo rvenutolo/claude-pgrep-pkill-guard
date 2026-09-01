@@ -45,6 +45,9 @@ function main() {
     log "validating ${manifest}"
     claude plugin validate --strict "${REPO_DIR}/${manifest}" || rc=1
   done
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

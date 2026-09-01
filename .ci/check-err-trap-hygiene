@@ -1,0 +1,238 @@
+#!/usr/bin/env bash
+
+# @description Assert that every deliberate non-zero `return` from `main`, in
+#              every tracked file that installs an `ERR` trap, is immediately
+#              preceded by `trap - ERR` (#43, invariant 6 in
+#              docs/architecture.md).
+#
+#              The trap is there to report UNEXPECTED failure. A gate returning
+#              non-zero because it found exactly what it was looking for is the
+#              one thing it must not report as a crash. Before #43 a real
+#              check-manifest-invariants failure ended like this:
+#
+#                FAIL: I9: marketplace plugins[0] source contains a path traversal (..): ../../etc
+#                FAIL: I8: marketplace plugins[0] source "../../etc" has no vendored .../plugin.json
+#                [check-manifest-invariants] ERROR: line 225 (exit 1): return "${rc}"
+#
+#              The first two lines are the answer. The third sends the reader
+#              hunting for a bug at line 225, where there is none -- and 225 is
+#              not even the `return` it quotes, because LINENO in that report is
+#              the `main "$@"` call at the bottom of the file. The one line of
+#              the three that looks like a stack pointer points nowhere.
+#
+#              `trap - ERR` at the return gives up exactly that one report. The
+#              trap stays installed for everything before it, so a typo-d
+#              command or a missing tool partway through `main` is still caught
+#              and still reported.
+#
+#              `main "$@" || exit "$?"` is NOT an acceptable alternative. The
+#              trailing `||` suppresses errexit and the `ERR` trap for the whole
+#              dynamic extent of `main`, so the script runs on past a failed
+#              command and the gate exits 0 -- a gate that can pass while
+#              broken. That was probed rather than assumed; the transcript is in
+#              invariant 6.
+#
+#              The candidate set is derived from the tree -- `git ls-files`
+#              filtered to files whose text installs an `ERR` trap -- and never
+#              from a list. #43 shipped a list and it was wrong in both
+#              directions: it predicted bench/run, and it missed run-tests,
+#              check-fast-path-size and check-issue-forms, all three of which
+#              joined the family after the issue was filed and every one of
+#              which reintroduced the pattern. A new .ci/check-* is covered the
+#              day it lands.
+#
+#              One kind of `ERR` trap is deliberately NOT policed: a fail-open
+#              handler that exits 0. hooks/pgrep-pkill-guard.sh installs
+#              `trap 'emit_allow; exit 0' ERR` so that any unexpected failure
+#              still emits an allow verdict rather than blocking the user's
+#              command -- invariant 2's fail-open discipline. Applying this
+#              rule there would be actively wrong: `trap - ERR` before a return
+#              in the hook's `main` would hand the user a broken guard instead
+#              of an open one. The hook has no such return today, so the gate
+#              is quiet either way; the exemption exists so that it stays the
+#              right answer if one is ever added. It keys off what the handler
+#              DOES, not off a path, so a second fail-open script needs no edit
+#              here.
+#
+#              This is a lexical check over a family of files that all follow
+#              one house style, not a bash parser, and it does not need to be
+#              one: `main` is found by its opening line and ends at the first
+#              `}` in column 0.
+# @noargs
+# @exitcode 0 every in-scope return is preceded by `trap - ERR`
+# @exitcode 1 at least one is not, or the scan came up empty
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+# Matches a line that INSTALLS an `ERR` trap, and deliberately not one that
+# clears it: the handler may not begin with `-`, which is what `trap - ERR` is.
+readonly TRAP_INSTALL_RE='^[[:space:]]*trap[[:space:]]+[^-[:space:]].*[[:space:]]ERR[[:space:]]*$'
+
+# Matches an `ERR` trap whose handler EXITS ZERO -- a fail-open trap, which is a
+# different contract from the reporting trap this gate polices, and one this
+# rule must not be applied to. See `fail_open` below.
+readonly FAIL_OPEN_TRAP_RE='^[[:space:]]*trap[[:space:]]+[^-[:space:]].*exit[[:space:]]+0.*[[:space:]]ERR[[:space:]]*$'
+
+# @description Print every tracked file whose text installs an `ERR` trap, one
+#              repo-relative path per line. Derived from the tree on every run
+#              so a newly added gate needs no registration anywhere.
+# @noargs
+# @stdout repo-relative paths, one per line
+function trap_installing_files() {
+  local -a tracked=()
+  mapfile -t tracked < <(git -C "${REPO_DIR}" ls-files)
+  if ((${#tracked[@]} == 0)); then
+    return 0
+  fi
+  # grep exits 1 when nothing matches; the caller's empty-scan guard is what
+  # turns that into a verdict, so the status is deliberately not propagated.
+  (
+    cd "${REPO_DIR}" \
+      && grep --files-with-matches --extended-regexp --binary-files=without-match \
+        --regexp="${TRAP_INSTALL_RE}" -- "${tracked[@]}"
+  ) || true
+}
+
+# @description True when the named file's `ERR` trap is a fail-open handler --
+#              one that exits 0 -- rather than the reporting trap this gate
+#              polices. The guard under hooks/ installs
+#              `trap 'emit_allow; exit 0' ERR` so that ANY unexpected failure
+#              still emits an allow verdict rather than blocking the user's
+#              command; that is invariant 2's fail-open discipline, and
+#              `trap - ERR` is precisely the wrong answer there. Recognised by
+#              what the handler DOES, not by its path, so a second fail-open
+#              script would be covered without editing this gate.
+# @arg $1 file repo-relative path
+# @exitcode 0 the file's ERR trap exits 0
+# @exitcode 1 it does not
+function fail_open() {
+  grep --quiet --extended-regexp --regexp="${FAIL_OPEN_TRAP_RE}" -- "${REPO_DIR}/$1"
+}
+
+# @description Scan the named files for non-zero `return` statements inside
+#              `main` that are not immediately preceded by `trap - ERR`.
+#              "Immediately preceded" skips blank and comment-only lines.
+#              Emits one tab-separated `V` record per violation
+#              (file, line number, offending source line) and a single trailing
+#              `N` record carrying the number of in-scope returns examined.
+# @arg $@ files repo-relative paths to scan
+# @stdout tab-separated `V` and `N` records
+function scan_files() {
+  (
+    cd "${REPO_DIR}" \
+      && awk '
+        FNR == 1 { in_main = 0; last = "" }
+        {
+          trimmed = $0
+          sub(/[[:space:]]+$/, "", trimmed)
+          sub(/^[[:space:]]+/, "", trimmed)
+        }
+        !in_main && /^(function[[:space:]]+)?main[[:space:]]*\(\)/ {
+          in_main = 1
+          last = ""
+          next
+        }
+        in_main && /^\}/ { in_main = 0; next }
+        in_main {
+          if (trimmed ~ /^return([[:space:]]|$)/) {
+            operand = trimmed
+            sub(/^return[[:space:]]*/, "", operand)
+            sub(/[[:space:]]*#.*$/, "", operand)
+            if (operand != "" && operand != "0") {
+              checked++
+              if (last !~ /^trap[[:space:]]+-[[:space:]]+ERR([[:space:]]|$)/) {
+                printf "V\t%s\t%d\t%s\n", FILENAME, FNR, trimmed
+              }
+            }
+          }
+          if (trimmed != "" && substr(trimmed, 1, 1) != "#") { last = trimmed }
+        }
+        END { printf "N\t%d\n", checked }
+      ' "$@"
+  )
+}
+
+function main() {
+  local -a candidates=() scripts=() skipped=()
+  mapfile -t candidates < <(trap_installing_files)
+
+  local candidate
+  for candidate in ${candidates[@]+"${candidates[@]}"}; do
+    if fail_open "${candidate}"; then
+      skipped+=("${candidate}")
+    else
+      scripts+=("${candidate}")
+    fi
+  done
+
+  # An empty scan is never a clean pass. Every gate in this repo says so, and
+  # here it would mean the trap pattern stopped matching the family rather than
+  # that the family stopped installing traps.
+  if ((${#scripts[@]} == 0)); then
+    printf 'FAIL: no tracked file installs a reporting ERR trap — an empty scan is not a clean pass\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  local rc=0 returns=0 kind file line text
+  while IFS=$'\t' read -r kind file line text; do
+    case "${kind}" in
+      V)
+        printf 'FAIL: %s:%s: deliberate non-zero return with no preceding "trap - ERR": %s\n' \
+          "${file}" "${line}" "${text}" >&2
+        rc=1
+        ;;
+      N)
+        # The count rides in the record's second field, where a V record
+        # carries the file name.
+        returns="${file}"
+        ;;
+      *)
+        printf 'FAIL: unrecognized scan record: %s\n' "${kind}" >&2
+        rc=1
+        ;;
+    esac
+  done < <(scan_files "${scripts[@]}")
+
+  if ((rc != 0)); then
+    printf '      A gate reporting its own verdict is not a crash. Put\n' >&2
+    printf '        trap - ERR\n' >&2
+    printf '      immediately before each return above, so the FAIL diagnostics\n' >&2
+    printf '      are the last thing the reader sees. Invariant 6 in\n' >&2
+    printf '      docs/architecture.md records why clearing the trap at the\n' >&2
+    printf '      return beats suppressing it around the whole call.\n' >&2
+  fi
+
+  # Scripts but no in-scope returns means the `main` traversal stopped matching
+  # the house style, not that the tree suddenly has nothing to check.
+  if ((rc == 0 && returns == 0)); then
+    printf 'FAIL: %s scripts scanned but no non-zero return found in any main() —\n' \
+      "${#scripts[@]}" >&2
+    printf '      the scan looks broken rather than the tree clean\n' >&2
+    rc=1
+  fi
+
+  if ((rc == 0)); then
+    printf 'ok: %s scripts install a reporting ERR trap; %s deliberate non-zero returns all clear it\n' \
+      "${#scripts[@]}" "${returns}" >&2
+    if ((${#skipped[@]} > 0)); then
+      printf 'ok: %s fail-open ERR trap(s) not policed by this rule: %s\n' \
+        "${#skipped[@]}" "${skipped[*]}" >&2
+    fi
+  fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  return "${rc}"
+}
+
+main "$@"

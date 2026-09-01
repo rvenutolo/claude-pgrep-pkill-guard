@@ -55,6 +55,18 @@ jobs:
         with:
           client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # Without these the minted token carries every permission the App
+          # installation holds (zizmor github-app, High). These two are the set
+          # release-please documents, and they are exactly what this workflow
+          # spends:
+          #   contents      release-please's branch, tag and release writes,
+          #                 plus the GraphQL createCommitOnBranch below.
+          #   pull-requests opening and updating the release PR, including its
+          #                 autorelease: labels -- for an App installation
+          #                 token, PR labels fall under pull-requests, not
+          #                 issues, so `issues: write` is deliberately absent.
+          permission-contents: write
+          permission-pull-requests: write
 
       # One annotation on this step is known, benign, and NOT worth
       # rediagnosing a third time (#41):

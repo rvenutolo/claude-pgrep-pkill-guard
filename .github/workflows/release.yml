@@ -85,32 +85,52 @@ jobs:
       # changelog. Left alone, merging the release PR turns main red. So the
       # release branch is reformatted in place before anyone can merge it.
       #
-      # This cannot loop: the push targets the release branch, and this workflow
-      # fires only on push to main. It DOES re-trigger ci.yml through the PR's
-      # synchronize event, which is the entire point.
+      # This cannot loop: the reformat lands on the release branch, and this
+      # workflow fires only on push to main. It DOES re-trigger ci.yml through
+      # the PR's synchronize event, which is the entire point.
       - name: Check out the release branch
         if: steps.release.outputs.pr != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+          # The fetch credential, and only that. Nothing here pushes any more --
+          # the reformat is committed through the GitHub API (see the next step)
+          # -- so no git remote helper on the runner ever needs this token, and
+          # the checkout matches every other one in this repo.
           token: ${{ steps.app-token.outputs.token }}
-          # The one place in this repo where credentials must persist: this step
-          # pushes.
-          persist-credentials: true
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         if: steps.release.outputs.pr != ''
 
+      # The reformat is committed through the GitHub API, not `git commit` +
+      # `git push`. `protect-main` has `required_signatures`, and nothing on the
+      # runner holds a signing key, so a pushed commit arrives unsigned and the
+      # ruleset refuses the merge -- the release PR sits at `BLOCKED` with every
+      # required check green (#70). It recurred on every single release. GraphQL
+      # `createCommitOnBranch`, called with the App installation token, produces
+      # a commit GitHub signs on the App's behalf: same content, same bot, valid
+      # signature. It is the same mechanism that makes release-please's own
+      # commit acceptable.
+      #
+      # That also makes the old GIT_AUTHOR_*/GIT_COMMITTER_* env block dead
+      # config, so it is gone: the API attributes the commit to the token's
+      # actor, which is that same bot.
       - name: Apply repo formatting to the generated files
         if: steps.release.outputs.pr != ''
         shell: bash
         env:
-          # Attribute the commit to the App rather than to a person. 322229312
-          # is the bot user's numeric id, from /users/<slug>[bot].
-          GIT_AUTHOR_NAME: claude-pgrep-pkill-guard-releaser[bot]
-          GIT_AUTHOR_EMAIL: 322229312+claude-pgrep-pkill-guard-releaser[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: claude-pgrep-pkill-guard-releaser[bot]
-          GIT_COMMITTER_EMAIL: 322229312+claude-pgrep-pkill-guard-releaser[bot]@users.noreply.github.com
+          # Interpolated into env:, never into the run: body -- the standing
+          # untrusted-input discipline across this repo's workflows, which
+          # zizmor enforces.
+          BRANCH: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+          # Byte-for-byte the subject the old `git commit` used: conventional,
+          # so the PR's commitlint check stays green.
+          HEADLINE: 'chore: apply repo formatting to the release-please output'
+          # The App installation token is what makes the commit a signed one.
+          # It survives `nix develop --ignore-environment` because GH_TOKEN is
+          # in .ci/in-devshell's KEEP_VARS allowlist.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -Eeuo pipefail
           # treefmt handles the JSON manifests. It does not touch markdown at
@@ -121,12 +141,25 @@ jobs:
             # the job: a residual lint error here is a red main after merge.
             nix develop --command markdownlint-cli2 --fix CHANGELOG.md
           fi
-          if [[ -z "$(git status --porcelain)" ]]; then
+          # Staged first, then compared: the payload builder reads the INDEX, so
+          # what is staged here is exactly what the mutation sends.
+          git add --all
+          if git diff --cached --quiet HEAD; then
             echo 'release-please output already matches repo formatting'
             exit 0
           fi
           git status --short
-          git add --all
-          # Conventional, so the PR's commitlint check stays green.
-          git commit --message 'chore: apply repo formatting to the release-please output'
-          git push
+          # Through .ci/in-devshell, like every other gate tool in this repo: a
+          # gate never resolves its tools from the ambient PATH. Two evaluations
+          # rather than one nested `bash -c` -- the Nix store is warm by this
+          # point and readability wins.
+          #
+          # The payload pins expectedHeadOid to the HEAD just checked out. If
+          # the release branch moved under the job, the mutation fails loudly
+          # and this job goes red. Deliberate: there is no retry and no force
+          # path, because a branch that moved means the tree that was formatted
+          # is not the tree being committed to, and guessing is worse than
+          # stopping.
+          payload="$(.ci/in-devshell .ci/build-commit-payload \
+            "${GITHUB_REPOSITORY}" "${BRANCH}" "${HEADLINE}")"
+          printf '%s' "${payload}" | .ci/in-devshell gh api graphql --input -

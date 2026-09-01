@@ -94,32 +94,10 @@ function main() {
   # verdict, so nothing is swallowed.
   mapfile -t files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '' || true)
 
-  # The lychee config is dropped from its own input list. It is not prose that
-  # contains links -- it is REGEXES that contain URL prefixes, and lychee
-  # extracts those as if they were addresses: `^https://ci\.example` yields
-  # `https://ci`, and the comment quoting the old own-repo exclude yields
-  # `https://github`. Neither resolves, so the config would permanently fail the
-  # check it configures, and the only ways to appease it would be to contort the
-  # patterns until no scheme survives or to exclude the two phantoms by name --
-  # an exclude list that hides the exclude list.
-  #
-  # Dropped here rather than through lychee's own `exclude_path`, which does
-  # remove them but then prints `No files found for this input source` on every
-  # run. The trade is that a genuine URL written into lychee.toml goes
-  # unchecked; there are none, and prose about links belongs in the docs.
-  local -a inputs=()
-  local file
-  for file in "${files[@]}"; do
-    if [[ "${file}" == "${CONFIG_FILE##*/}" ]]; then
-      continue
-    fi
-    inputs+=("${file}")
-  done
-
   # An empty scan is never a clean pass -- the same guard the `typos` and
   # `shellcheck` steps in .ci/run-lint-checks carry. Here it would mean the file
   # enumeration broke, not that the repo has no links.
-  if ((${#inputs[@]} == 0)); then
+  if ((${#files[@]} == 0)); then
     printf 'FAIL: no tracked text files found — this is a failure, not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
     # diagnostics above are the last thing the reader sees (#43, invariant 6).
@@ -134,7 +112,7 @@ function main() {
     log 'checking anonymously — GitHub rate limits may yield 429, which lychee.toml accepts'
   fi
 
-  log "checking links in ${#inputs[@]} tracked file(s)"
+  log "checking links in ${#files[@]} tracked file(s)"
 
   # --mode plain and --no-progress: CI logs are not a terminal, and lychee's
   # default `color` mode writes escape codes into them.
@@ -150,12 +128,12 @@ function main() {
 
   local rc=0
   if [[ -n "${token}" ]]; then
-    GITHUB_TOKEN="${token}" "${lychee_cmd[@]}" < <(printf '%s\n' "${inputs[@]}") || rc=1
+    GITHUB_TOKEN="${token}" "${lychee_cmd[@]}" < <(printf '%s\n' "${files[@]}") || rc=1
   else
     # `env --unset` rather than just not setting it: an exported-but-empty
     # GITHUB_TOKEN is still PRESENT to lychee's clap env binding, which would
     # hand GitHub a zero-length credential instead of no credential.
-    env --unset=GITHUB_TOKEN "${lychee_cmd[@]}" < <(printf '%s\n' "${inputs[@]}") || rc=1
+    env --unset=GITHUB_TOKEN "${lychee_cmd[@]}" < <(printf '%s\n' "${files[@]}") || rc=1
   fi
 
   if ((rc != 0)); then

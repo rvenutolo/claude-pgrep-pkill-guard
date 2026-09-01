@@ -52,6 +52,25 @@ exclude = [
   # The alternation accepts either form so a future lychee that stops encoding
   # does not silently unmask the fixture.
   '\$(\{|%7B)repo(\}|%7D)',
+  # Not a fixture address but a fixture-shaped ARTEFACT, and the one entry here
+  # that is load-bearing rather than belt-and-braces.
+  #
+  # This repo's prose quotes URL-shaped regexes at itself -- this file names
+  # `ci\.example` in a comment, .ci/check-links explains that pattern in its
+  # header, and both quote the old own-repo exclude. lychee reads a tracked file
+  # as prose and extracts the literal prefix of each such pattern as an address:
+  # a scheme followed by a single-label host, `https://ci` and `https://github`.
+  # Neither resolves, so without this entry every file that DESCRIBES the link
+  # checker fails the link check -- and it fails only once the file is tracked,
+  # which is how this first reached CI green-locally and red-on-PR.
+  #
+  # A single-label host (no dot) is never a real address in this tree: there are
+  # no intranet links here, and lychee drops `localhost` on its own. Matching
+  # the shape rather than listing the two current phantoms by name means a
+  # future comment quoting a third pattern needs no edit here -- and an exclude
+  # list that had to name the strings appearing in the exclude list would be a
+  # trap of its own.
+  '^https?://[^/.]+/?$',
 ]
 
 # Deliberately NOT excluded: this repo's own github.com links. The old file

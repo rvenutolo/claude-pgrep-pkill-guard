@@ -193,6 +193,9 @@ function main() {
   # a file that did not parse would report the parse error a second time, in a
   # worse format.
   if ((rc != 0)); then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # parse errors above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
     return "${rc}"
   fi
 
@@ -203,6 +206,9 @@ function main() {
   if ! output="$(jq --raw-output --slurpfile plugin "${PLUGIN_JSON}" \
     "${JQ_PROGRAM}" "${MARKET_JSON}")"; then
     fail 'the invariant program itself failed to run'
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
     return 1
   fi
 
@@ -219,6 +225,9 @@ function main() {
   if ((rc == 0)); then
     printf 'ok: manifests satisfy I1-I4, I8-I11 and the hooks.json parse\n' >&2
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

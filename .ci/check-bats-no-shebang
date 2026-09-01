@@ -32,6 +32,9 @@ function main() {
     printf 'FAIL: no .bats files found — an empty scan is not a clean pass\n' >&2
     rc=1
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

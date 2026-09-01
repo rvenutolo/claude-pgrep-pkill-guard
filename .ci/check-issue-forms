@@ -172,6 +172,9 @@ function report_violations() {
 function main() {
   if [[ ! -d "${DIR}" ]]; then
     fail "${DIR} does not exist or is not a directory"
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
     return 1
   fi
 
@@ -222,6 +225,9 @@ function main() {
     printf 'ok: %s issue form(s) and %s satisfy the issue-forms schema\n' \
       "${#forms[@]}" "${CONFIG_NAME}" >&2
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

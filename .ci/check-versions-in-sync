@@ -130,6 +130,9 @@ function main() {
   hook_version="$(read_hook_version "${BODY_SH}")" || rc=1
 
   if ((rc != 0)); then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # read failures above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
     return "${rc}"
   fi
 
@@ -158,6 +161,9 @@ function main() {
     printf 'ok: plugin %s, marketplace %s, release-please manifest %s, hook constant %s\n' \
       "${plugin_version}" "${market_version}" "${manifest_version}" "${hook_version}" >&2
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

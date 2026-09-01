@@ -49,6 +49,9 @@ function main() {
     printf 'FAIL: workflow files exist but contain no external "uses:" — scan looks broken\n' >&2
     rc=1
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

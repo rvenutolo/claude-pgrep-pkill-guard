@@ -404,7 +404,7 @@ does not see, and where it stands down.
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the Nix
 devShell, the gate, the commit convention and the rules the test suite is held
 to; [docs/architecture.md](docs/architecture.md) traces how a command moves
-through the guard and records the five design invariants that look like
+through the guard and records the six design invariants that look like
 inconsistencies and are not.
 
 ## License

@@ -2,7 +2,7 @@
 
 This document is for contributors. It traces the path a command takes through
 the guard and records the decisions that the code cannot explain on its own —
-in particular the five design invariants — three of them defined by absence,
+in particular the six design invariants — three of them defined by absence,
 where a reasonable-looking cleanup breaks the plugin on half the platforms it
 supports. The user-facing
 documentation is [the README](../README.md); nothing here is needed to install
@@ -366,9 +366,11 @@ Recorded as part of #34.
 
 ## Design invariants
 
-Five rules the code depends on and cannot enforce. Each is repeated as a
-comment in the source it constrains; if one changes here, change the comment
-too.
+Six rules the code depends on that are not evident from reading any single
+file. Each is repeated as a comment in the source it constrains; if one changes
+here, change the comment too. Invariants 5 and 6 additionally have a gate
+behind them (`.ci/check-fast-path-size`, `.ci/check-err-trap-hygiene`); the
+other four rest on the comments and on review.
 
 ### 1. `hooks/` uses POSIX short flags, not GNU long options
 
@@ -570,3 +572,106 @@ zero-line count: an empty read is a broken measurement, not a very fast hook.
 **Tracked comments:** the header of `.ci/check-fast-path-size`, which carries
 the measurement above, and the header of `hooks/pgrep-pkill-guard-body.sh`,
 which points back to this invariant.
+
+### 6. A deliberate non-zero `return` is preceded by `trap - ERR`
+
+In every gate script that installs the `ERR` trap, a deliberate non-zero
+`return` from `main` must be preceded by `trap - ERR`.
+`.ci/check-err-trap-hygiene` enforces it, and `run-all-checks` runs that gate
+with the rest. #43 fixed **19 such returns across 12 files**; counting the
+gate's own two, it polices **21 returns across 13 files** today.
+
+**Why:** the trap is there to report *unexpected* failure, and a gate
+announcing its own verdict is the one thing it must not report as a crash.
+Before #43, a real `.ci/check-manifest-invariants` failure ended like this:
+
+```text
+FAIL: I9: marketplace plugins[0] source contains a path traversal (..): ../../etc
+FAIL: I8: marketplace plugins[0] source "../../etc" has no vendored .../plugin.json
+[check-manifest-invariants] ERROR: line 225 (exit 1): return "${rc}"
+```
+
+The first two lines are the answer. The third sends the reader hunting for a
+bug at line 225, where there is none — and line 225 is not even the `return`
+the message quotes: `LINENO` in that report is the `main "$@"` line at the
+bottom of the file. The trap fires once, at the top-level call, whatever
+returned non-zero underneath it. So the one line of the three that looks like a
+stack pointer is the one line that points nowhere.
+
+**Why not `main "$@" || exit "$?"`.** It silences the report too, and it is a
+correctness bug rather than a style preference. The trailing `||` suppresses
+errexit and the `ERR` trap for the entire dynamic extent of `main`. Probed on a
+script with a nonexistent command partway through `main`:
+
+```text
+$ bash d.sh
+d.sh: line 6: nonexistent_command_xyz: command not found
+REACHED-AFTER-ERROR
+exit=0
+```
+
+The failed command is swallowed, execution carries on past it, and the gate
+exits **0** — a gate that can pass while broken. `trap - ERR` at the return
+gives up exactly one report, the one nobody wanted; the `||` gives up every
+report `main` could ever have produced.
+
+**The same construct, wanted, one directory over.** Invariant 2 depends on that
+suppression deliberately: `repeat_reason="$(repeat_check …)" || repeat_reason=''`
+is what keeps the guard's one stateful, filesystem-touching rule off the trap's
+radar, so a transient filesystem condition cannot surface as a trapped error.
+Load-bearing there, silent gate failure here. The mechanic is identical and only
+the intent differs — whether the suppression is the thing you want. That is the
+contrast to hold on to before copying either line into the other place.
+
+**Scope.** The rule binds the gate family: `run-all-checks`, `run-tests` and the
+`.ci/check-*` and `.ci/run-*` scripts. Four scripts sit outside it, verified
+rather than assumed:
+
+- `bench/run` — its `main` never returns non-zero. Bad input goes through
+  `die`, and `exit` does not fire an `ERR` trap. It also swaps the `ERR` trap
+  for an `EXIT` cleanup trap partway through `main`.
+- `.ci/in-devshell` — `main` ends in `exec`, and its failure paths call
+  `exit 1`.
+- `.ci/activate-githooks` — installs no `ERR` trap.
+- `.ci/check-inactive-on-old-bash` — POSIX `sh` with `set -eu`, no trap.
+
+`return 0` sites are exempt, because a zero return never fires the trap. So are
+returns in helper functions: every helper is called as `helper || rc=1`, and the
+`||` already keeps it off the trap's radar.
+
+**Why a gate and not a convention.** #43's own file list was wrong in both
+directions. It predicted `bench/run` as an eleventh affected file, and it missed
+`run-tests`, `.ci/check-fast-path-size` and `.ci/check-issue-forms` — all three
+of which joined the family after the issue was filed, and every one of which
+reintroduced the pattern without anyone noticing. That drift is the argument for
+enforcing this from the tree rather than trusting a list: a new `.ci/check-*` is
+covered the day it lands.
+
+**The one `ERR` trap this rule must never touch.** `.ci/check-err-trap-hygiene`
+derives its candidate set from the tree, so it also sees
+`hooks/pgrep-pkill-guard.sh` — which installs `trap 'emit_allow; exit 0' ERR`.
+That is a *fail-open* trap, not a reporting one: its whole job is to make any
+unexpected failure emit an allow verdict rather than block the user's command,
+which is invariant 2's discipline. Applying this rule there would be actively
+wrong — a `trap - ERR` before a return in the hook's `main` would hand the user
+a broken guard instead of an open one. The hook has no such return today, so
+the gate would be quiet either way; the exemption is written down so that it
+stays the right answer if one is ever added. It keys off what the handler
+**does** — exits 0 — rather than off a path, so a second fail-open script is
+covered without editing the gate, and the gate says so on every green run:
+
+```text
+ok: 15 scripts install a reporting ERR trap; 21 deliberate non-zero returns all clear it
+ok: 1 fail-open ERR trap(s) not policed by this rule: hooks/pgrep-pkill-guard.sh
+```
+
+**Tracked comments:** the `A gate reporting its own verdict is not a crash`
+comment at each of the 19 sites, worded to the diagnostics it follows:
+
+```text
+# A gate reporting its own verdict is not a crash: drop the ERR trap so the
+# diagnostics above are the last thing the reader sees (#43, invariant 6).
+```
+
+and the `@description` header of `.ci/check-err-trap-hygiene`, which carries the
+rule it enforces and points back here.

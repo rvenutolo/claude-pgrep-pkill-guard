@@ -43,6 +43,9 @@ function main() {
   local -r file="${REPO_DIR}/${FAST_PATH}"
   if [[ ! -r "${file}" ]]; then
     printf 'FAIL: %s is missing or unreadable\n' "${FAST_PATH}" >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
     return 1
   fi
 
@@ -55,6 +58,9 @@ function main() {
   # very fast. An empty scan is never a clean pass.
   if ((lines == 0)); then
     printf 'FAIL: %s is empty — the line count looks broken\n' "${FAST_PATH}" >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
     return 1
   fi
 
@@ -69,6 +75,9 @@ function main() {
   else
     printf 'ok: %s is %s lines (ceiling %s)\n' "${FAST_PATH}" "${lines}" "${MAX_LINES}" >&2
   fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
   return "${rc}"
 }
 

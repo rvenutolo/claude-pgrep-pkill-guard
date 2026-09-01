@@ -3,6 +3,14 @@
   "extends": ["config:recommended", ":semanticCommits"],
   "nix": { "enabled": true },
   "lockFileMaintenance": { "enabled": true },
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["digest", "pin", "patch", "lockFileMaintenance"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "merge-commit"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",
@@ -10,7 +18,8 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)\\s+BATS_[A-Z_]+_SHA:\\s*'(?<currentDigest>[0-9a-f]{40})'"
       ],
-      "currentValueTemplate": "master"
+      "currentValueTemplate": "master",
+      "packageNameTemplate": "https://github.com/{{{depName}}}"
     },
     {
       "customType": "regex",

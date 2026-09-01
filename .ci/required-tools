@@ -36,6 +36,8 @@ lychee
 markdownlint-cli2
 # asserted by .ci/check-devshell-provides
 nix
+# invoked by .ci/run-lint-checks; the binary name, not its `renovate` package
+renovate-config-validator
 # the lint gate for the repo's entire payload
 shellcheck
 # the format gate; treefmt drives it, check-scripts verifies it

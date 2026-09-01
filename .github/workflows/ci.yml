@@ -182,7 +182,7 @@ jobs:
       # manifest field would redden main on a day nothing here changed. Pinned,
       # that release arrives as a renovate PR that goes red instead.
       # renovate: datasource=npm depName=@anthropic-ai/claude-code
-      CLAUDE_CODE_VERSION: '2.1.257'
+      CLAUDE_CODE_VERSION: '2.1.258'
       # The CLI validates manifests entirely offline -- verified with an empty
       # HOME, which produced no login prompt and wrote no config. These keep it
       # from trying anything else under a blocking egress policy.

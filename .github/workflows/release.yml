@@ -71,7 +71,7 @@ jobs:
       #    the v1.0.0 tag, which is where release-please starts reading -- so
       #    they leave the window at the next release and cannot recur while
       #    merge subjects stay conventional. Nothing to fix.
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071  # v4.4.1
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
         id: release
         with:
           token: ${{ steps.app-token.outputs.token }}

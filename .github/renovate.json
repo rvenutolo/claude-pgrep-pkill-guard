@@ -3,6 +3,14 @@
   "extends": ["config:recommended", ":semanticCommits"],
   "nix": { "enabled": true },
   "lockFileMaintenance": { "enabled": true },
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["digest", "pin", "patch", "lockFileMaintenance"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "merge-commit"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",

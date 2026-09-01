@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+
+# @description Check every link in the tracked tree with lychee (#42).
+#
+#              Three choices here look arbitrary and are not:
+#
+#              1. The input list comes from `git grep -I --files-with-matches ''`
+#                 rather than from a bare `lychee .`. A tree walk does not honour
+#                 gitignore-adjacent reality: it descends into the author's
+#                 UNTRACKED docs/superpowers/ and .claude/ trees and reports
+#                 their links as this repo's. That is the same trap #46 fixed for
+#                 `typos`, and .ci/run-lint-checks solves it with exactly this
+#                 incantation -- every line matches the empty pattern, so git
+#                 names every tracked file, and `-I` (git grep has no long form
+#                 for it) drops the binaries, which keeps lychee from reading
+#                 assets/deny-message.png as prose.
+#              2. The config is passed by ABSOLUTE path. The tracked config spent
+#                 its whole life named `.lycheerc`, a default lychee moved away
+#                 from in 0.24, so it was read by nobody while looking
+#                 configured. Relying on a default once already produced an inert
+#                 config; relying on cwd would be the same mistake in a second
+#                 form.
+#              3. A missing GitHub token WARNS rather than fails. The token
+#                 exists to lift anonymous GitHub rate limits now that the
+#                 own-repo exclude is gone -- it is not a credential the check
+#                 needs to function. A coworker with no `gh` login must still be
+#                 able to run this; the worst case is a 429, which lychee.toml
+#                 already accepts.
+#
+#              The token reaches lychee through its environment
+#              (`[env: GITHUB_TOKEN]` on `--github-token`) and NEVER through
+#              argv: an argv token is readable in `ps` output by every user on
+#              the box for the life of the process.
+#
+#              Deliberately NOT part of run-all-checks / `just check`. That gate
+#              is hermetic and offline-deterministic; a link check is neither, so
+#              wiring it in would make the local gate fail on a plane and train
+#              the reader to ignore a red gate. It runs as its own CI job
+#              instead, plus weekly.
+# @noargs
+# @exitcode 0 every link in the tracked tree resolves
+# @exitcode 1 a link failed, or the file list came up empty
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+readonly CONFIG_FILE="${REPO_DIR}/lychee.toml"
+
+# @description Log a step banner to stderr, in the house format.
+# @arg $1 message the text to log
+function log() {
+  local -r message="$1"
+  printf '[%s] %s\n' "${0##*/}" "${message}" >&2
+}
+
+# @description Resolve a GitHub API token, preferring one already in the
+#              environment (CI supplies `secrets.GITHUB_TOKEN` that way) and
+#              falling back to the local `gh` login. Emits nothing when neither
+#              yields one -- that is a warning for the caller to make, not a
+#              failure.
+# @noargs
+# @stdout the token, or nothing
+function github_token() {
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    printf '%s\n' "${GITHUB_TOKEN}"
+    return 0
+  fi
+  if command -v gh > /dev/null 2>&1; then
+    # `|| true` inside the substitution, not a bare one: `gh` is routinely
+    # INSTALLED BUT LOGGED OUT, and under errexit + inherit_errexit a bare
+    # `token="$(gh auth token)"` would kill the run over a token this check
+    # does not require. stderr is dropped for the same reason -- gh's "not
+    # logged in" complaint is not this gate's verdict.
+    local token=''
+    token="$(gh auth token 2> /dev/null || true)"
+    if [[ -n "${token}" ]]; then
+      printf '%s\n' "${token}"
+    fi
+  fi
+}
+
+function main() {
+  local -a files=()
+  # `|| true` because `git grep` exits 1 when nothing matches, and the ERR trap
+  # is inherited into the process substitution: without it an empty tree prints
+  # a spurious "ERROR: line NN" above the verdict below, which is exactly the
+  # noise invariant 6 exists to keep out of a gate's output. The empty-list
+  # guard immediately below is what turns any non-zero git status into a
+  # verdict, so nothing is swallowed.
+  mapfile -t files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '' || true)
+
+  # An empty scan is never a clean pass -- the same guard the `typos` and
+  # `shellcheck` steps in .ci/run-lint-checks carry. Here it would mean the file
+  # enumeration broke, not that the repo has no links.
+  if ((${#files[@]} == 0)); then
+    printf 'FAIL: no tracked text files found — this is a failure, not a clean pass\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  local token=''
+  token="$(github_token)"
+  if [[ -z "${token}" ]]; then
+    log 'no GitHub token (GITHUB_TOKEN unset and gh auth token unavailable);'
+    log 'checking anonymously — GitHub rate limits may yield 429, which lychee.toml accepts'
+  fi
+
+  log "checking links in ${#files[@]} tracked file(s)"
+
+  # --mode plain and --no-progress: CI logs are not a terminal, and lychee's
+  # default `color` mode writes escape codes into them.
+  # --files-from - so the list arrives on stdin: as argv it would eventually hit
+  # ARG_MAX as the repo grows, and silently at first.
+  local -a lychee_cmd=(
+    lychee
+    --config "${CONFIG_FILE}"
+    --no-progress
+    --mode plain
+    --files-from -
+  )
+
+  local rc=0
+  if [[ -n "${token}" ]]; then
+    GITHUB_TOKEN="${token}" "${lychee_cmd[@]}" < <(printf '%s\n' "${files[@]}") || rc=1
+  else
+    # `env --unset` rather than just not setting it: an exported-but-empty
+    # GITHUB_TOKEN is still PRESENT to lychee's clap env binding, which would
+    # hand GitHub a zero-length credential instead of no credential.
+    env --unset=GITHUB_TOKEN "${lychee_cmd[@]}" < <(printf '%s\n' "${files[@]}") || rc=1
+  fi
+
+  if ((rc != 0)); then
+    log 'lychee reported at least one unreachable link'
+  fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  return "${rc}"
+}
+
+main "$@"

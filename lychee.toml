@@ -1,0 +1,83 @@
+# Config for lychee, the link checker .ci/check-links runs.
+#
+# The filename is `lychee.toml`, NOT `.lycheerc`. lychee 0.24.2 -- the version
+# nixpkgs ships and flake.lock pins -- defaults `--config` to `lychee.toml`;
+# `.lycheerc` was the default name in older releases. This file was tracked
+# under the old name for its whole life, so had anything ever invoked lychee
+# here, the config would have been read by nobody and every setting below would
+# have been silently inert: the check would have run on stock defaults while
+# looking configured (#42). Renaming is half the fix; .ci/check-links passes
+# `--config` by absolute path so the name is never load-bearing again.
+
+# Carried over unchanged from the old file. 429 stays even though
+# .ci/check-links supplies a GitHub token -- a token raises the rate limit, it
+# does not remove it.
+accept = [200, 206, 429]
+
+# Every entry below is a FIXTURE address: a deliberately fake URL that exists to
+# be parsed and never fetched. Nothing real belongs in this list. When a link in
+# the tree breaks, fix the link -- do not "tidy it up" into this array, or the
+# next reader inherits an exclude list they cannot tell fixtures from rot in.
+#
+# TOML single-quoted literal strings, so the backslashes reach lychee's regex
+# engine instead of being consumed as TOML escape sequences.
+#
+# lychee matches these patterns against the URL it has already *normalised*,
+# not against the text as written in the file. That matters for the last entry
+# below; verify any new pattern against `lychee --dump` output rather than
+# against the source line.
+exclude = [
+  # RFC 2606's reserved example host. Appears in corpus rows in
+  # tests/cases/verdicts.tsv and in fixtures in tests/manifest.bats and
+  # tests/issue-forms.bats; `https?` because one occurrence is deliberately
+  # plain http. Belt and braces under 0.24.2, which already drops RFC 2606
+  # reserved domains on its own -- kept so the intent survives a lychee that
+  # stops doing that for us.
+  '^https?://example\.com',
+  # A fake CI host inside a corpus payload in tests/cases/verdicts.tsv. Same
+  # belt-and-braces note as above: `.example` is RFC 2606 reserved too.
+  '^https://ci\.example',
+  # An elided URL in a .typos.toml comment, showing the shape of the commit
+  # links release-please writes into the changelog. 0.24.2 fails to parse it as
+  # a URL and never emits it, so this entry is currently inert; kept as the
+  # documented intent should a later parser start accepting it.
+  '^https://\.\.\.',
+  # A shell expansion inside a `git clone` URL in
+  # .github/actions/bats-ambient/action.yml -- a template, not an address, and
+  # the ONE fixture in this list that lychee really would go and fetch.
+  #
+  # The pattern must match the ENCODED form: lychee percent-encodes the braces
+  # while normalising, so `https://github.com/${repo}.git` reaches the filter as
+  # `https://github.com/$%7Brepo%7D.git` and a literal `\$\{repo\}` never fires.
+  # The alternation accepts either form so a future lychee that stops encoding
+  # does not silently unmask the fixture.
+  '\$(\{|%7B)repo(\}|%7D)',
+  # Not a fixture address but a fixture-shaped ARTEFACT, and the one entry here
+  # that is load-bearing rather than belt-and-braces.
+  #
+  # This repo's prose quotes URL-shaped regexes at itself -- this file names
+  # `ci\.example` in a comment, .ci/check-links explains that pattern in its
+  # header, and both quote the old own-repo exclude. lychee reads a tracked file
+  # as prose and extracts the literal prefix of each such pattern as an address:
+  # a scheme followed by a single-label host, `https://ci` and `https://github`.
+  # Neither resolves, so without this entry every file that DESCRIBES the link
+  # checker fails the link check -- and it fails only once the file is tracked,
+  # which is how this first reached CI green-locally and red-on-PR.
+  #
+  # A single-label host (no dot) is never a real address in this tree: there are
+  # no intranet links here, and lychee drops `localhost` on its own. Matching
+  # the shape rather than listing the two current phantoms by name means a
+  # future comment quoting a third pattern needs no edit here -- and an exclude
+  # list that had to name the strings appearing in the exclude list would be a
+  # trap of its own.
+  '^https?://[^/.]+/?$',
+]
+
+# Deliberately NOT excluded: this repo's own github.com links. The old file
+# excluded `^https://github\.com/rvenutolo/claude-pgrep-pkill-guard`, which took
+# out both README badges, the releases link, every issue link, the security
+# advisory link and all 14 commit-SHA links under docs/ -- that is, precisely
+# the links most likely to actually break. The only reason for that exclude was
+# anonymous GitHub rate limiting, back when the repo was private; the repo is
+# public now and .ci/check-links supplies a token, which solves rate limiting
+# without blinding the check.

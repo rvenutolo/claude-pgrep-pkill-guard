@@ -50,6 +50,7 @@ runs therefore cannot drift. The `just` recipes all go through it:
 | `just test` | the bats suite; extra arguments are forwarded to `run-tests` |
 | `just lint` | the config, markup and shell lint suite |
 | `just validate` | validates both plugin manifests with the Claude Code CLI, when it is installed |
+| `just links` | checks every link in the tracked tree, over the network |
 | `just format` | formats every file via treefmt |
 | `just format-check` | verifies formatting without writing changes |
 | `just hooks` | activates the tracked git hooks for this clone |
@@ -59,6 +60,16 @@ runs therefore cannot drift. The `just` recipes all go through it:
 first. It aggregates exit codes rather than failing fast, so one run surfaces
 every failing category. It also runs the bats suite twice, once under gawk and
 once under one-true-awk, because the hook must behave identically on both.
+
+`just links` is deliberately **not** part of `just check`. The gate is hermetic
+and offline: every tool comes from the flake and every step is deterministic, so
+it passes on a plane, behind a captive portal, and on a day when shields.io is
+having a bad minute. A link check is none of those things, and a gate that goes
+red for reasons outside the tree teaches you to stop reading it. Link checking
+runs in CI instead — on every pull request, and again every Monday, since rot
+does not correlate with pushes. It is **not** a required status check: link rot
+is caused by the internet, not by the pull request, and a third party's expired
+certificate should not be able to block an unrelated merge.
 
 A PR is ready when `just format`, `just check` and `just validate` are all
 green.

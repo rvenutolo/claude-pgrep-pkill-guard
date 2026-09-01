@@ -30,6 +30,8 @@ git
 jq
 # the task runner the .justfile and README document
 just
+# invoked by .ci/check-links
+lychee
 # invoked by .ci/run-lint-checks
 markdownlint-cli2
 # asserted by .ci/check-devshell-provides

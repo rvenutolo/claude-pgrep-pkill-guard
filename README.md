@@ -157,6 +157,12 @@ stock bash 3.2)` does not run the suite at all; it asserts the property that
 matters on a machine below the floor — that the guard says so out loud rather
 than quietly doing nothing.
 
+One CI job is deliberately absent from that table:
+[`links.yml`](.github/workflows/links.yml) checks every link in the tracked tree
+on each pull request and again every Monday, but it lives outside `ci.yml`,
+exercises no platform, bash or awk, and is advisory rather than required — link
+rot is caused by the internet, not by the pull request.
+
 What that reduces to, for the machine you are installing on:
 
 - **bash 4.3 or newer** (the guard uses namerefs)

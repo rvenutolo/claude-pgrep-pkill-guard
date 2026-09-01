@@ -1,0 +1,57 @@
+name: Links
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Link rot does not correlate with pushes: a URL dies when somebody else's
+  # server changes, in a week nobody touched this repo. The weekly run is what
+  # actually catches it. GitHub emails the repo owner when a scheduled workflow
+  # fails, so a red run is not silent even with nobody watching Actions.
+  #
+  # :17 rather than :00 -- on-the-hour cron slots are the most contended on
+  # GitHub's shared scheduler, and therefore the most delayed.
+  schedule:
+    - cron: '17 12 * * 1'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  links:
+    name: links
+    # Deliberately NOT a required status check, and it must not become one.
+    # Link rot is caused by the internet, not by the pull request: a required
+    # `links` context would let a third party's expired certificate block an
+    # unrelated merge. The job still runs on every PR and reddens visibly, it
+    # just cannot gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # The token exists to raise GitHub's API rate limit, not to write.
+      contents: read
+    steps:
+      # `audit`, not `block`. This is a deliberate deviation from every other
+      # job in this repo, all of which pin an egress allowlist -- do not
+      # "fix" it. An allowlist is structurally impossible for this job: its
+      # entire purpose is to make outbound requests to whatever hosts the repo
+      # happens to link to, so the list would have to be rewritten every time
+      # somebody adds a URL to the README. Worse, a stale allowlist fails the
+      # job in a way indistinguishable from a broken link -- exactly the
+      # verdict this job exists to report. `audit` still records the egress for
+      # review after the fact.
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Check every link in the tracked tree
+        # In the environment, never in argv: a token passed as a flag is visible
+        # in `ps` output for the life of the process. lychee reads GITHUB_TOKEN
+        # natively, and .ci/check-links passes it through the same way.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./.ci/in-devshell ./.ci/check-links

@@ -60,6 +60,11 @@
             editorconfig-checker
             typos
             actionlint
+            # the link checker .ci/check-links drives. Pinned here rather than
+            # taken from lycheeverse/lychee-action so the version lives in
+            # flake.lock like every other tool, instead of being the one that
+            # can change under the gate without a lockfile bump.
+            lychee
             # yq-go, whose binary is `yq`: .ci/check-issue-forms parses the
             # issue forms with it. The `-go` suffix is the package name, not
             # the command -- the Python-wrapper `yq` is a different tool with a

@@ -21,6 +21,10 @@ lint:
 validate:
     ./.ci/run-plugin-validate
 
+# Check every link in the tracked tree
+links:
+    ./.ci/in-devshell ./.ci/check-links
+
 # Format every file via treefmt
 format:
     nix fmt

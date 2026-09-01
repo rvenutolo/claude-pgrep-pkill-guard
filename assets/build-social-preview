@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+
+# @description Rebuild assets/social-preview.png, the 1280x640 Open Graph card
+#              GitHub serves when someone pastes this repo's URL into Slack,
+#              Discord or X (#35). The image is composed from
+#              assets/deny-message.png, the same capture the README embeds.
+#
+#              Tracked because the constants below are not recoverable by
+#              looking at the output. Regenerating the card by eye means
+#              rediscovering the crop height, the fade depth and the sampled
+#              palette; regenerating it with this script means changing one
+#              number.
+#
+#              Deliberately NOT wired into run-all-checks, and ImageMagick is
+#              deliberately NOT in the devShell. Same trade .ci/run-plugin-
+#              validate makes for the Claude Code CLI: the gate is hermetic, and
+#              a step depending on the ambient PATH would make it
+#              non-deterministic. Here the cost argument is also plain -- an
+#              ImageMagick closure in every contributor's `nix develop`, paid on
+#              every shell entry, for an asset regenerated roughly never. Unlike
+#              run-plugin-validate a missing tool FAILS rather than exiting 0,
+#              because nothing invokes this except a person who has just asked
+#              for an image.
+#
+#              GitHub uploads are manual: there is no API for the social preview
+#              setting. Once this has run, upload the result at Settings ->
+#              General -> Social preview.
+# @arg $1 output optional destination path; defaults to
+#         assets/social-preview.png under the repo root
+# @exitcode 0 the card was written
+# @exitcode 1 ImageMagick is missing, or the source capture is not readable
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+readonly SOURCE="${REPO_DIR}/assets/deny-message.png"
+OUTPUT="${1:-${REPO_DIR}/assets/social-preview.png}"
+readonly OUTPUT
+
+# GitHub's recommended social-preview dimensions. Anything else is letterboxed
+# or centre-cropped by whichever site renders the card.
+readonly CARD_W=1280
+readonly CARD_H=640
+
+# How much of the capture to keep, in SOURCE pixels, measured from the top.
+#
+# This number is tied to the content of assets/deny-message.png, not to its
+# dimensions: 272 is the blank line after "the session shell.", so the crop
+# keeps the command, the `Error:` opener and the paragraph explaining the
+# self-match, and stops before the numbered fixes. If the capture is ever
+# retaken, re-choose it so the cut lands in a BLANK line. A fade that bisects a
+# line of text does not read as a deliberate dissolve, it reads as a rendering
+# fault.
+readonly CROP_H=272
+# Depth of the fade to transparent at the bottom of the crop, in CARD pixels.
+readonly FADE=32
+# Width the crop is scaled to, leaving the same 72px margin as the text.
+readonly INSET_W=1136
+
+# Sampled from the capture itself with `magick ... -colors 8 histogram:info:`
+# rather than guessed, so the card's background is exactly the terminal's and
+# the faded crop dissolves into it with no visible seam. BG is Nord polar
+# night; ACCENT is the colour the guard's own denial text is rendered in.
+readonly BG='#2E3440'
+readonly ACCENT='#E56377'
+readonly TITLE_FILL='#ECEFF4'
+readonly TAGLINE_FILL='#AEB8CA'
+readonly FOOTER_FILL='#7C8899'
+
+# @description Log to stderr in the house format.
+# @arg $1 message the text to log
+function log() {
+  local -r message="$1"
+  printf '[%s] %s\n' "${0##*/}" "${message}" >&2
+}
+
+function main() {
+  if ! command -v magick > /dev/null 2>&1; then
+    printf 'FAIL: ImageMagick (magick) is not on PATH; it is not in the devShell by design — see this script'\''s header\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+  if [[ ! -r "${SOURCE}" ]]; then
+    printf 'FAIL: source capture is missing or unreadable: %s\n' "${SOURCE}" >&2
+    trap - ERR
+    return 1
+  fi
+
+  local work=''
+  work="$(mktemp --directory)"
+  # shellcheck disable=SC2064 # expand work now, not at trap time
+  trap "rm -rf -- '${work}'" EXIT
+
+  local source_w=''
+  source_w="$(magick identify -format '%w' "${SOURCE}")"
+
+  # Crop, then scale. Scaling the whole capture down to fit instead would put
+  # every line below the threshold of legibility in a link preview; cropping
+  # keeps the surviving lines at a readable size.
+  magick "${SOURCE}" -crop "${source_w}x${CROP_H}+0+0" +repage \
+    -resize "${INSET_W}x" "${work}/crop.png"
+
+  local inset_h='' solid=''
+  inset_h="$(magick identify -format '%h' "${work}/crop.png")"
+  solid=$((inset_h - FADE))
+
+  # An alpha mask that is opaque down to the last FADE rows and ramps to
+  # transparent across them.
+  magick -size "${INSET_W}x${solid}" xc:white \
+    -size "${INSET_W}x${FADE}" gradient:white-black -append "${work}/mask.png"
+  magick "${work}/crop.png" "${work}/mask.png" \
+    -alpha off -compose CopyOpacity -composite "${work}/inset.png"
+
+  magick -size "${CARD_W}x${CARD_H}" "xc:${BG}" -gravity NorthWest \
+    "${work}/inset.png" -geometry +72+282 -compose over -composite \
+    -font DejaVu-Sans-Bold -pointsize 66 -fill "${TITLE_FILL}" \
+    -annotate +72+58 'pgrep-pkill-guard' \
+    -fill "${ACCENT}" -draw 'rectangle 72,150 168,153' \
+    -font DejaVu-Sans -pointsize 29 -fill "${TAGLINE_FILL}" \
+    -annotate +72+176 'Blocks the pgrep/pkill shapes that make a Claude Code agent' \
+    -annotate +72+214 'kill its own session — or spin forever waiting on it.' \
+    -font FiraCode-Nerd-Font-Mono-Reg -pointsize 21 -fill "${FOOTER_FILL}" \
+    -annotate +72+548 'github.com/rvenutolo/claude-pgrep-pkill-guard' \
+    "${OUTPUT}"
+
+  log "wrote ${OUTPUT} ($(magick identify -format '%wx%h, %b' "${OUTPUT}"))"
+  log 'upload it at Settings -> General -> Social preview; there is no API for it'
+}
+
+main "$@"

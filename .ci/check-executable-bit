@@ -29,6 +29,7 @@ readonly EXPECT_EXECUTABLE=(
   'run-all-checks'
   'run-tests'
   'bench/run'
+  'assets/build-social-preview'
 )
 readonly EXPECT_NON_EXECUTABLE=(
   # Sourced by the guard's entry script once a payload looks worth inspecting,

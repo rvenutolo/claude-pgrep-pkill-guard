@@ -53,6 +53,7 @@
             prettier
             yamlfmt
             nixfmt
+            taplo
             # linters
             shellcheck
             yamllint
@@ -60,6 +61,13 @@
             editorconfig-checker
             typos
             actionlint
+            # the two standard nix linters, both invoked by
+            # .ci/run-lint-checks. nixfmt formats these files but says nothing
+            # about what they contain: statix catches antipatterns (it is what
+            # found the repeated `programs.` keys in .treefmt.nix) and deadnix
+            # catches unused bindings and arguments.
+            statix
+            deadnix
             # the link checker .ci/check-links drives. Pinned here rather than
             # taken from lycheeverse/lychee-action so the version lives in
             # flake.lock like every other tool, instead of being the one that

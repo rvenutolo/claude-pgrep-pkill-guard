@@ -2,12 +2,19 @@
 {
   projectRootFile = "flake.nix";
 
-  programs.prettier = {
-    enable = true;
-    includes = [ "*.json" ];
+  programs = {
+    prettier = {
+      enable = true;
+      includes = [ "*.json" ];
+    };
+    yamlfmt.enable = true;
+    nixfmt.enable = true;
+    # treefmt-nix's taplo module runs `taplo format` over *.toml and supplies
+    # the package itself, so taplo is not in .ci/required-tools -- same as
+    # prettier, yamlfmt and nixfmt. No `taplo lint`: the schema catalogue does
+    # not know lychee.toml or .typos.toml, so it would assert nothing.
+    taplo.enable = true;
   };
-  programs.yamlfmt.enable = true;
-  programs.nixfmt.enable = true;
 
   # shfmt via an explicit entry rather than programs.shfmt: that module hardcodes
   # `-s` (simplify) and options only APPEND, so the flag cannot be dropped. `-s`

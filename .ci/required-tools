@@ -7,8 +7,8 @@
 #   and every devShell package must contribute at least one entry.
 # - the same lint's reverse pass catches packages nothing justifies.
 #
-# Deliberately absent: prettier, yamlfmt, nixfmt (treefmt resolves these from the
-# Nix store directly, never through PATH).
+# Deliberately absent: prettier, yamlfmt, nixfmt, taplo (treefmt resolves these
+# from the Nix store directly, never through PATH).
 
 # invoked by .ci/run-lint-checks
 actionlint
@@ -18,6 +18,10 @@ bats
 commitlint
 # invoked by .ci/run-lint-checks
 editorconfig-checker
+# invoked by .ci/run-lint-checks
+deadnix
+# invoked by .ci/run-lint-checks
+statix
 # the hook's own runtime dependency, and scanner.bats drives it directly
 gawk
 # one-true-awk (BWK); run-tests --awk=bwk shims `awk` to it

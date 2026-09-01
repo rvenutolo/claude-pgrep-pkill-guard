@@ -74,6 +74,14 @@
             # check-devshell-provides fails AND every git commit dies with
             # "commitlint: command not found" once activate-githooks has run.
             commitlint
+            # renovate, here only for its `renovate-config-validator` binary,
+            # which .ci/run-lint-checks runs over .github/renovate.json. Without
+            # it a malformed config is not a CI failure: Renovate simply stops
+            # opening dependency PRs, silently and forever. Note the cost --
+            # nixpkgs' renovate lists no x86_64-darwin in meta.platforms, so
+            # this devShell no longer evaluates on an Intel Mac. The gate is
+            # unaffected: CI's macos-latest runner is arm64.
+            renovate
             # tests / runtime
             # withLibraries, not bare bats: the wrapper exports BATS_LIB_PATH at
             # its own share/bats, so common.bash can bats_load_library and a bats

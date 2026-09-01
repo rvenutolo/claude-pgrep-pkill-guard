@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 # @description Run the config/markup lint suite: actionlint, yamllint,
-#              markdownlint, typos, editorconfig-checker, and shellcheck over
-#              every tracked shell script. Aggregates exit codes rather than
-#              failing fast, so one run surfaces every failing category.
+#              renovate-config-validator, markdownlint, typos,
+#              editorconfig-checker, and shellcheck over every tracked shell
+#              script. Aggregates exit codes rather than failing fast, so one
+#              run surfaces every failing category.
 # @noargs
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed
@@ -75,6 +76,16 @@ function main() {
 
   log 'running yamllint'
   yamllint --strict . || rc=1
+
+  log 'running renovate-config-validator'
+  # --no-global is required, not cosmetic: a config named on the command line is
+  # validated against the GLOBAL self-hosted schema by default, and
+  # .github/renovate.json is a repo config. Explicit path rather than bare
+  # auto-discovery because the bare form resolves the default filenames relative
+  # to the CURRENT directory and, finding none, exits 0 with only a warning --
+  # a gate that passes by looking at nothing. Without any of this a malformed
+  # config is not a CI failure: Renovate just stops opening dependency PRs.
+  renovate-config-validator --no-global "${REPO_DIR}/.github/renovate.json" || rc=1
 
   log 'running markdownlint'
   # Tracked files only. markdownlint does not honour gitignore, so a glob would

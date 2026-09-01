@@ -1,28 +1,31 @@
 * text=auto eol=lf
 *.png binary
 
-flake.lock                  linguist-generated
-bench/RESULTS.md            linguist-generated
-*.bats                      linguist-language=Shell
+flake.lock                    linguist-generated
+bench/RESULTS.md              linguist-generated
+*.bats                        linguist-language=Shell
 
 # export-ignore keeps `git archive` -- and so the release tarball -- to what a
 # user actually installs. flake.nix and flake.lock stay IN: a user can
 # `nix develop` the plugin. assets/*.png stay IN: README.md renders them.
-.ci/                        export-ignore
-.githooks/                  export-ignore
-.github/                    export-ignore
-.editorconfig               export-ignore
-.editorconfig-checker.json  export-ignore
-.commitlintrc.yml           export-ignore
-.markdownlint.json          export-ignore
-.treefmt.nix                export-ignore
-.typos.toml                 export-ignore
-.yamlfmt                    export-ignore
-.yamllint.yml               export-ignore
-.justfile                   export-ignore
-lychee.toml                 export-ignore
-run-tests                   export-ignore
-run-all-checks              export-ignore
-tests/                      export-ignore
-bench/                      export-ignore
-assets/build-social-preview export-ignore
+.ci/                          export-ignore
+.githooks/                    export-ignore
+.github/                      export-ignore
+.editorconfig                 export-ignore
+.editorconfig-checker.json    export-ignore
+.commitlintrc.yml             export-ignore
+.markdownlint.json            export-ignore
+.treefmt.nix                  export-ignore
+.typos.toml                   export-ignore
+.yamlfmt                      export-ignore
+.yamllint.yml                 export-ignore
+.justfile                     export-ignore
+lychee.toml                   export-ignore
+run-tests                     export-ignore
+run-all-checks                export-ignore
+tests/                        export-ignore
+bench/                        export-ignore
+assets/build-social-preview   export-ignore
+.envrc                        export-ignore
+release-please-config.json    export-ignore
+.release-please-manifest.json export-ignore

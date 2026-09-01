@@ -71,6 +71,21 @@ exclude = [
   # list that had to name the strings appearing in the exclude list would be a
   # trap of its own.
   '^https?://[^/.]+/?$',
+  # The one entry here that is neither a fixture nor a fixture-shaped artefact:
+  # a real address that is deliberately unresolvable for a bounded window.
+  #
+  # release-please writes a compare link for the version being released into
+  # CHANGELOG.md, and the tag it points at is not created until the release PR
+  # MERGES. So for the whole life of every release PR the link is correct and
+  # 404 at the same time, and the links job goes red on a changelog that is
+  # exactly right (#98). It resolves the moment the tag exists.
+  #
+  # Narrow on purpose. This is NOT the blanket own-repo exclude the closing
+  # comment below warns against: issue links, release links, the README badges
+  # and the 14 commit-SHA links under docs/ all stay checked. Only the compare
+  # form is excluded, and release-please is the only thing in this tree that
+  # writes one.
+  '^https://github\.com/rvenutolo/claude-pgrep-pkill-guard/compare/',
 ]
 
 # Deliberately NOT excluded: this repo's own github.com links. The old file

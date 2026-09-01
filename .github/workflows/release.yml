@@ -38,15 +38,39 @@ jobs:
             install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
             releases.nixos.org:443 tarballs.nixos.org:443
       # Pull requests created with the default GITHUB_TOKEN do not trigger
-      # workflows, so the release PR would never run the five required status
+      # workflows, so the release PR would never run the six required status
       # checks and could only be merged by admin bypass. An App installation
       # token is a real actor and its events do trigger workflows.
+      #
+      # `client-id`, not `app-id`: v3.2.0 deprecates the latter and annotated
+      # every release run to say so (#41). The Client ID is a DIFFERENT value
+      # from the App ID -- same App, newer identifier -- so this needed the
+      # APP_CLIENT_ID secret before it could be swapped. APP_ID is deliberately
+      # left in place as a working fallback until a dispatched run proves this
+      # mints a token; this step is the first thing after harden-runner, so a
+      # wrong id fails here with a 401 before release-please runs at all, and
+      # nothing has to be unwound.
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
         id: app-token
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
+      # Two annotations on this step are known, benign, and NOT worth
+      # rediagnosing a third time (#41):
+      #
+      # 1. `Node.js 20 is deprecated ... forced to run on Node.js 24`. Upstream's
+      #    to fix; renovate tracks the action, so it resolves on a version bump.
+      # 2. `Error: unexpected token ' ' at 1:6, valid tokens [(, !, :]`, twice.
+      #    That is the conventional-commit parser rejecting two commit subjects,
+      #    named in the log as 45020ec and d55f280 -- both merges carrying
+      #    GitHub's default `Merge pull request #N from ...` subject. `Merge` is
+      #    five characters, so the space lands at column 6 where a scope, a `!`
+      #    or the type's `:` was expected. Both predate the current practice of
+      #    rewriting merge subjects to `type: subject (#N)`, and both sit after
+      #    the v1.0.0 tag, which is where release-please starts reading -- so
+      #    they leave the window at the next release and cannot recur while
+      #    merge subjects stay conventional. Nothing to fix.
       - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445  # v4.2.0
         id: release
         with:

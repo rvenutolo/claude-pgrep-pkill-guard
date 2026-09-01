@@ -22,7 +22,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       # harden-runner is Linux-only, so it cannot be "first in every job" here.
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         if: runner.os == 'Linux'
         with:
           egress-policy: block
@@ -71,7 +71,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: block
           disable-sudo: true
@@ -91,7 +91,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >-
@@ -191,7 +191,7 @@ jobs:
       DISABLE_ERROR_REPORTING: '1'
       DISABLE_TELEMETRY: '1'
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: block
           disable-sudo: true

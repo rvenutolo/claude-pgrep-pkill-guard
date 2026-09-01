@@ -23,6 +23,7 @@ readonly REPO_DIR
 readonly EXPECT_EXECUTABLE=(
   'hooks/pgrep-pkill-guard.sh'
   '.ci/in-devshell'
+  '.ci/build-*'
   '.ci/check-*'
   '.ci/run-*'
   '.githooks/*'

@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+
+# @description Emit the GraphQL document that commits the currently STAGED tree
+#              onto a branch through GitHub's createCommitOnBranch mutation,
+#              shaped for `gh api graphql --input -`.
+#
+#              Why the API rather than `git commit` + `git push` (#70):
+#              protect-main has required_signatures on, and nothing on a runner
+#              holds a signing key, so a pushed commit is unsigned and the
+#              ruleset refuses the merge -- mergeStateStatus BLOCKED with every
+#              required check green. A commit created through the API with the
+#              App installation token is signed by GitHub on the App's behalf,
+#              which is the same mechanism that makes release-please's own
+#              commit valid. Same content, same bot author, signed.
+#
+#              Pure and network-free on purpose. Everything that needs a token
+#              stays in the caller, so this half is a unit under test:
+#              tests/commit-payload.bats grades it against throwaway repos, and
+#              the only thing left unproven is the HTTP call itself.
+#
+#              Every path and every base64 blob crosses into JSON through jq's
+#              --arg / --args, never through string interpolation. A path
+#              holding a double quote or a backslash must not be able to break
+#              the document, and a `printf '{"path": "%s"' "${path}"` here would
+#              hand an attacker who can name a file the whole mutation.
+# @arg $1 repo owner/name, e.g. rvenutolo/claude-pgrep-pkill-guard
+# @arg $2 branch the branch to commit onto, e.g. release-please--branches--main
+# @arg $3 headline the commit subject
+# @stdout one JSON document: {"query": ..., "variables": {"input": ...}}
+# @exitcode 0 the payload is on stdout
+# @exitcode 1 wrong argument count, not inside a git repo, nothing staged, or a
+#             staged change carries a status letter this script does not model
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+# expectedHeadOid rides in the input, so the mutation fails loudly if the branch
+# moved under the job. There is deliberately no retry and no force path: a race
+# here means two writers disagree about the release branch, and guessing which
+# one wins is worse than a red run.
+#
+# `$input` is a GraphQL variable name, not a shell expansion; hence the SC2016
+# disable and the single quotes that make it one.
+# shellcheck disable=SC2016
+readonly MUTATION='mutation ($input: CreateCommitOnBranchInput!) {
+  createCommitOnBranch(input: $input) {
+    commit {
+      oid
+      url
+    }
+  }
+}'
+
+# One jq program, fed three strings per staged change through $ARGS.positional:
+# kind, path, contents. A flat positional list rather than three lists because
+# jq offers exactly one positional array, and re-pairing it here is cheaper than
+# three separate jq invocations -- each of which would have to hand the blobs
+# across argv again.
+#
+# $ARGS and the $-prefixed bindings are jq syntax, not shell expansions; hence
+# the SC2016 disable.
+# shellcheck disable=SC2016
+readonly JQ_PROGRAM='
+[ range(0; ($ARGS.positional | length); 3) as $i
+  | {
+      kind: $ARGS.positional[$i],
+      path: $ARGS.positional[$i + 1],
+      contents: $ARGS.positional[$i + 2]
+    } ] as $changes
+| {
+    query: $mutation,
+    variables: {
+      input: {
+        branch: {
+          repositoryNameWithOwner: $repo,
+          branchName: $branch
+        },
+        expectedHeadOid: $head_oid,
+        message: {
+          headline: $headline
+        },
+        fileChanges: {
+          additions: [ $changes[] | select(.kind == "addition") | {path, contents} ],
+          deletions: [ $changes[] | select(.kind == "deletion") | {path} ]
+        }
+      }
+    }
+  }
+'
+
+# @description Print one fatal diagnostic to stderr and exit 1. Nothing is ever
+#              written to stdout on the way out: a caller piping this script
+#              straight into `gh api graphql --input -` must not receive a
+#              half-formed document alongside the failure.
+# @arg $1 message the diagnostic text
+# @exitcode 1 always
+function die() {
+  printf '%s: %s\n' "${0##*/}" "$1" >&2
+  exit 1
+}
+
+function main() {
+  if (($# != 3)); then
+    printf 'usage: %s <repo> <branch> <headline>\n' "${0##*/}" >&2
+    exit 1
+  fi
+  local -r repo="$1"
+  local -r branch="$2"
+  local -r headline="$3"
+
+  if ! git rev-parse --show-toplevel > '/dev/null' 2>&1; then
+    die "not a git repo: $(pwd)"
+  fi
+
+  local head_oid
+  head_oid="$(git rev-parse HEAD)"
+
+  # Three jq positional arguments per staged change -- kind, path, contents --
+  # with contents empty for a deletion.
+  #
+  # The source is `git diff --cached --name-status -z --no-renames HEAD`, whose
+  # records are <status>NUL<path>NUL. `-z` is what makes the parse safe for a
+  # path holding a space, a newline or a quote; without it git quotes such paths
+  # and this would have to unquote them. `--no-renames` decomposes a rename into
+  # a D plus an A, so there is no rename record to model and no similarity score
+  # riding on the status letter.
+  #
+  # The loop body runs in THIS shell, not a subshell: `< <(git ...)` subshells
+  # only the git process, so `die` below ends the whole run rather than ending a
+  # producer and leaving main to build a payload from a partial change list. A
+  # helper function feeding `mapfile` would have exactly that hole, and would
+  # also lose any path containing a newline to the line-based transfer.
+  #
+  # Blobs are read from the INDEX (`git show ":0:<path>"`), never from the
+  # worktree, so the payload is exactly what was staged. The explicit `:0:`
+  # stage prefix rather than a bare `:<path>` disposes of the one ambiguity in
+  # that syntax: a path beginning with a digit and a colon would otherwise parse
+  # as a stage number.
+  local -a changes=()
+  local status path contents
+  while IFS= read -r -d '' status && IFS= read -r -d '' path; do
+    case "${status}" in
+      A | M)
+        contents="$(git show ":0:${path}" | base64 --wrap=0)"
+        changes+=('addition' "${path}" "${contents}")
+        ;;
+      D)
+        changes+=('deletion' "${path}" '')
+        ;;
+      *)
+        # Loudly, not silently. GitHub's fileChanges models additions and
+        # deletions and nothing else, so a T (typechange) or any letter this
+        # script does not model has no representation here -- dropping it would
+        # ship a commit that quietly omits a file.
+        die "unrecognised staged status ${status} for ${path}"
+        ;;
+    esac
+  done < <(git diff --cached --name-status -z --no-renames HEAD)
+
+  # Nothing staged is an error, not a silent success. The caller checks for an
+  # empty diff first and skips the commit entirely; reaching this script with a
+  # clean index means the caller is broken, and emitting an empty-fileChanges
+  # mutation would paper over that with a pointless empty commit.
+  if ((${#changes[@]} == 0)); then
+    die 'nothing staged; the caller is responsible for checking that first'
+  fi
+
+  jq --null-input \
+    --arg mutation "${MUTATION}" \
+    --arg repo "${repo}" \
+    --arg branch "${branch}" \
+    --arg headline "${headline}" \
+    --arg head_oid "${head_oid}" \
+    --args "${JQ_PROGRAM}" "${changes[@]}"
+}
+
+main "$@"

@@ -7,8 +7,8 @@
 #   and every devShell package must contribute at least one entry.
 # - the same lint's reverse pass catches packages nothing justifies.
 #
-# Deliberately absent: prettier, yamlfmt, nixfmt (treefmt resolves these from the
-# Nix store directly, never through PATH).
+# Deliberately absent: prettier, yamlfmt, nixfmt, taplo (treefmt resolves these
+# from the Nix store directly, never through PATH).
 
 # invoked by .ci/run-lint-checks
 actionlint

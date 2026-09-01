@@ -53,6 +53,7 @@
             prettier
             yamlfmt
             nixfmt
+            taplo
             # linters
             shellcheck
             yamllint

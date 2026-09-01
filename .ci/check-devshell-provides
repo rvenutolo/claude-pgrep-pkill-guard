@@ -1,16 +1,45 @@
 #!/usr/bin/env bash
 
 # @description Two-way drift lint between .ci/required-tools and the devShell.
-#              Forward: every declared tool must actually be on PATH inside the
-#              devShell. Reverse: a tool on PATH that nothing declares is not an
-#              error (the shell pulls in transitive deps), so only the forward
-#              direction hard-fails — but an EMPTY declaration list does fail,
-#              since a scan that finds nothing must never read as a clean pass.
+#
+#              Forward: every declared tool must actually resolve on PATH inside
+#              the devShell. An EMPTY declaration list fails too, since a scan
+#              that finds nothing must never read as a clean pass.
+#
+#              Reverse: every devShell package must justify its presence. A
+#              package is justified when either holds:
+#                1. one of its outputs has bin/<tool> for a declared tool, or
+#                2. it backs a formatter .treefmt.nix enables -- treefmt runs
+#                   those from the Nix store, never through PATH, so they are
+#                   justified without ever appearing in .ci/required-tools.
+#              Rule 2 is DERIVED from .treefmt.nix rather than a hand-kept
+#              exemption list: enabling a formatter in both files passes with no
+#              edit here, and dropping one from .treefmt.nix while leaving it in
+#              the devShell correctly fails. A hardcoded list would have to be
+#              remembered at exactly the moment it is easiest to forget.
+#
+#              Two traps shape the reverse pass, both found the hard way:
+#
+#              1. `toString pkg` is the DEFAULT output, which for jq, nix and
+#                 ShellCheck is `-dev` and has no bin/ at all. Checking only
+#                 that output reports all three as dead packages. Every output
+#                 is scanned instead.
+#              2. `nix eval` caches flake evaluations. A cached result reported
+#                 an inventory three packages stale while the tree on disk had
+#                 already moved. --no-eval-cache is mandatory, not tidiness.
 #
 #              Must be run INSIDE the devShell (run-all-checks always is).
-# @noargs
-# @exitcode 0 every declared tool resolves
-# @exitcode 1 a declared tool is missing, or the list is empty
+# @arg $1 dir optional fixture directory, which switches the script to reverse-
+#         pass-only mode and makes it read `required-tools`, `packages.tsv` and
+#         `formatters.txt` from that directory instead of consulting Nix. It
+#         exists so the bats suite can drive the reverse pass over a fabricated
+#         inventory in milliseconds; without it the only possible test would be
+#         "exits 0 on the real repo", which a script that always returned 0
+#         would also pass. The forward pass is deliberately NOT rerouted: it
+#         asserts against the live PATH, and a fixture cannot stand in for that.
+# @exitcode 0 every declared tool resolves and every package is justified
+# @exitcode 1 a declared tool is missing, the list is empty, or a package
+#             justifies nothing
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -18,9 +47,176 @@ IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
-readonly REPO_DIR
-readonly TOOLS_FILE="${REPO_DIR}/.ci/required-tools"
+readonly FIXTURE_DIR="${1:-}"
+
+# REPO_DIR is resolved only in real mode. Fixture mode must not need a git repo
+# at all: a bats test runs from a temp directory, and making the fixture path
+# depend on `git rev-parse` would couple it to the suite's working directory.
+if [[ -n "${FIXTURE_DIR}" ]]; then
+  readonly TOOLS_FILE="${FIXTURE_DIR}/required-tools"
+else
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+  readonly REPO_DIR
+  readonly TOOLS_FILE="${REPO_DIR}/.ci/required-tools"
+fi
+
+# Both expressions carry REPO_PLACEHOLDER rather than an interpolated path so
+# they can stay single-quoted: every `${...}` below is Nix syntax, and letting
+# bash near it would expand the lot. The substitution happens at the call site.
+#
+# shellcheck disable=SC2016
+readonly PACKAGES_EXPR='
+let
+  flake = builtins.getFlake (toString REPO_PLACEHOLDER);
+  system = builtins.currentSystem;
+  outputsOf = pkg: map (name: toString pkg.${name}) (pkg.outputs or [ "out" ]);
+  line = pkg: builtins.concatStringsSep "\t" ([ (pkg.pname or pkg.name) ] ++ outputsOf pkg);
+in
+builtins.concatStringsSep "\n" (map line flake.devShells.${system}.default.nativeBuildInputs)
+'
+
+# .treefmt.nix is read through flake.outPath, not as a bare path literal, so the
+# formatters and the packages come from ONE tree. Reading it directly off disk
+# would let the two halves of the reverse pass disagree whenever the working
+# tree and the flake source differ.
+#
+# shellcheck disable=SC2016
+readonly FORMATTERS_EXPR='
+let
+  flake = builtins.getFlake (toString REPO_PLACEHOLDER);
+  system = builtins.currentSystem;
+  pkgs = flake.inputs.nixpkgs.legacyPackages.${system};
+  eval = flake.inputs.treefmt-nix.lib.evalModule pkgs (flake.outPath + "/.treefmt.nix");
+  formatters = eval.config.settings.formatter;
+in
+builtins.concatStringsSep "\n" (map (name: toString formatters.${name}.command) (builtins.attrNames formatters))
+'
+
+# @description Print every tool declared in the tools file, one per line.
+#              The file is data: `#` comments and blank lines are ignored and
+#              all whitespace is stripped, per line -- never over the whole
+#              stream, which would delete the newlines too and collapse the
+#              list into a single bogus entry.
+# @stdout one declared tool per line
+function declared_tools() {
+  local line tool
+  while IFS= read -r line; do
+    line="${line%%#*}"
+    tool="${line//[[:space:]]/}"
+    if [[ -n "${tool}" ]]; then
+      printf '%s\n' "${tool}"
+    fi
+  done < "${TOOLS_FILE}"
+  return 0
+}
+
+# @description Print the devShell's packages, one per line, as the package name
+#              followed by every one of its output paths, tab-separated.
+# @stdout name<TAB>outpath[<TAB>outpath...] per package
+function devshell_packages() {
+  if [[ -n "${FIXTURE_DIR}" ]]; then
+    cat "${FIXTURE_DIR}/packages.tsv"
+    return
+  fi
+  # Bare `return`, never `return 0`: a trailing `return 0` would swallow a
+  # failed `nix eval` and hand back an empty inventory, which the caller would
+  # then report as "the devShell declares no packages" -- a wrong verdict
+  # dressed up as a real one.
+  nix eval --raw --impure --no-eval-cache \
+    --expr "${PACKAGES_EXPR//REPO_PLACEHOLDER/${REPO_DIR}}"
+}
+
+# @description Print the absolute command path of every formatter .treefmt.nix
+#              enables, one per line.
+# @stdout one formatter command path per line
+function formatter_commands() {
+  if [[ -n "${FIXTURE_DIR}" ]]; then
+    cat "${FIXTURE_DIR}/formatters.txt"
+    return
+  fi
+  nix eval --raw --impure --no-eval-cache \
+    --expr "${FORMATTERS_EXPR//REPO_PLACEHOLDER/${REPO_DIR}}"
+}
+
+# @description Assert every declared tool resolves on the live PATH.
+# @arg $@ tools the declared tools
+# @exitcode 0 all resolve
+# @exitcode 1 at least one does not
+function forward_check() {
+  local rc=0 tool
+  for tool in "$@"; do
+    if ! command -v "${tool}" > /dev/null 2>&1; then
+      printf 'FAIL: declared tool not provided by the devShell: %s\n' "${tool}" >&2
+      rc=1
+    fi
+  done
+  return "${rc}"
+}
+
+# @description Assert every devShell package is justified -- it ships a declared
+#              tool, or it backs a formatter .treefmt.nix enables.
+# @arg $@ tools the declared tools
+# @exitcode 0 every package is justified
+# @exitcode 1 at least one package justifies nothing, or the inventory is empty
+function reverse_check() {
+  local -ra tools=("$@")
+  # Command substitution, not `mapfile < <(...)`: a process substitution's exit
+  # status is invisible to mapfile, so a failed `nix eval` would look like an
+  # empty inventory. Under inherit_errexit these assignments make it the crash
+  # it actually is.
+  local packages_raw formatters_raw
+  packages_raw="$(devshell_packages)"
+  formatters_raw="$(formatter_commands)"
+
+  local -a packages=() formatters=()
+  if [[ -n "${packages_raw}" ]]; then
+    mapfile -t packages <<< "${packages_raw}"
+  fi
+  if [[ -n "${formatters_raw}" ]]; then
+    mapfile -t formatters <<< "${formatters_raw}"
+  fi
+
+  if ((${#packages[@]} == 0)); then
+    printf 'FAIL: the devShell declares no packages\n' >&2
+    return 1
+  fi
+
+  local rc=0 entry name tool output formatter justified
+  local -a outputs=()
+  for entry in "${packages[@]}"; do
+    name="${entry%%$'\t'*}"
+    IFS=$'\t' read -r -a outputs <<< "${entry#*$'\t'}"
+    justified=''
+
+    for output in "${outputs[@]}"; do
+      for tool in "${tools[@]}"; do
+        if [[ -x "${output}/bin/${tool}" ]]; then
+          justified="tool"
+          break 2
+        fi
+      done
+    done
+
+    if [[ -z "${justified}" ]]; then
+      for formatter in "${formatters[@]}"; do
+        for output in "${outputs[@]}"; do
+          if [[ "${formatter}" == "${output}/"* ]]; then
+            justified='formatter'
+            break 2
+          fi
+        done
+      done
+    fi
+
+    if [[ -z "${justified}" ]]; then
+      printf 'FAIL: devShell package justifies nothing: %s\n' "${name}" >&2
+      printf '      Declare one of its binaries in %s, enable it in\n' "${TOOLS_FILE}" >&2
+      printf '      .treefmt.nix, or drop it from the devShell.\n' >&2
+      rc=1
+    fi
+  done
+  return "${rc}"
+}
 
 function main() {
   if [[ ! -r "${TOOLS_FILE}" ]]; then
@@ -31,23 +227,25 @@ function main() {
     return 1
   fi
 
-  local rc=0 count=0 line tool
-  while IFS= read -r line; do
-    # Strip comments and blanks; the file is data, one tool per line.
-    line="${line%%#*}"
-    tool="${line//[[:space:]]/}"
-    [[ -z "${tool}" ]] && continue
-    count=$((count + 1))
-    if ! command -v "${tool}" > /dev/null 2>&1; then
-      printf 'FAIL: declared tool not provided by the devShell: %s\n' "${tool}" >&2
-      rc=1
-    fi
-  done < "${TOOLS_FILE}"
+  local -a tools=()
+  mapfile -t tools < <(declared_tools)
 
-  if ((count == 0)); then
+  local rc=0
+  if ((${#tools[@]} == 0)); then
     printf 'FAIL: no tools declared in %s\n' "${TOOLS_FILE}" >&2
-    rc=1
+    # Every later pass needs this list; with it empty they would each report a
+    # second, derived failure. Stop here so the real cause is the only output.
+    trap - ERR
+    return 1
   fi
+
+  # The forward pass reads the live PATH, which a fixture cannot supply; see the
+  # @arg note above.
+  if [[ -z "${FIXTURE_DIR}" ]]; then
+    forward_check "${tools[@]}" || rc=1
+  fi
+  reverse_check "${tools[@]}" || rc=1
+
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (#43, invariant 6).
   trap - ERR

@@ -2,13 +2,14 @@
 # call site. This file is data: one tool per line, `#` comments and blank lines
 # ignored, no shebang and no executable bit.
 #
-# Two lints consume it:
-# - .ci/check-devshell-provides: every entry must be provided by the devShell,
-#   and every devShell package must contribute at least one entry.
-# - the same lint's reverse pass catches packages nothing justifies.
+# .ci/check-devshell-provides reads this file in both directions:
+# - forward: every entry here must resolve on PATH inside the devShell;
+# - reverse: every devShell package must ship one of these binaries, OR back a
+#   formatter .treefmt.nix enables.
 #
-# Deliberately absent: prettier, yamlfmt, nixfmt, taplo (treefmt resolves these
-# from the Nix store directly, never through PATH).
+# That second escape is why prettier, yamlfmt, nixfmt and taplo are absent:
+# treefmt runs them from the Nix store, never through PATH, and the lint derives
+# their exemption from .treefmt.nix rather than from a list kept here.
 
 # invoked by .ci/run-lint-checks
 actionlint
@@ -52,3 +53,15 @@ typos
 yamllint
 # invoked by .ci/check-issue-forms
 yq
+
+# The baseline userland the gates shell out to. stdenv puts these on PATH
+# anyway, at byte-identical store paths, so naming them buys no new binary --
+# it converts an inherited nixpkgs internal (stdenv.initialPath, which no gate
+# asserts and a flake.lock bump could change) into a declared dependency, and
+# it is what justifies coreutils, findutils and gnugrep to the reverse pass.
+# invoked by .ci/check-err-trap-hygiene and .ci/check-versions-in-sync
+grep
+# tests/repeat.bats walks the state dir with it
+find
+# bench/run creates its sample directories with it
+mkdir

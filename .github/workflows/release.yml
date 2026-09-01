@@ -125,7 +125,19 @@ jobs:
           # Interpolated into env:, never into the run: body -- the standing
           # untrusted-input discipline across this repo's workflows, which
           # zizmor enforces.
-          BRANCH: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+          #
+          # The `|| '{}'` is not defensive padding, it is the fix for #103. A
+          # step's env: block is evaluated BEFORE its `if:`, unlike its `with:`,
+          # so this expression runs even on the pushes where the guard above is
+          # about to skip the step. release-please emits no `pr` output when it
+          # has nothing to release -- every push to main carrying only
+          # chore(deps): commits -- and `fromJson('')` is a hard template error
+          # that fails the job. The identical expression at the `ref:` above is
+          # safe precisely because with: is evaluated after the `if:`.
+          #
+          # '' is falsy, so `||` yields '{}', fromJson gets valid JSON, and the
+          # absent key evaluates to empty. The step still skips.
+          BRANCH: ${{ fromJson(steps.release.outputs.pr || '{}').headBranchName }}
           # Byte-for-byte the subject the old `git commit` used: conventional,
           # so the PR's commitlint check stays green.
           HEADLINE: 'chore: apply repo formatting to the release-please output'

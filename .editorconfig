@@ -41,5 +41,11 @@ binary_next_line = true
 switch_case_indent = true
 space_redirects = true
 
+[assets/**]
+shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+space_redirects = true
+
 [*.md]
 trim_trailing_whitespace = false

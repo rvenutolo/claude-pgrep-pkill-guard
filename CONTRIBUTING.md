@@ -74,6 +74,25 @@ certificate should not be able to block an unrelated merge.
 A PR is ready when `just format`, `just check` and `just validate` are all
 green.
 
+Seven status checks are **required** by the `protect-main` ruleset and a pull
+request cannot merge without all of them green:
+
+| Check | What it covers |
+| --- | --- |
+| `gate (ubuntu-latest)` | the full hermetic gate on Linux |
+| `gate (macos-latest)` | the same gate on macOS |
+| `compat (ubuntu, ambient)` | the bats suite against the runner's own tools |
+| `compat (macos, homebrew bash)` | the same, under Homebrew bash |
+| `compat (macos, stock bash 3.2)` | the hook stays inactive on bash 3.2 |
+| `validate` | both plugin manifests, via the Claude Code CLI |
+| `commitlint` | every commit subject on the pull request |
+
+`commitlint` is required because release-please reads the commit history to cut
+releases and write the changelog: a subject that merges without matching the
+convention is one release-please either misfiles or silently drops. The one
+subject it cannot see is the merge commit's own, which is why merge subjects are
+rewritten to `type: subject (#N)` by hand.
+
 ## Commits
 
 Commit messages follow the Angular convention: `type: subject`, imperative

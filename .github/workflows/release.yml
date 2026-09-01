@@ -56,21 +56,23 @@ jobs:
           client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      # Two annotations on this step are known, benign, and NOT worth
+      # One annotation on this step is known, benign, and NOT worth
       # rediagnosing a third time (#41):
+      # `Error: unexpected token ' ' at 1:6, valid tokens [(, !, :]`, twice.
+      # That is the conventional-commit parser rejecting two commit subjects,
+      # named in the log as 45020ec and d55f280 -- both merges carrying GitHub's
+      # default `Merge pull request #N from ...` subject. `Merge` is five
+      # characters, so the space lands at column 6 where a scope, a `!` or the
+      # type's `:` was expected. Both predate the current practice of rewriting
+      # merge subjects to `type: subject (#N)`, and both sit after the v1.0.0
+      # tag, which is where release-please starts reading -- so they leave the
+      # window at the next release and cannot recur while merge subjects stay
+      # conventional. Nothing to fix.
       #
-      # 1. `Node.js 20 is deprecated ... forced to run on Node.js 24`. Upstream's
-      #    to fix; renovate tracks the action, so it resolves on a version bump.
-      # 2. `Error: unexpected token ' ' at 1:6, valid tokens [(, !, :]`, twice.
-      #    That is the conventional-commit parser rejecting two commit subjects,
-      #    named in the log as 45020ec and d55f280 -- both merges carrying
-      #    GitHub's default `Merge pull request #N from ...` subject. `Merge` is
-      #    five characters, so the space lands at column 6 where a scope, a `!`
-      #    or the type's `:` was expected. Both predate the current practice of
-      #    rewriting merge subjects to `type: subject (#N)`, and both sit after
-      #    the v1.0.0 tag, which is where release-please starts reading -- so
-      #    they leave the window at the next release and cannot recur while
-      #    merge subjects stay conventional. Nothing to fix.
+      # The second annotation this block used to carry, `Node.js 20 is
+      # deprecated`, is gone: v5.0.0's sole breaking change is the node24
+      # upgrade, which is exactly the version bump the old note predicted would
+      # resolve it.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
         id: release
         with:

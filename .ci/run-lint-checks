@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 # @description Run the config/markup lint suite: shellcheck and shfmt over every
-#              tracked shell script, plus just --fmt, actionlint, yamllint,
-#              renovate-config-validator, markdownlint, typos and
-#              editorconfig-checker. Aggregates exit codes rather than failing
-#              fast, so one run surfaces every failing category.
+#              tracked shell script, plus just --fmt, statix, deadnix,
+#              actionlint, yamllint, renovate-config-validator, markdownlint,
+#              typos and editorconfig-checker. Aggregates exit codes rather
+#              than failing fast, so one run surfaces every failing category.
 # @noargs
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed
@@ -74,6 +74,27 @@ function main() {
   # refuses to run it without the flag. Drop it when just stabilises --fmt.
   # --check makes it verify-only, matching every other step in this gate.
   just --fmt --check --unstable --justfile "${REPO_DIR}/.justfile" || rc=1
+
+  log 'running statix and deadnix'
+  # Tracked files only, and an explicit list rather than `statix check .`:
+  # a bare directory target walks .direnv/, which holds every flake input's
+  # source tree, so the gate would lint nixpkgs itself and fail on its
+  # fixtures. Same reason markdownlint and typos take explicit lists below.
+  #
+  # statix takes a single TARGET, not a file list, so it needs the loop.
+  # deadnix accepts them all at once.
+  local -a nix_files=()
+  mapfile -t nix_files < <(git -C "${REPO_DIR}" ls-files '*.nix')
+  if ((${#nix_files[@]} > 0)); then
+    local nix_file
+    for nix_file in "${nix_files[@]}"; do
+      statix check "${REPO_DIR}/${nix_file}" || rc=1
+    done
+    deadnix --fail "${nix_files[@]}" || rc=1
+  else
+    log 'no nix files found - this is a failure, not a clean pass'
+    rc=1
+  fi
 
   log 'running actionlint'
   if [[ -d "${REPO_DIR}/.github/workflows" ]]; then

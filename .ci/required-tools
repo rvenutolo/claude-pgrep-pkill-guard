@@ -18,6 +18,10 @@ bats
 commitlint
 # invoked by .ci/run-lint-checks
 editorconfig-checker
+# invoked by .ci/run-lint-checks
+deadnix
+# invoked by .ci/run-lint-checks
+statix
 # the hook's own runtime dependency, and scanner.bats drives it directly
 gawk
 # one-true-awk (BWK); run-tests --awk=bwk shims `awk` to it

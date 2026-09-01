@@ -2,12 +2,14 @@
 {
   projectRootFile = "flake.nix";
 
-  programs.prettier = {
-    enable = true;
-    includes = [ "*.json" ];
+  programs = {
+    prettier = {
+      enable = true;
+      includes = [ "*.json" ];
+    };
+    yamlfmt.enable = true;
+    nixfmt.enable = true;
   };
-  programs.yamlfmt.enable = true;
-  programs.nixfmt.enable = true;
 
   # shfmt via an explicit entry rather than programs.shfmt: that module hardcodes
   # `-s` (simplify) and options only APPEND, so the flag cannot be dropped. `-s`

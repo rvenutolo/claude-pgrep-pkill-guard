@@ -2,7 +2,7 @@
 
 # @description Run the config/markup lint suite: shellcheck and shfmt over every
 #              tracked shell script, gawk --lint over every tracked awk program,
-#              plus just --fmt, statix, deadnix, actionlint, yamllint,
+#              plus just --fmt, statix, deadnix, actionlint, zizmor, yamllint,
 #              renovate-config-validator, markdownlint, typos and
 #              editorconfig-checker. Aggregates exit codes rather than failing
 #              fast, so one run surfaces every failing category.
@@ -159,6 +159,41 @@ function main() {
   log 'running actionlint'
   if [[ -d "${REPO_DIR}/.github/workflows" ]]; then
     actionlint || rc=1
+  fi
+
+  log 'running zizmor'
+  # zizmor is to the workflows what shellcheck is to the scripts, and it sits
+  # here rather than beside actionlint by accident of alphabet: actionlint reads
+  # a workflow as YAML and as bash and asks whether it is VALID; zizmor asks
+  # whether it is SAFE -- template injection into a `run:` block, over-broad
+  # `permissions:`, credentials left persisted in .git/config, environment-file
+  # writes a later step will trust. Neither tool reports what the other does.
+  #
+  # --no-online-audits so the hermetic gate needs no network. The online audits
+  # add only "is this `uses:` ref a tag or an immutable commit" checks, and
+  # .ci/check-uses-sha-pinned already answers that offline, from the tree.
+  #
+  # --persona=pedantic, probed rather than assumed: against this tree it reports
+  # exactly what the default persona does, so it costs nothing today and catches
+  # the next pedantic-only finding for free. `auditor` is deliberately NOT used
+  # -- it adds three findings here (`misfeature`, two `secrets-outside-env`)
+  # that would each need a suppression to say nothing useful.
+  #
+  # The two real findings are suppressed INLINE, next to the code, never in a
+  # config file: a suppression a reader cannot see from the line it excuses is a
+  # suppression nobody re-examines. Each carries its reason in the surrounding
+  # YAML comment. Note that the suppression must sit on the `run:` KEY, not on
+  # the line inside the block it describes -- zizmor reads YAML comments, and a
+  # `#` inside a block scalar is shell source it never sees.
+  #
+  # .github/ and not `.` : zizmor's own discovery walks for workflows, and a
+  # bare `.` would descend into the author's untracked docs/superpowers/ tree
+  # for the same reason markdownlint and typos take explicit lists above.
+  if [[ -d "${REPO_DIR}/.github" ]]; then
+    zizmor --no-online-audits --persona=pedantic "${REPO_DIR}/.github/" || rc=1
+  else
+    log 'no .github directory found - this is a failure, not a clean pass'
+    rc=1
   fi
 
   log 'running yamllint'

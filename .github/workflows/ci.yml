@@ -203,7 +203,15 @@ jobs:
       - name: Install the pinned Claude Code CLI
         # The runner's bundled Node is used as-is. actions/setup-node would mean
         # one more SHA to pin and one more thing to bump for no gain here.
-        run: |
+        #
+        # zizmor's adhoc-packages is suppressed here, and only here: the version
+        # is not ad-hoc at all. CLAUDE_CODE_VERSION is pinned below and Renovate
+        # bumps it, which is the property a lockfile would buy -- see that env
+        # key's own comment for why the pin is load-bearing rather than tidy.
+        # The suppression sits on the `run:` key because zizmor reads YAML
+        # comments: a `#` inside the block scalar is part of the shell script,
+        # not a comment zizmor can see, and is silently ignored.
+        run: |  # zizmor: ignore[adhoc-packages]
           set -Eeuo pipefail
           npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
           # Load-bearing, not a courtesy echo: the npm package ships a

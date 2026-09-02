@@ -55,6 +55,8 @@ shfmt
 typos
 # invoked by .ci/run-lint-checks
 yamllint
+# invoked by .ci/run-lint-checks; the workflow security audit next to actionlint
+zizmor
 # invoked by .ci/check-issue-forms
 yq
 

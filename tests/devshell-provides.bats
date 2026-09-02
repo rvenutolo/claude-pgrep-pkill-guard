@@ -1,6 +1,16 @@
 setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-devshell-provides"
+
+  # Every .ci/ script is devShell-only by contract -- run-all-checks, the
+  # .justfile recipes and the workflows all reach them through .ci/in-devshell
+  # -- and this one exists to grade the devShell itself: its real mode asks Nix
+  # what the shell contains. The two ambient compat legs have no devShell and
+  # no nix at all, so there is nothing there for it to be right or wrong about.
+  # The hermetic gate leg is the one that grades this script.
+  if [[ -z "${IN_DEVSHELL:-}" ]]; then
+    skip 'not inside the devShell; .ci/ scripts are graded inside it'
+  fi
 }
 
 # @description Build a minimal, VALID fixture inventory: one package justified
@@ -168,6 +178,8 @@ function write_inventory() {
   rm -f "${root}/packages.tsv"
   run "${CHECK}" "${root}"
   assert_failure
+  assert_output --partial 'could not read the devShell package inventory'
+  refute_output --partial 'declares no packages'
 }
 
 @test "devshell provides: a missing tools file is rejected" {

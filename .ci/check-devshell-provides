@@ -160,13 +160,24 @@ function forward_check() {
 # @exitcode 1 at least one package justifies nothing, or the inventory is empty
 function reverse_check() {
   local -ra tools=("$@")
-  # Command substitution, not `mapfile < <(...)`: a process substitution's exit
-  # status is invisible to mapfile, so a failed `nix eval` would look like an
-  # empty inventory. Under inherit_errexit these assignments make it the crash
-  # it actually is.
+  # Both statuses are tested explicitly rather than left to errexit. main calls
+  # this function as `reverse_check ... || rc=1`, and that trailing `||` turns
+  # errexit off for the function's entire dynamic extent -- the same mechanism
+  # the guard relies on for repeat_check. So a failed `nix eval` here does NOT
+  # abort: without these guards it would fall through as an empty inventory and
+  # be reported as "the devShell declares no packages", which is a wrong verdict
+  # wearing the costume of a real one. `mapfile < <(...)` has the same hazard
+  # for a different reason -- a process substitution's status is invisible to
+  # mapfile -- which is why the reads below go through command substitution.
   local packages_raw formatters_raw
-  packages_raw="$(devshell_packages)"
-  formatters_raw="$(formatter_commands)"
+  if ! packages_raw="$(devshell_packages)"; then
+    printf 'FAIL: could not read the devShell package inventory\n' >&2
+    return 1
+  fi
+  if ! formatters_raw="$(formatter_commands)"; then
+    printf 'FAIL: could not read the treefmt formatter list\n' >&2
+    return 1
+  fi
 
   local -a packages=() formatters=()
   if [[ -n "${packages_raw}" ]]; then

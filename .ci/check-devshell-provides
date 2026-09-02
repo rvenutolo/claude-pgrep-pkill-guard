@@ -8,7 +8,7 @@
 #
 #              Reverse: every devShell package must justify its presence. A
 #              package is justified when either holds:
-#                1. one of its outputs has bin/<tool> for a declared tool, or
+#                1. a declared tool resolves on PATH to one of its outputs, or
 #                2. it backs a formatter .treefmt.nix enables -- treefmt runs
 #                   those from the Nix store, never through PATH, so they are
 #                   justified without ever appearing in .ci/required-tools.
@@ -20,23 +20,27 @@
 #
 #              Two traps shape the reverse pass, both found the hard way:
 #
-#              1. `toString pkg` is the DEFAULT output, which for jq, nix and
-#                 ShellCheck is `-dev` and has no bin/ at all. Checking only
-#                 that output reports all three as dead packages. Every output
-#                 is scanned instead.
+#              1. Justification is decided by where a tool RESOLVES ON PATH, not
+#                 by scanning each output's bin/. An output the shell does not
+#                 need is never realised, so a scan asks about directories that
+#                 exist on one machine and not another: `nix` passed locally and
+#                 failed in CI for exactly that reason. Every output is still
+#                 enumerated, because the resolved path must be attributed to
+#                 one of them, and binaries live in `bin`, `out`, etc.
 #              2. `nix eval` caches flake evaluations. A cached result reported
 #                 an inventory three packages stale while the tree on disk had
 #                 already moved. --no-eval-cache is mandatory, not tidiness.
 #
 #              Must be run INSIDE the devShell (run-all-checks always is).
-# @arg $1 dir optional fixture directory, which switches the script to reverse-
-#         pass-only mode and makes it read `required-tools`, `packages.tsv` and
-#         `formatters.txt` from that directory instead of consulting Nix. It
-#         exists so the bats suite can drive the reverse pass over a fabricated
-#         inventory in milliseconds; without it the only possible test would be
-#         "exits 0 on the real repo", which a script that always returned 0
-#         would also pass. The forward pass is deliberately NOT rerouted: it
-#         asserts against the live PATH, and a fixture cannot stand in for that.
+# @arg $1 dir optional fixture directory, which makes the script read
+#         `required-tools`, `packages.tsv` and `formatters.txt` from there
+#         instead of asking Nix. It exists so the bats suite can drive both
+#         passes over a fabricated inventory in milliseconds; without it the
+#         only possible test would be "exits 0 on the real repo", which a
+#         script that always returned 0 would also pass. Only the inventory is
+#         fabricated -- both passes still resolve tools through PATH, so a
+#         fixture that puts its own bin directories on PATH exercises exactly
+#         the code the real run takes.
 # @exitcode 0 every declared tool resolves and every package is justified
 # @exitcode 1 a declared tool is missing, the list is empty, or a package
 #             justifies nothing
@@ -192,17 +196,38 @@ function reverse_check() {
     return 1
   fi
 
-  local rc=0 entry name tool output formatter justified
+  # Where each declared tool ACTUALLY resolves on the devShell's PATH. This is
+  # the whole basis of rule 1, and it is deliberately not a scan of every
+  # output's bin/: an output that the shell does not need is never realised, so
+  # scanning it asks the filesystem about a directory that exists on the author's
+  # machine and not on a CI runner. That is how `nix` passed locally and failed
+  # in CI -- its bin lives in an output nothing had built there. Resolving
+  # through PATH only ever names paths that exist, and says the thing the lint
+  # actually means: this package puts a tool we use into the shell.
+  local -a tool_paths=()
+  local resolved
+  for tool in "${tools[@]}"; do
+    resolved="$(command -v "${tool}" 2> /dev/null || true)"
+    if [[ -n "${resolved}" ]]; then
+      tool_paths+=("${resolved}")
+    fi
+  done
+
+  local rc=0 entry name output formatter tool_path justified
   local -a outputs=()
   for entry in "${packages[@]}"; do
     name="${entry%%$'\t'*}"
     IFS=$'\t' read -r -a outputs <<< "${entry#*$'\t'}"
     justified=''
 
+    # Every output, because a package's binaries may live in any of them: jq
+    # and ShellCheck both ship theirs in `bin`, nix ships its own in `out`.
+    # (That sentence must not open with the word shellcheck -- a comment
+    # starting with it is parsed as a shellcheck directive, SC1072/SC1073.)
     for output in "${outputs[@]}"; do
-      for tool in "${tools[@]}"; do
-        if [[ -x "${output}/bin/${tool}" ]]; then
-          justified="tool"
+      for tool_path in "${tool_paths[@]}"; do
+        if [[ "${tool_path}" == "${output}/"* ]]; then
+          justified='tool'
           break 2
         fi
       done
@@ -250,11 +275,7 @@ function main() {
     return 1
   fi
 
-  # The forward pass reads the live PATH, which a fixture cannot supply; see the
-  # @arg note above.
-  if [[ -z "${FIXTURE_DIR}" ]]; then
-    forward_check "${tools[@]}" || rc=1
-  fi
+  forward_check "${tools[@]}" || rc=1
   reverse_check "${tools[@]}" || rc=1
 
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

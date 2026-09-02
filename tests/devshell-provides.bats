@@ -79,16 +79,36 @@ function write_inventory() {
   done
 }
 
-@test "devshell provides: the real devShell and required-tools agree" {
-  # The argument-less path is the only one that consults Nix, so unlike the
-  # other gates' suites this cannot be left to run-all-checks alone -- fixture
-  # mode never evaluates the flake and would not notice a broken expression.
-  run "${CHECK}"
-  assert_success
+# @description Prepend every fixture package's bin/ to PATH, so both passes
+#              resolve declared tools to the fixture instead of the real
+#              devShell. This is what lets a fixture exercise the same code the
+#              real run takes rather than a separate branch.
+# @arg $1 root fixture root
+function use_fixture_path() {
+  local -r root="$1"
+  local dir
+  for dir in "${root}"/store/*/bin; do
+    if [ -d "${dir}" ]; then
+      PATH="${dir}:${PATH}"
+    fi
+  done
+  export PATH
 }
+
+# There is deliberately no test that runs the check argument-less against the
+# real devShell, even though that is the only path which evaluates the flake.
+# bats prepends its own libexec to PATH, so inside a test `command -v bats`
+# resolves to the unwrapped bats rather than to the bats.withLibraries output
+# the devShell actually ships -- the check then reports that package as
+# justifying nothing. It is right to say so: the PATH it was handed really does
+# not contain that output. The verdict is an artifact of the harness, not of the
+# repo, and a test asserting otherwise would only be pinning bats' PATH
+# behaviour. run-all-checks runs the argument-less gate on every gate run, which
+# is where a broken Nix expression surfaces.
 
 @test "devshell provides: a valid fixture passes" {
   make_devshell_fixture "${BATS_TEST_TMPDIR}/ok"
+  use_fixture_path "${BATS_TEST_TMPDIR}/ok"
   run "${CHECK}" "${BATS_TEST_TMPDIR}/ok"
   assert_success
 }
@@ -98,15 +118,16 @@ function write_inventory() {
   make_devshell_fixture "${root}"
   make_package "${root}" 'cowsay' 'out' 'cowsay'
   write_inventory "${root}" 'jq' 'prettier' 'cowsay'
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'devShell package justifies nothing: cowsay'
 }
 
 @test "devshell provides: a package is justified by a non-default output" {
-  # The trap this exists for: `toString pkg` is the DEFAULT output, which for
-  # jq, nix and ShellCheck is -dev and holds no bin/ at all. A reverse pass that
-  # scanned only that output would call all three dead packages.
+  # The trap this exists for: a package's binaries need not live in its default
+  # output -- jq, nix and ShellCheck all ship theirs elsewhere. The resolved
+  # tool path must be attributed against EVERY output, not just the first.
   local -r root="${BATS_TEST_TMPDIR}/multi-output"
   make_devshell_fixture "${root}"
   make_package "${root}" 'ripgrep' 'dev'
@@ -115,6 +136,7 @@ function write_inventory() {
   write_inventory "${root}" 'jq' 'prettier'
   printf 'ripgrep\t%s\t%s\n' "${root}/store/ripgrep-dev" \
     "${root}/store/ripgrep-out" >> "${root}/packages.tsv"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_success
 }
@@ -124,10 +146,12 @@ function write_inventory() {
   # places a treefmt formatter command inside its output.
   local -r root="${BATS_TEST_TMPDIR}/formatter-only"
   make_devshell_fixture "${root}"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_success
 
   : > "${root}/formatters.txt"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'devShell package justifies nothing: prettier'
@@ -137,6 +161,7 @@ function write_inventory() {
   local -r root="${BATS_TEST_TMPDIR}/foreign-formatter"
   make_devshell_fixture "${root}"
   printf '%s/store/elsewhere-out/bin/prettier\n' "${root}" > "${root}/formatters.txt"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'devShell package justifies nothing: prettier'
@@ -146,6 +171,7 @@ function write_inventory() {
   local -r root="${BATS_TEST_TMPDIR}/not-executable"
   make_devshell_fixture "${root}"
   chmod -x "$(package_out "${root}" 'jq')/bin/jq"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'devShell package justifies nothing: jq'
@@ -155,6 +181,7 @@ function write_inventory() {
   local -r root="${BATS_TEST_TMPDIR}/no-tools"
   make_devshell_fixture "${root}"
   printf '# every line here is a comment\n\n' > "${root}/required-tools"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'no tools declared in'
@@ -164,6 +191,7 @@ function write_inventory() {
   local -r root="${BATS_TEST_TMPDIR}/no-packages"
   make_devshell_fixture "${root}"
   : > "${root}/packages.tsv"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'the devShell declares no packages'
@@ -176,6 +204,7 @@ function write_inventory() {
   local -r root="${BATS_TEST_TMPDIR}/no-inventory"
   make_devshell_fixture "${root}"
   rm -f "${root}/packages.tsv"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'could not read the devShell package inventory'
@@ -186,6 +215,7 @@ function write_inventory() {
   local -r root="${BATS_TEST_TMPDIR}/no-file"
   make_devshell_fixture "${root}"
   rm -f "${root}/required-tools"
+  use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'is missing or unreadable'

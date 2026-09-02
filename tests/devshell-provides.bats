@@ -1,16 +1,6 @@
 setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-devshell-provides"
-
-  # Every .ci/ script is devShell-only by contract -- run-all-checks, the
-  # .justfile recipes and the workflows all reach them through .ci/in-devshell
-  # -- and this one exists to grade the devShell itself: its real mode asks Nix
-  # what the shell contains. The two ambient compat legs have no devShell and
-  # no nix at all, so there is nothing there for it to be right or wrong about.
-  # The hermetic gate leg is the one that grades this script.
-  if [[ -z "${IN_DEVSHELL:-}" ]]; then
-    skip 'not inside the devShell; .ci/ scripts are graded inside it'
-  fi
 }
 
 # @description Build a minimal, VALID fixture inventory: one package justified
@@ -95,16 +85,26 @@ function use_fixture_path() {
   export PATH
 }
 
-# There is deliberately no test that runs the check argument-less against the
-# real devShell, even though that is the only path which evaluates the flake.
-# bats prepends its own libexec to PATH, so inside a test `command -v bats`
-# resolves to the unwrapped bats rather than to the bats.withLibraries output
-# the devShell actually ships -- the check then reports that package as
-# justifying nothing. It is right to say so: the PATH it was handed really does
-# not contain that output. The verdict is an artifact of the harness, not of the
-# repo, and a test asserting otherwise would only be pinning bats' PATH
-# behaviour. run-all-checks runs the argument-less gate on every gate run, which
-# is where a broken Nix expression surfaces.
+# Every case below drives FIXTURE mode, which never invokes Nix -- so this suite
+# needs no devShell and deliberately carries no skip, the same as
+# tests/issue-forms.bats. It therefore runs on the ambient compat legs too. If a
+# future change makes the script genuinely unrunnable there, add a capability
+# probe for that specific thing, the way tests/commit-payload.bats probes for
+# `base64 --wrap`; do not reach for a blanket skip, which surrenders the whole
+# suite for a hypothetical.
+#
+# Nothing here drives the argument-less REAL mode, so be plain about the split:
+# the two Nix expressions have no coverage in this suite at all. They are graded
+# by run-all-checks, which runs the argument-less gate on every gate run, locally
+# at pre-push and on both CI gate legs.
+#
+# That is a deliberate omission rather than an oversight. bats prepends its own
+# libexec to PATH, so inside a test `command -v bats` resolves to the unwrapped
+# bats rather than to the bats.withLibraries output the devShell ships, and the
+# check then reports that package as justifying nothing. It is right to say so:
+# the PATH it was handed really does not contain that output. The verdict would
+# be an artifact of the harness, and a test asserting around it would only pin
+# bats' PATH behaviour.
 
 @test "devshell provides: a valid fixture passes" {
   make_devshell_fixture "${BATS_TEST_TMPDIR}/ok"

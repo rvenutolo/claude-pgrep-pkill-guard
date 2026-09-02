@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-# @description Assert the guard's entry script stays under a hard line ceiling.
-#              bash parses the WHOLE file before it executes any of it, at
-#              roughly 1.2 us per line, and this hook runs on EVERY Bash tool
-#              call in every session -- so the file's length is a latency tax
-#              paid even by the commands the guard has no opinion about.
+# @description Assert the guard's entry script stays under a hard ceiling of
+#              200 lines. bash parses the WHOLE file before it executes any of
+#              it, at roughly 1.2 us per line, and this hook runs on EVERY Bash
+#              tool call in every session -- so the file's length is a latency
+#              tax paid even by the commands the guard has no opinion about.
 #              Measured with `bash -n` over valid prefixes of the pre-split
 #              2203-line guard (400 reps, `env -u BASH_ENV`): 4426 us for an
 #              empty script, 4559 at 120 lines, 5096 at 300, 5807 at 1100,
@@ -37,6 +37,12 @@ readonly REPO_DIR
 
 readonly FAST_PATH='hooks/pgrep-pkill-guard.sh'
 readonly BODY_PATH='hooks/pgrep-pkill-guard-body.sh'
+# The description above names the ceiling as `200 lines`, in those words, on
+# purpose: that phrase is the marker .ci/check-invariant-markers requires this
+# file to carry, which is what ties this gate to invariant 5 in
+# docs/architecture.md. If the number ever changes, change the sentence, the
+# constant and the invariant together -- and read invariant 5 first, because
+# raising the number is the thing it exists to argue against.
 readonly MAX_LINES=200
 
 function main() {

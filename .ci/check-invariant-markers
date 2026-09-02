@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+
+# @description Assert that every design invariant is still written down in the
+#              source it constrains, and not only in the document that
+#              describes it.
+#
+#              docs/architecture.md's "Design invariants" section opens by
+#              promising that each rule "is repeated as a comment in the source
+#              it constrains; if one changes here, change the comment too". Two
+#              of the six invariants have a gate behind them
+#              (.ci/check-fast-path-size, .ci/check-err-trap-hygiene); the rest
+#              rested entirely on that promise, and a promise nothing checks is
+#              a comment about a comment. This gate makes the promise
+#              mechanical: for each marker phrase, every file in its row must
+#              contain it.
+#
+#              It is a PRESENCE check, not a semantic one. It cannot know
+#              whether the comment still says something true -- only that the
+#              rule has not quietly lost its footprint in the code while the
+#              document kept describing it. That is the failure mode actually
+#              observed: #85 was filed because
+#              `grep 'POSIX short flags, deliberately'
+#              hooks/pgrep-pkill-guard.sh` returned nothing. The comment was
+#              there, but line-wrapped across `POSIX short flags,` and
+#              `# deliberately:`, so the phrase the docs tell a reader to search
+#              for found only the body file.
+#
+#              Hence the matching rule: line breaks and `#` continuations are
+#              collapsed before the search, so a wrapped comment still counts.
+#              The point is that the phrase is present, not how it is
+#              line-broken -- a check that failed on rewrapping would be a
+#              formatter with opinions, and the first person to reflow a comment
+#              would delete it instead.
+#
+#              A fifth row was proposed and DROPPED rather than forgotten: the
+#              `trap - ERR` rationale (invariant 6) across every gate script.
+#              .ci/check-err-trap-hygiene already enforces that invariant
+#              mechanically, by parsing every deliberate non-zero return in
+#              every file that installs the trap. Restating it here as a phrase
+#              match would duplicate a strong gate with a weak one, and the weak
+#              one would be the one people edited around.
+#
+#              The table lives here rather than in the (untracked) CLAUDE.md
+#              that also records these rules, so a coworker who clones the repo
+#              gets the check even though they never see that file.
+# @arg $1 dir optional fixture directory, treated as the repo root: every path
+#         in the table is resolved against it. It exists so the bats suite can
+#         drive the real matcher over a fabricated tree -- one where a phrase
+#         can be wrapped, unwrapped, or absent on purpose -- in milliseconds.
+#         Without it the only possible test would be "exits 0 on the real
+#         repo", which a script that unconditionally returned 0 would also pass.
+# @exitcode 0 every phrase appears in every file its row names
+# @exitcode 1 a phrase is missing, a listed file is unreadable, or the table is
+#             empty
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+readonly FIXTURE_DIR="${1:-}"
+
+# In fixture mode the directory IS the repo root, and it must be taken at face
+# value: `git rev-parse --show-toplevel` run from a bats temp directory would
+# either fail or -- worse -- resolve to some enclosing repo, and the suite would
+# then be grading the author's checkout instead of its own fixture.
+if [[ -n "${FIXTURE_DIR}" ]]; then
+  readonly REPO_DIR="${FIXTURE_DIR}"
+else
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+  readonly REPO_DIR
+fi
+
+# Invariants 1 and 2 both constrain the two halves of the split guard, and both
+# are written up in the architecture doc, so the same trio of files carries both
+# markers. Named once so the table rows below stay short enough to read.
+readonly GUARD_FILES='hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh docs/architecture.md'
+
+# The table. Each row is `<phrase>::<space-separated files>`, and the separator
+# is `::` rather than a tab because a tab in a source line is invisible in a
+# diff and this file is meant to be edited by hand. No phrase may contain `::`
+# and no path may contain a space -- both hold today and neither is a constraint
+# worth engineering around for four rows.
+#
+# Adding a row is the cheap half of adding an invariant. The expensive half is
+# deciding it is one: a phrase here is a promise that the comment stays, so
+# every row should correspond to a numbered invariant in docs/architecture.md.
+readonly MARKERS=(
+  "POSIX short flags, deliberately::${GUARD_FILES}"
+  "load-bearing beyond the obvious fallback::${GUARD_FILES}"
+  'POSIX short flags on purpose::tests/manifest.bats docs/architecture.md'
+  '200 lines::.ci/check-fast-path-size docs/architecture.md'
+)
+
+# @description Print a file's text with every line break and comment marker
+#              collapsed away, so a phrase that a comment wrapped across two
+#              lines reads as one run of words.
+#
+#              Leading whitespace goes first, then any run of leading `#`, then
+#              the whitespace behind it -- in that order, because a wrapped
+#              comment continuation looks like `#              deliberately:`
+#              and both halves have to go for the words either side of the break
+#              to end up adjacent. Runs of whitespace are then squeezed to one
+#              space so the phrase in the table can be written the way a human
+#              would write it.
+#
+#              sed and tr rather than a bash read loop: the body file is 2100
+#              lines and this runs on every gate invocation. Both invocations
+#              stay within POSIX syntax (`#*` rather than `#\{1,\}`, no GNU-only
+#              flags) because the bats suite drives this script on the ambient
+#              macOS compat legs, where sed and tr are BSD.
+# @arg $1 file path to read
+# @stdout the file's text as a single collapsed line
+function collapsed_text() {
+  local -r file="$1"
+  sed -e 's/^[[:space:]]*//' -e 's/^#*[[:space:]]*//' -- "${file}" \
+    | tr '\n' ' ' \
+    | tr -s '[:space:]' ' '
+}
+
+# @description Report whether one marker phrase appears in one file.
+# @arg $1 phrase the marker phrase
+# @arg $2 relative_path the file to search, relative to the repo root
+# @exitcode 0 the phrase is present
+# @exitcode 1 the file is unreadable, or the phrase is absent
+function check_marker() {
+  local -r phrase="$1"
+  local -r relative_path="$2"
+  local -r file="${REPO_DIR}/${relative_path}"
+
+  if [[ ! -r "${file}" ]]; then
+    printf 'FAIL: %s is missing or unreadable; it should carry the marker %s\n' \
+      "${relative_path}" "\"${phrase}\"" >&2
+    return 1
+  fi
+
+  local text
+  text="$(collapsed_text "${file}")"
+  # An empty read is never a clean pass. Every file in the table is a source
+  # file with content; a blank one means the read went wrong, and reporting
+  # "phrase missing" for it would send the reader to add a comment to a file
+  # that is already broken in a more interesting way.
+  if [[ -z "${text//[[:space:]]/}" ]]; then
+    printf 'FAIL: %s read as empty; cannot check the marker %s\n' \
+      "${relative_path}" "\"${phrase}\"" >&2
+    return 1
+  fi
+
+  if [[ "${text}" != *"${phrase}"* ]]; then
+    printf 'FAIL: %s does not carry the invariant marker %s\n' \
+      "${relative_path}" "\"${phrase}\"" >&2
+    printf '      docs/architecture.md promises every invariant is repeated as\n' >&2
+    printf '      a comment in the source it constrains. Restore the comment,\n' >&2
+    printf '      or -- if the rule really is gone -- retire the invariant in\n' >&2
+    printf '      docs/architecture.md and drop the row from this table.\n' >&2
+    printf '      Wrapping is fine: line breaks and comment markers are\n' >&2
+    printf '      collapsed before the search, so only the words have to survive.\n' >&2
+    return 1
+  fi
+
+  return 0
+}
+
+function main() {
+  # A table that scanned nothing would pass everything. This is the same class
+  # of bug as an empty tool list in check-devshell-provides, and it is worth one
+  # line to make impossible.
+  if ((${#MARKERS[@]} == 0)); then
+    printf 'FAIL: the marker table is empty; an empty scan is not a clean pass\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  local rc=0 row phrase relative_path checked=0
+  local -a files=()
+  for row in "${MARKERS[@]}"; do
+    phrase="${row%%::*}"
+    IFS=' ' read -r -a files <<< "${row#*::}"
+    for relative_path in "${files[@]}"; do
+      checked=$((checked + 1))
+      check_marker "${phrase}" "${relative_path}" || rc=1
+    done
+  done
+
+  if ((rc == 0)); then
+    printf 'ok: %s invariant markers present across %s rows\n' \
+      "${checked}" "${#MARKERS[@]}" >&2
+  fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  return "${rc}"
+}
+
+main "$@"

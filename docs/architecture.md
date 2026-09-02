@@ -376,6 +376,17 @@ here, change the comment too. Invariants 5 and 6 additionally have a gate
 behind them (`.ci/check-fast-path-size`, `.ci/check-err-trap-hygiene`); the
 other four rest on the comments and on review.
 
+That last sentence used to be the whole story, and it was too generous: nothing
+checked that the comments were still there, and one of them had already stopped
+being findable — the marker in `hooks/pgrep-pkill-guard.sh` was wrapped across
+two lines, so the phrase this document tells you to grep for matched only the
+body file. `.ci/check-invariant-markers` now asserts that each marker phrase
+below is present in every file named alongside it, collapsing line breaks and
+`#` continuations first so rewrapping a comment is still allowed. It is a
+presence check, not a semantic one: it cannot tell you the comment is still
+true, only that the rule has not lost its footprint in the code while this
+document went on describing it.
+
 ### 1. `hooks/` uses POSIX short flags, not GNU long options
 
 The rest of the repo uses GNU long options (`mkdir --parents`, `rm --force`).
@@ -406,9 +417,11 @@ and a third in `resolve_hook_dir` in `hooks/pgrep-pkill-guard.sh`, which is the
 entry script's one and only external command:
 
 ```text
-# Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is
-# not guaranteed to be exported into the hook's environment. POSIX short flags,
-# deliberately: macOS ships BSD userland, whose `dirname` has no long options.
+# Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is not guaranteed
+# to be exported into the hook's environment. POSIX short flags, deliberately: macOS ships BSD
+# userland, whose `dirname` has no long options. The phrase is kept on one line on purpose --
+# docs/architecture.md tells a reader to grep for it, and .ci/check-invariant-markers checks it
+# is here (invariant 1).
 ```
 
 **Same cause, different scope:** `tests/*.bats` and `tests/test_helper/` carry

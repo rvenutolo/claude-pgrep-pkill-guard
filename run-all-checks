@@ -60,6 +60,13 @@ function main() {
   # SHA-pinned, versions agree across manifests, the marketplace/plugin
   # manifests satisfy the ported invariants, and every .github/ISSUE_TEMPLATE
   # form is one GitHub will render rather than silently drop from the chooser.
+  # check-invariant-markers turns docs/architecture.md's "Design invariants"
+  # section from description into enforcement: that section promises each rule
+  # is repeated as a comment in the source it constrains, and until now nothing
+  # checked it -- one marker had already been line-wrapped into invisibility to
+  # the grep the doc tells a reader to run (#85). It is a presence check over a
+  # table of phrases, collapsing line breaks and `#` continuations first, so
+  # rewrapping a comment stays allowed and deleting one does not.
   # bench/run --smoke drives one payload per cohort through the hook and checks
   # every response parses as JSON. It asserts NOTHING about timing -- a timing
   # assertion would be flaky on a shared runner. Its only job is that the
@@ -79,6 +86,7 @@ function main() {
   "${REPO_DIR}/.ci/check-versions-in-sync" || rc=1
   "${REPO_DIR}/.ci/check-manifest-invariants" || rc=1
   "${REPO_DIR}/.ci/check-issue-forms" || rc=1
+  "${REPO_DIR}/.ci/check-invariant-markers" || rc=1
   "${REPO_DIR}/bench/run" --smoke || rc=1
 
   log 'running lint checks'

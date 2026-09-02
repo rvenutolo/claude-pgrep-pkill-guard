@@ -47,9 +47,11 @@ function emit_allow() {
 # @set HOOK_DIR the absolute, symlink-resolved directory holding this script
 # @noargs
 function resolve_hook_dir() {
-  # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is
-  # not guaranteed to be exported into the hook's environment. POSIX short flags,
-  # deliberately: macOS ships BSD userland, whose `dirname` has no long options.
+  # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is not guaranteed
+  # to be exported into the hook's environment. POSIX short flags, deliberately: macOS ships BSD
+  # userland, whose `dirname` has no long options. The phrase is kept on one line on purpose --
+  # docs/architecture.md tells a reader to grep for it, and .ci/check-invariant-markers checks it
+  # is here (invariant 1).
   HOOK_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
   readonly HOOK_DIR
 }

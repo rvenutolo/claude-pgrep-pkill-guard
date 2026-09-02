@@ -29,6 +29,11 @@ links:
 format:
     nix fmt
 
+# Run every auto-fixer: treefmt, then the fixers treefmt does not drive
+fix:
+    nix fmt
+    ./.ci/in-devshell ./.ci/run-fixers
+
 # Verify formatting without writing changes
 format-check:
     nix flake check --no-eval-cache

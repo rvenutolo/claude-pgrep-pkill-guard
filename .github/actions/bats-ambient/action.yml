@@ -5,7 +5,19 @@ runs:
   steps:
     - name: Install bats and its libraries
       shell: bash
-      run: |
+      # zizmor flags both environment-file writes below as `github-env`, at Low
+      # confidence, on the general grounds that a GITHUB_PATH or GITHUB_ENV
+      # write can smuggle attacker-controlled text into a later step. Neither
+      # value here is attacker-controlled: both are built from ${RUNNER_TEMP},
+      # which the runner sets, and nothing from the event payload, a fork, or a
+      # PR title reaches either line.
+      #
+      # One comment covers both findings because they share an anchor -- zizmor
+      # reports each at the `run:` key that owns the block, not at the echo
+      # inside it, which is also why the suppression cannot live next to the
+      # line it describes: a `#` inside a block scalar is shell source, not a
+      # YAML comment, and zizmor never sees it.
+      run: |  # zizmor: ignore[github-env]
         set -Eeuo pipefail
         libdir="${RUNNER_TEMP}/bats-libs"
         mkdir -p "${libdir}"

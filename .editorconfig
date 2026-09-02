@@ -8,8 +8,22 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
-[*.{sh,bash,bats}]
+[*.{sh,bash}]
 shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+space_redirects = true
+
+# `.bats` is its own shfmt dialect, and the split is load-bearing rather than
+# tidiness: under `shell_variant = bash` shfmt cannot PARSE a bats file at all --
+# every one of the eleven dies with ``tests/x.bats:NN:1: `}` can only be used to
+# close a block`` on the first `@test "..." { ... }`. The dialect has to reach
+# shfmt from here and not from an `-ln bats` flag on the command line, because
+# shfmt reads .editorconfig only when it is given NO parser or printer flag: the
+# flag would buy the dialect and silently discard the three style keys below,
+# reindenting all eleven files to tabs. That is the 1899-line diff #72 measured.
+[*.bats]
+shell_variant = bats
 binary_next_line = true
 switch_case_indent = true
 space_redirects = true

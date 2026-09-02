@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
 # @description Run the config/markup lint suite: shellcheck and shfmt over every
-#              tracked shell script, plus just --fmt, statix, deadnix,
-#              actionlint, yamllint, renovate-config-validator, markdownlint,
-#              typos and editorconfig-checker. Aggregates exit codes rather
-#              than failing fast, so one run surfaces every failing category.
+#              tracked shell script, gawk --lint over every tracked awk program,
+#              plus just --fmt, statix, deadnix, actionlint, zizmor, yamllint,
+#              renovate-config-validator, markdownlint, typos and
+#              editorconfig-checker. Aggregates exit codes rather than failing
+#              fast, so one run surfaces every failing category.
 # @noargs
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed
@@ -25,17 +26,27 @@ function log() {
   printf '[%s] %s\n' "${0##*/}" "${message}" >&2
 }
 
-# @description Collect tracked shell scripts: *.sh plus extensionless files whose
-#              first line is a bash shebang. `git ls-files` rather than a tree
-#              walk so untracked scratch files are never linted.
+# @description Collect tracked shell scripts: *.sh, *.bash and *.bats, plus
+#              extensionless files whose first line is a bash shebang.
+#              `git ls-files` rather than a tree walk so untracked scratch files
+#              are never linted.
+#
+#              *.bats is bash too, and until #72 it was the only bash in the
+#              repo no tool touched. shellcheck needs no help with it: a bats
+#              file carries no shebang (.ci/check-bats-no-shebang enforces that,
+#              because bats sources them), and shellcheck falls back to bash for
+#              a shebang-less file, so neither `--shell=bash` nor a per-file
+#              `# shellcheck shell=bash` directive is required. shfmt does need
+#              help -- the bats dialect reaches it from .editorconfig, see the
+#              comment on that file's `[*.bats]` section.
 # @noargs
 # @stdout one path per line
 function shell_files() {
   local file
   while IFS= read -r file; do
     case "${file}" in
-      *.sh | *.bash) printf '%s\n' "${file}" ;;
-      *.bats | *.awk | *.md | *.json | *.yml | *.yaml | *.toml | *.nix | *.lock) ;;
+      *.sh | *.bash | *.bats) printf '%s\n' "${file}" ;;
+      *.awk | *.md | *.json | *.yml | *.yaml | *.toml | *.nix | *.lock) ;;
       *)
         if [[ -f "${file}" ]] && IFS= read -r first_line < "${file}" \
           && [[ "${first_line}" == '#!/usr/bin/env bash' ]]; then
@@ -69,6 +80,55 @@ function main() {
     shfmt --list --diff "${files[@]}" || rc=1
   fi
 
+  log 'running gawk --lint over the awk programs'
+  # The scanner is the repo's second language and, until #74, the only source
+  # file no linter looked at -- .treefmt.nix excludes *.awk outright, because
+  # no formatter in the flake understands it.
+  #
+  # --lint=fatal, not plain --lint: --lint writes its warnings to stderr and
+  # still exits 0, and a gate that reports a problem and passes is not a gate.
+  #
+  # --posix is the half that matters here. The hook must behave identically on
+  # gawk, mawk and one-true-awk (#7), and `run-tests --awk=bwk` already proves
+  # that dynamically -- but only for the lines some test actually executes. A
+  # gawk-only construct (gensub, asort, `length(array)`, `**`) on a branch no
+  # fixture reaches would ship. --posix takes those out of the LANGUAGE rather
+  # than merely warning about them, so the whole program is rejected at parse
+  # time, before a byte of input is read.
+  #
+  # Both spellings do catch a planted `gensub`, and they say different things:
+  # --lint=fatal alone gives `fatal: 'gensub' is a gawk extension`, which is a
+  # lint verdict on a function that still exists; under --posix it is
+  # `fatal: function 'gensub' called but never defined`, because in POSIX mode
+  # there is no such function to call. The second is the stronger statement --
+  # it is what the other two awks would say -- and --posix also aligns the
+  # regex and escape semantics gawk otherwise extends, which no lint level
+  # does.
+  #
+  # /dev/null, not a sample command: the point is to lint the program, not to
+  # run it, and awk has no parse-only mode. Feeding it nothing is the closest
+  # thing -- and it is also the harshest input, since the empty-stdin path is
+  # the one gawk complained about (see the guard on pgrep-scan.awk's
+  # trailing-newline strip, and the commit before this one).
+  #
+  # LC_ALL=C to match how the hook and tests/scanner.bats invoke it: the scanner
+  # emits BYTE offsets, and a UTF-8 locale changes what `length` and `substr`
+  # count, so a lint pass under another locale would be grading a different
+  # program than the one that ships. stdout goes to /dev/null for the same
+  # reason: the token stream is the program's output, not its verdict, and a
+  # gate log should carry diagnostics only.
+  local -a awk_files=()
+  mapfile -t awk_files < <(git -C "${REPO_DIR}" ls-files '*.awk')
+  if ((${#awk_files[@]} > 0)); then
+    local awk_file
+    for awk_file in "${awk_files[@]}"; do
+      LC_ALL=C gawk --lint=fatal --posix -f "${REPO_DIR}/${awk_file}" < '/dev/null' > '/dev/null' || rc=1
+    done
+  else
+    log 'no awk files found - this is a failure, not a clean pass'
+    rc=1
+  fi
+
   log 'running just --fmt (verify only)'
   # --unstable is mandatory: `--fmt` is still an unstable subcommand and just
   # refuses to run it without the flag. Drop it when just stabilises --fmt.
@@ -99,6 +159,41 @@ function main() {
   log 'running actionlint'
   if [[ -d "${REPO_DIR}/.github/workflows" ]]; then
     actionlint || rc=1
+  fi
+
+  log 'running zizmor'
+  # zizmor is to the workflows what shellcheck is to the scripts, and it sits
+  # here rather than beside actionlint by accident of alphabet: actionlint reads
+  # a workflow as YAML and as bash and asks whether it is VALID; zizmor asks
+  # whether it is SAFE -- template injection into a `run:` block, over-broad
+  # `permissions:`, credentials left persisted in .git/config, environment-file
+  # writes a later step will trust. Neither tool reports what the other does.
+  #
+  # --no-online-audits so the hermetic gate needs no network. The online audits
+  # add only "is this `uses:` ref a tag or an immutable commit" checks, and
+  # .ci/check-uses-sha-pinned already answers that offline, from the tree.
+  #
+  # --persona=pedantic, probed rather than assumed: against this tree it reports
+  # exactly what the default persona does, so it costs nothing today and catches
+  # the next pedantic-only finding for free. `auditor` is deliberately NOT used
+  # -- it adds three findings here (`misfeature`, two `secrets-outside-env`)
+  # that would each need a suppression to say nothing useful.
+  #
+  # The two real findings are suppressed INLINE, next to the code, never in a
+  # config file: a suppression a reader cannot see from the line it excuses is a
+  # suppression nobody re-examines. Each carries its reason in the surrounding
+  # YAML comment. Note that the suppression must sit on the `run:` KEY, not on
+  # the line inside the block it describes -- zizmor reads YAML comments, and a
+  # `#` inside a block scalar is shell source it never sees.
+  #
+  # .github/ and not `.` : zizmor's own discovery walks for workflows, and a
+  # bare `.` would descend into the author's untracked docs/superpowers/ tree
+  # for the same reason markdownlint and typos take explicit lists above.
+  if [[ -d "${REPO_DIR}/.github" ]]; then
+    zizmor --no-online-audits --persona=pedantic "${REPO_DIR}/.github/" || rc=1
+  else
+    log 'no .github directory found - this is a failure, not a clean pass'
+    rc=1
   fi
 
   log 'running yamllint'

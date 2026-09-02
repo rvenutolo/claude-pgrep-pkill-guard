@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+
+# @description Run every auto-fixer the repo owns that `nix fmt` does not drive:
+#              markdownlint-cli2 --fix, typos --write-changes, shfmt --write and
+#              just --fmt. The writing counterpart of .ci/run-lint-checks, which
+#              is verify-only by design.
+#
+#              Scope is defined by subtraction, and the subtraction is the whole
+#              reason this script exists. `nix fmt` runs treefmt, and treefmt's
+#              shfmt entry includes only *.sh, *.bash, *.bats and *.envrc -- so
+#              it never touches the twenty-two EXTENSIONLESS bash scripts this
+#              repo is mostly built out of (run-all-checks, run-tests, every
+#              .ci/ and .githooks/ file, bench/run, assets/build-social-preview),
+#              every one of which .ci/run-lint-checks nonetheless shellchecks and
+#              shfmt-diffs. treefmt knows nothing about .justfile, markdown prose
+#              or spelling either. Those gaps are exactly the four fixers below,
+#              and each one is the writing twin of a step in
+#              .ci/run-lint-checks:
+#
+#                run-lint-checks (verify)        run-fixers (write)
+#                shfmt --list --diff             shfmt --write
+#                just --fmt --check --unstable   just --fmt --unstable
+#                markdownlint-cli2               markdownlint-cli2 --fix
+#                typos                           typos --write-changes
+#
+#              The file lists are computed here rather than left to each tool's
+#              own tree walk, and that is not duplication for its own sake: a
+#              bare `markdownlint-cli2 '**/*.md'` or a bare `typos` walks into
+#              the author's UNTRACKED docs/superpowers/ and .claude/ trees and
+#              rewrites files that are not this repo's -- a fixer doing that is
+#              strictly worse than the linter that only reported it, which is
+#              the trap #46 fixed for `typos`. .ci/run-lint-checks solves it
+#              with the same `git ls-files` / `git grep -I` incantations, and
+#              they are repeated rather than shared because .ci/ has no sourced
+#              library and inventing one for two callers would cost more than it
+#              saves.
+#
+#              Exit codes AGGREGATE rather than fail fast, matching
+#              .ci/run-lint-checks: one run should apply every fix it can, not
+#              stop at the first tool that has something left over.
+#
+#              A non-zero exit does NOT mean nothing was written. Two of these
+#              fixers report what they could not fix: markdownlint-cli2 --fix
+#              exits non-zero when an unfixable rule violation remains, and
+#              `typos --write-changes` leaves any word with more than one
+#              plausible correction alone -- see the abbreviated-SHA note in
+#              .typos.toml, where a two-suggestion word in release-please's
+#              changelog links is exactly what could not self-heal (#61) --
+#              and exits non-zero for it. That is the correct behaviour, not a
+#              bug in the fixer -- a tool that guessed between two corrections
+#              would silently corrupt prose. Read the output, fix those by hand,
+#              and run again.
+# @noargs
+# @exitcode 0 every fixer ran and had nothing left it could not fix
+# @exitcode 1 a fixer failed, left an unfixable finding, or a file list came
+#             up empty
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+# @description Log a step banner to stderr, in the house format.
+# @arg $1 message the text to log
+function log() {
+  local -r message="$1"
+  printf '[%s] %s\n' "${0##*/}" "${message}" >&2
+}
+
+# @description Collect tracked shell scripts: *.sh, *.bash and *.bats, plus
+#              extensionless files whose first line is a bash shebang. Kept
+#              byte-for-byte in step with `shell_files` in .ci/run-lint-checks:
+#              a file this script rewrites but that one does not check, or the
+#              reverse, is a gate that disagrees with its own fixer.
+# @noargs
+# @stdout one path per line
+function shell_files() {
+  local file
+  while IFS= read -r file; do
+    case "${file}" in
+      *.sh | *.bash | *.bats) printf '%s\n' "${file}" ;;
+      *.awk | *.md | *.json | *.yml | *.yaml | *.toml | *.nix | *.lock) ;;
+      *)
+        if [[ -f "${file}" ]] && IFS= read -r first_line < "${file}" \
+          && [[ "${first_line}" == '#!/usr/bin/env bash' ]]; then
+          printf '%s\n' "${file}"
+        fi
+        ;;
+    esac
+  done < <(git -C "${REPO_DIR}" ls-files)
+}
+
+function main() {
+  local rc=0
+
+  log 'running shfmt --write'
+  # No parser or printer flag, so shfmt reads .editorconfig for style -- the
+  # same rule .treefmt.nix's shfmt entry is built around, and the reason
+  # `[*.bats]` carries `shell_variant = bats` there rather than an `-ln bats`
+  # flag living here.
+  local -a shell_paths=()
+  mapfile -t shell_paths < <(shell_files)
+  if ((${#shell_paths[@]} > 0)); then
+    shfmt --write "${shell_paths[@]}" || rc=1
+  else
+    log 'no shell files found - this is a failure, not a clean pass'
+    rc=1
+  fi
+
+  log 'running just --fmt'
+  # --unstable is mandatory: `--fmt` is still an unstable subcommand and just
+  # refuses to run it without the flag. Drop it when just stabilises --fmt.
+  # Same invocation as the verify step in .ci/run-lint-checks, minus --check.
+  just --fmt --unstable --justfile "${REPO_DIR}/.justfile" || rc=1
+
+  log 'running markdownlint-cli2 --fix'
+  # Tracked files only; markdownlint does not honour gitignore.
+  local -a md_files=()
+  mapfile -t md_files < <(git -C "${REPO_DIR}" ls-files '*.md')
+  if ((${#md_files[@]} > 0)); then
+    markdownlint-cli2 --fix "${md_files[@]}" || rc=1
+  else
+    log 'no markdown files found - this is a failure, not a clean pass'
+    rc=1
+  fi
+
+  log 'running typos --write-changes'
+  # `git grep -I --files-with-matches ''` is every tracked file git considers
+  # text: the empty pattern matches every line, so git names every file, and -I
+  # drops the binaries -- which keeps typos from reading assets/deny-message.png
+  # as prose. Identical to the list .ci/run-lint-checks builds for the verify
+  # run; see that script for the full history of why a bare `typos` is wrong.
+  local -a typo_files=()
+  mapfile -t typo_files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '')
+  if ((${#typo_files[@]} > 0)); then
+    typos --write-changes "${typo_files[@]}" || rc=1
+  else
+    log 'no text files found for typos - this is a failure, not a clean pass'
+    rc=1
+  fi
+
+  if ((rc != 0)); then
+    log 'a fixer failed or left something it could not fix; see above'
+  fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  return "${rc}"
+}
+
+main "$@"

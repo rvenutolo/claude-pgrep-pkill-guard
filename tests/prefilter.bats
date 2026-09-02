@@ -15,7 +15,10 @@ setup() {
 #
 # POSIX short flags on purpose -- see the header of tests/manifest.bats.
 readonly -a TRIGGER_TOKENS=('pgrep' 'kill' '\.output')
-TRIGGER_RE="$(IFS='|'; echo "${TRIGGER_TOKENS[*]}")"
+TRIGGER_RE="$(
+  IFS='|'
+  echo "${TRIGGER_TOKENS[*]}"
+)"
 readonly TRIGGER_RE
 
 @test "prefilter: every non-allow row carries a trigger token" {

@@ -1,3 +1,18 @@
+# Seven single-quoted strings in this file hold literal `$(...)`, `$((...))` and
+# `${...}` text that is the SUBJECT of the test rather than something to expand:
+# the scanner's whole job is deciding which of those the shell would have
+# expanded, so the fixtures have to reach it byte for byte. Double-quoting any
+# of them would make bash expand it here and the test would assert on whatever
+# the developer's environment happened to contain. Seven sites in one file is
+# over the threshold at which per-site disables become noise, so the disable is
+# file-level here and per-site in tests/manifest.bats, which holds exactly one.
+#
+# The directive is honoured despite the file having no shebang (bats sources
+# these, so .ci/check-bats-no-shebang forbids one): shellcheck scopes a
+# file-level directive to everything after it, and infers bash for a
+# shebang-less file.
+# shellcheck disable=SC2016
+
 setup() {
   load 'test_helper/common'
 }

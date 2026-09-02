@@ -25,17 +25,27 @@ function log() {
   printf '[%s] %s\n' "${0##*/}" "${message}" >&2
 }
 
-# @description Collect tracked shell scripts: *.sh plus extensionless files whose
-#              first line is a bash shebang. `git ls-files` rather than a tree
-#              walk so untracked scratch files are never linted.
+# @description Collect tracked shell scripts: *.sh, *.bash and *.bats, plus
+#              extensionless files whose first line is a bash shebang.
+#              `git ls-files` rather than a tree walk so untracked scratch files
+#              are never linted.
+#
+#              *.bats is bash too, and until #72 it was the only bash in the
+#              repo no tool touched. shellcheck needs no help with it: a bats
+#              file carries no shebang (.ci/check-bats-no-shebang enforces that,
+#              because bats sources them), and shellcheck falls back to bash for
+#              a shebang-less file, so neither `--shell=bash` nor a per-file
+#              `# shellcheck shell=bash` directive is required. shfmt does need
+#              help -- the bats dialect reaches it from .editorconfig, see the
+#              comment on that file's `[*.bats]` section.
 # @noargs
 # @stdout one path per line
 function shell_files() {
   local file
   while IFS= read -r file; do
     case "${file}" in
-      *.sh | *.bash) printf '%s\n' "${file}" ;;
-      *.bats | *.awk | *.md | *.json | *.yml | *.yaml | *.toml | *.nix | *.lock) ;;
+      *.sh | *.bash | *.bats) printf '%s\n' "${file}" ;;
+      *.awk | *.md | *.json | *.yml | *.yaml | *.toml | *.nix | *.lock) ;;
       *)
         if [[ -f "${file}" ]] && IFS= read -r first_line < "${file}" \
           && [[ "${first_line}" == '#!/usr/bin/env bash' ]]; then

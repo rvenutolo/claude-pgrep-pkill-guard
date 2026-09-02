@@ -39,6 +39,13 @@ setup() {
   # Direct invocation is load-bearing on macOS: `bash <path>` would resolve to
   # /bin/bash 3.2 and the version guard would deactivate the hook.
   refute [ "${command:0:5}" = 'bash ' ]
+  # The single quotes are the point: hooks.json stores the LITERAL text
+  # `${CLAUDE_PLUGIN_ROOT}` for Claude Code to expand at hook-dispatch time, so
+  # this assertion must compare against the unexpanded string. Double quotes
+  # here would expand it in the test's own shell -- to the empty string, since
+  # nothing sets it -- and the glob would then match any command at all.
+  # Per-site rather than file-level: this is the only SC2016 site in the file.
+  # shellcheck disable=SC2016
   [[ "${command}" == *'${CLAUDE_PLUGIN_ROOT}'* ]]
   [[ "${command}" == *'pgrep-pkill-guard.sh' ]]
 }

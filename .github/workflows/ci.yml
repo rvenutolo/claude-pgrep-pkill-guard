@@ -4,10 +4,36 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Three of the jobs below -- every `compat (...)` job -- test against the
+  # runner image's AMBIENT tools by design, and GitHub rolls those images
+  # roughly weekly. Without a scheduled run the suite can go red in a week
+  # nobody pushed, and the breakage then surfaces on the next PR looking like
+  # that PR's fault. The hermetic `gate` jobs are pinned by flake.lock so an
+  # image roll cannot move them, but they still depend on cache.nixos.org and
+  # the Nix installer, which this covers too. GitHub emails the repo owner when
+  # a scheduled workflow fails, so a red run is not silent even with nobody
+  # watching Actions.
+  #
+  # :47 rather than :00 -- on-the-hour cron slots are the most contended on
+  # GitHub's shared scheduler, and therefore the most delayed. The minute
+  # differs from links.yml's :17 on purpose: both workflows want the same
+  # Monday-noon window, and there is nothing to gain from having them queue for
+  # runners at the same instant.
+  schedule:
+    - cron: '47 12 * * 1'
   workflow_dispatch:
 permissions: {}
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # `github.event_name` belongs in this key, not just workflow + ref. A
+  # scheduled run's `github.ref` is refs/heads/main -- indistinguishable from a
+  # push to main -- so without the event name a Monday-noon scheduled run and a
+  # push landing in the same window share a group, and `cancel-in-progress`
+  # kills one of them. That would most often kill the scheduled run, which is
+  # exactly the run nobody is watching and the only one that catches an ambient
+  # regression. With the event name in the key, push still cancels push (the
+  # whole point of the group) and a schedule can no longer be cancelled by
+  # unrelated traffic.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   gate:

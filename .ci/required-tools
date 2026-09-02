@@ -25,7 +25,8 @@ editorconfig-checker
 deadnix
 # invoked by .ci/run-lint-checks
 statix
-# the hook's own runtime dependency, and scanner.bats drives it directly
+# the hook's own runtime dependency, scanner.bats drives it directly, and
+# .ci/run-lint-checks lints the scanner with `gawk --lint=fatal --posix`
 gawk
 # one-true-awk (BWK); run-tests --awk=bwk shims `awk` to it
 nawk

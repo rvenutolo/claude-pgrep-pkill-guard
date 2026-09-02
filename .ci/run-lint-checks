@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
 # @description Run the config/markup lint suite: shellcheck and shfmt over every
-#              tracked shell script, plus just --fmt, statix, deadnix,
-#              actionlint, yamllint, renovate-config-validator, markdownlint,
-#              typos and editorconfig-checker. Aggregates exit codes rather
-#              than failing fast, so one run surfaces every failing category.
+#              tracked shell script, gawk --lint over every tracked awk program,
+#              plus just --fmt, statix, deadnix, actionlint, yamllint,
+#              renovate-config-validator, markdownlint, typos and
+#              editorconfig-checker. Aggregates exit codes rather than failing
+#              fast, so one run surfaces every failing category.
 # @noargs
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed
@@ -77,6 +78,55 @@ function main() {
   log 'running shfmt (verify only)'
   if ((${#files[@]} > 0)); then
     shfmt --list --diff "${files[@]}" || rc=1
+  fi
+
+  log 'running gawk --lint over the awk programs'
+  # The scanner is the repo's second language and, until #74, the only source
+  # file no linter looked at -- .treefmt.nix excludes *.awk outright, because
+  # no formatter in the flake understands it.
+  #
+  # --lint=fatal, not plain --lint: --lint writes its warnings to stderr and
+  # still exits 0, and a gate that reports a problem and passes is not a gate.
+  #
+  # --posix is the half that matters here. The hook must behave identically on
+  # gawk, mawk and one-true-awk (#7), and `run-tests --awk=bwk` already proves
+  # that dynamically -- but only for the lines some test actually executes. A
+  # gawk-only construct (gensub, asort, `length(array)`, `**`) on a branch no
+  # fixture reaches would ship. --posix takes those out of the LANGUAGE rather
+  # than merely warning about them, so the whole program is rejected at parse
+  # time, before a byte of input is read.
+  #
+  # Both spellings do catch a planted `gensub`, and they say different things:
+  # --lint=fatal alone gives `fatal: 'gensub' is a gawk extension`, which is a
+  # lint verdict on a function that still exists; under --posix it is
+  # `fatal: function 'gensub' called but never defined`, because in POSIX mode
+  # there is no such function to call. The second is the stronger statement --
+  # it is what the other two awks would say -- and --posix also aligns the
+  # regex and escape semantics gawk otherwise extends, which no lint level
+  # does.
+  #
+  # /dev/null, not a sample command: the point is to lint the program, not to
+  # run it, and awk has no parse-only mode. Feeding it nothing is the closest
+  # thing -- and it is also the harshest input, since the empty-stdin path is
+  # the one gawk complained about (see the guard on pgrep-scan.awk's
+  # trailing-newline strip, and the commit before this one).
+  #
+  # LC_ALL=C to match how the hook and tests/scanner.bats invoke it: the scanner
+  # emits BYTE offsets, and a UTF-8 locale changes what `length` and `substr`
+  # count, so a lint pass under another locale would be grading a different
+  # program than the one that ships. stdout goes to /dev/null for the same
+  # reason: the token stream is the program's output, not its verdict, and a
+  # gate log should carry diagnostics only.
+  local -a awk_files=()
+  mapfile -t awk_files < <(git -C "${REPO_DIR}" ls-files '*.awk')
+  if ((${#awk_files[@]} > 0)); then
+    local awk_file
+    for awk_file in "${awk_files[@]}"; do
+      LC_ALL=C gawk --lint=fatal --posix -f "${REPO_DIR}/${awk_file}" < '/dev/null' > '/dev/null' || rc=1
+    done
+  else
+    log 'no awk files found - this is a failure, not a clean pass'
+    rc=1
   fi
 
   log 'running just --fmt (verify only)'

@@ -31,7 +31,17 @@ BEGIN {
   ORS = ""
   cmd = ""
   while ((getline line) > 0) cmd = cmd line "\n"
-  cmd = substr(cmd, 1, length(cmd) - 1)
+  # Drop the one newline the loop above appended. The guard is not paranoia
+  # about the value: on EMPTY stdin the loop never runs, the length is 0, and
+  # the bare form becomes `substr(cmd, 1, -1)`, which every awk in scope
+  # already answers with "" -- POSIX says a non-positive length yields the
+  # empty string, so the result was always right. What the bare form was is
+  # UNLINTABLE. `gawk --lint` calls it out as
+  # `warning: substr: length -1 is not >= 1`, and the static lint step that
+  # runs this file under `gawk --lint=fatal --posix` has to feed it something:
+  # a lint pass wants no input, so it feeds /dev/null and lands on exactly this
+  # call. Spelling the empty case out is what lets that gate exist at all.
+  cmd = (length(cmd) > 1) ? substr(cmd, 1, length(cmd) - 1) : ""
   n = length(cmd)
   masked = ""
   depth = 0

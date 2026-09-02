@@ -441,6 +441,24 @@ orphan_probe() {
   [[ "${out}" == *'<SCAN:0>'* ]]
 }
 
+@test "scanner: zero-byte stdin yields the trailer and nothing else" {
+  # Not a duplicate of the test above. `scan ''` sends ONE newline, so the read
+  # loop runs once and the reassembled command is "\n"; here stdin is zero
+  # bytes, the loop never runs, and the command is "". That is the only input
+  # that reaches the empty branch of the trailing-newline strip, and it is
+  # unreachable through the hook, which always newline-terminates what it sends
+  # the scanner. Override 3 permits driving pgrep-scan.awk directly, under
+  # LC_ALL=C, because it has a public interface of its own.
+  #
+  # It is also the input the `gawk --lint=fatal --posix` step in
+  # .ci/run-lint-checks feeds the scanner, so this test and that gate cover the
+  # same call from the two opposite sides: the gate asserts no diagnostic, this
+  # asserts the answer is still right.
+  local out
+  out="$(LC_ALL=C awk -f "${SCANNER}" < /dev/null)"
+  assert_equal "${out}" "$(tab)<SCAN:0>"
+}
+
 @test "scanner: the trailer counts every byte of a command with a blank line" {
   # A blank line is what paragraph-mode awk splits a record on. The scanner no
   # longer depends on RS at all, so the reassembled byte count must be exact on

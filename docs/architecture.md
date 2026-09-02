@@ -249,10 +249,14 @@ strings stored as JSON so quoting and whitespace survive:
 
 Of the remaining bats files, the ones that exercise the guard cover the parts
 no table can express: `tests/scanner.bats` (the awk scanner directly),
-`tests/repeat.bats` (the stateful tier and its state-directory failure modes)
-and `tests/manifest.bats`. `tests/issue-forms.bats` is unrelated to the guard
-entirely — it drives `.ci/check-issue-forms` against fixture issue templates,
-not anything in `hooks/`.
+`tests/repeat.bats` (the stateful tier and its state-directory failure modes),
+`tests/cli.bats` (`--help`, `--version` and the usage errors) and
+`tests/manifest.bats`. Three more are unrelated to the guard entirely, each
+driving a `.ci/` script rather than anything in `hooks/`:
+`tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
+templates), `tests/commit-payload.bats` (`.ci/build-commit-payload`) and
+`tests/devshell-provides.bats` (`.ci/check-devshell-provides`, against a
+fabricated package inventory).
 
 ## Fail open, loudly
 

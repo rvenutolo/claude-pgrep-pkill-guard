@@ -4,8 +4,10 @@
 #
 # .ci/check-devshell-provides reads this file in both directions:
 # - forward: every entry here must resolve on PATH inside the devShell;
-# - reverse: every devShell package must ship one of these binaries, OR back a
-#   formatter .treefmt.nix enables.
+# - reverse: every devShell package must be where one of these binaries actually
+#   RESOLVES on PATH, OR back a formatter .treefmt.nix enables. Resolution, not
+#   mere presence: a package shipping a binary that another package shadows is
+#   contributing nothing to the shell, and the lint says so.
 #
 # That second escape is why prettier, yamlfmt, nixfmt and taplo are absent:
 # treefmt runs them from the Nix store, never through PATH, and the lint derives

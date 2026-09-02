@@ -16,7 +16,14 @@ on:
   workflow_dispatch:
 permissions: {}
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # `github.event_name` belongs in this key for the same reason it does in
+  # ci.yml, and this workflow has carried the bug since #42 gave it a schedule.
+  # A scheduled run's `github.ref` is refs/heads/main, indistinguishable from a
+  # push to main, so without the event name the Monday-noon run and a push
+  # landing in the same window share a group and `cancel-in-progress` kills one
+  # of them -- usually the scheduled one, which is the run that exists to catch
+  # link rot in a week nobody pushed.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   links:

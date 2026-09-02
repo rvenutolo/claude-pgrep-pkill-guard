@@ -14,6 +14,65 @@
 # does not remove it.
 accept = [200, 206, 429]
 
+# --- Network behaviour (#100) ---------------------------------------------
+#
+# The four keys below are all settings lychee already applies; what changes
+# here is the value, not whether the setting exists. #100 assumed retries were
+# off ("neither is set, so whatever the default is, it is not surviving
+# these") -- they were on, at 3 attempts one second apart, and they were
+# already losing. So the fix is not "turn retries on", it is "retry more
+# patiently and open fewer sockets at once".
+#
+# Nothing here accepts a 503. A 503 means the host decided it was too busy to
+# serve the page, which is exactly the condition this job exists to report;
+# adding it to `accept` above would silence the report rather than fix it.
+#
+# Every value below was PROVED to take effect against a local probe server
+# before being committed, by setting an absurd value and watching the
+# behaviour change -- not assumed from the flag name. #42 shipped a whole
+# config nobody read, and a setting that silently does nothing is
+# indistinguishable from one that works right up until the day it matters.
+# 0.24.2 does at least reject an unknown key outright (`maxRetries = 99` aborts
+# the run and prints the full list of valid fields), so a misspelled key cannot
+# go inert here -- but a MISUNDERSTOOD key still can, and one of these was
+# misunderstood on the first pass: see retry_wait_time.
+
+# 5, up from the default 3. Probed: lychee retries TRANSPORT errors and does
+# NOT retry a rejected HTTP status. A connection reset -- the direnv.net
+# failure in #100 -- is attempted max_retries + 1 times; a 503 from github.com
+# is attempted exactly ONCE regardless of what this is set to. So this key
+# addresses one of the two flakes in #100 and provably cannot address the
+# other; the concurrency keys below are what address that one.
+max_retries = 5
+
+# 2 seconds, up from the default 1 -- and deliberately not the 4 first
+# proposed, because the wait DOUBLES between attempts rather than staying
+# flat. Probed at `retry_wait_time = 8, max_retries = 2`: the three attempts
+# landed at t=0s, t=8s and t=24s, i.e. waits of 8s then 16s. Total patience for
+# a URL that never recovers is therefore retry_wait_time * (2^max_retries - 1)
+# -- 62s here, against 7s on the defaults. A base of 4 would have meant 124s,
+# which buys nothing extra on a transient reset and would spend a quarter of
+# the links job's 15-minute budget on every genuinely dead link.
+retry_wait_time = 2
+
+# 16, down from the default 128. The tracked tree holds ~57 URLs, so the
+# default fans the entire check out in a single burst. That burst is the most
+# plausible cause of the 503s in #100: a 503 is what a host returns when it
+# sheds load, not when a page is missing. Retries cannot help there (see
+# max_retries), opening fewer sockets can.
+max_concurrency = 16
+
+# 4 per host, down from the default 10, and the key that actually bites here:
+# most of those ~57 URLs are github.com, so this -- not max_concurrency -- is
+# the real cap on how hard the check hits any single origin. Proved to work
+# independently of the global limit: `max_concurrency = 128,
+# host_concurrency = 1` still serialised 8 same-host requests end to end, so
+# this is not merely being shadowed by max_concurrency.
+#
+# Cheap: 57 URLs four at a time is nothing next to per-request latency, and
+# the whole check still finishes in seconds.
+host_concurrency = 4
+
 # Every entry below is a FIXTURE address: a deliberately fake URL that exists to
 # be parsed and never fetched. Nothing real belongs in this list. When a link in
 # the tree breaks, fix the link -- do not "tidy it up" into this array, or the

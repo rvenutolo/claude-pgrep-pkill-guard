@@ -120,7 +120,12 @@
             git
             gh
             just
-            nix
+            # nix.out, NOT a bare `nix`. This package's default output is `dev`,
+            # which has no bin/ at all, so a bare `nix` puts nothing on the
+            # shell's PATH and the gates silently run whatever nix the host
+            # ships -- 2.35.2 here versus the locked 2.34.8. .out is what makes
+            # the pinned nix the one that actually runs inside the shell.
+            nix.out
             coreutils
             findutils
             gnugrep

@@ -52,6 +52,7 @@ runs therefore cannot drift. The `just` recipes all go through it:
 | `just validate` | validates both plugin manifests with the Claude Code CLI, when it is installed |
 | `just links` | checks every link in the tracked tree, over the network |
 | `just format` | formats every file via treefmt |
+| `just fix` | runs every auto-fixer: treefmt, then the fixers treefmt does not drive |
 | `just format-check` | verifies formatting without writing changes |
 | `just hooks` | activates the tracked git hooks for this clone |
 | `just install` | prints the commands that add this working copy as a local marketplace, for dogfooding |
@@ -60,6 +61,18 @@ runs therefore cannot drift. The `just` recipes all go through it:
 first. It aggregates exit codes rather than failing fast, so one run surfaces
 every failing category. It also runs the bats suite twice, once under gawk and
 once under one-true-awk, because the hook must behave identically on both.
+
+**When `just check` goes red on formatting, spelling or markdown style, run
+`just fix` first.** `just format` is only treefmt, and treefmt leaves four
+gaps: it never reindents the twenty-two extensionless bash scripts this repo is
+mostly built out of (`run-all-checks`, `run-tests`, everything under `.ci/` and
+`.githooks/`, `bench/run`), never touches `.justfile`, and knows nothing about
+prose or spelling. `just fix` runs treefmt and then `.ci/run-fixers`, which
+applies `shfmt --write`, `just --fmt`, `markdownlint-cli2 --fix` and
+`typos --write-changes` over exactly the file lists the lint gate checks. It can
+still exit non-zero, and that is not a bug: `markdownlint-cli2 --fix` reports
+rule violations no rewrite can settle, and `typos` deliberately refuses to guess
+between two plausible corrections. Those are the ones to fix by hand.
 
 `just links` is deliberately **not** part of `just check`. The gate is hermetic
 and offline: every tool comes from the flake and every step is deterministic, so

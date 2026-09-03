@@ -9,26 +9,26 @@ hook that runs on every Bash tool call.
 
 | field | value |
 | --- | --- |
-| date | 2026-08-31T19:29:47+00:00 |
-| commit | `4c189fb` |
+| date | 2026-09-03T23:00:34+00:00 |
+| commit | `74829f3` |
 | kernel | Linux 6.8.0-138-generic x86_64 |
 | cpu | 12th Gen Intel(R) Core(TM) i9-12900HK |
 | bash | 5.3.15(1)-release |
-| awk | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/ny5hzk3l36pldfsjkh56ia7y55xr23vd-gawk-5.4.1/bin/awk`) |
+| awk | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/bpy2ps3f0f3gvgvqjwgqriw1j1n840wd-gawk-5.4.1/bin/awk`) |
 | jq | jq-1.8.2 |
 | repetitions | 45 |
-| samples | 14805 |
+| samples | 14850 |
 
 ## Per-call cost
 
 | cohort | path exercised | n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 0.94 | 1.57 | 2.20 | 3.28 |
-| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 1.56 | 2.52 | 3.62 | 4.82 |
-| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 1.58 | 2.48 | 3.79 | 6.30 |
-| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2655 | 15.44 | 24.20 | 32.65 | 61.30 |
-| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 19.18 | 43.80 | 65.02 | 108.02 |
-| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 16.18 | 27.34 | 40.12 | 65.02 |
+| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 1.06 | 2.32 | 3.09 | 4.67 |
+| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 1.62 | 4.14 | 5.44 | 8.19 |
+| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 1.74 | 3.25 | 5.10 | 5.93 |
+| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2700 | 9.55 | 38.14 | 49.62 | 78.42 |
+| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 18.63 | 68.94 | 98.02 | 128.90 |
+| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 17.43 | 42.83 | 62.94 | 85.47 |
 
 ## How to read this
 

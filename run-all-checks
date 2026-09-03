@@ -67,6 +67,15 @@ function main() {
   # the grep the doc tells a reader to run (#85). It is a presence check over a
   # table of phrases, collapsing line breaks and `#` continuations first, so
   # rewrapping a comment stays allowed and deleting one does not.
+  # check-bench-fresh compares the commit bench/RESULTS.md records in its
+  # provenance table against the hooks/ history since. The README quotes that
+  # report's figures as measured, and nothing tied the two together: when the
+  # gate was written the file said 4c189fb and hooks/ had moved twice since,
+  # including the split the benchmark exists to measure (#84). Four verdicts,
+  # not two -- the recorded commit can also be present but unreachable (its
+  # branch was rewritten), which is a failure with different wording because no
+  # comparison happened at all, or absent from the object store, which is a SKIP
+  # so that a shallow clone never gets a red gate over history it never fetched.
   # bench/run --smoke drives one payload per cohort through the hook and checks
   # every response parses as JSON. It asserts NOTHING about timing -- a timing
   # assertion would be flaky on a shared runner. Its only job is that the
@@ -87,6 +96,7 @@ function main() {
   "${REPO_DIR}/.ci/check-manifest-invariants" || rc=1
   "${REPO_DIR}/.ci/check-issue-forms" || rc=1
   "${REPO_DIR}/.ci/check-invariant-markers" || rc=1
+  "${REPO_DIR}/.ci/check-bench-fresh" || rc=1
   "${REPO_DIR}/bench/run" --smoke || rc=1
 
   log 'running lint checks'

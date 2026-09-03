@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+
+# @description Assert that bench/RESULTS.md still describes the hook that is in
+#              the tree.
+#
+#              The report records the commit it was generated from in its
+#              provenance table, and the README's Performance section quotes its
+#              figures as fact. Nothing connected the two: at the time this gate
+#              was written the file said `4c189fb`, and hooks/ had moved twice
+#              since -- including `perf: split the guard`, the single change the
+#              benchmark exists to measure. A published number that no longer
+#              describes the code is worse than no number, because it reads as
+#              measured rather than as guessed.
+#
+#              Only hooks/ counts. A change to bench/run itself, or to the
+#              tests, does not invalidate the numbers: the corpus is replayed
+#              through the hook as a subprocess, so what is being timed is
+#              hooks/, and nothing else in the tree can move it. If the harness
+#              ever changes in a way that does move it, that is the harness
+#              author's job to re-run -- a gate that fired on every bench/run
+#              edit would be a gate people learned to ignore.
+#
+#              FOUR verdicts, not two. The obvious design -- `git log
+#              <recorded>..HEAD -- hooks/` is empty, pass, else fail -- assumes
+#              the recorded commit is reachable from HEAD, and neither of the
+#              two ways it can fail to be is hypothetical:
+#
+#                1. reachable, hooks/ untouched since         -> pass
+#                2. reachable, hooks/ changed since           -> FAIL, stale
+#                3. present in the object store, NOT reachable -> FAIL, but with
+#                   different wording, because the comparison was never made
+#                4. absent from the object store               -> SKIP
+#
+#              Verdict 3 is not a corner case invented for symmetry. `4c189fb`,
+#              the sha this gate was written against, is exactly it: the object
+#              is in the store, but it is on no branch, because it was
+#              superseded on its own branch by `6fa70a0` before that branch
+#              merged. `git merge-base --is-ancestor` says nothing about hooks/
+#              there, so neither does this script: telling the reader "hooks/
+#              changed" when no comparison happened would be a lie that sends
+#              them looking at the wrong diff. It says the history moved and
+#              stops.
+#
+#              Verdict 4 is a SKIP and not a failure on purpose. `git clone
+#              --depth 1` leaves a repo in which the recorded commit simply is
+#              not there, and a consumer who clones this repo shallowly must not
+#              get a red gate over history they never asked for. Nothing about
+#              their tree is wrong; the question is unanswerable, and a gate
+#              that cannot ask its question must not convict. In this repo's own
+#              CI the question IS answerable -- ci.yml's gate job sets
+#              `fetch-depth: 0` for exactly this reason -- so the skip is a
+#              safety net for other people's clones rather than the normal path.
+#
+#              Regeneration happens on a branch: `just bench` records the commit
+#              it ran at, and the regenerated RESULTS.md is then committed on top
+#              of it. So in the normal case the recorded commit is HEAD's parent
+#              and is not yet on main. That is verdict 1, and it must pass --
+#              which is why reachability is tested with `merge-base
+#              --is-ancestor` against HEAD rather than membership of main.
+# @arg $1 dir optional fixture directory, treated as the repo root: both the
+#         report and the git history are read from there. It exists so the bats
+#         suite can drive all four verdicts over a purpose-built two-commit
+#         repository in milliseconds. Without it the only possible test would be
+#         "exits 0 on the real repo", which a script that unconditionally
+#         returned 0 would also pass -- the same reasoning as
+#         .ci/check-devshell-provides' fixture argument. Only the location is
+#         fabricated: every verdict below still comes from real `git` queries
+#         against a real repository, so a fixture exercises the code the real
+#         run takes rather than a parallel branch.
+# @exitcode 0 the report is fresh, or the recorded commit is unavailable (skip)
+# @exitcode 1 the report is stale, the recorded commit is unreachable, or the
+#             provenance table could not be read
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+readonly FIXTURE_DIR="${1:-}"
+
+# In fixture mode the directory IS the repo root and is taken at face value:
+# `git rev-parse --show-toplevel` from a bats temp directory would either fail
+# or -- worse -- resolve to some enclosing repo, and the suite would then be
+# grading the author's checkout instead of its own fixture. Every git command
+# below therefore goes through `git -C "${REPO_DIR}"`, never bare `git`.
+if [[ -n "${FIXTURE_DIR}" ]]; then
+  readonly REPO_DIR="${FIXTURE_DIR}"
+else
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+  readonly REPO_DIR
+fi
+
+# Named once, and reported by this relative name rather than by the absolute
+# path, so the diagnostics read the same on a CI runner as they do locally.
+readonly REPORT='bench/RESULTS.md'
+readonly RESULTS_FILE="${REPO_DIR}/${REPORT}"
+
+# The one path whose history invalidates the report. A pathspec, so it is what
+# `git log` is handed rather than a prefix this script matches by hand.
+readonly BENCH_SUBJECT='hooks/'
+
+# The provenance row, as bench/run writes it:
+#
+#   | commit | `4c189fb` |
+#
+# Matched structurally rather than by `grep 'commit'`, because "commit" also
+# appears in the prose below the table. The sha is required to look like a sha:
+# a row whose cell says `unknown` is a malformed report, and reporting it as
+# such beats handing an unusable string to `git` and letting the error surface
+# as a crash inside a plumbing command.
+# shellcheck disable=SC2016 # the backticks are markdown table syntax, not a substitution
+readonly PROVENANCE_RE='^\|[[:space:]]*commit[[:space:]]*\|[[:space:]]*`([0-9a-fA-F]{7,40})`[[:space:]]*\|[[:space:]]*$'
+
+# @description Print the commit sha recorded in the report's provenance table.
+#              Reads line by line and stops at the first match: the provenance
+#              table is the first table in the file, and a second `commit` row
+#              would be a different report entirely.
+# @stdout the recorded short sha
+# @stderr a diagnostic when no usable row is found
+# @exitcode 0 a commit row was found and its cell holds a hex sha
+# @exitcode 1 no such row exists
+function recorded_commit() {
+  local line
+  while IFS= read -r line; do
+    if [[ "${line}" =~ ${PROVENANCE_RE} ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      return 0
+    fi
+  done < "${RESULTS_FILE}"
+
+  printf 'FAIL: no usable commit row in the %s provenance table\n' "${REPORT}" >&2
+  # shellcheck disable=SC2016 # the backticks are markdown table syntax, not a substitution
+  printf '      Expected a row of the form: | commit | `4c189fb` |\n' >&2
+  printf '      bench/run writes that row; regenerate with: just bench\n' >&2
+  return 1
+}
+
+# @description Report whether a commit object is present in this clone.
+# @arg $1 sha the recorded commit
+# @exitcode 0 the object is present
+# @exitcode 1 it is not -- a shallow, partial or fresh clone
+function commit_present() {
+  local -r sha="$1"
+  # The `^{commit}` peel is load-bearing: `cat-file -e <sha>` is true for ANY
+  # object, so without it a sha that happened to name a blob or a tree would
+  # sail past this and fail confusingly two commands later.
+  git -C "${REPO_DIR}" cat-file -e "${sha}^{commit}" 2> /dev/null
+}
+
+function main() {
+  if [[ ! -r "${RESULTS_FILE}" ]]; then
+    printf 'FAIL: %s is missing or unreadable\n' "${RESULTS_FILE}" >&2
+    printf '      Generate it with: just bench\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  local recorded
+  # `if !` rather than a bare assignment: the diagnostic belongs to
+  # recorded_commit, which has already printed it, and this branch only has to
+  # decide the exit code.
+  if ! recorded="$(recorded_commit)"; then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  # Verdict 4, tested FIRST because every later query needs the object to exist:
+  # in a shallow clone `merge-base` and `log` would both fail on a missing
+  # commit, and the failure would read as a broken gate rather than as absent
+  # history.
+  if ! commit_present "${recorded}"; then
+    printf 'skip: %s records commit %s, which is not in this clone\n' "${REPORT}" "${recorded}" >&2
+    printf '      A shallow or partial clone cannot see it, so the freshness\n' >&2
+    printf '      comparison is unanswerable here. Nothing is wrong with the\n' >&2
+    printf '      tree. For a real answer: git fetch --unshallow. The gate job\n' >&2
+    printf '      in this repo checks out with fetch-depth: 0 so it runs there.\n' >&2
+    return 0
+  fi
+
+  # Verdict 3. Reachability is asked against HEAD, not against main, because
+  # regeneration lands on a branch -- see the header.
+  if ! git -C "${REPO_DIR}" merge-base --is-ancestor "${recorded}" HEAD; then
+    printf 'FAIL: %s records commit %s, which exists but is not\n' "${REPORT}" "${recorded}" >&2
+    printf '      reachable from HEAD -- history was rewritten, or that commit\n' >&2
+    printf '      was superseded on its branch before the branch merged.\n' >&2
+    printf '      This is NOT a statement about %s: no comparison was\n' "${BENCH_SUBJECT}" >&2
+    printf '      possible, so the report describes a tree that no longer\n' >&2
+    printf '      exists in this history. Regenerate with: just bench\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  # Verdicts 1 and 2. Through a command substitution rather than
+  # `mapfile < <(git ...)`: a process substitution's exit status is invisible to
+  # mapfile, so a failed `git log` would arrive as an empty list and be reported
+  # as "fresh" -- a wrong verdict wearing the costume of a real one.
+  local changes
+  if ! changes="$(git -C "${REPO_DIR}" log --format='%h %s' "${recorded}..HEAD" -- "${BENCH_SUBJECT}")"; then
+    printf 'FAIL: could not read the %s history since %s\n' "${BENCH_SUBJECT}" "${recorded}" >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  if [[ -n "${changes}" ]]; then
+    local -a commits=()
+    mapfile -t commits <<< "${changes}"
+    printf 'FAIL: %s is stale: it was generated at %s, and %s has\n' \
+      "${REPORT}" "${recorded}" "${BENCH_SUBJECT}" >&2
+    printf '      changed in %s commit(s) since:\n' "${#commits[@]}" >&2
+    local commit
+    for commit in "${commits[@]}"; do
+      printf '        %s\n' "${commit}" >&2
+    done
+    printf '      The README quotes these figures as measured. Regenerate\n' >&2
+    printf '      with: just bench\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  printf 'ok: %s was generated at %s; %s is unchanged since\n' \
+    "${REPORT}" "${recorded}" "${BENCH_SUBJECT}" >&2
+  return 0
+}
+
+main "$@"

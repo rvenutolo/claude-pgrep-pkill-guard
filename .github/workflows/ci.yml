@@ -58,6 +58,13 @@ jobs:
             releases.nixos.org:443 tarballs.nixos.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          # Full history, not actions/checkout's default depth of 1. The gate
+          # runs .ci/check-bench-fresh, which asks git whether hooks/ has moved
+          # since the commit bench/RESULTS.md was generated at -- a question a
+          # shallow clone cannot answer. The check skips rather than fails when
+          # the recorded commit is missing, so at depth 1 it would skip on every
+          # CI run and the gate would be theatre. The history is ~150 commits.
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Run the full gate

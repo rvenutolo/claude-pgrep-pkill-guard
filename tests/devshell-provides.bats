@@ -220,3 +220,71 @@ function use_fixture_path() {
   assert_failure
   assert_output --partial 'is missing or unreadable'
 }
+
+# The `linux-only` annotation. Both sides of the branch are real cases here,
+# never a skip: the platform comes from the fixture's optional `platform` file,
+# so a Linux runner exercises the Darwin path and vice versa. A case that
+# no-opped off Linux would leave that branch executed by nothing at all.
+#
+# ABSENT_TOOL stands in for kcov -- a declared tool the fixture's PATH does not
+# provide. A name no PATH could plausibly carry, so a case can never pass by
+# accident on a machine that happens to have the real thing installed.
+ABSENT_TOOL='pgpk-guard-no-such-tool'
+
+@test "devshell provides: a linux-only tool that is absent is skipped off Linux" {
+  local -r root="${BATS_TEST_TMPDIR}/linux-only-darwin"
+  make_devshell_fixture "${root}"
+  printf '%s  # linux-only\n' "${ABSENT_TOOL}" >> "${root}/required-tools"
+  printf 'Darwin\n' > "${root}/platform"
+  use_fixture_path "${root}"
+  run "${CHECK}" "${root}"
+  assert_success
+  # The skip must be audible. A silent pass here is the failure mode the
+  # annotation could most easily hide.
+  assert_output --partial "SKIP: ${ABSENT_TOOL} is linux-only; not checked on Darwin"
+}
+
+@test "devshell provides: a linux-only tool that is absent still fails on Linux" {
+  local -r root="${BATS_TEST_TMPDIR}/linux-only-linux"
+  make_devshell_fixture "${root}"
+  printf '%s  # linux-only\n' "${ABSENT_TOOL}" >> "${root}/required-tools"
+  printf 'Linux\n' > "${root}/platform"
+  use_fixture_path "${root}"
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial "declared tool not provided by the devShell: ${ABSENT_TOOL}"
+  refute_output --partial 'SKIP:'
+}
+
+@test "devshell provides: an unannotated absent tool fails on every platform" {
+  # The control for the two cases above: without the annotation the platform is
+  # irrelevant, so `linux-only` cannot be doing nothing.
+  local -r root="${BATS_TEST_TMPDIR}/plain-absent"
+  make_devshell_fixture "${root}"
+  printf '%s\n' "${ABSENT_TOOL}" >> "${root}/required-tools"
+  use_fixture_path "${root}"
+
+  local platform
+  for platform in 'Linux' 'Darwin'; do
+    printf '%s\n' "${platform}" > "${root}/platform"
+    run "${CHECK}" "${root}"
+    assert_failure
+    assert_output --partial "declared tool not provided by the devShell: ${ABSENT_TOOL}"
+  done
+}
+
+@test "devshell provides: an unrecognised annotation is rejected" {
+  # A typo'd `linux_only` must NOT degrade to "unannotated". If it did, the
+  # entry would quietly become required on macOS and the gate would break at
+  # some later, unrelated commit. jq is used here precisely because it DOES
+  # resolve: the only thing wrong with the entry is its annotation, so the
+  # verdict cannot be confused with a missing tool.
+  local -r root="${BATS_TEST_TMPDIR}/bad-annotation"
+  make_devshell_fixture "${root}"
+  printf 'jq  # linux_only\n' > "${root}/required-tools"
+  use_fixture_path "${root}"
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial 'unrecognised annotation on declared tool jq: linux_only'
+  refute_output --partial 'not provided by the devShell'
+}

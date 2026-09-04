@@ -4,7 +4,16 @@
 #
 #              Forward: every declared tool must actually resolve on PATH inside
 #              the devShell. An EMPTY declaration list fails too, since a scan
-#              that finds nothing must never read as a clean pass.
+#              that finds nothing must never read as a clean pass. An entry may
+#              carry a trailing `# linux-only` annotation, which the forward
+#              pass honours by skipping the entry off Linux -- nixpkgs' kcov has
+#              no darwin build at all, so flake.nix adds it conditionally and
+#              the devShell genuinely does not provide it on macOS (#91). The
+#              skip is printed, not silent: a Darwin run must say out loud what
+#              it did not check. Any OTHER annotation is a hard failure rather
+#              than an ignored comment, because a typo'd `# linux_only` silently
+#              reverting to "required everywhere" is precisely the drift this
+#              lint exists to catch.
 #
 #              Reverse: every devShell package must justify its presence. A
 #              package is justified when either holds:
@@ -33,14 +42,23 @@
 #
 #              Must be run INSIDE the devShell (run-all-checks always is).
 # @arg $1 dir optional fixture directory, which makes the script read
-#         `required-tools`, `packages.tsv` and `formatters.txt` from there
-#         instead of asking Nix. It exists so the bats suite can drive both
-#         passes over a fabricated inventory in milliseconds; without it the
-#         only possible test would be "exits 0 on the real repo", which a
-#         script that always returned 0 would also pass. Only the inventory is
-#         fabricated -- both passes still resolve tools through PATH, so a
-#         fixture that puts its own bin directories on PATH exercises exactly
-#         the code the real run takes.
+#         `required-tools`, `packages.tsv`, `formatters.txt` and an optional
+#         `platform` from there instead of asking Nix and `uname`. It exists so
+#         the bats suite can drive both passes over a fabricated inventory in
+#         milliseconds; without it the only possible test would be "exits 0 on
+#         the real repo", which a script that always returned 0 would also
+#         pass. Only the inventory is fabricated -- both passes still resolve
+#         tools through PATH, so a fixture that puts its own bin directories on
+#         PATH exercises exactly the code the real run takes.
+#
+#         `platform` is the fourth of those files and stands in for `uname -s`,
+#         defaulting to the real `uname -s` when it is absent. It is a fixture
+#         file rather than an environment variable on purpose: the `linux-only`
+#         annotation needs both a Linux and a non-Linux case, and routing the
+#         platform through the one mechanism the script already has for
+#         test-only inventories keeps that axis out of the real run entirely.
+#         The alternative -- skipping the Darwin case on a Linux runner -- would
+#         mean the branch is never executed by anything at all.
 # @exitcode 0 every declared tool resolves and every package is justified
 # @exitcode 1 a declared tool is missing, the list is empty, or a package
 #             justifies nothing
@@ -96,22 +114,84 @@ in
 builtins.concatStringsSep "\n" (map (name: toString formatters.${name}.command) (builtins.attrNames formatters))
 '
 
-# @description Print every tool declared in the tools file, one per line.
-#              The file is data: `#` comments and blank lines are ignored and
-#              all whitespace is stripped, per line -- never over the whole
-#              stream, which would delete the newlines too and collapse the
-#              list into a single bogus entry.
-# @stdout one declared tool per line
-function declared_tools() {
-  local line tool
+# @description Print every declared entry as `tool<TAB>annotation`, one per
+#              line, with an empty annotation for an unannotated entry.
+#              The file is data: blank lines and whole-line `#` comments are
+#              ignored and all whitespace is stripped, per line -- never over
+#              the whole stream, which would delete the newlines too and
+#              collapse the list into a single bogus entry.
+#
+#              Text after a `#` on a line that also names a tool is the
+#              ANNOTATION, not a comment, and it is handed on rather than
+#              discarded. That is the one behavioural difference from the
+#              parser this file shipped before `linux-only` existed, and it is
+#              why .ci/required-tools' own header had to change: a header
+#              promising "`#` comments ignored" describes a parser that would
+#              silently drop `linux-only` and quietly demand kcov on macOS.
+# @stdout tool<TAB>annotation per declared entry
+function declared_tools_annotated() {
+  local line name annotation
   while IFS= read -r line; do
-    line="${line%%#*}"
-    tool="${line//[[:space:]]/}"
-    if [[ -n "${tool}" ]]; then
-      printf '%s\n' "${tool}"
+    name="${line%%#*}"
+    name="${name//[[:space:]]/}"
+    if [[ -z "${name}" ]]; then
+      continue
     fi
+    annotation=''
+    if [[ "${line}" == *'#'* ]]; then
+      annotation="${line#*#}"
+      annotation="${annotation//[[:space:]]/}"
+    fi
+    printf '%s\t%s\n' "${name}" "${annotation}"
   done < "${TOOLS_FILE}"
   return 0
+}
+
+# @description Print every tool declared in the tools file, one bare name per
+#              line, annotations dropped.
+#
+#              Kept as a separate function with its OLD contract rather than
+#              folded into the annotated form: reverse_check consumes this and
+#              is entirely uninterested in annotations. Off Linux kcov is not
+#              in nativeBuildInputs at all, so there is no package to justify,
+#              and reverse_check's tool_paths loop already ignores a declared
+#              tool that does not resolve. Derived from the annotated form, not
+#              a second copy of the parser, so the two cannot drift.
+# @stdout one declared tool per line
+function declared_tools() {
+  local annotated entry
+  annotated="$(declared_tools_annotated)"
+  if [[ -z "${annotated}" ]]; then
+    return 0
+  fi
+  while IFS= read -r entry; do
+    printf '%s\n' "${entry%%$'\t'*}"
+  done <<< "${annotated}"
+  return 0
+}
+
+# @description Print the platform the forward pass should reason about, in
+#              `uname -s` terms (Linux, Darwin, ...).
+#
+#              Fixture mode may override it with a `platform` file, which is
+#              what lets tests/devshell-provides.bats drive BOTH sides of the
+#              `linux-only` branch on a single Linux runner. A test that
+#              skipped its Darwin case off Darwin would leave that branch
+#              executed by nothing anywhere.
+# @stdout the platform name
+function host_platform() {
+  if [[ -n "${FIXTURE_DIR}" && -r "${FIXTURE_DIR}/platform" ]]; then
+    local platform
+    platform="$(< "${FIXTURE_DIR}/platform")"
+    printf '%s\n' "${platform//[[:space:]]/}"
+    return 0
+  fi
+  # POSIX short flag, deliberately, in a file that otherwise uses GNU long
+  # options. This line is reachable from tests/devshell-provides.bats, which
+  # carries no devShell skip and therefore runs on the ambient `compat (macos,
+  # ...)` legs against BSD coreutils, where `uname --kernel-name` dies with
+  # "illegal option". Same trap as the `mkdir -p` in run-tests' --report path.
+  uname -s
 }
 
 # @description Print the devShell's packages, one per line, as the package name
@@ -143,12 +223,47 @@ function formatter_commands() {
 }
 
 # @description Assert every declared tool resolves on the live PATH.
-# @arg $@ tools the declared tools
-# @exitcode 0 all resolve
-# @exitcode 1 at least one does not
+#
+#              Consumes the ANNOTATED entries so it can honour `linux-only`:
+#              off Linux such an entry is skipped, and the skip is PRINTED. A
+#              pass that quietly checked less than it claims to check is the
+#              exact failure this whole file is a defence against, so a Darwin
+#              run has to say which entries it let past.
+#
+#              An annotation the script does not recognise fails the entry
+#              outright instead of degrading to "no annotation". Degrading is
+#              the tempting behaviour and the wrong one: a typo'd
+#              `# linux_only` would then silently mean "required on every
+#              platform", the check would pass on Linux, and the macOS gate
+#              would break at some later, unrelated commit.
+# @arg $@ entries tool<TAB>annotation, one per declared entry
+# @exitcode 0 every entry resolves or was legitimately skipped
+# @exitcode 1 an entry does not resolve, or carries an unknown annotation
 function forward_check() {
-  local rc=0 tool
-  for tool in "$@"; do
+  local platform
+  platform="$(host_platform)"
+
+  local rc=0 entry tool annotation
+  for entry in "$@"; do
+    tool="${entry%%$'\t'*}"
+    annotation="${entry#*$'\t'}"
+    case "${annotation}" in
+      '') ;;
+      'linux-only')
+        if [[ "${platform}" != 'Linux' ]]; then
+          printf 'SKIP: %s is linux-only; not checked on %s\n' "${tool}" "${platform}"
+          continue
+        fi
+        ;;
+      *)
+        printf 'FAIL: unrecognised annotation on declared tool %s: %s\n' \
+          "${tool}" "${annotation}" >&2
+        printf '      The only annotation this lint understands is linux-only.\n' >&2
+        printf '      A plain note belongs on its own line above the tool.\n' >&2
+        rc=1
+        continue
+        ;;
+    esac
     if ! command -v "${tool}" > /dev/null 2>&1; then
       printf 'FAIL: declared tool not provided by the devShell: %s\n' "${tool}" >&2
       rc=1
@@ -263,8 +378,12 @@ function main() {
     return 1
   fi
 
-  local -a tools=()
+  # Two views of the same list, deliberately. forward_check needs the
+  # annotations to honour `linux-only`; reverse_check's contract is bare names
+  # and is unchanged by any of this.
+  local -a tools=() annotated=()
   mapfile -t tools < <(declared_tools)
+  mapfile -t annotated < <(declared_tools_annotated)
 
   local rc=0
   if ((${#tools[@]} == 0)); then
@@ -275,7 +394,7 @@ function main() {
     return 1
   fi
 
-  forward_check "${tools[@]}" || rc=1
+  forward_check "${annotated[@]}" || rc=1
   reverse_check "${tools[@]}" || rc=1
 
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

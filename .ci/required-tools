@@ -1,6 +1,19 @@
 # Tools the repo's own tooling shells out to. Every entry is justified by a real
-# call site. This file is data: one tool per line, `#` comments and blank lines
-# ignored, no shebang and no executable bit.
+# call site. This file is data: one tool per line, blank lines and whole-line
+# `#` comments ignored, no shebang and no executable bit.
+#
+# A `#` comment on the SAME line as a tool is NOT a free-form note -- it is an
+# annotation the lint reads and validates. Exactly one annotation exists:
+#
+#   kcov  # linux-only
+#
+# `linux-only` means the devShell carries the tool on Linux and deliberately
+# does not carry it elsewhere, so the forward pass skips the entry (loudly, with
+# a SKIP: line) when it is not running on Linux. Anything else after the `#` on
+# a tool's line is a hard failure, not a comment: a typo'd `# linux_only` that
+# quietly reverted to "required on every platform" is exactly the drift this
+# file exists to catch. Put a justifying note on its own line ABOVE the tool,
+# the way every entry below already does.
 #
 # .ci/check-devshell-provides reads this file in both directions:
 # - forward: every entry here must resolve on PATH inside the devShell;
@@ -38,6 +51,12 @@ git
 jq
 # the task runner the .justfile and README document
 just
+# invoked by `run-tests --coverage`, which `just coverage` drives, to measure
+# the hook's line coverage under the bats suite. nixpkgs' kcov declares no
+# darwin platform at all, so flake.nix adds it behind `lib.optionals
+# stdenv.isLinux` and the forward pass must skip it off Linux rather than
+# report a missing tool the shell was never going to have (#91).
+kcov  # linux-only
 # invoked by .ci/check-links
 lychee
 # invoked by .ci/run-lint-checks

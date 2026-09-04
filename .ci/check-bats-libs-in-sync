@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+
+# @description Assert the bats library SHAs pinned in the ambient compat action
+#              match the ones flake.lock pins for the hermetic gate. The gate
+#              legs load bats-support and bats-assert from flake inputs; the
+#              three compat legs clone them by SHA from
+#              .github/actions/bats-ambient/action.yml. Nothing tied the two
+#              together, and they agreed only by coincidence (#101).
+#
+#              The coincidence became able to break in #102. Renovate moves the
+#              ambient SHAs one dependency at a time through a git-refs custom
+#              manager, and moves flake.lock as one unit through
+#              lockFileMaintenance -- its nix manager has no per-input update,
+#              so the two sides cannot be grouped into a single PR. main will
+#              therefore sit transiently drifted after any single-sided bump,
+#              and a single-sided Renovate PR goes red here until its
+#              counterpart lands. That cost was accepted deliberately: a green
+#              `compat` leg should mean what a green `gate` leg means, and a
+#              compat leg running a different bats-assert does not.
+#
+#              BATS_CORE_SHA is deliberately NOT checked. bats-core reaches the
+#              devShell through nixpkgs' `bats` package, not through a flake
+#              input, so there is no flake.lock node to compare it against.
+#              .ci/check-devshell-provides already asserts the devShell provides
+#              `bats`; asserting a SHA against a nixpkgs derivation would be a
+#              different check with a different failure mode, and inventing one
+#              here would be guessing.
+# @arg $1 action optional path to the composite action; defaults to
+#         .github/actions/bats-ambient/action.yml under the repo root. It exists
+#         so the bats suite can point the script at a fixture carrying a planted
+#         mismatch. Without it the only possible test would be "exits 0 on the
+#         real repo", which a script that always returned 0 would also pass.
+# @arg $2 lock optional path to the flake lock; defaults to flake.lock under the
+#         repo root.
+# @exitcode 0 every checked library SHA agrees across the two files
+# @exitcode 1 a file is missing or unparsable, a SHA is absent or malformed, or
+#             the two sides disagree
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+readonly REPO_DIR
+
+ACTION_YML="${1:-${REPO_DIR}/.github/actions/bats-ambient/action.yml}"
+LOCK_JSON="${2:-${REPO_DIR}/flake.lock}"
+readonly ACTION_YML LOCK_JSON
+
+# library name -> the action.yml env var carrying its SHA. The flake.lock node
+# name is the library name itself.
+readonly LIBRARIES=(
+  'bats-support:BATS_SUPPORT_SHA'
+  'bats-assert:BATS_ASSERT_SHA'
+)
+
+# @description Print one violation to stderr, in the house format.
+# @arg $1 message the violation text
+function fail() {
+  printf 'FAIL: %s\n' "$1" >&2
+}
+
+# @description Read one env var out of the composite action, failing loudly
+#              rather than yielding the string `null` when it is absent. yq
+#              prints a literal `null` on stdout for an absent path and only
+#              distinguishes it from a real value through --exit-status, which
+#              is why the status is what is branched on and the captured text
+#              is discarded on the failure path.
+# @arg $1 var the env var name
+# @stdout the 40-character SHA
+# @exitcode 0 the value exists and is SHA-shaped
+# @exitcode 1 it is absent, unparsable or malformed
+function action_sha() {
+  local -r var="$1"
+  local value
+  if ! value="$(yq --exit-status ".runs.steps[0].env.${var}" "${ACTION_YML}" 2> /dev/null)"; then
+    fail "${ACTION_YML#"${REPO_DIR}/"} has no runs.steps[0].env.${var}"
+    return 1
+  fi
+  if [[ ! "${value}" =~ ^[0-9a-f]{40}$ ]]; then
+    fail "${ACTION_YML#"${REPO_DIR}/"} ${var} is not a 40-character SHA: ${value}"
+    return 1
+  fi
+  printf '%s\n' "${value}"
+}
+
+# @description Read one flake input's locked rev, with the same contract.
+# @arg $1 node the flake.lock node name
+# @stdout the 40-character SHA
+# @exitcode 0 the value exists and is SHA-shaped
+# @exitcode 1 it is absent, unparsable or malformed
+function lock_sha() {
+  local -r node="$1"
+  local value
+  if ! value="$(jq --raw-output --exit-status ".nodes[\"${node}\"].locked.rev" "${LOCK_JSON}" 2> /dev/null)"; then
+    fail "${LOCK_JSON#"${REPO_DIR}/"} has no nodes[\"${node}\"].locked.rev"
+    return 1
+  fi
+  if [[ ! "${value}" =~ ^[0-9a-f]{40}$ ]]; then
+    fail "${LOCK_JSON#"${REPO_DIR}/"} ${node} rev is not a 40-character SHA: ${value}"
+    return 1
+  fi
+  printf '%s\n' "${value}"
+}
+
+function main() {
+  local rc=0 entry library var ambient locked
+
+  if [[ ! -f "${ACTION_YML}" ]]; then
+    fail "${ACTION_YML} does not exist"
+    rc=1
+  fi
+  if [[ ! -f "${LOCK_JSON}" ]]; then
+    fail "${LOCK_JSON} does not exist"
+    rc=1
+  fi
+  if ((rc != 0)); then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return "${rc}"
+  fi
+
+  # Aggregated, not fail-fast: a lock-file bump moves both libraries at once, so
+  # reporting only the first mismatch would hide half the work of fixing it.
+  for entry in "${LIBRARIES[@]}"; do
+    library="${entry%%:*}"
+    var="${entry##*:}"
+    ambient='' locked=''
+    ambient="$(action_sha "${var}")" || {
+      rc=1
+      continue
+    }
+    locked="$(lock_sha "${library}")" || {
+      rc=1
+      continue
+    }
+    if [[ "${ambient}" != "${locked}" ]]; then
+      fail "${library}: bats-ambient ${var} ${ambient} != flake.lock ${locked}"
+      rc=1
+    fi
+  done
+
+  if ((rc == 0)); then
+    printf 'ok: %s bats libraries pinned identically in bats-ambient and flake.lock\n' \
+      "${#LIBRARIES[@]}" >&2
+  fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  return "${rc}"
+}
+
+main "$@"

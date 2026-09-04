@@ -252,19 +252,28 @@ Of the remaining bats files, the ones that exercise the guard cover the parts
 no table can express: `tests/scanner.bats` (the awk scanner directly),
 `tests/repeat.bats` (the stateful tier and its state-directory failure modes),
 `tests/cli.bats` (`--help`, `--version` and the usage errors) and
-`tests/manifest.bats`. Five more are unrelated to the guard entirely, each
+`tests/manifest.bats`. Six more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
 `tests/devshell-provides.bats` (`.ci/check-devshell-provides`, against a
 fabricated package inventory), `tests/invariant-markers.bats`
-(`.ci/check-invariant-markers`, against a fabricated source tree) and
+(`.ci/check-invariant-markers`, against a fabricated source tree),
 `tests/bench-fresh.bats` (`.ci/check-bench-fresh`, against a purpose-built
-two-commit repository). Every one of them drives its script over a fabricated
-input — four through an optional fixture-directory argument, and
-`build-commit-payload` by being invoked inside a throwaway repo — for the same
-reason: a suite that only asserted "exits 0 on the real repo" would pass just
-as well against a script that unconditionally returned 0.
+two-commit repository) and `tests/bats-libs-in-sync.bats`
+(`.ci/check-bats-libs-in-sync`, against copied fixtures of
+`.github/actions/bats-ambient/action.yml` and `flake.lock` carrying planted SHA
+mismatches). Every one of them drives its script over a fabricated input — five
+through optional fixture-path arguments, and `build-commit-payload` by being
+invoked inside a throwaway repo — for the same reason: a suite that only
+asserted "exits 0 on the real repo" would pass just as well against a script
+that unconditionally returned 0.
+
+One more, `tests/run-tests-cli.bats`, drives neither the guard nor a `.ci/`
+script: it grades `run-tests`' own leading-flag handling — `--awk=bwk` and
+`--report DIR` in either order — against a trivial always-passing fixture suite
+rather than against the real one, so the cases measure argument parsing and not
+the suite's runtime. It is the only bats file that runs `bats` inside `bats`.
 
 ## Fail open, loudly
 
@@ -437,10 +446,21 @@ the same exemption. The three ambient compat CI legs — `compat (ubuntu,
 ambient)`, `compat (macos, homebrew bash)` and `compat (macos, stock bash 3.2)`
 — run against the tools the runner ships rather than against the devShell, and
 the first two of those run the bats suite. A `--parents` in a `.bats` file
-passes locally in the devShell and reddens a macOS job. `run-tests` itself keeps
-long options: it is the gate entrypoint and runs under the devShell bash. The
-tracked counterpart is the `POSIX short flags on purpose` comment above
-`make_manifest_fixture` in `tests/manifest.bats`.
+passes locally in the devShell and reddens a macOS job. The tracked counterpart
+is the `POSIX short flags on purpose` comment above `make_manifest_fixture` in
+`tests/manifest.bats`.
+
+`run-tests` itself mostly keeps long options, but **not because it is safe to**
+— the first two of those legs invoke `./run-tests` directly against ambient
+tools, exactly like a `.bats` file. It gets away with it only because every
+long option in it sits on a devShell-only path: `use_bwk_awk`'s
+`mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
+under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
+them. The one line that is _not_ devShell-only — the `mkdir -p` that creates
+`--report`'s output directory — carries a POSIX short flag and a comment saying
+why. #83's first CI probe added that line with `--parents` and the macOS leg
+died at it with `mkdir: illegal option -- -` before a single test ran. A new
+long option anywhere else in `run-tests`' main path is the same bug again.
 
 ### 2. `hooks/` never sets `shopt -s inherit_errexit`
 

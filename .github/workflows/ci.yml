@@ -91,7 +91,23 @@ jobs:
         # flake's bash, because the point here is to RUN the gate, not to
         # rediscover that the host bash is too old.
         shell: nix develop --command bash -e {0}
-        run: ./.ci/in-devshell ./run-all-checks
+        # RUNNER_TEMP rather than a path in the workspace: the gate asserts the
+        # suite left the repo untouched, and a report directory written under
+        # the checkout would be an untracked file the next `git status` sees.
+        # It is already in .ci/in-devshell's KEEP_VARS, so it resolves to the
+        # same path inside and outside the hermetic boundary.
+        run: ./.ci/in-devshell ./run-all-checks --report "${RUNNER_TEMP}/bats-junit"
+      # if: failure() -- the report is only interesting when something went red,
+      # and uploading ~22 KB of green XML on every push is noise. run-all-checks
+      # writes gawk/ and bwk/ subdirectories, so both suite runs survive (#83).
+      # The name must be unique across the whole workflow run, hence the matrix
+      # OS: two legs uploading `bats-junit-gate` would collide.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: failure()
+        with:
+          name: bats-junit-gate-${{ matrix.os }}
+          path: ${{ runner.temp }}/bats-junit
+          retention-days: 7
 
   commitlint:
     name: commitlint
@@ -146,7 +162,14 @@ jobs:
           awk --version 2>&1 | head -1 || awk -W version 2>&1 | head -1
       - uses: ./.github/actions/bats-ambient
       - name: Run the suite against ambient tools
-        run: ./run-tests
+        run: ./run-tests --report "${RUNNER_TEMP}/bats-junit"
+      # See the gate job's upload step for why this only fires on failure (#83).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: failure()
+        with:
+          name: bats-junit-compat-ubuntu
+          path: ${{ runner.temp }}/bats-junit
+          retention-days: 7
 
   compat-macos-brew-bash:
     name: compat (macos, homebrew bash)
@@ -185,7 +208,16 @@ jobs:
           [ "$(command -v awk)" = /usr/bin/awk ]
           awk --version 2>&1 | head -1
           bash --version | head -1
-          ./run-tests
+          ./run-tests --report "${RUNNER_TEMP}/bats-junit"
+      # See the gate job's upload step for why this only fires on failure (#83).
+      # This leg runs no harden-runner -- the action is Linux-only -- so nothing
+      # in its egress path needs allowlisting.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: failure()
+        with:
+          name: bats-junit-compat-macos-brew
+          path: ${{ runner.temp }}/bats-junit
+          retention-days: 7
 
   compat-macos-stock-bash:
     name: compat (macos, stock bash 3.2)

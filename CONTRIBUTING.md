@@ -10,6 +10,9 @@ permanent regression test.
 why three of its rules are written the way they are.
 [`SECURITY.md`](SECURITY.md) covers what the guard can and cannot see, and what
 belongs in a private report.
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) is the Contributor Covenant 2.1
+verbatim, applies to every issue, pull request and review here, and takes
+enforcement reports through that same private form.
 
 ## Setup
 
@@ -44,18 +47,18 @@ the devShell cannot inherit the caller's `PATH` and no gate step can silently
 resolve a tool from the machine it happens to be running on. Local runs and CI
 runs therefore cannot drift. The `just` recipes all go through it:
 
-| Recipe | What it does |
-| --- | --- |
-| `just check` | the full local verification gate (the default recipe) |
-| `just test` | the bats suite; extra arguments are forwarded to `run-tests` |
-| `just lint` | the config, markup and shell lint suite |
-| `just validate` | validates both plugin manifests with the Claude Code CLI, when it is installed |
-| `just links` | checks every link in the tracked tree, over the network |
-| `just format` | formats every file via treefmt |
-| `just fix` | runs every auto-fixer: treefmt, then the fixers treefmt does not drive |
-| `just format-check` | verifies formatting without writing changes |
-| `just hooks` | activates the tracked git hooks for this clone |
-| `just install` | prints the commands that add this working copy as a local marketplace, for dogfooding |
+| Recipe              | What it does                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `just check`        | the full local verification gate (the default recipe)                                 |
+| `just test`         | the bats suite; extra arguments are forwarded to `run-tests`                          |
+| `just lint`         | the config, markup and shell lint suite                                               |
+| `just validate`     | validates both plugin manifests with the Claude Code CLI, when it is installed        |
+| `just links`        | checks every link in the tracked tree, over the network                               |
+| `just format`       | formats every file via treefmt                                                        |
+| `just fix`          | runs every auto-fixer: treefmt, then the fixers treefmt does not drive                |
+| `just format-check` | verifies formatting without writing changes                                           |
+| `just hooks`        | activates the tracked git hooks for this clone                                        |
+| `just install`      | prints the commands that add this working copy as a local marketplace, for dogfooding |
 
 `just check` is verify-only — it never rewrites the tree — so run `just format`
 first. It aggregates exit codes rather than failing fast, so one run surfaces
@@ -90,15 +93,15 @@ green.
 Seven status checks are **required** by the `protect-main` ruleset and a pull
 request cannot merge without all of them green:
 
-| Check | What it covers |
-| --- | --- |
-| `gate (ubuntu-latest)` | the full hermetic gate on Linux |
-| `gate (macos-latest)` | the same gate on macOS |
-| `compat (ubuntu, ambient)` | the bats suite against the runner's own tools |
-| `compat (macos, homebrew bash)` | the same, under Homebrew bash |
-| `compat (macos, stock bash 3.2)` | the hook stays inactive on bash 3.2 |
-| `validate` | both plugin manifests, via the Claude Code CLI |
-| `commitlint` | every commit subject on the pull request |
+| Check                            | What it covers                                 |
+| -------------------------------- | ---------------------------------------------- |
+| `gate (ubuntu-latest)`           | the full hermetic gate on Linux                |
+| `gate (macos-latest)`            | the same gate on macOS                         |
+| `compat (ubuntu, ambient)`       | the bats suite against the runner's own tools  |
+| `compat (macos, homebrew bash)`  | the same, under Homebrew bash                  |
+| `compat (macos, stock bash 3.2)` | the hook stays inactive on bash 3.2            |
+| `validate`                       | both plugin manifests, via the Claude Code CLI |
+| `commitlint`                     | every commit subject on the pull request       |
 
 `commitlint` is required because release-please reads the commit history to cut
 releases and write the changelog: a subject that merges without matching the
@@ -112,7 +115,7 @@ Commit messages follow the Angular convention: `type: subject`, imperative
 mood, 72-character subject line, with `!` after the type for a breaking change.
 Allowed types are `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`,
 `perf`, `style`, `build` and `revert`. An optional body after a blank line
-explains *why*, not *what*.
+explains _why_, not _what_.
 
 commitlint enforces this through the tracked `commit-msg` hook that `just
 hooks` activates, running inside the devShell so the same commitlint runs

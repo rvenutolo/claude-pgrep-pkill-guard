@@ -7,32 +7,32 @@ hook that runs on every Bash tool call.
 
 ## Provenance
 
-| field | value |
-| --- | --- |
-| date | 2026-09-04T01:39:49+00:00 |
-| commit | `4e22d0f` |
-| kernel | Linux 6.8.0-138-generic x86_64 |
-| cpu | 12th Gen Intel(R) Core(TM) i9-12900HK |
-| bash | 5.3.15(1)-release |
-| awk | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/bpy2ps3f0f3gvgvqjwgqriw1j1n840wd-gawk-5.4.1/bin/awk`) |
-| jq | jq-1.8.2 |
-| governor | powersave (EPP balance_performance) |
-| power | AC |
-| load at start | 0.34 0.72 0.62 |
-| package temp at start | 52 C |
-| repetitions | 45 |
-| samples | 14850 |
+| field                 | value                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| date                  | 2026-09-04T01:39:49+00:00                                                                                |
+| commit                | `4e22d0f`                                                                                                |
+| kernel                | Linux 6.8.0-138-generic x86_64                                                                           |
+| cpu                   | 12th Gen Intel(R) Core(TM) i9-12900HK                                                                    |
+| bash                  | 5.3.15(1)-release                                                                                        |
+| awk                   | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/bpy2ps3f0f3gvgvqjwgqriw1j1n840wd-gawk-5.4.1/bin/awk`) |
+| jq                    | jq-1.8.2                                                                                                 |
+| governor              | powersave (EPP balance_performance)                                                                      |
+| power                 | AC                                                                                                       |
+| load at start         | 0.34 0.72 0.62                                                                                           |
+| package temp at start | 52 C                                                                                                     |
+| repetitions           | 45                                                                                                       |
+| samples               | 14850                                                                                                    |
 
 ## Per-call cost
 
-| cohort | path exercised | n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 0.96 | 2.01 | 2.50 | 3.89 |
-| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 1.44 | 3.27 | 3.83 | 7.60 |
-| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 1.32 | 2.64 | 3.68 | 4.99 |
-| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2700 | 8.88 | 34.82 | 43.50 | 59.19 |
-| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 19.09 | 63.34 | 87.62 | 113.70 |
-| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 16.47 | 38.16 | 55.92 | 76.19 |
+| cohort     | path exercised                                                         |    n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
+| ---------- | ---------------------------------------------------------------------- | ---: | -------: | -------: | -------: | -------: |
+| `baseline` | process spawn and pipe only, no hook -- the floor                      |  585 |     0.96 |     2.01 |     2.50 |     3.89 |
+| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                |  585 |     1.44 |     3.27 |     3.83 |     7.60 |
+| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus |  270 |     1.32 |     2.64 |     3.68 |     4.99 |
+| `quiet`    | bash startup, one `jq` spawn, one scanner pass                         | 2700 |     8.88 |    34.82 |    43.50 |    59.19 |
+| `inspect`  | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 |    19.09 |    63.34 |    87.62 |   113.70 |
+| `deny`     | the stateless tiers plus `deny_message`; no state                      | 7065 |    16.47 |    38.16 |    55.92 |    76.19 |
 
 ## How to read this
 

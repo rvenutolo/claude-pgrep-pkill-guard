@@ -74,6 +74,7 @@ In execution order:
 
    Sitting after the version guard at step 3 is deliberate, and it costs
    `--help` on bash below 4.3; see **Known limitations** below.
+
 6. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
    `IFS= read -r -d '' input || :` — rather than the `input="$(cat)"` it used
    to, which was a fork and an exec on every Bash tool call before the guard
@@ -207,14 +208,14 @@ otherwise tell `foo` from `foo\n` at end of input.
 
 `classify_command` prints one of:
 
-| Verdict | Meaning |
-| --- | --- |
-| `deny:kill` | a pattern kill whose pattern matches the invoking shell |
-| `deny:loop` | a loop whose termination test is a full-command-line pattern search |
-| `deny:task-poll` | a loop whose termination test reads a harness task-output file |
-| `warn` | a `pgrep --full` whose result is consumed but which is neither a loop nor a kill |
-| `allow` | everything else |
-| `inactive` | the scanner failed its integrity trailer; `inspect_command` emits the INACTIVE `systemMessage` |
+| Verdict          | Meaning                                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| `deny:kill`      | a pattern kill whose pattern matches the invoking shell                                        |
+| `deny:loop`      | a loop whose termination test is a full-command-line pattern search                            |
+| `deny:task-poll` | a loop whose termination test reads a harness task-output file                                 |
+| `warn`           | a `pgrep --full` whose result is consumed but which is neither a loop nor a kill               |
+| `allow`          | everything else                                                                                |
+| `inactive`       | the scanner failed its integrity trailer; `inspect_command` emits the INACTIVE `systemMessage` |
 
 `repeat` is the fifth deny kind and is not one of these: it is decided after
 classification, in `inspect_command`, because it is the only stateful rule.
@@ -245,7 +246,7 @@ strings stored as JSON so quoting and whitespace survive:
 - `messages.tsv` — `<command>\t<field>\t<mode>\t<needle>`, read by
   `tests/messages.bats`, where `field` is `reason`, `context` or `decision` and
   `mode` is `contains`, `lacks` or `equals`. `lacks` asserts absence, which is
-  how the tables pin that a `loop` deny does *not* offer `--ignore-ancestors`.
+  how the tables pin that a `loop` deny does _not_ offer `--ignore-ancestors`.
 
 Of the remaining bats files, the ones that exercise the guard cover the parts
 no table can express: `tests/scanner.bats` (the awk scanner directly),
@@ -304,7 +305,7 @@ a long sequence of `|| return 0` guards rather than as assertions.
 for an unrecognized argument and for a bare run with stdin on a terminal, and
 the entry script's `human_mode "$@" || exit "$?"` is written precisely so that
 2 survives the `ERR` trap and becomes the process's exit status. A `PreToolUse`
-hook exiting 2 means *block the tool call*, so this is the one path in the repo
+hook exiting 2 means _block the tool call_, so this is the one path in the repo
 that does not fail open. It is safe because arguments cannot reach the script
 from Claude Code: `hooks/hooks.json` passes none, so the 2 lands in a terminal
 next to the stderr line explaining it. Someone who hand-edited
@@ -328,15 +329,15 @@ the token makes the comparison fail and the command is allowed. Every form below
 is a valid invocation of `pkill`, and `zzznoproc` matches no process, so the
 rows that pin them can be run without killing anything:
 
-| command | verdict |
-| --- | --- |
-| `pkill --full zzznoproc` | `deny:kill` |
-| `"pkill" --full zzznoproc` | `allow` |
-| `$'pkill' --full zzznoproc` | `allow` |
-| `p'k'ill --full zzznoproc` | `allow` |
-| `'pk''ill' --full zzznoproc` | `allow` |
-| `pk\ill --full zzznoproc` | `allow` |
-| `PATH=/bin p\kill --full zzznoproc` | `allow` |
+| command                             | verdict     |
+| ----------------------------------- | ----------- |
+| `pkill --full zzznoproc`            | `deny:kill` |
+| `"pkill" --full zzznoproc`          | `allow`     |
+| `$'pkill' --full zzznoproc`         | `allow`     |
+| `p'k'ill --full zzznoproc`          | `allow`     |
+| `'pk''ill' --full zzznoproc`        | `allow`     |
+| `pk\ill --full zzznoproc`           | `allow`     |
+| `PATH=/bin p\kill --full zzznoproc` | `allow`     |
 
 This is intended, on the threat model. The guard exists for an agent that does
 not realise a pattern-kill will match the session running it — not for an
@@ -605,7 +606,7 @@ In every gate script that installs the `ERR` trap, a deliberate non-zero
 with the rest. #43 fixed **19 such returns across 12 files**; counting the
 gate's own two, it polices **21 returns across 13 files** today.
 
-**Why:** the trap is there to report *unexpected* failure, and a gate
+**Why:** the trap is there to report _unexpected_ failure, and a gate
 announcing its own verdict is the one thing it must not report as a crash.
 Before #43, a real `.ci/check-manifest-invariants` failure ended like this:
 
@@ -674,7 +675,7 @@ covered the day it lands.
 **The one `ERR` trap this rule must never touch.** `.ci/check-err-trap-hygiene`
 derives its candidate set from the tree, so it also sees
 `hooks/pgrep-pkill-guard.sh` — which installs `trap 'emit_allow; exit 0' ERR`.
-That is a *fail-open* trap, not a reporting one: its whole job is to make any
+That is a _fail-open_ trap, not a reporting one: its whole job is to make any
 unexpected failure emit an allow verdict rather than block the user's command,
 which is invariant 2's discipline. Applying this rule there would be actively
 wrong — a `trap - ERR` before a return in the hook's `main` would hand the user

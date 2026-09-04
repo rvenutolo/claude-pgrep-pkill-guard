@@ -77,13 +77,13 @@ retry of the same one.
 
 Four deny kinds, plus a warn tier. Everything else is allowed with a bare `{}`.
 
-| Kind | Fires on | Mitigation the reason names |
-| --- | --- | --- |
-| `kill` | a pattern kill whose pattern matches the invoking shell — `pkill --full java`, `pkill -f java`, `pgrep --full java \| xargs kill` | `--ignore-ancestors`, or a PID, or `"[j]ava"` |
-| `loop` | a loop whose termination test is a full-command-line pattern search — `until ! pgrep --full x; do sleep 5; done` | `while kill -0 "$pid"`, or stop polling |
-| `task-poll` | a loop whose termination test reads a harness task-output file (`…/tasks/<id>.output`) | stop and wait for the task notification, or `TaskOutput` with `block: true` |
-| `repeat` | the third probe of the same target within 300 s, in one session | stop and wait for the task notification, or `TaskOutput` with `block: true` |
-| *warn* | a `pgrep --full` whose **result is consumed** but which is not a loop or a kill — `pgrep --full x \| wc -l`, `pgrep --full x && echo up` | allowed, with an `additionalContext` note that the count is inflated by one and exit status 0 does not mean the target is running |
+| Kind        | Fires on                                                                                                                                 | Mitigation the reason names                                                                                                       |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `kill`      | a pattern kill whose pattern matches the invoking shell — `pkill --full java`, `pkill -f java`, `pgrep --full java \| xargs kill`        | `--ignore-ancestors`, or a PID, or `"[j]ava"`                                                                                     |
+| `loop`      | a loop whose termination test is a full-command-line pattern search — `until ! pgrep --full x; do sleep 5; done`                         | `while kill -0 "$pid"`, or stop polling                                                                                           |
+| `task-poll` | a loop whose termination test reads a harness task-output file (`…/tasks/<id>.output`)                                                   | stop and wait for the task notification, or `TaskOutput` with `block: true`                                                       |
+| `repeat`    | the third probe of the same target within 300 s, in one session                                                                          | stop and wait for the task notification, or `TaskOutput` with `block: true`                                                       |
+| _warn_      | a `pgrep --full` whose **result is consumed** but which is not a loop or a kill — `pgrep --full x \| wc -l`, `pgrep --full x && echo up` | allowed, with an `additionalContext` note that the count is inflated by one and exit status 0 does not mean the target is running |
 
 A bare `pgrep --full java` whose result nothing reads is allowed silently: the
 inflated match only matters when something acts on it.
@@ -136,13 +136,13 @@ The guard is bash and awk with no network calls, so "supported" means one thing
 here: the shells and awks CI actually runs it under. Every row below is a real
 job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-| Platform | bash | awk | CI job |
-| --- | --- | --- | --- |
-| Linux, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk | `gate (ubuntu-latest)` |
-| macOS, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk | `gate (macos-latest)` |
-| Linux, ambient distro tools | the runner image's own bash | whatever the image resolves `awk` to | `compat (ubuntu, ambient)` |
-| macOS, `brew install bash` | Homebrew bash | stock `/usr/bin/awk` (one-true-awk) | `compat (macos, homebrew bash)` |
-| macOS, stock bash 3.2 | 3.2 — the guard reports itself INACTIVE | not reached | `compat (macos, stock bash 3.2)` |
+| Platform                     | bash                                     | awk                                  | CI job                           |
+| ---------------------------- | ---------------------------------------- | ------------------------------------ | -------------------------------- |
+| Linux, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk            | `gate (ubuntu-latest)`           |
+| macOS, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk            | `gate (macos-latest)`            |
+| Linux, ambient distro tools  | the runner image's own bash              | whatever the image resolves `awk` to | `compat (ubuntu, ambient)`       |
+| macOS, `brew install bash`   | Homebrew bash                            | stock `/usr/bin/awk` (one-true-awk)  | `compat (macos, homebrew bash)`  |
+| macOS, stock bash 3.2        | 3.2 — the guard reports itself INACTIVE  | not reached                          | `compat (macos, stock bash 3.2)` |
 
 The two `gate` legs run the whole gate — formatting, lints, the governance
 checks and the bats suite twice, once under gawk and once under one-true-awk —

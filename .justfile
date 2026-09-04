@@ -10,8 +10,15 @@ test *ARGS:
     ./.ci/in-devshell ./run-tests {{ ARGS }}
 
 # Re-measure the hook's per-call cost and rewrite bench/RESULTS.md
+#
+# Two steps, one operation: bench/run emits markdown tables with unpadded
+# cells, and prettier owns their alignment (#76). Skipping the second step
+# leaves a tree that fails `nix flake check`. `nix fmt` is invoked outside
+# in-devshell on purpose -- treefmt-nix supplies prettier from the Nix store
+# rather than through PATH, so the devShell has nothing to add here.
 bench:
     ./.ci/in-devshell ./bench/run --output bench/RESULTS.md
+    nix fmt bench/RESULTS.md
 
 # Run the config/markup/shell lint suite
 lint:

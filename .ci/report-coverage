@@ -147,8 +147,12 @@ function main() {
       # opening them. See docs/architecture.md, "Line coverage".
       cat << 'SUMMARY_MD'
 Read it as a floor, not a measurement: kcov counts heredoc body lines as
-coverable, and the guard's verdict messages are long prose heredocs. The
-per-line hit counts in the `coverage-html` artifact are the useful part.
+coverable, and the guard's verdict messages are long prose heredocs. kcov also
+stops recording after a traced command carrying an odd number of unescaped
+apostrophes, and resumes at the next one, so some windows of a run are missing
+however complete the report looks (#128). A zero in the per-line hit counts in
+the `coverage-html` artifact is a question, not a finding — see
+docs/architecture.md, "Line coverage", for the recipe that answers it.
 SUMMARY_MD
     } >> "${GITHUB_STEP_SUMMARY}"
   fi

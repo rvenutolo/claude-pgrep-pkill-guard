@@ -252,19 +252,22 @@ Of the remaining bats files, the ones that exercise the guard cover the parts
 no table can express: `tests/scanner.bats` (the awk scanner directly),
 `tests/repeat.bats` (the stateful tier and its state-directory failure modes),
 `tests/cli.bats` (`--help`, `--version` and the usage errors) and
-`tests/manifest.bats`. Five more are unrelated to the guard entirely, each
+`tests/manifest.bats`. Six more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
 `tests/devshell-provides.bats` (`.ci/check-devshell-provides`, against a
 fabricated package inventory), `tests/invariant-markers.bats`
-(`.ci/check-invariant-markers`, against a fabricated source tree) and
+(`.ci/check-invariant-markers`, against a fabricated source tree),
 `tests/bench-fresh.bats` (`.ci/check-bench-fresh`, against a purpose-built
-two-commit repository). Every one of them drives its script over a fabricated
-input — four through an optional fixture-directory argument, and
-`build-commit-payload` by being invoked inside a throwaway repo — for the same
-reason: a suite that only asserted "exits 0 on the real repo" would pass just
-as well against a script that unconditionally returned 0.
+two-commit repository) and `tests/bats-libs-in-sync.bats`
+(`.ci/check-bats-libs-in-sync`, against copied fixtures of
+`.github/actions/bats-ambient/action.yml` and `flake.lock` carrying planted SHA
+mismatches). Every one of them drives its script over a fabricated input — five
+through optional fixture-path arguments, and `build-commit-payload` by being
+invoked inside a throwaway repo — for the same reason: a suite that only
+asserted "exits 0 on the real repo" would pass just as well against a script
+that unconditionally returned 0.
 
 ## Fail open, loudly
 

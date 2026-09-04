@@ -1,0 +1,63 @@
+# The authoritative label set for this repository (#89).
+#
+# AUTHORITATIVE means exactly that: .github/workflows/labels.yml applies this
+# file with deletion enabled, so a label that is not listed here is DELETED on
+# the next push to main -- and deleting a label strips it from every issue and
+# pull request carrying it, which re-creating the label does not undo. Add
+# before you remove.
+#
+# The two `autorelease:` labels are release-please's, not ours. They are listed
+# so the labeler does not delete what release-please immediately recreates,
+# which would flip-flop them on every release. Their descriptions are empty
+# because that is what release-please creates them with; the empty string is
+# written out rather than omitted so the labeler compares equal and reports
+# "Skipping update" instead of rewriting them on every run.
+#
+# Colours carry no leading `#`, matching what `gh label list` and the REST API
+# return. crazy-max/ghaction-github-labeler strips a leading `#` before
+# comparing, so both spellings work -- this one is the spelling a maintainer can
+# diff against `gh label list --json name,color,description` without editing it.
+#
+# .ci/check-issue-forms asserts that every label referenced by a form under
+# .github/ISSUE_TEMPLATE appears here, so the forms and this file cannot drift.
+- name: 'accessibility'
+  color: 'f143ab'
+  description: 'Barrier affecting people with disabilities'
+- name: 'bug'
+  color: 'd73a4a'
+  description: "Something isn't working"
+- name: 'documentation'
+  color: '0075ca'
+  description: 'Improvements or additions to documentation'
+- name: 'duplicate'
+  color: 'cfd3d7'
+  description: 'This issue or pull request already exists'
+- name: 'enhancement'
+  color: 'a2eeef'
+  description: 'New feature or request'
+- name: 'good first issue'
+  color: '7057ff'
+  description: 'Good for newcomers'
+- name: 'help wanted'
+  color: '008672'
+  description: 'Extra attention is needed'
+- name: 'invalid'
+  color: 'e4e669'
+  description: "This doesn't seem right"
+- name: 'question'
+  color: 'd876e3'
+  description: 'Further information is requested'
+- name: 'wontfix'
+  color: 'ffffff'
+  description: 'This will not be worked on'
+# This repo's own, referenced by .github/ISSUE_TEMPLATE/false-verdict.yml.
+- name: 'false-verdict'
+  color: 'd73a4a'
+  description: 'The guard allowed something it should have denied, or denied something it should have allowed'
+# release-please's, described above.
+- name: 'autorelease: pending'
+  color: 'ededed'
+  description: ''
+- name: 'autorelease: tagged'
+  color: 'ededed'
+  description: ''

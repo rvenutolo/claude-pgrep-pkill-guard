@@ -146,3 +146,74 @@ YAML
   assert_failure
   assert_output --partial 'holds no issue form (a *.yml other than config.yml)'
 }
+
+# @description Write a labels file declaring exactly the names given, so a case
+#              can assert the mismatch rather than depending on the real
+#              .github/labels.yml. POSIX short flags on purpose -- see the
+#              header of tests/manifest.bats.
+# @arg $1 path the labels file to write
+# @arg $@ rest label names to declare
+function make_labels_fixture() {
+  local -r path="$1"
+  shift
+  mkdir -p "$(dirname "${path}")"
+  : > "${path}"
+  local name
+  for name in "$@"; do
+    printf -- '- name: %s\n  color: ededed\n  description: A fixture label.\n' "${name}" >> "${path}"
+  done
+}
+
+@test "issue forms: the real forms reference only declared labels" {
+  run "${CHECK}" "${FORMS_DIR}" "${REPO_DIR}/.github/labels.yml"
+  assert_success
+}
+
+@test "issue forms: a form referencing an undeclared label is rejected" {
+  local -r root="${BATS_TEST_TMPDIR}/undeclared"
+  make_form_fixture "${root}"
+  make_labels_fixture "${BATS_TEST_TMPDIR}/labels-undeclared.yml" 'enhancement'
+  run "${CHECK}" "${root}" "${BATS_TEST_TMPDIR}/labels-undeclared.yml"
+  assert_failure
+  assert_output --partial 'references label "bug"'
+}
+
+@test "issue forms: a label whose name is a substring of a declared one is rejected" {
+  local -r root="${BATS_TEST_TMPDIR}/substring"
+  make_form_fixture "${root}"
+  make_labels_fixture "${BATS_TEST_TMPDIR}/labels-substring.yml" 'bugs'
+  run "${CHECK}" "${root}" "${BATS_TEST_TMPDIR}/labels-substring.yml"
+  assert_failure
+}
+
+@test "issue forms: a label name holding a space is matched whole, not by word" {
+  local -r root="${BATS_TEST_TMPDIR}/spaced"
+  make_form_fixture "${root}"
+  # The fixture form declares `labels: [bug]`; rewrite it to reference a name
+  # with a space, which is what makes the --line-regexp --fixed-strings match
+  # load-bearing rather than incidental.
+  sed -i.bak 's/^labels: \[bug\]$/labels: [good first issue]/' "${root}/report.yml"
+  rm -f "${root}/report.yml.bak"
+  make_labels_fixture "${BATS_TEST_TMPDIR}/labels-spaced.yml" 'good first issue'
+  run "${CHECK}" "${root}" "${BATS_TEST_TMPDIR}/labels-spaced.yml"
+  assert_success
+}
+
+@test "issue forms: a missing labels file is rejected, not ignored" {
+  local -r root="${BATS_TEST_TMPDIR}/no-labels"
+  make_form_fixture "${root}"
+  run "${CHECK}" "${root}" "${BATS_TEST_TMPDIR}/absent.yml"
+  assert_failure
+  assert_output --partial 'does not exist'
+  refute_output --partial 'ERROR: line'
+}
+
+@test "issue forms: a labels file declaring nothing is rejected, not a vacuous pass" {
+  local -r root="${BATS_TEST_TMPDIR}/empty-labels"
+  make_form_fixture "${root}"
+  make_labels_fixture "${BATS_TEST_TMPDIR}/labels-empty.yml"
+  run "${CHECK}" "${root}" "${BATS_TEST_TMPDIR}/labels-empty.yml"
+  assert_failure
+  assert_output --partial 'declares no labels'
+  refute_output --partial 'ERROR: line'
+}

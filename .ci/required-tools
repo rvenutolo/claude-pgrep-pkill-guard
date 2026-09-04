@@ -65,7 +65,8 @@ yq
 # it converts an inherited nixpkgs internal (stdenv.initialPath, which no gate
 # asserts and a flake.lock bump could change) into a declared dependency, and
 # it is what justifies coreutils, findutils and gnugrep to the reverse pass.
-# invoked by .ci/check-err-trap-hygiene and .ci/check-versions-in-sync
+# invoked by .ci/check-err-trap-hygiene, .ci/check-versions-in-sync and
+# .ci/check-issue-forms
 grep
 # tests/repeat.bats walks the state dir with it
 find

@@ -10,6 +10,9 @@ permanent regression test.
 why three of its rules are written the way they are.
 [`SECURITY.md`](SECURITY.md) covers what the guard can and cannot see, and what
 belongs in a private report.
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) is the Contributor Covenant 2.1
+verbatim, applies to every issue, pull request and review here, and takes
+enforcement reports through that same private form.
 
 ## Setup
 

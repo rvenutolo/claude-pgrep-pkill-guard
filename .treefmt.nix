@@ -5,7 +5,15 @@
   programs = {
     prettier = {
       enable = true;
-      includes = [ "*.json" ];
+      # `proseWrap: "preserve"` is pinned in .prettierrc.json rather than left
+      # to prettier's default. Every doc in this repo is hand-wrapped, and the
+      # only thing markdown formatting is wanted for here is table alignment --
+      # a prettier that reflowed prose would rewrite every paragraph in the
+      # tree on a version bump.
+      includes = [
+        "*.json"
+        "*.md"
+      ];
     };
     yamlfmt.enable = true;
     nixfmt.enable = true;

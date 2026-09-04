@@ -43,7 +43,23 @@ export GIT_CEILING_DIRECTORIES="${REPO_DIR}"
 
 # Stop child bash processes from re-sourcing the user's interactive ~/.bashrc,
 # which would clobber the per-test environment.
-unset BASH_ENV
+#
+# Guarded, and this is the one line of the hardening block that is: BASH_ENV is
+# also how kcov instruments bash. kcov exports BASH_ENV=<outdir>/bash-helper.sh,
+# and every child bash sources that helper, which sets a PS4 carrying
+# BASH_SOURCE/LINENO and turns on `set -x` so the trace becomes the coverage
+# record. Because every test drives the guard as a fresh subprocess
+# (invariant 3), an unconditional unset here means kcov instruments the bats
+# parent and nothing below it -- which is exactly why the first coverage probe
+# reported 0.00% with no files at all (#91).
+#
+# COVERAGE has exactly one caller, `run-tests --coverage`, which exports it
+# immediately before starting kcov. Any other run of the suite -- a bare `bats`,
+# `just test`, every CI leg but the coverage step -- leaves it unset, so the
+# unset still happens and the hardening above is never relaxed by accident.
+if [[ -z "${COVERAGE:-}" ]]; then
+  unset BASH_ENV
+fi
 
 # @description Build a PreToolUse hook payload for the Bash tool.
 #              session_id is OMITTED when not supplied, which is what keeps the

@@ -26,11 +26,24 @@
 #              created if absent, because bats requires `--output` to name a
 #              directory that already exists. The report lands whether the suite
 #              passed or failed; the failing case is the one it exists for.
-# @arg $@ args optional `--awk=bwk` and `--report DIR` in any order, then bats
-#         arguments or test paths; omit paths to run all of tests/
+#
+#              `--coverage DIR` runs the whole suite under kcov and writes an
+#              HTML line-coverage report for hooks/ into DIR (open
+#              DIR/index.html). Linux only: nixpkgs' kcov declares no darwin
+#              platform, so the devShell carries it only on Linux. The measured
+#              scope is `--include-path=hooks/` and nothing else -- coverage of
+#              the suite itself is not the question, and including it would bury
+#              the two files that matter. kcov instruments bash by exporting
+#              BASH_ENV, which tests/test_helper/common.bash unsets unless
+#              COVERAGE is set, so this flag exports COVERAGE=1; without that the
+#              report is 0.00% with no files (#91).
+# @arg $@ args optional `--awk=bwk`, `--report DIR` and `--coverage DIR` in any
+#         order, then bats arguments or test paths; omit paths to run all of
+#         tests/
 # @exitcode 0 all tests passed and the repo was left untouched
-# @exitcode 1 bats missing, nawk missing under --awk=bwk, --report given without
-#             a directory, a test failed, or the suite mutated the repo
+# @exitcode 1 bats missing, nawk missing under --awk=bwk, kcov missing under
+#             --coverage, --report or --coverage given without a directory, a
+#             test failed, or the suite mutated the repo
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -91,6 +104,15 @@ function main() {
   # Unset BASH_ENV so bats' per-test subshells do not re-source the user's
   # interactive ~/.bashrc. That re-source fires for every test subshell, making
   # the suite dramatically slower and clobbering exported vars in child shells.
+  #
+  # This is NOT the unset that had to be guarded for `--coverage`, and it must
+  # stay unconditional -- do not "fix" it for symmetry with the guarded one in
+  # tests/test_helper/common.bash. It runs here, before the kcov process below
+  # is started, and kcov exports its own BASH_ENV into the environment it hands
+  # its child; clearing an inherited interactive BASH_ENV first is exactly what
+  # we want, and it cannot suppress the one kcov sets afterwards. The unset in
+  # common.bash is different because that file is sourced *inside* the traced
+  # tree, after kcov has injected.
   unset BASH_ENV
 
   if ! command -v bats > /dev/null 2>&1; then
@@ -101,8 +123,10 @@ function main() {
   # rather than a chain of `if`s so `--awk=bwk --report DIR` and
   # `--report DIR --awk=bwk` are the same invocation -- CI passes one, a person
   # debugging locally passes the other, and an order-dependent parse would make
-  # one of them silently forward `--awk=bwk` to bats as a test path.
-  local report_dir=''
+  # one of them silently forward `--awk=bwk` to bats as a test path. `--coverage`
+  # joins the same loop for the same reason: it has to compose with both of the
+  # others, in either direction.
+  local report_dir='' coverage_dir=''
   while (($# > 0)); do
     case "$1" in
       '--awk=bwk')
@@ -114,6 +138,13 @@ function main() {
           die '--report needs a directory argument'
         fi
         report_dir="$2"
+        shift 2
+        ;;
+      '--coverage')
+        if (($# < 2)); then
+          die '--coverage needs a directory argument'
+        fi
+        coverage_dir="$2"
         shift 2
         ;;
       *) break ;;
@@ -146,6 +177,38 @@ function main() {
     report_args=(--report-formatter junit --output "${report_dir}")
   fi
 
+  local -a kcov_args=()
+  if [[ -n "${coverage_dir}" ]]; then
+    if ! command -v kcov > /dev/null 2>&1; then
+      # Two genuinely different failures, and the wrong message sends a reader
+      # off to install something that does not exist for their platform.
+      case "$(uname -s)" in
+        'Darwin')
+          die "kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only (#91)"
+          ;;
+        *)
+          die "kcov not found on PATH — run './.ci/in-devshell ./run-tests --coverage DIR' or 'just coverage'"
+          ;;
+      esac
+    fi
+    # kcov creates its output directory itself, so this is not load-bearing the
+    # way --report's mkdir is; it is here so the two flags behave identically and
+    # a CI path is safe to name before the tool runs. POSIX short flag for the
+    # reason spelled out on --report's `mkdir -p` above -- this line is on the
+    # ambient-tool path too.
+    mkdir -p "${coverage_dir}"
+    # The one caller of COVERAGE. tests/test_helper/common.bash unsets BASH_ENV
+    # for fixture hygiene unless it sees this, and BASH_ENV is the channel kcov
+    # instruments bash through; without the export the report is 0.00% with no
+    # files (#91). Exported here rather than in the fixture so a bare `bats` run
+    # never sees it.
+    export COVERAGE=1
+    # --include-path is hooks/ only: the entry script and the body it sources are
+    # the subject. The awk scanner is a separate process kcov cannot instrument,
+    # and the suite's own coverage is not the question being asked.
+    kcov_args=(kcov "--include-path=${REPO_DIR}/hooks" "${coverage_dir}")
+  fi
+
   local before after status=0
   before="$(repo_state)"
   # `${report_args[@]+"${report_args[@]}"}` rather than a plain
@@ -153,12 +216,14 @@ function main() {
   # `set -u` as an unbound-variable error, and .ci/in-devshell advertises a 4.2
   # floor. Same idiom as .ci/check-err-trap-hygiene and the guard body use, and
   # it preserves element boundaries -- a report directory whose path contains a
-  # space still reaches bats as one argument.
+  # space still reaches bats as one argument. `kcov_args` is expanded the same
+  # way, as a command PREFIX: empty it vanishes and `bats` is still the command,
+  # so the two flags compose without a second copy of the invocation.
   if (($# == 0)); then
-    bats --recursive --print-output-on-failure \
+    ${kcov_args[@]+"${kcov_args[@]}"} bats --recursive --print-output-on-failure \
       ${report_args[@]+"${report_args[@]}"} "${REPO_DIR}/tests" || status=$?
   else
-    bats ${report_args[@]+"${report_args[@]}"} "$@" || status=$?
+    ${kcov_args[@]+"${kcov_args[@]}"} bats ${report_args[@]+"${report_args[@]}"} "$@" || status=$?
   fi
   after="$(repo_state)"
 

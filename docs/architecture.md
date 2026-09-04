@@ -526,8 +526,76 @@ produces numbers here.
 coverable, and this guard's verdict messages are long heredocs of guidance prose.
 Those lines can never be "covered" independently of the line that opens the
 heredoc, so they sit in the uncovered column permanently and drag the figure
-down. What the report is good for is the per-line hit counts and the named gaps —
-a function nothing enters is a real finding — not the headline number.
+down.
+
+**An apostrophe in a traced command eats the rest of the trace.** This is a
+second, unrelated kind of wrongness in the same report, and it is the more
+dangerous one because it is invisible: the heredoc caveat only makes the number
+too small, while this one makes the report describe a codebase that was not
+measured (#128).
+
+The trigger is one byte. kcov instruments bash by exporting
+`PS4='kcov@${BASH_SOURCE}@${LINENO}@'`, `set -x` and a shared `BASH_XTRACEFD`
+pipe; the reader on that pipe tracks single-quote state across lines and **stops
+recording while it believes a quoted string is open**. A trace line carrying an
+odd number of unescaped `'` opens that window, and the next odd-count line closes
+it. Proved on a fixture with no guard, no bats and no `jq` in it: a script that
+sources a sibling and then calls it, run under kcov with a payload of `don't`,
+reports the sibling at **0 of 60 lines** and loses everything in the main script
+from the poison line onward; with `don''t` the same run is whole. Sweeping the
+other fourteen shell metacharacters through the same fixture — backtick,
+backslash, `$`, `!`, tab, newline, double quote — changes nothing. Only the
+apostrophe.
+
+Bash's own quoting is safe (`payload='a'\''b'` escapes its quotes); what is not
+safe is a construct that prints a word raw, such as `[[ a'b != *x* ]]`. The
+suite hits this because two rows of `tests/cases/verdicts.tsv` legitimately carry
+`# don't do it` — and those rows stay, because they are real verdict cases and
+deleting them to flatter a measurement would be the wrong trade.
+
+What the loss looks like, measured on this suite:
+
+| shape                                | report                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| odd number of apostrophes            | `hooks/pgrep-pkill-guard-body.sh` **absent**; entry script at 4 of 33                             |
+| even number, unbalanced across lines | `"files": []` and `0.00%` — nothing at all                                                        |
+| poison late in a `.bats` file        | everything after it in that file uncounted                                                        |
+| poison early, suite continues        | collection **resyncs** at later trace lines, so both files reappear and the number looks ordinary |
+
+That last row is why the failure went unnoticed for a release: the full-suite
+report lists both files with plausible counts and is still missing data. It cost
+an issue — #126 was filed against `is_xargs_value_option` and `loop_body_has_kill`
+as functions "nothing enters", and both are in fact driven by rows that had been
+in `verdicts.tsv` for months.
+
+**No kcov knob avoids it.** `--bash-parse-files-in-dir`, `--bash-parser`,
+`--configure=bash-use-basic-parser=1` and an externally set `BASH_XTRACEFD` all
+leave the loss exactly where it was; `--bash-handle-sh-invocation`,
+`--bash-tracefd-cloexec` and `--bash-parser=/bin/sh` make it worse, reporting
+0 covered lines on a **clean** payload too. `--bash-method=DEBUG` is the silent
+0.00% described above. The upstream bug is not worked around here: this repo
+carries no kcov patch or overlay by decision.
+
+**So `.ci/report-coverage` refuses an incomplete report.** Both `hooks/` files
+must appear in the report's `files[]` with a non-zero covered-line count, or the
+step dies naming the file. That catches the odd-count shape exactly, and the
+`"files": []` shape was already caught by the older refuse-to-report-nothing
+rule. It does **not** catch the resync shape, where both files are present and
+some windows are missing, and no gate here does: a canary suite ordered last was
+tried and rejected, because it records hits both in a healthy run and in the
+full-suite run that is known to be lossy — a check with no discriminating power
+is worse than none.
+
+**Debugging recipe for a suspicious zero.** Before believing that a function is
+unreached, append a throwaway `tests/zz-probe.bats` that drives the shape you
+think should reach it and run `just coverage` again. bats runs files in order, so
+a canary at the end sits outside most swallow windows. That is how the 76.42%
+run was shown to be missing at least eight body-file lines: with such a probe
+appended the body file reads 395 of 514 rather than 387, and
+`is_xargs_value_option` goes from 0 hits to 5.
+
+What the report is good for is the per-line hit counts, read with all of the
+above in mind. A zero is a question, not a finding.
 
 [kcov]: https://github.com/SimonKagstrom/kcov
 

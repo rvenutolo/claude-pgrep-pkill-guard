@@ -332,3 +332,5 @@
 "pgrep -f java | while read -r p; do echo \"$p\"; done"	allow
 "for pid in $(pgrep -f java | grep -v do); do echo \"$pid\"; done; kill 1"	warn
 "for pid in `pgrep -f java | grep -v do`; do echo \"$pid\"; done; kill 1"	warn
+"for pid in $(pgrep -f java); do echo \"$pid\""	warn
+"pgrep -f java | while read -r p; do echo \"$p\""	allow

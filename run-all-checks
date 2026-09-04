@@ -9,7 +9,15 @@
 #              step run before it. Exit codes are AGGREGATED rather than failing
 #              fast, so a single run surfaces every failing category instead of
 #              only the first.
-# @noargs
+#
+#              `--report DIR` is forwarded to the two suite runs as
+#              `--report DIR/gawk` and `--report DIR/bwk`, so each gets its own
+#              JUnit report rather than the second overwriting the first (#83).
+#              Nothing else in the gate emits a report; the flag exists so CI
+#              can upload the suite's results as an artifact when a leg fails.
+# @arg $1 --report optional literal `--report`; anything else is ignored and the
+#         gate runs with no report
+# @arg $2 dir directory to write the two per-awk report subdirectories under
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
 
@@ -46,6 +54,21 @@ function warn_untracked() {
 }
 
 function main() {
+  # Each suite run gets its own subdirectory. run-all-checks runs the suite
+  # TWICE -- once under gawk, once under one-true-awk -- and a shared output
+  # directory means the second run overwrites the first. Losing the gawk report
+  # when the bwk run also failed is exactly the case the artifact exists for.
+  local report_dir=''
+  if (($# >= 2)) && [[ "$1" == '--report' ]]; then
+    report_dir="$2"
+    shift 2
+  fi
+  local -a gawk_report=() bwk_report=()
+  if [[ -n "${report_dir}" ]]; then
+    gawk_report=(--report "${report_dir}/gawk")
+    bwk_report=(--report "${report_dir}/bwk")
+  fi
+
   local rc=0
   warn_untracked
 
@@ -116,11 +139,15 @@ function main() {
   log 'running lint checks'
   "${REPO_DIR}/.ci/run-lint-checks" || rc=1
 
+  # `${arr[@]+"${arr[@]}"}` rather than a plain `"${arr[@]}"`: bash 4.2 and 4.3
+  # treat expanding an EMPTY array under `set -u` as an unbound-variable error,
+  # and .ci/in-devshell advertises a 4.2 floor. Same idiom as run-tests and
+  # .ci/check-err-trap-hygiene use.
   log 'running tests (gawk)'
-  "${REPO_DIR}/run-tests" || rc=1
+  "${REPO_DIR}/run-tests" ${gawk_report[@]+"${gawk_report[@]}"} || rc=1
 
   log 'running tests (one-true-awk)'
-  "${REPO_DIR}/run-tests" --awk=bwk || rc=1
+  "${REPO_DIR}/run-tests" --awk=bwk ${bwk_report[@]+"${bwk_report[@]}"} || rc=1
 
   if ((rc != 0)); then
     log 'one or more checks failed'

@@ -16,11 +16,21 @@
 #              holding a single `awk -> nawk` symlink, prepended to PATH, is all
 #              it takes to exercise that platform from Linux. The default run
 #              keeps whatever `awk` the devShell puts first (gawk).
-# @arg $@ args optional `--awk=bwk`, then bats arguments or test paths; omit
-#         paths to run all of tests/
+#
+#              `--report DIR` adds bats' JUnit reporter, which writes
+#              DIR/report.xml while leaving the terminal formatter alone --
+#              `--report-formatter`, not `--formatter`, because the compat legs'
+#              job logs are the first thing a reader looks at when a macOS-only
+#              failure appears and swapping them for XML would trade the
+#              artifact against the thing it exists to supplement (#83). DIR is
+#              created if absent, because bats requires `--output` to name a
+#              directory that already exists. The report lands whether the suite
+#              passed or failed; the failing case is the one it exists for.
+# @arg $@ args optional `--awk=bwk` and `--report DIR` in any order, then bats
+#         arguments or test paths; omit paths to run all of tests/
 # @exitcode 0 all tests passed and the repo was left untouched
-# @exitcode 1 bats missing, nawk missing under --awk=bwk, a test failed, or the
-#             suite mutated the repo
+# @exitcode 1 bats missing, nawk missing under --awk=bwk, --report given without
+#             a directory, a test failed, or the suite mutated the repo
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -87,17 +97,56 @@ function main() {
     die "bats not found on PATH — run './.ci/in-devshell ./run-tests' or 'just test'"
   fi
 
-  if (($# > 0)) && [[ "$1" == '--awk=bwk' ]]; then
-    shift
-    use_bwk_awk
+  # Leading flags, in any order, consumed before anything reaches bats. A loop
+  # rather than a chain of `if`s so `--awk=bwk --report DIR` and
+  # `--report DIR --awk=bwk` are the same invocation -- CI passes one, a person
+  # debugging locally passes the other, and an order-dependent parse would make
+  # one of them silently forward `--awk=bwk` to bats as a test path.
+  local report_dir=''
+  while (($# > 0)); do
+    case "$1" in
+      '--awk=bwk')
+        shift
+        use_bwk_awk
+        ;;
+      '--report')
+        if (($# < 2)); then
+          die '--report needs a directory argument'
+        fi
+        report_dir="$2"
+        shift 2
+        ;;
+      *) break ;;
+    esac
+  done
+
+  local -a report_args=()
+  if [[ -n "${report_dir}" ]]; then
+    # bats' own --help says the --output directory "must exist"; it does not
+    # create one. Creating it here is what makes `--report` safe to point at a
+    # per-run path like ${RUNNER_TEMP}/bats-junit that nothing else made.
+    mkdir --parents "${report_dir}"
+    # --report-formatter, NOT --formatter: the first writes JUnit to a file and
+    # leaves the terminal formatter alone, the second REPLACES terminal output.
+    # The compat legs' job logs are the first thing a reader looks at when a
+    # macOS-only failure appears, and swapping them for XML would trade the
+    # artifact against the thing it exists to supplement (#83).
+    report_args=(--report-formatter junit --output "${report_dir}")
   fi
 
   local before after status=0
   before="$(repo_state)"
+  # `${report_args[@]+"${report_args[@]}"}` rather than a plain
+  # `"${report_args[@]}"`: bash 4.2 and 4.3 treat expanding an EMPTY array under
+  # `set -u` as an unbound-variable error, and .ci/in-devshell advertises a 4.2
+  # floor. Same idiom as .ci/check-err-trap-hygiene and the guard body use, and
+  # it preserves element boundaries -- a report directory whose path contains a
+  # space still reaches bats as one argument.
   if (($# == 0)); then
-    bats --recursive --print-output-on-failure "${REPO_DIR}/tests" || status=$?
+    bats --recursive --print-output-on-failure \
+      ${report_args[@]+"${report_args[@]}"} "${REPO_DIR}/tests" || status=$?
   else
-    bats "$@" || status=$?
+    bats ${report_args[@]+"${report_args[@]}"} "$@" || status=$?
   fi
   after="$(repo_state)"
 

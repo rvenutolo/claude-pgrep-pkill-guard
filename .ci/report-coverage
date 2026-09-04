@@ -19,11 +19,26 @@
 #              reports no number is worse than one that goes red: the number is
 #              the entire deliverable, and CI would otherwise keep passing while
 #              the summary went blank.
+#
+#              Reporting an INCOMPLETE number is refused for the same reason, and
+#              this half is not hypothetical. kcov 43 desynchronises on a traced
+#              command containing both an apostrophe and a newline -- the shape
+#              `# don't do it\necho hi`, which two rows of tests/cases/verdicts.tsv
+#              legitimately carry -- and drops the whole of
+#              hooks/pgrep-pkill-guard-body.sh from the report rather than
+#              undercounting it. The percentage that survives is arithmetically
+#              correct over the files that remain and silently describes a
+#              different codebase, which is how #126 came to be filed against
+#              helpers the suite provably reaches. So both hooks/ files must
+#              appear in `files[]` with a non-zero covered-line count before any
+#              number is printed. See #128 and docs/architecture.md,
+#              "Line coverage".
 # @arg $1 dir the directory passed to `run-tests --coverage`
 # @stdout the percentage, e.g. `76.42`
-# @exitcode 0 exactly one report was found and its percentage printed
-# @exitcode 1 no directory given, the directory is missing, or the number of
-#             reports found was not exactly one
+# @exitcode 0 exactly one complete report was found and its percentage printed
+# @exitcode 1 no directory given, the directory is missing, the number of
+#             reports found was not exactly one, or the one report found is
+#             missing a hooks/ file or records zero covered lines for one
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -70,6 +85,40 @@ function main() {
   if ((${#reports[@]} > 1)); then
     die "expected exactly one coverage.json under ${coverage_dir}, found ${#reports[@]}: ${reports[*]}"
   fi
+
+  # Report integrity, before anything is printed. See the header: kcov 43 can
+  # lose a whole traced file and still emit a well-formed report, so "the JSON
+  # parsed and had a percentage in it" is not evidence that the percentage means
+  # anything. These two files are the entire subject of the measurement; if
+  # either is absent or empty the run measured something else.
+  #
+  # Matched on the BASENAME, never on an absolute path. kcov records the path as
+  # it existed on the machine that produced the report -- a Nix build sandbox, a
+  # CI runner checkout, a contributor's home directory -- and this script is also
+  # run by tests against fabricated reports. Pinning the leading directories
+  # would turn a portable check into one that only passes here.
+  local -ra required_hook_files=(
+    'pgrep-pkill-guard.sh'
+    'pgrep-pkill-guard-body.sh'
+  )
+  local required_hook_file matched
+  for required_hook_file in "${required_hook_files[@]}"; do
+    # One jq pass yields "<entries matched> <covered lines summed>". covered_lines
+    # goes through tonumber because kcov writes some numeric fields as JSON
+    # strings, and `add` over strings is a jq type error rather than a total.
+    matched="$(
+      jq --raw-output --arg name "${required_hook_file}" '
+        [ .files[]? | select((.file | split("/") | last) == $name) ] as $hits
+        | "\($hits | length) \([ $hits[] | (.covered_lines | tonumber? ) // 0 ] | add // 0)"
+      ' "${reports[0]}"
+    )"
+    if [[ "${matched%% *}" == '0' ]]; then
+      die "coverage report lists no entry for hooks/${required_hook_file} — kcov 43 drops a traced file outright when it loses xtrace sync, so the percentage in ${reports[0]} describes a different codebase; see #128"
+    fi
+    if [[ "${matched##* }" == '0' ]]; then
+      die "coverage report records zero covered lines for hooks/${required_hook_file} — the suite drives that file on every case, so a zero means collection failed, not that the code is untested; see #128 and ${reports[0]}"
+    fi
+  done
 
   local percent
   percent="$(jq --raw-output '.percent_covered' "${reports[0]}")"

@@ -20,20 +20,37 @@ function make_trivial_suite() {
 BATS
 }
 
-# @description Skip a case that drives `run-tests --awk=bwk`. That path needs
-#              nawk on PATH and it builds its shim directory with GNU
-#              `mktemp --directory`, `ln --symbolic` and `head --lines=1`, so it
-#              is devShell-only by construction. The two ambient compat legs run
-#              this suite against whatever the runner ships, and macOS ships
-#              BSD coreutils. Skipping there is honest: the hermetic gate leg is
-#              the one that grades the flag, and a test that quietly rewrote the
-#              invocation to something BSD accepts would be grading a command
-#              run-tests never runs.
+# @description Skip a case that drives `run-tests --awk=bwk`. That path is
+#              devShell-only by construction and the two ambient compat legs run
+#              this suite against whatever the runner ships, so it has to be
+#              probed rather than assumed. Skipping there is honest: the
+#              hermetic gate leg is the one that grades the flag, and a test
+#              that quietly rewrote the invocation to something ambient tools
+#              accept would be grading a command run-tests never runs.
+#
+#              Three separate things have to hold, and each of them has already
+#              been observed NOT to on some leg:
+#
+#              1. `nawk` on PATH at all.
+#              2. That `nawk` is genuinely one-true-awk. `command -v nawk` is
+#                 not enough -- ubuntu-latest ships a `nawk` that IS gawk, and
+#                 run-tests then dies with "expected one-true-awk at the head of
+#                 PATH, got: GNU Awk 5.2.1". So the version string is checked
+#                 here the same way use_bwk_awk checks it after the swap.
+#              3. GNU coreutils, because use_bwk_awk builds its shim directory
+#                 with `mktemp --directory`, `ln --symbolic` and
+#                 `head --lines=1`. macOS ships BSD, which has none of them.
 # @noargs
 function require_bwk_awk() {
   if ! command -v nawk > /dev/null 2>&1; then
     skip 'nawk is not on PATH; --awk=bwk is graded by the hermetic gate leg'
   fi
+  local version=''
+  version="$(nawk --version 2>&1 | head -n 1)" || version='<no version output>'
+  case "${version}" in
+    'awk version '*) ;;
+    *) skip "nawk is not one-true-awk (${version}); --awk=bwk is graded by the hermetic gate leg" ;;
+  esac
   local probe=''
   if ! probe="$(mktemp --directory 2> /dev/null)"; then
     skip 'mktemp has no --directory (BSD coreutils); --awk=bwk is graded by the hermetic gate leg'

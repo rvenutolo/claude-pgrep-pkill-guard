@@ -28,14 +28,30 @@
 #                 unbracketed `tag != "!!str" or . == ""` collapses to a
 #                 constant true and the rule fires on every document. Every
 #                 operand is parenthesised for that reason.
+#              One rule lives outside those programs, in bash: every label a
+#              form declares must exist in .github/labels.yml. It cannot live in
+#              a yq program because the existing ones are single-quoted
+#              expressions over ONE file and the labels are in a second, and
+#              restructuring them to reach it would trade a real rule against
+#              the two traps above. A form referencing a label that does not
+#              exist does not error either -- GitHub files the issue without it
+#              -- so this is the same failure mode as the rest of the file (#89).
 # @arg $1 dir optional directory to check; defaults to the repo root plus
 #         .github/ISSUE_TEMPLATE. It exists so the bats suite can point the
 #         script at a fixture holding one deliberately broken form and assert
 #         that it fails. Without it the only possible test would be "exits 0 on
 #         the real repo", which a script that always returned 0 would also pass.
-# @exitcode 0 every form and config.yml satisfy the schema
+# @arg $2 labels optional path to the labels file; defaults to the repo root
+#         plus .github/labels.yml. Defaulted to the REAL file rather than
+#         derived from $1 on purpose: the suite's form fixtures declare
+#         `labels: [bug]`, and `bug` is in the real file, so every pre-existing
+#         case keeps passing with one argument. A path derived from $1 would
+#         have made a labels fixture mandatory for all of them.
+# @exitcode 0 every form and config.yml satisfy the schema, and every label a
+#             form references is declared in the labels file
 # @exitcode 1 the directory is missing or holds no form, a file is unparsable,
-#             or a rule is violated
+#             the labels file is missing or declares nothing, or a rule is
+#             violated
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -44,7 +60,8 @@ IFS=$'\n\t'
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
 DIR="${1:-$(git rev-parse --show-toplevel)/.github/ISSUE_TEMPLATE}"
-readonly DIR
+LABELS_FILE="${2:-$(git rev-parse --show-toplevel)/.github/labels.yml}"
+readonly DIR LABELS_FILE
 
 # config.yml is the chooser configuration, not a form: it carries no name,
 # description or body, so it gets its own program below rather than being
@@ -169,6 +186,64 @@ function report_violations() {
   return "${rc}"
 }
 
+# @description Print every label name declared in the labels file, one per line.
+#              Read ONCE before the form loop rather than per form: the file is
+#              the same for all of them, and re-reading it would report a
+#              missing labels file once per form.
+# @stdout one label name per line
+# @exitcode 0 the file parsed and declared at least one label
+# @exitcode 1 the file is missing, unparsable, or declares none
+function declared_labels() {
+  if [[ ! -f "${LABELS_FILE}" ]]; then
+    fail "${LABELS_FILE} does not exist"
+    return 1
+  fi
+  local output
+  if ! output="$(yq '.[].name' "${LABELS_FILE}" 2> /dev/null)"; then
+    fail "${LABELS_FILE##*/} is not parseable YAML"
+    return 1
+  fi
+  # The same guard as the `${#forms[@]} == 0` one below: an empty scan is a
+  # failure, never a vacuous pass. Without it a labels file that parsed to an
+  # empty sequence would make every form's labels rule trivially satisfied.
+  if [[ -z "${output}" ]]; then
+    fail "${LABELS_FILE##*/} declares no labels"
+    return 1
+  fi
+  printf '%s\n' "${output}"
+}
+
+# @description Assert every label a form declares exists in the labels file.
+#              A form referencing a label that does not exist does not error --
+#              GitHub silently files the issue without it -- so nothing short of
+#              filing one notices (#89).
+# @arg $1 file path to the form
+# @arg $2 declared newline-separated label names from the labels file
+# @exitcode 0 every referenced label is declared
+# @exitcode 1 at least one is not, or the form's labels key is unreadable
+function check_form_labels() {
+  local -r file="$1" declared="$2"
+  local -r label="${file##*/}"
+  local referenced rc=0 name
+  if ! referenced="$(yq '[.labels // [] | .[]] | .[]' "${file}" 2> /dev/null)"; then
+    fail "${label}: the labels rule could not read .labels"
+    return 1
+  fi
+  [[ -n "${referenced}" ]] || return 0
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    # `grep --line-regexp --fixed-strings` rather than a bash `[[ ]]` match: a
+    # label name may hold a space (`good first issue`) or a colon
+    # (`autorelease: pending`), and a substring match would let a declared `bug`
+    # satisfy a reference to `bugs`.
+    if ! printf '%s\n' "${declared}" | grep --line-regexp --fixed-strings --quiet -- "${name}"; then
+      fail "${label}: references label \"${name}\", which ${LABELS_FILE##*/} does not declare"
+      rc=1
+    fi
+  done <<< "${referenced}"
+  return "${rc}"
+}
+
 function main() {
   if [[ ! -d "${DIR}" ]]; then
     fail "${DIR} does not exist or is not a directory"
@@ -212,18 +287,28 @@ function main() {
     rc=1
   fi
 
+  # Fetched once, before the loop. An unreadable labels file is one violation,
+  # not one per form -- and when it is unreadable `declared` is empty, so the
+  # per-form rule is skipped rather than reporting every label as undeclared on
+  # top of the real diagnosis.
+  local declared=''
+  declared="$(declared_labels)" || rc=1
+
   local form
   for form in "${forms[@]}"; do
     if check_parses "${form}"; then
       report_violations "${form}" "${FORM_PROGRAM}" || rc=1
+      if [[ -n "${declared}" ]]; then
+        check_form_labels "${form}" "${declared}" || rc=1
+      fi
     else
       rc=1
     fi
   done
 
   if ((rc == 0)); then
-    printf 'ok: %s issue form(s) and %s satisfy the issue-forms schema\n' \
-      "${#forms[@]}" "${CONFIG_NAME}" >&2
+    printf 'ok: %s issue form(s) and %s satisfy the issue-forms schema, and reference only labels %s declares\n' \
+      "${#forms[@]}" "${CONFIG_NAME}" "${LABELS_FILE##*/}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (#43, invariant 6).

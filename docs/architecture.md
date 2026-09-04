@@ -255,7 +255,7 @@ no table can express: `tests/scanner.bats` (the awk scanner directly),
 `tests/manifest.bats`. Six more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
-templates), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
+templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
 `tests/devshell-provides.bats` (`.ci/check-devshell-provides`, against a
 fabricated package inventory), `tests/invariant-markers.bats`
 (`.ci/check-invariant-markers`, against a fabricated source tree),

@@ -1,0 +1,68 @@
+name: Labels
+on:
+  # Both paths, not just the data file. A change to this workflow can alter what
+  # the data file MEANS -- flipping skip-delete, or widening the trigger -- and
+  # a run that never fires on the change that introduced it is a run nobody
+  # reviewed. Re-applying an unchanged labels.yml is a no-op the action reports
+  # as "Skipping update" per label, so the extra run costs nothing.
+  push:
+    branches: [main]
+    paths:
+      - .github/labels.yml
+      - .github/workflows/labels.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/labels.yml
+      - .github/workflows/labels.yml
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  # `github.event_name` for the same reason ci.yml and links.yml carry it: this
+  # workflow has no schedule today, but a push to main and a workflow_dispatch
+  # of the same ref would otherwise share a group and cancel each other -- and
+  # the cancelled one would be the manual run somebody is watching.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  labels:
+    name: labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # The checkout needs the tree; nothing here writes to it.
+      contents: read
+      # The default GITHUB_TOKEN carries this. The release App token is
+      # deliberately NOT wired in here: nothing about labels needs to bypass
+      # branch protection.
+      #
+      # The trailing comment is what zizmor's `undocumented-permissions` audit
+      # actually reads -- a comment block ABOVE the key does not satisfy it,
+      # which is not obvious from the finding's wording ("needs an explanatory
+      # comment") and cost a lint cycle to establish.
+      issues: write  # labels are an issues-API resource; there is no narrower scope
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >-
+            api.github.com:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # dry-run on pull_request so a PR SHOWS what it would do without doing it.
+      # .github/labels.yml is authoritative and deletion is enabled, so the diff
+      # in a PR log is the only review a label deletion ever gets -- read it
+      # before merging.
+      #
+      # The input names are kebab-case (`yaml-file`, `skip-delete`, `dry-run`),
+      # verified against the action's own action.yml at the pinned SHA. An
+      # unrecognised input is silently ignored by the runner, so a snake_case
+      # `skip_delete` here would not disable deletion, it would leave deletion
+      # at its default -- which happens to be the same value, and would
+      # therefore look like it worked.
+      - uses: crazy-max/ghaction-github-labeler@548a7c3603594ec17c819e1239f281a3b801ab4d  # v6.0.0
+        with:
+          yaml-file: .github/labels.yml
+          skip-delete: false
+          dry-run: ${{ github.event_name == 'pull_request' }}

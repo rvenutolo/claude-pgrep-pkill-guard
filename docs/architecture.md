@@ -385,6 +385,67 @@ Declined on that trade, deliberately.
 
 Recorded as part of #34.
 
+## Repository automation
+
+Four workflows, and one piece of repository configuration that lives outside the
+tree.
+
+`ci.yml` runs the gate and the compat legs and is the only workflow whose
+contexts are required for a merge. `links.yml` checks link rot on every pull
+request and again weekly, and is deliberately advisory. `release.yml` drives
+release-please. `labels.yml` is the fourth, added by #89, and is the odd one
+out: it changes the repository rather than reporting on it.
+
+### Labels are code
+
+`.github/labels.yml` is the authoritative label set. `labels.yml` (the
+workflow) applies it with `skip-delete: false`, so **a label absent from that
+file is deleted on the next push to `main`** — and deleting a label strips it
+from every issue and pull request carrying it, which re-creating the label does
+not undo. That is the whole reason the workflow also runs on `pull_request`
+with `dry-run: true`: the job log on a PR is the only review a deletion ever
+gets, and it must be read before merging.
+
+Two consequences worth knowing before editing either file:
+
+- release-please's `autorelease: pending` and `autorelease: tagged` are listed
+  even though nothing in this repo creates them. Omitting them would have the
+  labeler delete what release-please recreates on the next release, flip-flopping
+  them forever.
+- `.ci/check-issue-forms` asserts that every label named in a form under
+  `.github/ISSUE_TEMPLATE` is declared in `.github/labels.yml`. A form
+  referencing a label that does not exist does not error — GitHub silently files
+  the issue without it — so nothing short of filing one would otherwise notice.
+
+The action's inputs are kebab-case (`yaml-file`, `skip-delete`, `dry-run`),
+which matters more than it looks: an unrecognised input is silently ignored by
+the Actions runner, so a snake_case `skip_delete` would not disable deletion,
+it would leave deletion at whatever its default is. Verify the names against the
+action's own `action.yml` at the pinned SHA whenever that pin moves.
+
+### The Actions allowlist
+
+Repository settings restrict Actions to GitHub-owned actions plus an explicit
+list of owner patterns (`verified_allowed` is off, so Marketplace verification
+buys nothing here). As of #89 that list is:
+
+```text
+googleapis/*  step-security/*  nix-community/*  wagoid/*  DeterminateSystems/*  crazy-max/*
+```
+
+It is repository configuration, not a tracked file, so it is read and written
+through the API:
+
+```console
+gh api repos/rvenutolo/claude-pgrep-pkill-guard/actions/permissions/selected-actions
+```
+
+A workflow using an owner outside the list is rejected by policy before it runs,
+which looks like a workflow failure rather than a settings problem. Adding one
+means reading the current value and merging into it — never writing the list
+from memory or from a design document, which is how the other five entries would
+get dropped.
+
 ## Design invariants
 
 Six rules the code depends on that are not evident from reading any single

@@ -309,3 +309,28 @@
 "$'pkill' --full zzznoproc"	allow
 "'pk''ill' --full zzznoproc"	allow
 "PATH=/bin p\\kill --full zzznoproc"	allow
+"pgrep -f java | xargs -a pids.txt kill"	deny:kill
+"pgrep -f java | xargs --arg-file pids.txt kill"	deny:kill
+"pgrep -f java | xargs -d , kill"	deny:kill
+"pgrep -f java | xargs --delimiter \"\\n\" kill"	deny:kill
+"pgrep -f java | xargs -E END kill"	deny:kill
+"pgrep -f java | xargs -J % kill %"	deny:kill
+"pgrep -f java | xargs -L 1 kill"	deny:kill
+"pgrep -f java | xargs --max-procs 4 kill"	deny:kill
+"pgrep -f java | xargs -s 1024 kill"	deny:kill
+"pgrep -f java | xargs --max-chars 1024 kill"	deny:kill
+"pgrep -f java | xargs --process-slot-var i kill"	deny:kill
+"pgrep -f java | xargs -E kill echo hi"	warn
+"pgrep -f java | xargs --process-slot-var kill echo hi"	warn
+"for pid in `pgrep -f java`; do kill \"$pid\"; done"	deny:kill
+"for pid in $( (pgrep -f java) ); do kill \"$pid\"; done"	deny:kill
+"for pid in $(pgrep -f java); do for i in 1 2; do :; done; kill \"$pid\"; done"	deny:kill
+"for pid in $(pgrep -f java); do echo \"$pid\"; done"	warn
+"for pid in $(pgrep -f java)"	warn
+"select pid in $(pgrep -f java); do kill \"$pid\"; done"	deny:kill
+"pgrep -f java | while read -r p; do while read -r q; do :; done < f; kill \"$p\"; done"	deny:kill
+"pgrep -f java | while read -r p; do echo \"$p\"; done"	allow
+"for pid in $(pgrep -f java | grep -v do); do echo \"$pid\"; done; kill 1"	warn
+"for pid in `pgrep -f java | grep -v do`; do echo \"$pid\"; done; kill 1"	warn
+"for pid in $(pgrep -f java); do echo \"$pid\""	warn
+"pgrep -f java | while read -r p; do echo \"$p\""	allow

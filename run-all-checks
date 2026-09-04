@@ -57,9 +57,11 @@ function main() {
   # stays under the line ceiling that keeps its per-call parse cost small, every
   # script that installs the ERR trap clears it before its own deliberate
   # non-zero return so a verdict never reads as a crash, external sources are
-  # SHA-pinned, versions agree across manifests, the marketplace/plugin
-  # manifests satisfy the ported invariants, and every .github/ISSUE_TEMPLATE
-  # form is one GitHub will render rather than silently drop from the chooser.
+  # SHA-pinned, versions agree across manifests, the bats libraries are pinned
+  # to the same SHAs on both sides of the hermetic boundary, the
+  # marketplace/plugin manifests satisfy the ported invariants, and every
+  # .github/ISSUE_TEMPLATE form is one GitHub will render rather than silently
+  # drop from the chooser.
   # check-invariant-markers turns docs/architecture.md's "Design invariants"
   # section from description into enforcement: that section promises each rule
   # is repeated as a comment in the source it constrains, and until now nothing
@@ -76,6 +78,17 @@ function main() {
   # branch was rewritten), which is a failure with different wording because no
   # comparison happened at all, or absent from the object store, which is a SKIP
   # so that a shallow clone never gets a red gate over history it never fetched.
+  # check-bats-libs-in-sync ties the two independent places bats-support and
+  # bats-assert are pinned: the flake inputs the hermetic gate loads them from,
+  # and the SHAs .github/actions/bats-ambient/action.yml clones them at for the
+  # compat legs. Nothing connected the two, so they agreed only by coincidence,
+  # and #102 made that coincidence able to break -- Renovate moves the ambient
+  # SHAs one at a time through a git-refs custom manager and flake.lock as one
+  # unit through lockFileMaintenance, with no way to group them into a single
+  # PR. A single-sided bump therefore goes red here until its counterpart
+  # lands, which is the accepted cost: a green compat leg should mean what a
+  # green gate leg means, and a compat leg running a different bats-assert does
+  # not (#101).
   # bench/run --smoke drives one payload per cohort through the hook and checks
   # every response parses as JSON. It asserts NOTHING about timing -- a timing
   # assertion would be flaky on a shared runner. Its only job is that the
@@ -93,6 +106,7 @@ function main() {
   "${REPO_DIR}/.ci/check-err-trap-hygiene" || rc=1
   "${REPO_DIR}/.ci/check-uses-sha-pinned" || rc=1
   "${REPO_DIR}/.ci/check-versions-in-sync" || rc=1
+  "${REPO_DIR}/.ci/check-bats-libs-in-sync" || rc=1
   "${REPO_DIR}/.ci/check-manifest-invariants" || rc=1
   "${REPO_DIR}/.ci/check-issue-forms" || rc=1
   "${REPO_DIR}/.ci/check-invariant-markers" || rc=1

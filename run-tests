@@ -125,7 +125,19 @@ function main() {
     # bats' own --help says the --output directory "must exist"; it does not
     # create one. Creating it here is what makes `--report` safe to point at a
     # per-run path like ${RUNNER_TEMP}/bats-junit that nothing else made.
-    mkdir --parents "${report_dir}"
+    #
+    # POSIX short flag, deliberately, and it is the one line in this file that
+    # needs to be. The rest of run-tests keeps GNU long options because every
+    # other one of them sits on a devShell-only path -- `use_bwk_awk`'s
+    # `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable
+    # only under `--awk=bwk`, which needs the devShell's nawk anyway. This line
+    # is not: `compat (ubuntu, ambient)` and `compat (macos, homebrew bash)`
+    # both invoke ./run-tests directly against the tools the runner ships, and
+    # BSD mkdir has no --parents. That was not theory -- the first CI probe of
+    # this feature died here with `mkdir: illegal option -- -` before a single
+    # test ran, which is also why the upload step it exists to feed found
+    # nothing to upload.
+    mkdir -p "${report_dir}"
     # --report-formatter, NOT --formatter: the first writes JUnit to a file and
     # leaves the terminal formatter alone, the second REPLACES terminal output.
     # The compat legs' job logs are the first thing a reader looks at when a

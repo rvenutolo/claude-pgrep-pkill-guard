@@ -446,10 +446,21 @@ the same exemption. The three ambient compat CI legs — `compat (ubuntu,
 ambient)`, `compat (macos, homebrew bash)` and `compat (macos, stock bash 3.2)`
 — run against the tools the runner ships rather than against the devShell, and
 the first two of those run the bats suite. A `--parents` in a `.bats` file
-passes locally in the devShell and reddens a macOS job. `run-tests` itself keeps
-long options: it is the gate entrypoint and runs under the devShell bash. The
-tracked counterpart is the `POSIX short flags on purpose` comment above
-`make_manifest_fixture` in `tests/manifest.bats`.
+passes locally in the devShell and reddens a macOS job. The tracked counterpart
+is the `POSIX short flags on purpose` comment above `make_manifest_fixture` in
+`tests/manifest.bats`.
+
+`run-tests` itself mostly keeps long options, but **not because it is safe to**
+— the first two of those legs invoke `./run-tests` directly against ambient
+tools, exactly like a `.bats` file. It gets away with it only because every
+long option in it sits on a devShell-only path: `use_bwk_awk`'s
+`mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
+under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
+them. The one line that is _not_ devShell-only — the `mkdir -p` that creates
+`--report`'s output directory — carries a POSIX short flag and a comment saying
+why. #83's first CI probe added that line with `--parents` and the macOS leg
+died at it with `mkdir: illegal option -- -` before a single test ran. A new
+long option anywhere else in `run-tests`' main path is the same bug again.
 
 ### 2. `hooks/` never sets `shopt -s inherit_errexit`
 

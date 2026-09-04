@@ -269,6 +269,12 @@ invoked inside a throwaway repo — for the same reason: a suite that only
 asserted "exits 0 on the real repo" would pass just as well against a script
 that unconditionally returned 0.
 
+One more, `tests/run-tests-cli.bats`, drives neither the guard nor a `.ci/`
+script: it grades `run-tests`' own leading-flag handling — `--awk=bwk` and
+`--report DIR` in either order — against a trivial always-passing fixture suite
+rather than against the real one, so the cases measure argument parsing and not
+the suite's runtime. It is the only bats file that runs `bats` inside `bats`.
+
 ## Fail open, loudly
 
 One rule explains most of the code. **Every precondition failure and every

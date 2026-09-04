@@ -170,7 +170,15 @@ function main() {
         # index is what keeps two staged files from overwriting each other, and
         # it is a counter rather than the path because a path can hold a slash.
         blob_file="${scratch}/blob-${index}"
-        git show ":0:${path}" | base64 --wrap=0 > "${blob_file}"
+        # `| tr -d '\n'` is NOT redundant with --wrap=0. --rawfile hands the
+        # file's bytes over verbatim, so a base64 that appends a trailing
+        # newline puts that newline inside the JSON string and ships a corrupt
+        # blob. The argv channel could not expose that: `$(...)` strips trailing
+        # newlines, which is what silently guaranteed the property before. The
+        # guarantee is now explicit rather than inherited from a substitution --
+        # and it is not hypothetical: the macOS runner's base64 accepts
+        # --wrap=0 and emits the newline anyway (#94).
+        git show ":0:${path}" | base64 --wrap=0 | tr -d '\n' > "${blob_file}"
         jq --null-input --compact-output \
           --arg path "${path}" \
           --rawfile contents "${blob_file}" \

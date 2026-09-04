@@ -108,6 +108,62 @@ jobs:
           name: bats-junit-gate-${{ matrix.os }}
           path: ${{ runner.temp }}/bats-junit
           retention-days: 7
+      - name: Measure hook line coverage
+        # Linux only: nixpkgs' kcov names no darwin platform at all, so the
+        # devShell does not carry it on macos-latest and `run-tests --coverage`
+        # would die there by design (#91).
+        #
+        # A SECOND run of the suite rather than wrapping the gate's own: the
+        # gate's authoritative pass/fail must not depend on kcov working, or a
+        # kcov regression -- or a nixpkgs bump that breaks its bash support --
+        # reads as a test failure and sends the next reader into hooks/. It
+        # costs ~30 s on top of a ~2 min suite, on one leg.
+        #
+        # Not `if: failure()`, unlike the JUnit upload above: the number IS the
+        # deliverable here, so it is wanted on every green run and useless on a
+        # red one.
+        if: runner.os == 'Linux'
+        # See the gate step above for why the interpreter is the flake's bash.
+        shell: nix develop --command bash -e {0}
+        # RUNNER_TEMP, not the workspace: run-tests asserts the suite left the
+        # repo untouched, and a report written under the checkout would be an
+        # untracked tree the next `git status` sees. It is already in
+        # .ci/in-devshell's KEEP_VARS, so it names the same path on both sides
+        # of the hermetic boundary.
+        #
+        # stderr goes to a file, and only surfaces if the step fails. kcov's
+        # bash tracing forwards every trace line it cannot parse -- the
+        # continuation lines of any multi-line traced command, of which the
+        # suite's JSON payloads produce a great many -- to its own stderr. That
+        # is ~1200 lines for one .bats file and roughly 12000 for the suite,
+        # which would bury the run in the job log. bats writes its TAP to
+        # STDOUT, so the test results themselves are unaffected and stay
+        # visible; only the trace spill is captured.
+        run: |
+          ./.ci/in-devshell ./run-tests --coverage "${RUNNER_TEMP}/coverage" \
+            2> "${RUNNER_TEMP}/coverage-stderr.log" || {
+            echo '::group::coverage run stderr (last 200 lines)'
+            tail --lines=200 "${RUNNER_TEMP}/coverage-stderr.log"
+            echo '::endgroup::'
+            exit 1
+          }
+      - name: Summarise coverage
+        if: runner.os == 'Linux'
+        shell: nix develop --command bash -e {0}
+        # .ci/report-coverage locates kcov's report (the directory name embeds a
+        # per-run hash, so it cannot be hardcoded), fails loudly when it does not
+        # find exactly one, and writes the summary itself. GITHUB_STEP_SUMMARY is
+        # in KEEP_VARS, so it survives --ignore-environment.
+        run: ./.ci/in-devshell ./.ci/report-coverage "${RUNNER_TEMP}/coverage"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        # Unconditional on this leg, and only this leg: the HTML is ~1.4 MB and
+        # is the part of the coverage run actually worth reading -- the per-line
+        # hit counts, which the job summary's single percentage cannot carry.
+        if: runner.os == 'Linux'
+        with:
+          name: coverage-html
+          path: ${{ runner.temp }}/coverage
+          retention-days: 7
 
   commitlint:
     name: commitlint

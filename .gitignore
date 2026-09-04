@@ -2,6 +2,11 @@
 .direnv/
 result
 
+# `just coverage`'s default output directory. The recipe takes a path argument,
+# but its default is relative so that a person can type `just coverage` and find
+# the report next to the tree it describes.
+/coverage/
+
 # NOTE: .claude/ and docs/superpowers/ are deliberately absent here. They are
 # covered by the repo author's global ignore file (~/.config/git/ignore). If a
 # contributor's PR ever shows spec or planning files, that is the signal to

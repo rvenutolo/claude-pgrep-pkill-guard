@@ -47,6 +47,14 @@ readonly KEEP_VARS=(
   CI
   IN_DEVSHELL
   NIX_SSL_CERT_FILE
+  # tests/scanner-fuzz.bats reads both: FUZZ_N sizes the corpus (`just fuzz`
+  # passes a much larger one than the gate runs) and FUZZ_SEED reproduces a
+  # specific corpus from a red run. Without them here --ignore-environment
+  # strips both and the suite silently runs its default N against a fresh
+  # random seed -- which is the failure mode where you think you are
+  # reproducing a reported failure and are not.
+  FUZZ_N
+  FUZZ_SEED
   GITHUB_ACTIONS
   GITHUB_OUTPUT
   GITHUB_ENV

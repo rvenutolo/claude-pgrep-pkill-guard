@@ -261,6 +261,89 @@ function tool_version() {
   printf '%s\n' "${line:-unknown}"
 }
 
+# @description Print the CPU frequency governor and its energy-performance
+#              preference, best effort. Every probe is optional: this is Linux
+#              cpufreq sysfs, absent on macOS and on any kernel built without
+#              it, and a missing file must degrade to `unknown` rather than
+#              fail a benchmark run.
+# @noargs
+# @stdout one line
+function cpu_governor() {
+  local governor='' epp=''
+  local -r base=/sys/devices/system/cpu/cpu0/cpufreq
+  [[ -r "${base}/scaling_governor" ]] && governor="$(< "${base}/scaling_governor")"
+  [[ -r "${base}/energy_performance_preference" ]] && epp="$(< "${base}/energy_performance_preference")"
+  if [[ -n "${governor}" && -n "${epp}" ]]; then
+    printf '%s (EPP %s)\n' "${governor}" "${epp}"
+  else
+    printf '%s\n' "${governor:-unknown}"
+  fi
+}
+
+# @description Print whether the machine is on AC or on battery, best effort.
+#              This one matters more than it looks on a laptop: platform power
+#              limits throttle a sustained run on battery no matter what the
+#              governor says, so a report that does not record it cannot be
+#              compared against one taken plugged in.
+#
+#              Read from sysfs rather than through `on_ac_power`, deliberately.
+#              That helper lives in powermgmt-base, which this repo's devShell
+#              does not ship, and the devShell runs --ignore-environment -- so a
+#              command-based probe would report `unknown` on exactly the runs
+#              this file is generated from. sysfs needs no tool at all.
+# @noargs
+# @stdout one line
+function power_source() {
+  local supply online
+  for supply in /sys/class/power_supply/*; do
+    [[ -r "${supply}/type" && "$(< "${supply}/type")" == 'Mains' ]] || continue
+    [[ -r "${supply}/online" ]] || continue
+    online="$(< "${supply}/online")"
+    if [[ "${online}" == '1' ]]; then
+      printf 'AC\n'
+    else
+      printf 'battery\n'
+    fi
+    return 0
+  done
+  printf 'unknown\n'
+}
+
+# @description Print the 1/5/15-minute load average, best effort. Captured
+#              BEFORE the measurement loop by its caller, never at report time:
+#              the run itself spawns ~15k processes, so a load figure read at
+#              the end describes the benchmark rather than the machine it ran
+#              on, which is the opposite of what a reader needs.
+# @noargs
+# @stdout one line
+function load_average() {
+  if [[ -r /proc/loadavg ]]; then
+    cut --delimiter=' ' --fields=1-3 < /proc/loadavg
+  else
+    printf 'unknown\n'
+  fi
+}
+
+# @description Print the CPU package temperature in degrees Celsius, best
+#              effort. Recorded because a hot package is the one machine
+#              condition that moves p50 while leaving min alone: a lucky sample
+#              still lands at full clock, but a sustained 15k-spawn run cannot
+#              hold it. Without this row that signature is unattributable.
+# @noargs
+# @stdout one line
+function package_temp() {
+  local zone type
+  for zone in /sys/class/thermal/thermal_zone*; do
+    [[ -r "${zone}/type" && -r "${zone}/temp" ]] || continue
+    type="$(< "${zone}/type")"
+    if [[ "${type}" == 'x86_pkg_temp' ]]; then
+      printf '%s C\n' "$(($(< "${zone}/temp") / 1000))"
+      return 0
+    fi
+  done
+  printf 'unknown\n'
+}
+
 # @description Print the markdown report: the generated-file notice, the
 #              provenance table, the cohort table, and how to read it.
 # @arg $1 samples_dir the directory holding one sample file per cohort
@@ -294,6 +377,15 @@ function write_report() {
   printf '| bash | %s |\n' "${BASH_VERSION}"
   printf '| awk | %s (`%s`) |\n' "$(tool_version awk)" "$(command -v awk)"
   printf '| jq | %s |\n' "$(tool_version jq)"
+  # Machine state, not toolchain. These four rows exist because a run whose
+  # p50 doubles while its min holds is describing the machine, not the code,
+  # and without them a later reader cannot tell those two cases apart -- which
+  # is exactly the question a regenerated report raised on 2026-09-03. LOAD and
+  # TEMP are read before the measurement loop, not here; see their capture site.
+  printf '| governor | %s |\n' "$(cpu_governor)"
+  printf '| power | %s |\n' "$(power_source)"
+  printf '| load at start | %s |\n' "${LOAD_AT_START:-unknown}"
+  printf '| package temp at start | %s |\n' "${TEMP_AT_START:-unknown}"
   printf '| repetitions | %s |\n' "${reps}"
   for cohort in "${COHORTS[@]}"; do
     IFS=$'\t' read -r n _ _ _ _ < <(cohort_stats "${samples_dir}/${cohort}")
@@ -329,7 +421,15 @@ function write_report() {
   printf 'mentions `kill` takes, and the gap between `skipped` and `quiet` as the\n'
   printf 'cost of reaching the scanner at all.\n\n'
   printf 'Percentiles are nearest-rank over every sample in the cohort. Regenerate\n'
-  printf 'with `just bench`.\n'
+  printf 'with `just bench`.\n\n'
+  printf 'Compare two of these reports by their **min** column first, then their\n'
+  printf '`baseline` row. A run where every p50 rose but the mins held is describing\n'
+  printf 'the machine, not this code: the floor is what the CPU can still do, and a\n'
+  printf 'median that drifts away from it means the run could not hold that clock.\n'
+  printf 'That is what the governor, power, load and package-temperature rows are\n'
+  printf 'for — a report generated at 96 C on battery is not comparable with one\n'
+  printf 'taken cold on AC, and before those rows existed there was no way to tell.\n'
+  printf 'Only distances measured WITHIN one report describe the guard itself.\n'
 }
 
 function main() {
@@ -384,6 +484,15 @@ function main() {
   local -r samples_dir="${WORK}/samples"
   mkdir --parents "${samples_dir}"
   export PGREP_PKILL_GUARD_STATE_DIR="${state_dir}"
+
+  # Captured HERE, before a single payload is timed, and deliberately global so
+  # emit_report can read them: the run spawns ~15k processes, so a load average
+  # sampled at report time measures the benchmark rather than the machine that
+  # hosted it. The package temperature has the same problem in reverse -- it is
+  # the pre-run thermal headroom that shapes the whole distribution.
+  LOAD_AT_START="$(load_average)"
+  TEMP_AT_START="$(package_temp)"
+  readonly LOAD_AT_START TEMP_AT_START
 
   local -a cohort_of=() payload_of=()
   local cohort payload

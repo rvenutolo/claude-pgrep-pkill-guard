@@ -9,13 +9,17 @@ hook that runs on every Bash tool call.
 
 | field | value |
 | --- | --- |
-| date | 2026-09-03T23:00:34+00:00 |
-| commit | `74829f3` |
+| date | 2026-09-04T01:39:49+00:00 |
+| commit | `4e22d0f` |
 | kernel | Linux 6.8.0-138-generic x86_64 |
 | cpu | 12th Gen Intel(R) Core(TM) i9-12900HK |
 | bash | 5.3.15(1)-release |
 | awk | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/bpy2ps3f0f3gvgvqjwgqriw1j1n840wd-gawk-5.4.1/bin/awk`) |
 | jq | jq-1.8.2 |
+| governor | powersave (EPP balance_performance) |
+| power | AC |
+| load at start | 0.34 0.72 0.62 |
+| package temp at start | 52 C |
 | repetitions | 45 |
 | samples | 14850 |
 
@@ -23,12 +27,12 @@ hook that runs on every Bash tool call.
 
 | cohort | path exercised | n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 1.06 | 2.32 | 3.09 | 4.67 |
-| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 1.62 | 4.14 | 5.44 | 8.19 |
-| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 1.74 | 3.25 | 5.10 | 5.93 |
-| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2700 | 9.55 | 38.14 | 49.62 | 78.42 |
-| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 18.63 | 68.94 | 98.02 | 128.90 |
-| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 17.43 | 42.83 | 62.94 | 85.47 |
+| `baseline` | process spawn and pipe only, no hook -- the floor | 585 | 0.96 | 2.01 | 2.50 | 3.89 |
+| `skipped` | the prefilter short-circuit -- no `jq`, no scanner pass | 585 | 1.44 | 3.27 | 3.83 | 7.60 |
+| `typical` | the `skipped` path, driven by ordinary commands rather than the corpus | 270 | 1.32 | 2.64 | 3.68 | 4.99 |
+| `quiet` | bash startup, one `jq` spawn, one scanner pass | 2700 | 8.88 | 34.82 | 43.50 | 59.19 |
+| `inspect` | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 3645 | 19.09 | 63.34 | 87.62 | 113.70 |
+| `deny` | the stateless tiers plus `deny_message`; no state | 7065 | 16.47 | 38.16 | 55.92 | 76.19 |
 
 ## How to read this
 
@@ -53,3 +57,12 @@ cost of reaching the scanner at all.
 
 Percentiles are nearest-rank over every sample in the cohort. Regenerate
 with `just bench`.
+
+Compare two of these reports by their **min** column first, then their
+`baseline` row. A run where every p50 rose but the mins held is describing
+the machine, not this code: the floor is what the CPU can still do, and a
+median that drifts away from it means the run could not hold that clock.
+That is what the governor, power, load and package-temperature rows are
+for — a report generated at 96 C on battery is not comparable with one
+taken cold on AC, and before those rows existed there was no way to tell.
+Only distances measured WITHIN one report describe the guard itself.

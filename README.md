@@ -238,22 +238,23 @@ every command in a session does.
 
 On the author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
 6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — such a command costs a
-median of **3.25 ms**, p95 5.10 ms. Driven by the wider verdicts corpus instead
-of a handful of curated ordinary commands, the same path costs 4.14 ms; those
+median of **2.64 ms**, p95 3.68 ms. Driven by the wider verdicts corpus instead
+of a handful of curated ordinary commands, the same path costs 3.27 ms; those
 rows are longer and more awkward strings than anything a session types, so read
 the pair as the range that one path spans rather than as a single number. The
-empty-hook baseline on that same run is 2.32 ms, so the guard still costs about
-**0.9 ms** above the bare process-spawn floor.
+empty-hook baseline on that same run is 2.01 ms, so the guard still costs well
+under **1 ms** above the bare process-spawn floor.
 
-Every absolute figure here moved up between the run of 2026-08-31 and the one of
-2026-09-03, and the empty-hook baseline — the control, which runs no hook at all
-— moved with them, 1.57 ms to 2.32 ms. Nothing in `hooks/` explains that; the
-machine was simply in a slower state, and a wall-clock report carries the
-machine's mood along with the code's cost. What did not move is the fast path's
-distance from that control — 0.91 ms then, 0.93 ms now — and the deeper rows
-scaled almost uniformly, each about 1.6x its old figure, next to the 1.5x the
-control itself moved by. Compare rows within one run; comparing a figure here
-against one in an older run compares two machine states.
+Every absolute figure here sits above the run of 2026-08-31, and the empty-hook
+baseline — the control, which runs no hook at all — moved with them, 1.57 ms to
+2.01 ms. Nothing in `hooks/` explains that, and the **min** column is how you
+can tell: it is unchanged across every run (`inspect` 19.18 ms then, 19.09 ms
+now), so the machine still reaches the same peak and simply cannot hold it for
+15,000 consecutive process spawns. The report now records the governor, power
+source, load average and package temperature for exactly this reason. What did
+not move is the fast path's distance from the control — 0.91 ms in 2026-08-31,
+0.63 ms here. Compare rows within one run; comparing a figure here against one
+in an older run compares two machine states.
 
 Getting there took three changes. The prefilter came first and moved an ordinary
 command from about 19 ms to somewhere in the 9-12 ms range. Next went the two

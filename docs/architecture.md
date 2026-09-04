@@ -250,9 +250,33 @@ strings stored as JSON so quoting and whitespace survive:
 
 Of the remaining bats files, the ones that exercise the guard cover the parts
 no table can express: `tests/scanner.bats` (the awk scanner directly),
+`tests/scanner-fuzz.bats` (the same scanner, against generated input),
 `tests/repeat.bats` (the stateful tier and its state-directory failure modes),
 `tests/cli.bats` (`--help`, `--version` and the usage errors) and
-`tests/manifest.bats`. Seven more are unrelated to the guard entirely, each
+`tests/manifest.bats`.
+
+`tests/scanner-fuzz.bats` is the odd one of those, and the only property-based
+suite in the tree. The scanner's contract is narrow enough to state without
+running it — for any input it exits 0 and its last line is the integrity trailer,
+whose count is the byte length of the reassembled command — so a generator can
+supply the inputs and the suite asserts only that. It asserts nothing about which
+tokens appear or at what offsets: a random input has no expected token stream, and
+inventing one would mean reimplementing the scanner inside the test.
+
+The generator is fragment-based rather than uniform-random, because uniform random
+bytes essentially never produce `<<'EOF'`, an unbalanced `$(` or a `#` at word
+start — the constructs where this scanner's logic actually lives — and would spend
+their whole budget confirming that ordinary text round trips. A catalogue of short
+strings drawn from the trouble spots the scanner's own header names is assembled
+in random order, with a minority of random printable bytes mixed in. The seed is
+printed on every run, not only on failure, and `FUZZ_SEED` reproduces a corpus;
+`FUZZ_N` sizes it, and both are in `.ci/in-devshell`'s `KEEP_VARS` so they survive
+`--ignore-environment`. `just fuzz` runs a much larger corpus on demand and is
+deliberately not part of `just check`.
+
+Anything it finds becomes a hand-written case in `tests/scanner.bats` — not a row
+in `tests/cases/`, whose tables are hook-level and read by `tests/classify.bats`.
+The fuzzer's job is to find them; the suite's job is to keep them. Seven more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-commit-payload`),

@@ -41,6 +41,18 @@ bench:
     ./.ci/in-devshell ./bench/run --output bench/RESULTS.md
     nix fmt bench/RESULTS.md
 
+# Fuzz hooks/pgrep-scan.awk with N random inputs, far more than the gate runs
+#
+# tests/scanner-fuzz.bats runs a few hundred cases as part of the suite, sized so
+# the gate does not slow measurably. This recipe is the deliberate session: a
+# larger corpus, run on demand, deliberately NOT part of `just check`.
+#
+# Set FUZZ_SEED to reproduce a corpus; the suite prints the seed it used on every
+# run. Anything this finds becomes a hand-written case in tests/scanner.bats --
+# the fuzzer's job is to find them, the suite's job is to keep them.
+fuzz N="10000":
+    FUZZ_N={{ N }} ./.ci/in-devshell ./run-tests tests/scanner-fuzz.bats
+
 # Run the config/markup/shell lint suite
 lint:
     ./.ci/in-devshell ./.ci/run-lint-checks

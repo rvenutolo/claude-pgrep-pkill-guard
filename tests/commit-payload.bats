@@ -9,14 +9,27 @@ setup() {
 
   # Every .ci/ script is devShell-only by contract -- run-all-checks, the
   # .justfile recipes and the workflows all reach them through .ci/in-devshell
-  # -- and this one reads blobs through GNU `base64 --wrap=0`. The two ambient
-  # compat legs run this suite against whatever the runner ships, and macOS
-  # ships BSD base64, which has no --wrap at all. Skipping there is honest:
-  # the hermetic leg is the one that grades this script, and a test that
-  # quietly rewrote the invocation to something BSD accepts would be grading a
-  # command the script never runs.
-  if ! printf '' | base64 --wrap=0 > /dev/null 2>&1; then
-    skip 'base64 has no --wrap (BSD coreutils); .ci/ scripts are graded inside the devShell'
+  # -- and this one needs GNU coreutils in three places: `base64 --wrap=0`,
+  # `mktemp --directory` and `rm --recursive --force`. The two ambient compat
+  # legs run this suite against whatever the runner ships. Skipping there is
+  # honest: the hermetic leg is the one that grades this script, and a test
+  # that quietly rewrote an invocation to something BSD accepts would be
+  # grading a command the script never runs.
+  #
+  # The guard used to be `printf '' | base64 --wrap=0`, on the belief that
+  # macOS ships BSD base64 with no --wrap at all. That belief is wrong, and
+  # this suite has therefore been running -- not skipping -- on
+  # `compat (macos, homebrew bash)` all along. That runner's base64 ACCEPTS
+  # --wrap=0 and then appends a trailing newline, which the old argv channel
+  # hid because `$(...)` strips one (#94). So probe each flag the script
+  # actually uses, and probe base64 for the PROPERTY rather than for the
+  # exit status: `printf 'x' | base64` is `eA==`, four bytes and no more.
+  # POSIX short flags in the probes on purpose -- `wc -c` pads on BSD, hence
+  # the tr.
+  if [ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ] \
+    || ! mktemp --directory --dry-run > /dev/null 2>&1 \
+    || ! rm --recursive --force "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null; then
+    skip 'not GNU coreutils; .ci/ scripts are graded inside the devShell'
   fi
 }
 

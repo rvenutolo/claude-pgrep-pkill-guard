@@ -18,11 +18,22 @@
 #              tests/commit-payload.bats grades it against throwaway repos, and
 #              the only thing left unproven is the HTTP call itself.
 #
-#              Every path and every base64 blob crosses into JSON through jq's
-#              --arg / --args, never through string interpolation. A path
-#              holding a double quote or a backslash must not be able to break
-#              the document, and a `printf '{"path": "%s"' "${path}"` here would
-#              hand an attacker who can name a file the whole mutation.
+#              Nothing crosses into JSON through string interpolation, and that
+#              has not changed -- only the channel has. Every path still crosses
+#              through jq's --arg. Every base64 blob now crosses through
+#              --rawfile, which reads a file's bytes and hands them over as a
+#              JSON string WITHOUT parsing them, so it carries exactly the same
+#              guarantee --arg did: a path or a blob holding a double quote or a
+#              backslash cannot break the document, and a
+#              `printf '{"path": "%s"' "${path}"` here would still hand an
+#              attacker who can name a file the whole mutation.
+#
+#              What forced the move off argv is that argv is bounded (#94).
+#              MAX_ARG_STRLEN caps a single argument at 128 KiB on Linux and
+#              ARG_MAX caps the whole vector, and base64's 4/3 inflation turned
+#              that into a ~96 KiB ceiling on a single staged source file --
+#              past which the exec failed outright with `Argument list too
+#              long`. Files have no such ceiling.
 # @arg $1 repo owner/name, e.g. rvenutolo/claude-pgrep-pkill-guard
 # @arg $2 branch the branch to commit onto, e.g. release-please--branches--main
 # @arg $3 headline the commit subject
@@ -54,41 +65,35 @@ readonly MUTATION='mutation ($input: CreateCommitOnBranchInput!) {
   }
 }'
 
-# One jq program, fed three strings per staged change through $ARGS.positional:
-# kind, path, contents. A flat positional list rather than three lists because
-# jq offers exactly one positional array, and re-pairing it here is cheaper than
-# three separate jq invocations -- each of which would have to hand the blobs
-# across argv again.
+# One jq program, fed the per-change objects through --slurpfile rather than
+# through $ARGS.positional. The three-strings-per-change flattening this
+# replaced existed only because jq offers exactly one positional array; with the
+# changes arriving as a stream of JSON values in a file, there is nothing left
+# to re-pair.
 #
-# $ARGS and the $-prefixed bindings are jq syntax, not shell expansions; hence
-# the SC2016 disable.
+# $changes and the other $-prefixed bindings are jq syntax, not shell
+# expansions; hence the SC2016 disable.
 # shellcheck disable=SC2016
 readonly JQ_PROGRAM='
-[ range(0; ($ARGS.positional | length); 3) as $i
-  | {
-      kind: $ARGS.positional[$i],
-      path: $ARGS.positional[$i + 1],
-      contents: $ARGS.positional[$i + 2]
-    } ] as $changes
-| {
-    query: $mutation,
-    variables: {
-      input: {
-        branch: {
-          repositoryNameWithOwner: $repo,
-          branchName: $branch
-        },
-        expectedHeadOid: $head_oid,
-        message: {
-          headline: $headline
-        },
-        fileChanges: {
-          additions: [ $changes[] | select(.kind == "addition") | {path, contents} ],
-          deletions: [ $changes[] | select(.kind == "deletion") | {path} ]
-        }
+{
+  query: $mutation,
+  variables: {
+    input: {
+      branch: {
+        repositoryNameWithOwner: $repo,
+        branchName: $branch
+      },
+      expectedHeadOid: $head_oid,
+      message: {
+        headline: $headline
+      },
+      fileChanges: {
+        additions: [ $changes[] | select(.kind == "addition") | {path, contents} ],
+        deletions: [ $changes[] | select(.kind == "deletion") | {path} ]
       }
     }
   }
+}
 '
 
 # @description Print one fatal diagnostic to stderr and exit 1. Nothing is ever
@@ -118,8 +123,24 @@ function main() {
   local head_oid
   head_oid="$(git rev-parse HEAD)"
 
-  # Three jq positional arguments per staged change -- kind, path, contents --
-  # with contents empty for a deletion.
+  # Blobs cross into jq through files, never through argv. The directory is
+  # created before the first blob can be written and removed by an EXIT trap, so
+  # no path through this script leaks it -- including the `die` paths, which
+  # exit rather than return.
+  #
+  # The EXIT trap is a SECOND trap, not a replacement for the ERR trap installed
+  # at the top of this file: they are different signals and both stay armed.
+  #
+  # The trap writes NOTHING to stdout: this script's contract is that stdout
+  # carries the JSON document and nothing else, and a caller piping it straight
+  # into `gh api graphql --input -` must not receive cleanup chatter.
+  local scratch
+  scratch="$(mktemp --directory)"
+  # shellcheck disable=SC2064  # expand scratch NOW, not when the trap fires
+  trap "rm --recursive --force '${scratch}'" EXIT
+
+  # One JSON object per staged change, appended to a single accumulator file and
+  # slurped back in below. Deletions carry no blob and stay cheap.
   #
   # The source is `git diff --cached --name-status -z --no-renames HEAD`, whose
   # records are <status>NUL<path>NUL. `-z` is what makes the parse safe for a
@@ -139,16 +160,35 @@ function main() {
   # stage prefix rather than a bare `:<path>` disposes of the one ambiguity in
   # that syntax: a path beginning with a digit and a colon would otherwise parse
   # as a stage number.
-  local -a changes=()
-  local status path contents
+  local -r changes_file="${scratch}/changes.json"
+  : > "${changes_file}"
+  local status path blob_file index=0
   while IFS= read -r -d '' status && IFS= read -r -d '' path; do
     case "${status}" in
       A | M)
-        contents="$(git show ":0:${path}" | base64 --wrap=0)"
-        changes+=('addition' "${path}" "${contents}")
+        # A distinct file per blob rather than one reused scratch path: the
+        # index is what keeps two staged files from overwriting each other, and
+        # it is a counter rather than the path because a path can hold a slash.
+        blob_file="${scratch}/blob-${index}"
+        # `| tr -d '\n'` is NOT redundant with --wrap=0. --rawfile hands the
+        # file's bytes over verbatim, so a base64 that appends a trailing
+        # newline puts that newline inside the JSON string and ships a corrupt
+        # blob. The argv channel could not expose that: `$(...)` strips trailing
+        # newlines, which is what silently guaranteed the property before. The
+        # guarantee is now explicit rather than inherited from a substitution --
+        # and it is not hypothetical: the macOS runner's base64 accepts
+        # --wrap=0 and emits the newline anyway (#94).
+        git show ":0:${path}" | base64 --wrap=0 | tr -d '\n' > "${blob_file}"
+        jq --null-input --compact-output \
+          --arg path "${path}" \
+          --rawfile contents "${blob_file}" \
+          '{kind: "addition", path: $path, contents: $contents}' >> "${changes_file}"
+        index=$((index + 1))
         ;;
       D)
-        changes+=('deletion' "${path}" '')
+        jq --null-input --compact-output \
+          --arg path "${path}" \
+          '{kind: "deletion", path: $path}' >> "${changes_file}"
         ;;
       *)
         # Loudly, not silently. GitHub's fileChanges models additions and
@@ -164,17 +204,20 @@ function main() {
   # empty diff first and skips the commit entirely; reaching this script with a
   # clean index means the caller is broken, and emitting an empty-fileChanges
   # mutation would paper over that with a pointless empty commit.
-  if ((${#changes[@]} == 0)); then
+  if [[ ! -s "${changes_file}" ]]; then
     die 'nothing staged; the caller is responsible for checking that first'
   fi
 
+  # --slurpfile reads a stream of JSON values out of a file into an array, which
+  # is exactly the shape one --compact-output object per line produced.
   jq --null-input \
     --arg mutation "${MUTATION}" \
     --arg repo "${repo}" \
     --arg branch "${branch}" \
     --arg headline "${headline}" \
     --arg head_oid "${head_oid}" \
-    --args "${JQ_PROGRAM}" "${changes[@]}"
+    --slurpfile changes "${changes_file}" \
+    "${JQ_PROGRAM}"
 }
 
 main "$@"

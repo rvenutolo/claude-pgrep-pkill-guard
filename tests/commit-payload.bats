@@ -253,3 +253,37 @@ function field() {
   assert_equal "${output}" ''
   [[ "${stderr}" == *'not a git repo'* ]]
 }
+
+@test "commit payload: a file larger than the argv limit still round-trips" {
+  local -r root="${BATS_TEST_TMPDIR}/large"
+  make_repo "${root}"
+  # ~208 KiB of inert, deterministic filler. Comfortably past the ~96 KiB of
+  # source that base64's 4/3 inflation puts against Linux's 128 KiB
+  # MAX_ARG_STRLEN, and small enough not to slow the suite. Inert on purpose:
+  # this is a payload position, and payload positions never hold anything with
+  # side effects.
+  local -r big="${root}/big.txt"
+  local line
+  line="$(printf 'PAYLOAD_FILLER_%060d' 0)"
+  local i=0
+  : > "${big}"
+  while [ "${i}" -lt 2800 ]; do
+    printf '%s\n' "${line}" >> "${big}"
+    i=$((i + 1))
+  done
+  [ "$(wc -c < "${big}")" -gt 131072 ]
+
+  git -C "${root}" add big.txt
+  run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
+  assert_success
+
+  # The emitted base64 must decode back to exactly the staged bytes. Compared by
+  # RE-ENCODING the expected bytes rather than decoding the emitted string:
+  # GNU base64 decodes with --decode and BSD with -D, and this suite runs on
+  # both compat legs. Compared with `[` rather than assert_equal so a mismatch
+  # does not dump a quarter of a megabyte of base64 into the failure report.
+  local emitted expected
+  emitted="$(field '.variables.input.fileChanges.additions[0].contents')"
+  expected="$(b64 < "${big}")"
+  [ "${emitted}" = "${expected}" ]
+}

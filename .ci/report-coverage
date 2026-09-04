@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+# @description Print the line-coverage percentage from a kcov report directory,
+#              and append a one-line summary to ${GITHUB_STEP_SUMMARY} when that
+#              variable is set.
+#
+#              Exists because locating kcov's report is not obvious and getting
+#              it wrong fails silently. kcov writes the real JSON to
+#              `<dir>/<binary>.<hash>/coverage.json`, where the hash varies from
+#              run to run, so the path cannot be hardcoded. Next to it kcov also
+#              creates `<dir>/kcov-merged/`, which for a single-binary run --
+#              which is every run here, since run-tests invokes kcov around one
+#              `bats` -- is EMPTY. A summariser that reached for the
+#              obvious-looking merged directory would find nothing and, written
+#              the obvious way, would print nothing and exit 0.
+#
+#              So the rule is exactly one match, and anything else is a failure
+#              with a message naming what it found. A coverage step that quietly
+#              reports no number is worse than one that goes red: the number is
+#              the entire deliverable, and CI would otherwise keep passing while
+#              the summary went blank.
+# @arg $1 dir the directory passed to `run-tests --coverage`
+# @stdout the percentage, e.g. `76.42`
+# @exitcode 0 exactly one report was found and its percentage printed
+# @exitcode 1 no directory given, the directory is missing, or the number of
+#             reports found was not exactly one
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+function die() {
+  printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  exit 1
+}
+
+function main() {
+  if (($# != 1)); then
+    printf 'usage: %s <coverage-dir>\n' "${0##*/}" >&2
+    trap - ERR
+    exit 1
+  fi
+  local -r coverage_dir="$1"
+
+  if [[ ! -d "${coverage_dir}" ]]; then
+    die "not a directory: ${coverage_dir}"
+  fi
+
+  # -mindepth 2 -maxdepth 2 rather than a recursive walk: the report sits exactly
+  # one level down, and kcov's HTML tree further in contains no coverage.json but
+  # a deep walk would still have to be filtered. The kcov-merged prune is what
+  # keeps an empty merged directory from ever becoming a second match on a future
+  # kcov that decides to populate it.
+  local -a reports=()
+  mapfile -t reports < <(
+    find "${coverage_dir}" -mindepth 2 -maxdepth 2 \
+      -path '*/kcov-merged/*' -prune -o \
+      -name 'coverage.json' -print \
+      | sort
+  )
+
+  if ((${#reports[@]} == 0)); then
+    die "no coverage.json under ${coverage_dir} — did kcov actually run?"
+  fi
+  if ((${#reports[@]} > 1)); then
+    die "expected exactly one coverage.json under ${coverage_dir}, found ${#reports[@]}: ${reports[*]}"
+  fi
+
+  local percent
+  percent="$(jq --raw-output '.percent_covered' "${reports[0]}")"
+  if [[ -z "${percent}" || "${percent}" == 'null' ]]; then
+    die "coverage report has no percent_covered field: ${reports[0]}"
+  fi
+
+  printf '%s\n' "${percent}"
+
+  # Writing the job summary from here rather than from the workflow keeps the
+  # report's shape in one place, and means a local run can be checked against
+  # what CI will render by setting the variable.
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    # The prose goes through a QUOTED heredoc rather than a run of printfs
+    # because it contains markdown backticks, and a backtick inside a
+    # single-quoted printf format is SC2016. An unquoted heredoc would be worse
+    # than the warning it silenced: there the backticks would be real command
+    # substitution.
+    {
+      printf '### Hook line coverage\n\n'
+      printf '**%s%%** of executable lines in hooks/ were reached by the BATS suite.\n\n' "${percent}"
+      # The caveat travels with the number on purpose. Without it a reader takes
+      # the figure for branch reach, and it is not: kcov counts heredoc BODY
+      # lines as coverable, and this guard's verdict messages are long heredocs
+      # of guidance prose that can never be covered independently of the line
+      # opening them. See docs/architecture.md, "Line coverage".
+      cat << 'SUMMARY_MD'
+Read it as a floor, not a measurement: kcov counts heredoc body lines as
+coverable, and the guard's verdict messages are long prose heredocs. The
+per-line hit counts in the `coverage-html` artifact are the useful part.
+SUMMARY_MD
+    } >> "${GITHUB_STEP_SUMMARY}"
+  fi
+
+  trap - ERR
+  return 0
+}
+
+main "$@"

@@ -26,6 +26,7 @@ readonly EXPECT_EXECUTABLE=(
   '.ci/build-*'
   '.ci/check-*'
   '.ci/run-*'
+  '.ci/report-*'
   '.githooks/*'
   'run-all-checks'
   'run-tests'

@@ -252,7 +252,7 @@ Of the remaining bats files, the ones that exercise the guard cover the parts
 no table can express: `tests/scanner.bats` (the awk scanner directly),
 `tests/repeat.bats` (the stateful tier and its state-directory failure modes),
 `tests/cli.bats` (`--help`, `--version` and the usage errors) and
-`tests/manifest.bats`. Six more are unrelated to the guard entirely, each
+`tests/manifest.bats`. Seven more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
@@ -263,17 +263,20 @@ fabricated package inventory), `tests/invariant-markers.bats`
 two-commit repository) and `tests/bats-libs-in-sync.bats`
 (`.ci/check-bats-libs-in-sync`, against copied fixtures of
 `.github/actions/bats-ambient/action.yml` and `flake.lock` carrying planted SHA
-mismatches). Every one of them drives its script over a fabricated input — five
-through optional fixture-path arguments, and `build-commit-payload` by being
-invoked inside a throwaway repo — for the same reason: a suite that only
-asserted "exits 0 on the real repo" would pass just as well against a script
-that unconditionally returned 0.
+mismatches) and `tests/report-coverage.bats` (`.ci/report-coverage`, against a
+fabricated kcov output directory). Every one of them drives its script over a
+fabricated input — five through optional fixture-path arguments,
+`build-commit-payload` by being invoked inside a throwaway repo, and
+`report-coverage` by being pointed at a directory a case built — for the same
+reason: a suite that only asserted "exits 0 on the real repo" would pass just as
+well against a script that unconditionally returned 0.
 
 One more, `tests/run-tests-cli.bats`, drives neither the guard nor a `.ci/`
-script: it grades `run-tests`' own leading-flag handling — `--awk=bwk` and
-`--report DIR` in either order — against a trivial always-passing fixture suite
-rather than against the real one, so the cases measure argument parsing and not
-the suite's runtime. It is the only bats file that runs `bats` inside `bats`.
+script: it grades `run-tests`' own leading-flag handling — `--awk=bwk`,
+`--report DIR` and `--coverage DIR`, in any order — against a trivial
+always-passing fixture suite rather than against the real one, so the cases
+measure argument parsing and not the suite's runtime. It is the only bats file
+that runs `bats` inside `bats`.
 
 ## Fail open, loudly
 
@@ -445,6 +448,64 @@ which looks like a workflow failure rather than a settings problem. Adding one
 means reading the current value and merging into it — never writing the list
 from memory or from a design document, which is how the other five entries would
 get dropped.
+
+### Line coverage
+
+`run-tests --coverage DIR` runs the suite under [kcov][kcov] and writes an HTML
+report to `DIR`; `just coverage` is the wrapper a person types. The `gate` job
+runs it on the Linux leg only, uploads the report as an artifact and prints the
+percentage in the job summary. There is no threshold and no badge: the number is
+something to look at, not something to pass.
+
+Three things about it are not obvious, and all three cost a day to find (#91).
+
+**kcov instruments bash through `BASH_ENV`.** It exports
+`BASH_ENV=<outdir>/bash-helper.sh` into the traced environment; every child bash
+sources that helper on startup, which sets `PS4` and turns on `set -x`.
+`tests/test_helper/common.bash` unsets `BASH_ENV` — deliberately, to stop child
+shells re-sourcing the user's interactive `~/.bashrc` — and because every test
+drives the guard as a subprocess (invariant 3), that unset meant kcov
+instrumented the bats parent and nothing else. The first probe therefore reported
+0% _with no files at all_, which reads like a path or filter problem and is not
+one. The unset is now conditional on `COVERAGE`, which `run-tests --coverage`
+sets and nothing else does, so an ordinary run is byte-identical to what it was
+and the fixture-escape hardening around it is never relaxed by accident.
+
+`run-tests` unsets `BASH_ENV` too, in `main`, and that one is deliberately _not_
+guarded: it runs before the `kcov` process starts, and kcov exports the variable
+into the environment it hands its child, so guarding it would change nothing.
+The comment there says so, because the symmetry invites a reader to
+"fix" it.
+
+**kcov is Linux-only in nixpkgs.** Its `meta.platforms` names no darwin system at
+all, so it enters the devShell behind `lib.optionals stdenv.isLinux` — an
+unconditional entry would break evaluation on `aarch64-darwin` and take the
+hermetic macOS gate with it, the same trap the `flock`/util-linux note in
+`flake.nix` avoids. That is why `.ci/required-tools` grew a `linux-only`
+annotation: `check-devshell-provides`' forward pass skips such an entry off
+Linux, and says out loud that it skipped it, while the reverse pass is unaffected
+because the package is not in `nativeBuildInputs` there in the first place. An
+annotation the parser does not recognise is a failure, not a silent pass.
+
+**The run is loud, and the quiet alternative does not work.** kcov forwards every
+line of the trace stream it cannot parse — which is every continuation line of a
+multi-line traced command, and the suite's JSON payloads produce a great many —
+to its own stderr: roughly 1,200 lines for one `.bats` file and 12,000 for the
+suite. bats writes its TAP to stdout, so the test results are unaffected; the
+gate's coverage step redirects stderr to a file and prints it only when the step
+fails. kcov's `--bash-method=DEBUG`, which traces through a `DEBUG` trap writing
+to a private fd, is silent — and reports **0.00%**. It is the knob #91 expected to
+need, and it is the wrong one; the noisy default method is the only one that
+produces numbers here.
+
+**Read the percentage as a floor.** kcov counts heredoc _body_ lines as
+coverable, and this guard's verdict messages are long heredocs of guidance prose.
+Those lines can never be "covered" independently of the line that opens the
+heredoc, so they sit in the uncovered column permanently and drag the figure
+down. What the report is good for is the per-line hit counts and the named gaps —
+a function nothing enters is a real finding — not the headline number.
+
+[kcov]: https://github.com/SimonKagstrom/kcov
 
 ## Design invariants
 

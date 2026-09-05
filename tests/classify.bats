@@ -74,6 +74,6 @@ assert_row() {
   done < "${CASES}"
 
   echo "checked ${count} rows, ${failures} failures" >&3
-  [ "${count}" -eq 345 ]
+  [ "${count}" -eq 349 ]
   [ "${failures}" -eq 0 ]
 }

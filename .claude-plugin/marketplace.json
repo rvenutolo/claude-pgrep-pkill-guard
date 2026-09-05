@@ -21,12 +21,7 @@
         "name": "Rick Venutolo",
         "url": "https://github.com/rvenutolo"
       },
-      "keywords": [
-        "hook",
-        "safety",
-        "pgrep",
-        "pkill"
-      ]
+      "keywords": ["hook", "safety", "pgrep", "pkill"]
     }
   ]
 }

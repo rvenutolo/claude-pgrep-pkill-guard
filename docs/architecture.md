@@ -522,11 +522,26 @@ to a private fd, is silent — and reports **0.00%**. It is the knob #91 expecte
 need, and it is the wrong one; the noisy default method is the only one that
 produces numbers here.
 
-**Read the percentage as a floor.** kcov counts heredoc _body_ lines as
-coverable, and this guard's verdict messages are long heredocs of guidance prose.
-Those lines can never be "covered" independently of the line that opens the
-heredoc, so they sit in the uncovered column permanently and drag the figure
-down.
+**Read the percentage as a floor.** kcov's parser marks lines coverable that
+bash's xtrace can never report a hit on, so they sit in the uncovered column
+permanently and drag the figure down. Three shapes do it here, and the first is
+the one the caveat used to name alone:
+
+- **Heredoc bodies.** This guard's verdict messages are long heredocs of guidance
+  prose, and no body line can be "covered" independently of the line that opens
+  the heredoc.
+- **Continuation lines of a multi-line quoted assignment or array literal.** The
+  trace records the line the assignment starts on and nothing after it, so every
+  further line of `preamble='...'`, of a multi-line `jq` program, and of a
+  `readonly -a X=(` list is permanently uncovered.
+- **A `case` arm whose pattern sits alone on its line.** xtrace records the arm's
+  body, never its pattern, so `'(')` on its own line reads as uncovered while the
+  line below it — the arm actually taken — reads as covered. An arm written on a
+  single line (`'do') depth=$((depth + 1)) ;;`) does not have the problem.
+
+Together these were **51 of the body file's 76 uncovered lines** at the tip that
+closed #132 — including all thirty of `deny_message`'s, which is the function
+this caveat exists to explain.
 
 **An apostrophe in a traced command eats the rest of the trace.** This is a
 second, unrelated kind of wrongness in the same report, and it is the more
@@ -593,6 +608,18 @@ a canary at the end sits outside most swallow windows. That is how the 76.42%
 run was shown to be missing at least eight body-file lines: with such a probe
 appended the body file reads 395 of 514 rather than 387, and
 `is_xargs_value_option` goes from 0 hits to 5.
+
+**Two zeros in the body file are neither artifact nor gap: they are
+unreachable.** `loop_context`'s closing `printf 'none\n'` and
+`invocation_is_captured`'s closing `return 1` are defensive returns that no input
+reaches. `invocation_is_captured` iterates `for ((idx = 0; idx <= target;
+idx++))` and returns unconditionally at `idx == target`, so the loop cannot run
+past it; `loop_context` reads the same token stream that produced `target`,
+counts indices the same way, and likewise returns there. Falling off either loop
+would need a `target` beyond the end of the stream it came from. Both guards
+stay — this is a redundancy, not a defect, the same finding #131 recorded for
+`loop_body_has_kill`'s `((found_do == 1)) || return 1` — and neither gets a test
+row, because a row that cannot be written is not a coverage gap.
 
 What the report is good for is the per-line hit counts, read with all of the
 above in mind. A zero is a question, not a finding.

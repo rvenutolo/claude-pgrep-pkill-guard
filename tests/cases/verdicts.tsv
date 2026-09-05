@@ -334,11 +334,11 @@
 "for pid in `pgrep -f java | grep -v do`; do echo \"$pid\"; done; kill 1"	warn
 "for pid in $(pgrep -f java); do echo \"$pid\""	warn
 "pgrep -f java | while read -r p; do echo \"$p\""	allow
-"doas -n pgrep --full java"	allow
-"pgrep --full -- java > /tmp/out"	allow
-"echo `date` && pgrep --full java"	allow
-"while true; do pgrep --full x >/dev/null || echo `sh -c break`; sleep 5; done"	warn
-"while true; do pgrep --full x >/dev/null || echo $(sh -c break); sleep 5; done"	warn
+"doas -n pkill --full java"	deny:kill
+"pkill --full -- \"[j]ava\" > /tmp/out"	allow
+"while `date`; do :; done; pgrep --full y"	allow
+"while true; do pgrep --full x >/dev/null || echo `break`; sleep 5; done"	warn
+"while true; do pgrep --full x >/dev/null || echo $(break); sleep 5; done"	warn
 "while true; do pgrep --full x >/dev/null || sleep 5"	warn
 "pgrep --full java | kill -9"	deny:kill
 "(pgrep --full java)"	allow

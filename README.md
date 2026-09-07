@@ -237,24 +237,34 @@ hook spawns `jq`, the scanner, or anything else at all — which is what almost
 every command in a session does.
 
 On the author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
-6.8.0-138-generic x86_64 and bash 5.3.15(1)-release — such a command costs a
-median of **2.64 ms**, p95 3.68 ms. Driven by the wider verdicts corpus instead
-of a handful of curated ordinary commands, the same path costs 3.27 ms; those
+6.8.0-139-generic x86_64 and bash 5.3.15(1)-release — such a command costs a
+median of **3.17 ms**, p95 4.11 ms. Driven by the wider verdicts corpus instead
+of a handful of curated ordinary commands, the same path costs 3.33 ms; those
 rows are longer and more awkward strings than anything a session types, so read
 the pair as the range that one path spans rather than as a single number. The
-empty-hook baseline on that same run is 2.01 ms, so the guard still costs well
-under **1 ms** above the bare process-spawn floor.
+empty-hook baseline on that same run is 2.04 ms, so the guard costs about
+**1.1 ms** above the bare process-spawn floor.
 
 Every absolute figure here sits above the run of 2026-08-31, and the empty-hook
 baseline — the control, which runs no hook at all — moved with them, 1.57 ms to
-2.01 ms. Nothing in `hooks/` explains that, and the **min** column is how you
-can tell: it is unchanged across every run (`inspect` 19.18 ms then, 19.09 ms
-now), so the machine still reaches the same peak and simply cannot hold it for
-15,000 consecutive process spawns. The report now records the governor, power
-source, load average and package temperature for exactly this reason. What did
-not move is the fast path's distance from the control — 0.91 ms in 2026-08-31,
-0.63 ms here. Compare rows within one run; comparing a figure here against one
-in an older run compares two machine states.
+2.04 ms. Nothing in `hooks/` explains that, and the **min** column is how you
+can tell: it is near-unchanged across every run (`inspect` 19.18 ms in
+2026-08-31, 19.53 ms now), so the machine still reaches the same peak and simply
+cannot hold it for tens of thousands of consecutive process spawns. The report
+records the governor, power source, load average and package temperature for
+exactly this reason.
+
+The fast path's **distance** from the control is the figure worth watching, and
+it has not held still either: 0.91 ms in 2026-08-31, 0.63 ms in 2026-09-04,
+1.13 ms now — with the control itself flat across the last pair, 2.01 to
+2.04 ms. That last move is not this guard's code. `hooks/pgrep-pkill-guard.sh`
+is byte-identical between the two runs, and `typical` exercises the prefilter
+short-circuit, which never sources the body file where the only intervening
+change landed; the kernel went 6.8.0-138 to 6.8.0-139 between them. The cause
+was not isolated further, and the honest statement is the one this section
+already makes: compare rows within one run. Comparing a figure here against one
+in an older run compares two machine states, and even a within-run difference
+travels less well across them than it looks like it should.
 
 Getting there took three changes. The prefilter came first and moved an ordinary
 command from about 19 ms to somewhere in the 9-12 ms range. Next went the two
@@ -289,14 +299,14 @@ to 2.49. The control is `baseline`, the empty hook, which sat at 1.67, 1.57,
 move is why the comparison is worth quoting.
 
 What is left is not `jq`, not the scanner, not a helper process, and no longer
-two thousand lines of parse. About 2.32 ms of the 3.25 is process spawn, which
+two thousand lines of parse. About 2.04 ms of the 3.33 is process spawn, which
 any hook at all would pay, and the 0.13 ms of parse named above is most of what
 the entry script adds on top of it.
 
 Commands that reach the deeper paths cost more, and only they pay it: one the
 guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
-state file — has a median of 68.94 ms, and a denied command 42.83 ms. Those
-figures, and the 38.14 ms alongside them, are for a command the guard actually
+state file — has a median of 66.04 ms, and a denied command 38.19 ms. Those
+figures, and the 35.12 ms alongside them, are for a command the guard actually
 inspects — one carrying `pgrep`, `kill` or a task-output path, past the
 prefilter and into the `jq` spawn and scanner pass. They come from
 `tests/cases/verdicts.tsv`, which exists to be hard on the scanner rather than

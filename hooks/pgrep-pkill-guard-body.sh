@@ -1030,12 +1030,26 @@ function result_is_consumed() {
 
   # An enclosing `if` / `elif`, or a negation, reads the exit status as a boolean.
   # Walk back over prefix words so `if sudo pgrep --full x` still counts.
+  #
+  # Anything between the invocation and the operator or keyword that opened its
+  # command is prefix material by construction: find_invocations only reports an
+  # invocation in command position, so a word reached here is a prefix command,
+  # one of its flags, that flag's value, or an assignment word. Testing for a
+  # prefix COMMAND alone stopped at the value word and hid the enclosing `if` of
+  # `if sudo -u bob pgrep --full x`, `if timeout 5 pgrep --full x` and every
+  # other prefix carrying an option or an operand (#132). The prefix-command test
+  # stays ahead of the stop test because `time` is both a prefix and a keyword.
   local k=$((target - 1)) word
   while ((k >= 0)); do
     word="${toks[k]##*/}"
     case "${word}" in
       'if' | 'elif' | '!') return 0 ;;
-      *) is_prefix_command "${word}" || break ;;
+      *)
+        if ! is_prefix_command "${word}" \
+          && { is_operator "${toks[k]}" || is_keyword "${toks[k]}"; }; then
+          break
+        fi
+        ;;
     esac
     k=$((k - 1))
   done

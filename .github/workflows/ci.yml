@@ -66,7 +66,27 @@ jobs:
           # CI run and the gate would be theatre. The history is ~150 commits.
           fetch-depth: 0
           persist-credentials: false
-      - uses: ./.github/actions/setup
+      # zizmor's `self-repository` audit, new in 1.30.0, asks that a local
+      # composite action be reached through GitHub's `$/` form rather than the
+      # path-relative `./`, so it resolves at the commit the workflow is
+      # running rather than out of whatever the working tree happens to hold.
+      # The concern it exists for is a job that checks out a ref it does not
+      # control and then runs an action from it.
+      #
+      # `$/` is not adoptable yet. No released actionlint parses it -- 1.7.12,
+      # the latest, rejects every one of these lines with "invalid format
+      # because ref is missing" -- and actionlint runs one linter EARLIER than
+      # zizmor in .ci/run-lint-checks, so converting the call sites would trade
+      # this audit for a hard parse error on all five. Upstream support is an
+      # open, unmerged pull request against rhysd/actionlint. Every one of
+      # these suppressions lifts when it ships (#137).
+      #
+      # Here, and at the two compat legs below and the one site in links.yml,
+      # the checkout immediately above is this workflow's own commit, so `./`
+      # and `$/` resolve to the same tree and the audit has nothing to bite on.
+      # The one site in this repo where the two forms genuinely differ is
+      # release.yml's reformat job; the rationale lives there, next to it.
+      - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
       - name: Run the full gate
         # The gate is run under a bash from the repo's own flake, not the host's.
         # .ci/in-devshell runs BEFORE the devShell it creates, so it executes
@@ -216,7 +236,10 @@ jobs:
           # belongs in the log when a run goes red.
           command -v awk
           awk --version 2>&1 | head -1 || awk -W version 2>&1 | head -1
-      - uses: ./.github/actions/bats-ambient
+      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
+      # would resolve the same tree. Full rationale at the gate job's
+      # `uses: ./.github/actions/setup` above (#137).
+      - uses: ./.github/actions/bats-ambient  # zizmor: ignore[self-repository]
       - name: Run the suite against ambient tools
         run: ./run-tests --report "${RUNNER_TEMP}/bats-junit"
       # See the gate job's upload step for why this only fires on failure (#83).
@@ -250,7 +273,10 @@ jobs:
           "${brew_prefix}/bin/bash" --version | head -1
           jq --version
           /usr/bin/awk --version 2>&1 | head -1
-      - uses: ./.github/actions/bats-ambient
+      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
+      # would resolve the same tree. Full rationale at the gate job's
+      # `uses: ./.github/actions/setup` above (#137).
+      - uses: ./.github/actions/bats-ambient  # zizmor: ignore[self-repository]
       - name: Run the suite against ambient tools
         run: |
           set -Eeuo pipefail

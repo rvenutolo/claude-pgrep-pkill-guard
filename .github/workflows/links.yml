@@ -54,7 +54,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
+      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
+      # would resolve the same tree. Full rationale at ci.yml's gate job
+      # (#137).
+      - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
       - name: Check every link in the tracked tree
         # In the environment, never in argv: a token passed as a flag is visible
         # in `ps` output for the life of the process. lychee reads GITHUB_TOKEN

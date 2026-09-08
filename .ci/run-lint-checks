@@ -179,12 +179,24 @@ function main() {
   # -- it adds three findings here (`misfeature`, two `secrets-outside-env`)
   # that would each need a suppression to say nothing useful.
   #
-  # The two real findings are suppressed INLINE, next to the code, never in a
-  # config file: a suppression a reader cannot see from the line it excuses is a
-  # suppression nobody re-examines. Each carries its reason in the surrounding
-  # YAML comment. Note that the suppression must sit on the `run:` KEY, not on
-  # the line inside the block it describes -- zizmor reads YAML comments, and a
-  # `#` inside a block scalar is shell source it never sees.
+  # Every finding this tree suppresses is suppressed INLINE, next to the code,
+  # never in a config file: a suppression a reader cannot see from the line it
+  # excuses is a suppression nobody re-examines. There is no zizmor.yml here on
+  # purpose. Each suppression carries its reason in the surrounding YAML
+  # comment. Note that the suppression must sit on the KEY it excuses -- the
+  # `run:` or the `uses:` -- and not on a line inside the block it describes:
+  # zizmor reads YAML comments, and a `#` inside a block scalar is shell source
+  # it never sees.
+  #
+  # Two of them are `github-env` and `adhoc-packages`, one apiece. The other
+  # five are `self-repository`, the audit zizmor 1.30.0 added, on the five
+  # `uses: ./.github/actions/...` call sites. No released actionlint parses the
+  # `$/` form that audit asks for, and actionlint runs above, so converting the
+  # call sites would trade the audit for a parse error on every one -- see #137
+  # and the rationale beside ci.yml's gate job. The author's linPEAS-flake repo
+  # answers the identical audit through a zizmor.yml ignore list; that is the
+  # right shape at its 66 call sites across 21 workflows and the wrong one at
+  # five, so the two repos diverge here deliberately.
   #
   # .github/ and not `.` : zizmor's own discovery walks for workflows, and a
   # bare `.` would descend into the author's untracked docs/superpowers/ tree

@@ -190,6 +190,7 @@ function report_violations() {
 #              Read ONCE before the form loop rather than per form: the file is
 #              the same for all of them, and re-reading it would report a
 #              missing labels file once per form.
+# @noargs
 # @stdout one label name per line
 # @exitcode 0 the file parsed and declared at least one label
 # @exitcode 1 the file is missing, unparsable, or declares none

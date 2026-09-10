@@ -128,6 +128,7 @@ builtins.concatStringsSep "\n" (map (name: toString formatters.${name}.command) 
 #              why .ci/required-tools' own header had to change: a header
 #              promising "`#` comments ignored" describes a parser that would
 #              silently drop `linux-only` and quietly demand kcov on macOS.
+# @noargs
 # @stdout tool<TAB>annotation per declared entry
 function declared_tools_annotated() {
   local line name annotation
@@ -157,6 +158,7 @@ function declared_tools_annotated() {
 #              and reverse_check's tool_paths loop already ignores a declared
 #              tool that does not resolve. Derived from the annotated form, not
 #              a second copy of the parser, so the two cannot drift.
+# @noargs
 # @stdout one declared tool per line
 function declared_tools() {
   local annotated entry
@@ -178,6 +180,7 @@ function declared_tools() {
 #              `linux-only` branch on a single Linux runner. A test that
 #              skipped its Darwin case off Darwin would leave that branch
 #              executed by nothing anywhere.
+# @noargs
 # @stdout the platform name
 function host_platform() {
   if [[ -n "${FIXTURE_DIR}" && -r "${FIXTURE_DIR}/platform" ]]; then
@@ -196,6 +199,7 @@ function host_platform() {
 
 # @description Print the devShell's packages, one per line, as the package name
 #              followed by every one of its output paths, tab-separated.
+# @noargs
 # @stdout name<TAB>outpath[<TAB>outpath...] per package
 function devshell_packages() {
   if [[ -n "${FIXTURE_DIR}" ]]; then
@@ -212,6 +216,7 @@ function devshell_packages() {
 
 # @description Print the absolute command path of every formatter .treefmt.nix
 #              enables, one per line.
+# @noargs
 # @stdout one formatter command path per line
 function formatter_commands() {
   if [[ -n "${FIXTURE_DIR}" ]]; then

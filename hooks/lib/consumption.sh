@@ -37,26 +37,19 @@ function is_xargs_value_option() {
 }
 
 # @description True when an invocation's output is piped into a kill, or when the invocation is
-#              itself substituted into a kill's argument list (`kill $(pgrep ...)` and the backtick
-#              equivalent). The forward pipeline scan requires `kill` to head a pipeline segment, or
-#              to follow an `xargs` that heads one, with flags and prefix words allowed in between:
-#              `pgrep --full x | grep -i kill` merely searches for the word and kills nothing. A
-#              pipeline segment headed by `while`/`until` (`pgrep -f java | while read -r p; do kill
-#              "$p"; done`) defers to loop_body_has_kill rather than being written off as `other`. The
-#              backward scan's `(` check also excludes an array literal (`arr=(kill $(...))`): the
-#              `(` there opens a list of words rather than a subshell, so `kill` inside it is never
-#              invoked. Its `in` case defers to loop_body_has_kill the same way, for `for pid in
-#              $(pgrep -f java); do kill "$pid"; done` -- but only once it confirms the `in` actually
-#              heads a for/select construct, so an unrelated argument word `in` (`echo in $(...)`)
-#              cannot be mistaken for one and misattribute a later, unrelated loop's kill.
-# @arg $1 tokens_var name of the caller's token array (built once by classify_command; every
-#              invocation in the same command reuses it rather than re-parsing the token stream)
+# @description Forward form of feeds_a_kill: the invocation's output is piped, directly or through
+#              `xargs`, into a `kill`. `kill` must head a pipeline segment, or follow an `xargs` that
+#              heads one, with flags and prefix words allowed in between: `pgrep --full x | grep -i
+#              kill` merely searches for the word and kills nothing. A segment headed by
+#              `while`/`until` (`pgrep -f java | while read -r p; do kill "$p"; done`) defers to
+#              loop_body_has_kill rather than being written off as `other`.
+# @arg $1 tokens_var name of the caller's token array
 # @arg $2 target index of the invocation token
-# @exitcode 0 output feeds a kill
+# @exitcode 0 a kill consumes the output downstream
 # @exitcode 1 it does not
-function feeds_a_kill() {
+function feeds_a_kill_forward() {
   local -n toks="$1"
-  local -r target="$2"
+  local -r tokens_var="$1" target="$2"
   local idx segment='none' word xargs_skip=0 prev='none'
   for ((idx = target + 1; idx < ${#toks[@]}; idx++)); do
     word="${toks[idx]##*/}"
@@ -83,7 +76,7 @@ function feeds_a_kill() {
               segment='xargs'
               xargs_skip=0
             elif [[ "${word}" == 'while' || "${word}" == 'until' ]]; then
-              loop_body_has_kill "$1" "${idx}" && return 0
+              loop_body_has_kill "${tokens_var}" "${idx}" && return 0
               segment='other'
             elif ! is_prefix_command "${word}"; then
               segment='other'
@@ -107,53 +100,68 @@ function feeds_a_kill() {
         ;;
     esac
   done
+  return 1
+}
 
-  # Backward form: `kill $(pgrep ...)`, `kill -9 $(pgrep ...)`, and the backtick
-  # equivalent. Here `kill` precedes the invocation, so the forward scan cannot
-  # see it. Skip the substitution punctuation and any flags on the way back, then
-  # require the `kill` to be in command position -- otherwise `echo kill $(...)`,
-  # where `kill` is merely an argument word, would be denied. A value word that
-  # belongs to a preceding `-s`/`--signal` (`kill -s TERM $(pgrep ...)`) is also
-  # skipped rather than treated as an unrecognized stop word: it is recognized by
-  # peeking at the token immediately before it, since scanning backward means the
-  # value is reached before its flag. Walking further back past `kill` to confirm
-  # command position also accepts a shell assignment word (`FOO=bar kill $(...)`),
-  # matching find_invocations's forward treatment of the same prefix.
-  local k=$((target - 1)) m
+# @description Whether the `kill` whose predecessor token sits at `index` is in command position.
+#              Walks back past prefix commands (`sudo kill`) and assignment words (`FOO=bar kill`);
+#              an operator or keyword there means command position. `(` restores command position
+#              for a real subshell or grouping construct, but `name=(...)` is an array literal: the
+#              `(` merely opens a list of words, and a `kill` immediately inside it is never invoked.
+#              The token right before the `(` ending in `=` is what tells the two apart.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 index index of the token immediately before the `kill` word
+# @exitcode 0 the kill is in command position
+# @exitcode 1 it is an argument word, or sits inside an array literal
+function kill_in_command_position() {
+  local -n toks="$1"
+  local m="$2"
+  while ((m >= 0)); do
+    if is_prefix_command "${toks[m]##*/}" || is_assignment_word "${toks[m]}"; then
+      m=$((m - 1))
+      continue
+    fi
+    if [[ "${toks[m]}" == '(' ]] && ((m > 0)) && [[ "${toks[m - 1]}" == *= ]]; then
+      return 1
+    fi
+    if is_operator "${toks[m]}" || is_keyword "${toks[m]}"; then return 0; fi
+    return 1
+  done
+  return 0
+}
+
+# @description Backward form of feeds_a_kill: `kill $(pgrep ...)`, `kill -9 $(pgrep ...)`, and the
+#              backtick equivalent. Here `kill` precedes the invocation, so the forward scan cannot
+#              see it. Skip the substitution punctuation and any flags on the way back, then require
+#              the `kill` to be in command position -- otherwise `echo kill $(...)`, where `kill` is
+#              merely an argument word, would be denied. A value word that belongs to a preceding
+#              `-s`/`--signal` (`kill -s TERM $(pgrep ...)`) is also skipped rather than treated as an
+#              unrecognized stop word: it is recognized by peeking at the token immediately before
+#              it, since scanning backward means the value is reached before its flag. A bare `in` is
+#              only a for/select head -- and thus worth deferring to loop_body_has_kill -- when the
+#              token two back (past the loop variable) is actually `for`/`select`; otherwise it is an
+#              ordinary argument word (`echo in $(...)`) and the forward walk in loop_body_has_kill
+#              could cross into an unrelated later loop's body.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 target index of the invocation token
+# @exitcode 0 a kill consumes the substitution
+# @exitcode 1 it does not
+function feeds_a_kill_backward() {
+  local -n toks="$1"
+  local -r tokens_var="$1" target="$2"
+  local word k=$((target - 1))
   while ((k >= 0)); do
     word="${toks[k]##*/}"
     case "${word}" in
       '$' | '(' | '`') ;;
       -*) ;;
       'kill')
-        m=$((k - 1))
-        while ((m >= 0)); do
-          if is_prefix_command "${toks[m]##*/}" || is_assignment_word "${toks[m]}"; then
-            m=$((m - 1))
-            continue
-          fi
-          # `(` restores command position for a real subshell or grouping
-          # construct, but `name=(...)` is an array literal: the `(` merely
-          # opens a list of words, and a `kill` immediately inside it is
-          # never invoked. The token right before the `(` ending in `=` is
-          # what tells the two apart.
-          if [[ "${toks[m]}" == '(' ]] && ((m > 0)) && [[ "${toks[m - 1]}" == *= ]]; then
-            return 1
-          fi
-          if is_operator "${toks[m]}" || is_keyword "${toks[m]}"; then return 0; fi
-          return 1
-        done
-        return 0
+        kill_in_command_position "${tokens_var}" "$((k - 1))"
+        return
         ;;
       'in')
-        # A bare `in` is only a for/select head -- and thus worth deferring to
-        # loop_body_has_kill -- when the token two back (past the loop
-        # variable) is actually `for`/`select`. Otherwise `in` is just an
-        # ordinary argument word (`echo in $(...)`), and the forward walk to
-        # a `do` in loop_body_has_kill could cross into an unrelated later
-        # loop's body and misattribute its kill to this invocation.
         if ((k >= 2)) && { [[ "${toks[k - 2]}" == 'for' ]] || [[ "${toks[k - 2]}" == 'select' ]]; }; then
-          loop_body_has_kill "$1" "${k}" && return 0
+          loop_body_has_kill "${tokens_var}" "${k}" && return 0
         fi
         return 1
         ;;
@@ -169,6 +177,19 @@ function feeds_a_kill() {
     k=$((k - 1))
   done
   return 1
+}
+
+# @description True when the invocation's output feeds a kill, either forward (`pgrep ... | xargs
+#              kill`, `... | while read p; do kill "$p"; done`) or backward (`kill $(pgrep ...)`).
+#              The two scans are independent; see feeds_a_kill_forward and feeds_a_kill_backward.
+# @arg $1 tokens_var name of the caller's token array (built once by classify_command; every
+#              invocation in the same command reuses it rather than re-parsing the token stream)
+# @arg $2 target index of the invocation token
+# @exitcode 0 output feeds a kill
+# @exitcode 1 it does not
+function feeds_a_kill() {
+  local -r tokens_var="$1" target="$2"
+  feeds_a_kill_forward "${tokens_var}" "${target}" || feeds_a_kill_backward "${tokens_var}" "${target}"
 }
 
 # @description True when an invocation sits inside a command substitution, so its output is captured

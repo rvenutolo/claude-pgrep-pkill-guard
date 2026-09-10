@@ -83,8 +83,25 @@ for guard_part in "${GUARD_PARTS[@]}"; do
   # shellcheck source=/dev/null # each part is linted on its own as hooks/lib/*.sh
   source "${HOOK_DIR}/lib/${guard_part%%:*}" || :
   declare -F "${guard_part#*:}" > /dev/null || {
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: lib/${guard_part%%:*} is missing or failed to load; the pgrep/pkill guard is INACTIVE for this command."
+    # Two messages, because the two causes send a reader to different places
+    # and the file's own readability is the only thing that separates them.
+    # An unreadable part is an install problem. A part that IS there but did
+    # not define its paired name is either a parse error inside it or a
+    # GUARD_PARTS row naming a function that no longer exists -- the rename
+    # hazard .ci/check-guard-parts exists to catch at lint time. The old
+    # single message said "missing or failed to load" for both, which for a
+    # stale row is simply false: the file loaded perfectly well.
+    #
+    # `source`'s own status cannot tell them apart -- it yields the status of
+    # the part's LAST top-level command, which is the whole reason this loop
+    # judges by `declare -F` (#147) -- so readability is the test.
+    if [[ -r "${HOOK_DIR}/lib/${guard_part%%:*}" ]]; then
+      printf '{"systemMessage":"%s"}\n' \
+        "${HOOK_NAME}: lib/${guard_part%%:*} did not define ${guard_part#*:}; it either failed to parse or its GUARD_PARTS row names the wrong function. The pgrep/pkill guard is INACTIVE for this command."
+    else
+      printf '{"systemMessage":"%s"}\n' \
+        "${HOOK_NAME}: lib/${guard_part%%:*} is missing or unreadable; the pgrep/pkill guard is INACTIVE for this command."
+    fi
     exit 0
   }
 done

@@ -116,8 +116,16 @@ In execution order:
 The loader. It holds `HOOK_VERSION`, `SCANNER`, and an explicit ordered list of
 the nine parts under `hooks/lib/`, each paired with one function it must
 define. The loader sources each part and then checks for that function with
-`declare -F`, failing open (INACTIVE, naming the part) if it is absent. The
-check is by definition rather than by `source`'s exit status because `source`
+`declare -F`, failing open (INACTIVE, naming the part) if it is absent. It says
+so in one of two ways, because the two causes send a reader to different places:
+a part that is not readable is an install problem, while a part that is present
+but defined nothing either failed to parse or has a `GUARD_PARTS` row naming a
+function that no longer exists. Calling the second one "missing" would be false.
+`.ci/check-guard-parts` catches that second case at lint time, in both
+directions — every row resolves to a part that defines its paired function, and
+every tracked part is named by exactly one row, since a part no row names is
+never sourced at all. The check
+is by definition rather than by `source`'s exit status because `source`
 yields the status of the sourced file's _last top-level command_: a part that
 happened to end in a `[[ … ]]` returning non-zero would otherwise look exactly
 like a missing one and stand the guard down on every call (#147). A function
@@ -820,13 +828,15 @@ exactly that.
 `hooks/pgrep-pkill-guard-body.sh` is not a loophole in this, and neither are the
 parts under `hooks/lib/`. They exist to be sourced, but that is the entry
 script's and the loader's business alone — no test may source any of them. The
-five tests that cover the split, in `tests/scanner.bats`, copy the entry script
+six tests that cover the split, in `tests/scanner.bats`, copy the entry script
 into a temporary directory and run it there with no sibling beside it, then with
 a deliberately broken one, then with the loader present but `lib/` absent, then
-with one part overwritten by a syntax error, then with one intact part that ends
-in a failing top-level command; the first four assert on the INACTIVE JSON the
-subprocess writes, the fifth asserts on the ordinary deny it must still produce,
-and none of them sources anything.
+with one part overwritten by a syntax error, then with every part intact but the
+loader's row for one of them naming a function nothing defines, then with one
+intact part that ends in a failing top-level command; the first five assert on
+the INACTIVE JSON the subprocess writes — and the third, fourth and fifth
+distinguish the loader's two messages from each other — while the sixth asserts
+on the ordinary deny it must still produce, and none of them sources anything.
 
 **The one exception** is `hooks/pgrep-scan.awk`, which has its own public
 interface: a command on stdin, offset/token records and an integrity trailer on

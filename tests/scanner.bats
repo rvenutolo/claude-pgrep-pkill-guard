@@ -428,6 +428,10 @@ loader_probe() {
   out="$(loader_probe)"
   [[ "${out}" == *'INACTIVE'* ]]
   [[ "${out}" == *'lib/tokens.sh'* ]]
+  # Pinned to the branch under test. The loader has two messages here, and this
+  # is the one for a part that is not there at all; the two cases below take the
+  # other branch, and without this assertion all three would pass on either.
+  [[ "${out}" == *'is missing or unreadable'* ]]
   # Exactly one JSON line: the loader exits rather than returning, so the entry
   # script's own fail-open branch must not fire a second message.
   [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
@@ -440,6 +444,38 @@ loader_probe() {
   out="$(loader_probe)"
   [[ "${out}" == *'INACTIVE'* ]]
   [[ "${out}" == *'lib/wrappers.sh'* ]]
+  # The file IS there, so this is the other branch: the loader must say the
+  # part did not define its paired function, and name that function, rather
+  # than call a present file missing.
+  [[ "${out}" == *'did not define shell_wrapper_payloads'* ]]
+  [[ "${out}" != *'is missing or unreadable'* ]]
+  [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
+}
+
+@test "scanner: a GUARD_PARTS row naming a gone function says so, not 'missing'" {
+  # The rename hazard, from the guard's own side. Every part here is intact --
+  # only the loader's row for classify.sh names a function nothing defines,
+  # which is exactly what a rename that missed the table leaves behind. The
+  # reader must be sent to the row, not to the file: the old single message
+  # said "lib/classify.sh is missing or failed to load", and the file had
+  # loaded perfectly well. .ci/check-guard-parts catches this at lint time;
+  # this case pins what happens when it reaches runtime anyway.
+  #
+  # POSIX short flags and POSIX sed syntax on purpose, as everywhere in this
+  # suite: the ambient macOS compat legs run it against BSD tools.
+  cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
+  sed -e "s/classify.sh:inspect_command/classify.sh:inspect_command_gone/" \
+    "${BODY}" > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
+  # Prove the fixture really is what this case claims, so it cannot pass by
+  # accident against a body the sed never matched.
+  run grep -c 'inspect_command_gone' "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
+  assert_output '1'
+  local out
+  out="$(orphan_probe)"
+  [[ "${out}" == *'INACTIVE'* ]]
+  [[ "${out}" == *'did not define inspect_command_gone'* ]]
+  [[ "${out}" == *'GUARD_PARTS'* ]]
+  [[ "${out}" != *'is missing or unreadable'* ]]
   [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
 }
 

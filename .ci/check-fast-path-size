@@ -13,11 +13,12 @@
 #
 #              #55 fixed it by splitting the guard in two: a small entry script
 #              that runs the payload prefilter, and
-#              hooks/pgrep-pkill-guard-body.sh -- 2000+ lines with no shebang
-#              and no exec bit -- which the entry script sources only once a
-#              payload looks worth inspecting. That win is invisible to every
-#              other check in this repo, so without this gate it would regress
-#              one helper at a time and nobody would notice.
+#              hooks/pgrep-pkill-guard-body.sh, a loader for the ~2200 lines
+#              under hooks/lib/, none of it with a shebang or exec bit -- which
+#              the entry script sources only once a payload looks worth
+#              inspecting. That win is invisible to every other check in this
+#              repo, so without this gate it would regress one helper at a time
+#              and nobody would notice.
 #
 #              The ceiling is the point, not an obstacle to it. If a new helper
 #              does not fit, put it in the body: raising the number spends the
@@ -74,8 +75,8 @@ function main() {
     printf 'FAIL: %s is %s lines, over the %s-line ceiling by %s\n' \
       "${FAST_PATH}" "${lines}" "${MAX_LINES}" "$((lines - MAX_LINES))" >&2
     printf '      bash parses every one of those lines on every Bash tool\n' >&2
-    printf '      call (#55, ~1.2 us/line). Move the new code into %s\n' \
-      "${BODY_PATH}" >&2
+    printf '      call (#55, ~1.2 us/line). Move the new code into a part\n' >&2
+    printf '      under hooks/lib/ (sourced by %s)\n' "${BODY_PATH}" >&2
     printf '      rather than raising the ceiling.\n' >&2
     rc=1
   else

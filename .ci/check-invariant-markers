@@ -72,11 +72,13 @@ else
   readonly REPO_DIR
 fi
 
-# Invariants 1 and 2 both constrain the two halves of the split guard, and both
-# are written up in the architecture doc, so the same trio of files carries both
-# markers. Named once so the table rows below stay short enough to read.
-readonly GUARD_FILES='hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh docs/architecture.md'
-
+# Invariants 1 and 2 now live where the code they constrain lives: the entry
+# script and loader each still carry both phrases (the loader's own `source …
+# ||` is invariant 2's other half), while `repeat_check` moved to
+# hooks/lib/repeat.sh (invariant 1) and `inspect_command` moved to
+# hooks/lib/classify.sh (invariant 2). Each row below lists exactly the files
+# that phrase must survive in.
+#
 # The table. Each row is `<phrase>::<space-separated files>`, and the separator
 # is `::` rather than a tab because a tab in a source line is invisible in a
 # diff and this file is meant to be edited by hand. No phrase may contain `::`
@@ -87,8 +89,8 @@ readonly GUARD_FILES='hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh
 # deciding it is one: a phrase here is a promise that the comment stays, so
 # every row should correspond to a numbered invariant in docs/architecture.md.
 readonly MARKERS=(
-  "POSIX short flags, deliberately::${GUARD_FILES}"
-  "load-bearing beyond the obvious fallback::${GUARD_FILES}"
+  'POSIX short flags, deliberately::hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh hooks/lib/repeat.sh docs/architecture.md'
+  'load-bearing beyond the obvious fallback::hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh hooks/lib/classify.sh docs/architecture.md'
   'POSIX short flags on purpose::tests/manifest.bats docs/architecture.md'
   '200 lines::.ci/check-fast-path-size docs/architecture.md'
 )
@@ -105,7 +107,7 @@ readonly MARKERS=(
 #              space so the phrase in the table can be written the way a human
 #              would write it.
 #
-#              sed and tr rather than a bash read loop: the body file is 2100
+#              sed and tr rather than a bash read loop: the largest part is ~430
 #              lines and this runs on every gate invocation. Both invocations
 #              stay within POSIX syntax (`#*` rather than `#\{1,\}`, no GNU-only
 #              flags) because the bats suite drives this script on the ambient

@@ -3,18 +3,37 @@ setup() {
   REPORTER="${REPO_DIR}/.ci/report-coverage"
 }
 
-# A files[] array in which both hooks/ files are present and non-empty, i.e. the
-# shape a healthy kcov run produces. The absolute paths are deliberately from a
-# machine that is not this one: kcov records whatever path existed where the
-# report was produced -- a Nix build sandbox, a CI runner checkout, someone
+# A files[] array in which every required hooks/ file -- the entry script, the
+# loader, and the nine parts under hooks/lib/ -- is present and non-empty, i.e.
+# the shape a healthy kcov run produces. The absolute paths are deliberately
+# from a machine that is not this one: kcov records whatever path existed where
+# the report was produced -- a Nix build sandbox, a CI runner checkout, someone
 # else's home directory -- so a fixture carrying THIS repo's path would let a
 # reporter that matched on the absolute path pass, and that reporter would go red
 # on every real report. Every case that wants a broken report overrides this.
 HEALTHY_FILES='[
   {"covered_lines": 143, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard.sh",
    "percent_covered": "95.33", "total_lines": 150},
-  {"covered_lines": 387, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard-body.sh",
-   "percent_covered": "75.29", "total_lines": 514}
+  {"covered_lines": 60, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard-body.sh",
+   "percent_covered": "75.00", "total_lines": 80},
+  {"covered_lines": 220, "file": "/build/kcov-src-9f2c/hooks/lib/tokens.sh",
+   "percent_covered": "75.09", "total_lines": 293},
+  {"covered_lines": 150, "file": "/build/kcov-src-9f2c/hooks/lib/scanner.sh",
+   "percent_covered": "74.63", "total_lines": 201},
+  {"covered_lines": 168, "file": "/build/kcov-src-9f2c/hooks/lib/loops.sh",
+   "percent_covered": "75.00", "total_lines": 224},
+  {"covered_lines": 125, "file": "/build/kcov-src-9f2c/hooks/lib/messages.sh",
+   "percent_covered": "74.85", "total_lines": 167},
+  {"covered_lines": 262, "file": "/build/kcov-src-9f2c/hooks/lib/consumption.sh",
+   "percent_covered": "75.07", "total_lines": 349},
+  {"covered_lines": 326, "file": "/build/kcov-src-9f2c/hooks/lib/wrappers.sh",
+   "percent_covered": "75.11", "total_lines": 434},
+  {"covered_lines": 122, "file": "/build/kcov-src-9f2c/hooks/lib/repeat.sh",
+   "percent_covered": "75.30", "total_lines": 162},
+  {"covered_lines": 267, "file": "/build/kcov-src-9f2c/hooks/lib/classify.sh",
+   "percent_covered": "75.00", "total_lines": 356},
+  {"covered_lines": 101, "file": "/build/kcov-src-9f2c/hooks/lib/human.sh",
+   "percent_covered": "74.81", "total_lines": 135}
 ]'
 
 # @description Build a fabricated kcov output directory. Fabricated rather than
@@ -197,17 +216,12 @@ function make_report() {
   refute_output --partial '27.83'
 }
 
-@test "report-coverage: a healthy report with both files still prints the number" {
+@test "report-coverage: a healthy report with all required files still prints the number" {
   # The counterweight to the three cases above: the integrity rule must reject a
   # lossy report without rejecting a good one. Passed explicitly rather than
   # relying on make_report's default so this case keeps grading the healthy shape
   # even if that default is ever narrowed.
-  make_report "${BATS_TEST_TMPDIR}/cov" '76.42' '[
-    {"covered_lines": 143, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard.sh",
-     "percent_covered": "95.33", "total_lines": 150},
-    {"covered_lines": 387, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard-body.sh",
-     "percent_covered": "75.29", "total_lines": 514}
-  ]'
+  make_report "${BATS_TEST_TMPDIR}/cov" '76.42' "${HEALTHY_FILES}"
   run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
   assert_success
   assert_output '76.42'
@@ -222,8 +236,26 @@ function make_report() {
   make_report "${BATS_TEST_TMPDIR}/cov" '76.42' '[
     {"covered_lines": 143, "file": "/nowhere/at/all/hooks/pgrep-pkill-guard.sh",
      "percent_covered": "95.33", "total_lines": 150},
-    {"covered_lines": 387, "file": "/nowhere/at/all/hooks/pgrep-pkill-guard-body.sh",
-     "percent_covered": "75.29", "total_lines": 514}
+    {"covered_lines": 60, "file": "/nowhere/at/all/hooks/pgrep-pkill-guard-body.sh",
+     "percent_covered": "75.00", "total_lines": 80},
+    {"covered_lines": 220, "file": "/nowhere/at/all/hooks/lib/tokens.sh",
+     "percent_covered": "75.09", "total_lines": 293},
+    {"covered_lines": 150, "file": "/nowhere/at/all/hooks/lib/scanner.sh",
+     "percent_covered": "74.63", "total_lines": 201},
+    {"covered_lines": 168, "file": "/nowhere/at/all/hooks/lib/loops.sh",
+     "percent_covered": "75.00", "total_lines": 224},
+    {"covered_lines": 125, "file": "/nowhere/at/all/hooks/lib/messages.sh",
+     "percent_covered": "74.85", "total_lines": 167},
+    {"covered_lines": 262, "file": "/nowhere/at/all/hooks/lib/consumption.sh",
+     "percent_covered": "75.07", "total_lines": 349},
+    {"covered_lines": 326, "file": "/nowhere/at/all/hooks/lib/wrappers.sh",
+     "percent_covered": "75.11", "total_lines": 434},
+    {"covered_lines": 122, "file": "/nowhere/at/all/hooks/lib/repeat.sh",
+     "percent_covered": "75.30", "total_lines": 162},
+    {"covered_lines": 267, "file": "/nowhere/at/all/hooks/lib/classify.sh",
+     "percent_covered": "75.00", "total_lines": 356},
+    {"covered_lines": 101, "file": "/nowhere/at/all/hooks/lib/human.sh",
+     "percent_covered": "74.81", "total_lines": 135}
   ]'
   run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
   assert_success

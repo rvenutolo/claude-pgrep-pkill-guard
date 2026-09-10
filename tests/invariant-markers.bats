@@ -4,7 +4,7 @@ setup() {
 }
 
 # @description Build a minimal, VALID tree in the shape the marker table
-#              expects: the five files it names, each carrying every phrase its
+#              expects: the seven files it names, each carrying every phrase its
 #              row demands, and nothing else. Each negative case below then
 #              corrupts exactly one of them.
 #
@@ -19,7 +19,7 @@ setup() {
 # @arg $1 root directory to populate
 function make_marker_fixture() {
   local -r root="$1"
-  mkdir -p "${root}/hooks" "${root}/docs" "${root}/tests" "${root}/.ci"
+  mkdir -p "${root}/hooks/lib" "${root}/docs" "${root}/tests" "${root}/.ci"
   cat > "${root}/hooks/pgrep-pkill-guard.sh" << 'GUARD'
 #!/usr/bin/env bash
 # POSIX short flags, deliberately: BSD userland has no long options.
@@ -29,6 +29,12 @@ GUARD
 # POSIX short flags, deliberately: the body ships to the same machines.
 # The `||` is load-bearing beyond the obvious fallback, as above.
 BODY
+  cat > "${root}/hooks/lib/repeat.sh" << 'REPEAT'
+# POSIX short flags, deliberately: the parts ship to the same machines.
+REPEAT
+  cat > "${root}/hooks/lib/classify.sh" << 'CLASSIFY'
+# The `||` is load-bearing beyond the obvious fallback, as above.
+CLASSIFY
   cat > "${root}/tests/manifest.bats" << 'MANIFEST'
 # POSIX short flags on purpose: the compat legs run against BSD coreutils.
 MANIFEST
@@ -85,8 +91,9 @@ DROPPED
   assert_failure
   assert_output --partial 'hooks/pgrep-pkill-guard.sh does not carry the invariant marker'
   assert_output --partial 'POSIX short flags, deliberately'
-  # The body file still has it, so it must not be dragged into the verdict.
-  refute_output --partial 'pgrep-pkill-guard-body.sh does not carry'
+  # hooks/lib/repeat.sh still has it, so it must not be dragged into the
+  # verdict.
+  refute_output --partial 'hooks/lib/repeat.sh does not carry'
 }
 
 @test "invariant markers: a phrase wrapped across comment lines still counts" {

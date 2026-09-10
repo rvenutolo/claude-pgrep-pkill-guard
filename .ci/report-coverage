@@ -100,6 +100,18 @@ function main() {
   local -ra required_hook_files=(
     'pgrep-pkill-guard.sh'
     'pgrep-pkill-guard-body.sh'
+    # The parts the body sources. Every one is driven by the suite: human.sh by
+    # tests/cli.bats, repeat.sh by tests/repeat.bats, the rest by every
+    # inspected payload.
+    'tokens.sh'
+    'scanner.sh'
+    'loops.sh'
+    'messages.sh'
+    'consumption.sh'
+    'wrappers.sh'
+    'repeat.sh'
+    'classify.sh'
+    'human.sh'
   )
   local required_hook_file matched
   for required_hook_file in "${required_hook_files[@]}"; do

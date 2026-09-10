@@ -98,8 +98,10 @@ In execution order:
    `resolve_scanner` — the awk scanner, so no path pays a second process for
    the second lookup. Two branches then stand down loudly, exactly as the
    precondition guards inside the body do: the sibling missing or unreadable,
-   and the `source` itself failing. The sibling's own source loop adds the same
-   pair, once per part, naming the part. The `||` on that `source` is what
+   and the `source` itself failing. The sibling's own source loop adds one
+   branch per part, naming the part, judged by a `declare -F` check on a
+   function the part must define rather than by `source`'s status (#147; see
+   the loader section below). The `||` on the `source` is what
    keeps a corrupt sibling off the `ERR` trap, which would otherwise answer a
    broken install with a bare `{}`. It is a function rather than the inline
    block it was before #34 because two call sites now need it, and a second
@@ -112,8 +114,15 @@ In execution order:
 ### `hooks/pgrep-pkill-guard-body.sh` and `hooks/lib/`
 
 The loader. It holds `HOOK_VERSION`, `SCANNER`, and an explicit ordered list of
-the nine parts under `hooks/lib/`, sourcing each and failing open (INACTIVE,
-naming the part) if one is missing or will not load. Between them those parts
+the nine parts under `hooks/lib/`, each paired with one function it must
+define. The loader sources each part and then checks for that function with
+`declare -F`, failing open (INACTIVE, naming the part) if it is absent. The
+check is by definition rather than by `source`'s exit status because `source`
+yields the status of the sourced file's _last top-level command_: a part that
+happened to end in a `[[ … ]]` returning non-zero would otherwise look exactly
+like a missing one and stand the guard down on every call (#147). A function
+that was defined proves the file was found, parsed to the end, and ran.
+Between them those parts
 are the rest of the guard: every constant except `HOOK_NAME`, `HOOK_VERSION` and
 `SCANNER`, and every function except `emit_allow`, `resolve_hook_dir`,
 `load_body` and `main` — `inspect_command` among them, which is what used to be
@@ -811,11 +820,13 @@ exactly that.
 `hooks/pgrep-pkill-guard-body.sh` is not a loophole in this, and neither are the
 parts under `hooks/lib/`. They exist to be sourced, but that is the entry
 script's and the loader's business alone — no test may source any of them. The
-four tests that cover the split, in `tests/scanner.bats`, copy the entry script
+five tests that cover the split, in `tests/scanner.bats`, copy the entry script
 into a temporary directory and run it there with no sibling beside it, then with
 a deliberately broken one, then with the loader present but `lib/` absent, then
-with one part overwritten by a syntax error; all four assert on the INACTIVE
-JSON the subprocess writes, and none of them sources anything.
+with one part overwritten by a syntax error, then with one intact part that ends
+in a failing top-level command; the first four assert on the INACTIVE JSON the
+subprocess writes, the fifth asserts on the ordinary deny it must still produce,
+and none of them sources anything.
 
 **The one exception** is `hooks/pgrep-scan.awk`, which has its own public
 interface: a command on stdin, offset/token records and an integrity trailer on

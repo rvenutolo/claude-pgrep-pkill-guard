@@ -443,6 +443,24 @@ loader_probe() {
   [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
 }
 
+@test "scanner: a part whose last top-level command fails still loads" {
+  # `source` yields the status of the sourced file's last top-level command, so
+  # a loader that trusted that status would call this part "missing or failed
+  # to load" and stand the guard down on every call (#147). The loader must
+  # judge a part by what it defines, not by what its last line returned. The
+  # part is intact -- every function it holds is still here -- so the probe's
+  # `pkill --full zzznoproc` must get the ordinary deny, not INACTIVE. The
+  # scanner rides along too: the other probes stop before they need it, and
+  # without it this one would report a different INACTIVE for the wrong reason.
+  cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
+  cp "${SCANNER}" "${BATS_TEST_TMPDIR}/pgrep-scan.awk"
+  printf '[[ 1 == 2 ]]\n' >> "${BATS_TEST_TMPDIR}/lib/wrappers.sh"
+  local out
+  out="$(loader_probe)"
+  [[ "${out}" != *'INACTIVE'* ]]
+  [ "$(decision_of "${out}")" = 'deny' ]
+}
+
 # --- The jq @tsv / printf %b round-trip -------------------------------------
 
 @test "scanner: a command with literal tabs and newlines survives the tsv decode" {

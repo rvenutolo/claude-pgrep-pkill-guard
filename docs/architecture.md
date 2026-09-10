@@ -127,17 +127,17 @@ defines only functions and `readonly` constants, and nothing runs until
 `inspect_command` or `human_mode` is called — so it is arranged for a reader,
 low-level helpers first. That is the order below.
 
-| Part                 | Holds                                                                                                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lib/tokens.sh`      | `COMMAND_POSITION_KEYWORDS`, `PREFIX_COMMANDS`, `is_prefix_command`, `prefix_value_option`, `prefix_operand_budget`, `prefix_breaks_chain`, `prefix_chain_step`, `is_assignment_word`, `is_keyword`, `is_operator` |
-| `lib/scanner.sh`     | `resolve_scanner`, `scan_command`, `find_invocations`, `invocation_args`, `has_flag`, `PGREP_VALUE_OPTIONS`, `pattern_operand`, `bracket_mitigation_holds`                                                         |
-| `lib/loops.sh`       | `loop_context`, `body_has_terminator`, `loop_body_has_kill`                                                                                                                                                        |
-| `lib/messages.sh`    | `emit_warn`, `emit_deny`, `WARN_MESSAGE`, `WRITE_TOOL_LEAD`, `deny_message`, `repeat_message`                                                                                                                      |
-| `lib/consumption.sh` | `XARGS_VALUE_OPTIONS`, `is_xargs_value_option`, `feeds_a_kill`, `invocation_is_captured`, `next_command_reads_status`, `result_is_consumed`                                                                        |
-| `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrapper_operand_budget`, `pipe_producer_payload`, `shell_wrapper_payloads`                                                             |
-| `lib/repeat.sh`      | `REPEAT_THRESHOLD`, `REPEAT_WINDOW_SECONDS`, `REPEAT_MAX_ENTRIES`, `repeat_check`                                                                                                                                  |
-| `lib/classify.sh`    | `TASK_OUTPUT_PATH_RE`, `task_poll_detected`, `probe_keys`, `classify_command`, `inspect_command`                                                                                                                   |
-| `lib/human.sh`       | `print_help`, `human_mode`                                                                                                                                                                                         |
+| Part                 | Holds                                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lib/tokens.sh`      | `COMMAND_POSITION_KEYWORDS`, `PREFIX_COMMANDS`, `is_prefix_command`, `prefix_value_option`, `prefix_operand_budget`, `prefix_breaks_chain`, `prefix_chain_step`, `is_assignment_word`, `is_keyword`, `is_operator`       |
+| `lib/scanner.sh`     | `resolve_scanner`, `scan_command`, `find_invocations`, `invocation_args`, `has_flag`, `PGREP_VALUE_OPTIONS`, `pattern_operand`, `bracket_mitigation_holds`                                                               |
+| `lib/loops.sh`       | `loop_context`, `body_has_terminator`, `loop_body_has_kill`                                                                                                                                                              |
+| `lib/messages.sh`    | `emit_warn`, `emit_deny`, `WARN_MESSAGE`, `WRITE_TOOL_LEAD`, `deny_message`, `repeat_message`                                                                                                                            |
+| `lib/consumption.sh` | `XARGS_VALUE_OPTIONS`, `is_xargs_value_option`, `feeds_a_kill_forward`, `kill_in_command_position`, `feeds_a_kill_backward`, `feeds_a_kill`, `invocation_is_captured`, `next_command_reads_status`, `result_is_consumed` |
+| `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrapper_operand_budget`, `pipe_producer_payload`, `pipe_carry_clear`, `segment_pipe_carry`, `shell_wrapper_payloads`                         |
+| `lib/repeat.sh`      | `REPEAT_THRESHOLD`, `REPEAT_WINDOW_SECONDS`, `REPEAT_MAX_ENTRIES`, `repeat_check`                                                                                                                                        |
+| `lib/classify.sh`    | `TASK_OUTPUT_PATH_RE`, `task_poll_detected`, `probe_keys`, `classify_invocation`, `classify_wrapper_payloads`, `classify_command`, `inspect_preconditions`, `repeat_tier_reason`, `inspect_command`                      |
+| `lib/human.sh`       | `print_help`, `human_mode`                                                                                                                                                                                               |
 
 The loader and every part are **sourced, never executed** — no shebang, no exec
 bit — and none of them sets `set -Eeuo pipefail`, `IFS` or an `ERR` trap,
@@ -771,7 +771,7 @@ them carries a shebang or an executable bit — they are not scripts that can be
 run.
 
 **Tracked comment:** `The || is load-bearing beyond the obvious fallback`, which
-now appears three times. In `hooks/lib/classify.sh`, in `inspect_command`
+now appears three times. In `hooks/lib/classify.sh`, in `repeat_tier_reason`
 directly above that assignment:
 
 ```text

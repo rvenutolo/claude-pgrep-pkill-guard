@@ -232,7 +232,11 @@ function field() {
   # Nothing on stdout: a caller piping straight into `gh api graphql --input -`
   # must not receive a half-formed document alongside the failure.
   assert_equal "${output}" ''
-  [[ "${stderr}" == *'nothing staged'* ]]
+  # The `[build-commit-payload] FATAL:` prefix, not just the message body, is
+  # what makes this non-vacuous: every fatal diagnostic in the repo carries the
+  # script name and the level, so a reader piping several tools together can
+  # tell which one gave up.
+  [[ "${stderr}" == '[build-commit-payload] FATAL: '*'nothing staged'* ]]
 }
 
 @test "commit payload: the wrong argument count is a usage error" {
@@ -264,7 +268,7 @@ function field() {
   run --separate-stderr build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_failure
   assert_equal "${output}" ''
-  [[ "${stderr}" == *'not a git repo'* ]]
+  [[ "${stderr}" == '[build-commit-payload] FATAL: '*'not a git repo'* ]]
 }
 
 @test "commit payload: a file larger than the argv limit still round-trips" {

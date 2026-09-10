@@ -92,6 +92,15 @@ function main() {
   # the grep the doc tells a reader to run (#85). It is a presence check over a
   # table of phrases, collapsing line breaks and `#` continuations first, so
   # rewrapping a comment stays allowed and deleting one does not.
+  # check-shell-shebangs asserts that every tracked file carrying a shebang
+  # carries `#!/usr/bin/env bash`, or is one of the named exemptions with the
+  # exact spelling it is allowed. run-lint-checks admits an extensionless file
+  # into shellcheck and shfmt only when its first line matches that string
+  # exactly, and drops any other bash spelling from BOTH linters with no
+  # diagnostic -- its empty-scan guard fires only when the list is entirely
+  # empty, never when it is one file short (#171). The one exemption,
+  # .ci/check-inactive-on-old-bash, was previously skipped by mechanism rather
+  # than by name, which is indistinguishable from that bug.
   # check-bench-fresh compares the commit bench/RESULTS.md records in its
   # provenance table against the hooks/ history since. The README quotes that
   # report's figures as measured, and nothing tied the two together: when the
@@ -131,6 +140,7 @@ function main() {
   "${REPO_DIR}/.ci/check-devshell-provides" || rc=1
   "${REPO_DIR}/.ci/check-executable-bit" || rc=1
   "${REPO_DIR}/.ci/check-bats-no-shebang" || rc=1
+  "${REPO_DIR}/.ci/check-shell-shebangs" || rc=1
   "${REPO_DIR}/.ci/check-fast-path-size" || rc=1
   "${REPO_DIR}/.ci/check-err-trap-hygiene" || rc=1
   "${REPO_DIR}/.ci/check-uses-sha-pinned" || rc=1

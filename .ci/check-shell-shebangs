@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+
+# @description Assert every tracked file that carries a shebang carries the
+#              canonical one, `#!/usr/bin/env bash`, unless the exemption table
+#              below names it together with the exact shebang it may have.
+#
+#              This gate exists because .ci/run-lint-checks decides which
+#              extensionless files reach shellcheck and shfmt by comparing
+#              their first line against that exact string. Every bash file it
+#              admits today spells it that way, so the lint gate is sound — but
+#              a script written `#!/bin/bash` or `#!/usr/bin/env -S bash` would
+#              be dropped from BOTH linters with no diagnostic, and the
+#              empty-scan guard in run-lint-checks' `main` fires only when the
+#              list is entirely empty, never when it is one file short (#171).
+#              Rather than teach a function whose whole contract is "print one
+#              path per line" to fail — it runs inside a process substitution
+#              feeding `mapfile`, so a non-zero return there reaches nobody —
+#              the invariant that makes the exact-string match safe is asserted
+#              here, loudly, next to its siblings check-bats-no-shebang and
+#              check-executable-bit.
+#
+#              It judges the shebangs that exist and never demands one:
+#              hooks/pgrep-pkill-guard-body.sh and hooks/lib/*.sh are sourced,
+#              not executed, and carry `# shellcheck shell=bash` instead.
+#
+#              *.bats is skipped outright, because check-bats-no-shebang
+#              forbids a shebang there. Judging those files here as well would
+#              mean two gates giving one file contradictory orders: "make the
+#              shebang canonical" and "remove the shebang".
+#
+#              The exemption table pins the path AND the spelling. An exemption
+#              for a path alone would let the stock-sh compat gate be rewritten
+#              to bash and still pass, and pinning nothing but the path is how
+#              an allowance outlives the reason for it.
+# @arg $1 dir optional fixture directory, treated as the repo root: the tracked
+#         file list is read from it rather than from the real checkout. It
+#         exists so the bats suite can drive the real matcher over a fabricated
+#         tree — one where a shebang can be canonical, non-canonical, exempt or
+#         absent on purpose — in milliseconds. Without it the only possible
+#         test would be "exits 0 on the real repo", which a script that
+#         unconditionally returned 0 would also pass.
+# @exitcode 0 every shebang is canonical or a matching exemption
+# @exitcode 1 a shebang is non-canonical, an exemption is stale, or nothing was
+#             scanned
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+readonly FIXTURE_DIR="${1:-}"
+
+# In fixture mode the directory IS the repo root, and it must be taken at face
+# value: `git rev-parse --show-toplevel` run from a bats temp directory would
+# either fail or -- worse -- resolve to some enclosing repo, and the suite would
+# then be grading the author's checkout instead of its own fixture.
+if [[ -n "${FIXTURE_DIR}" ]]; then
+  readonly REPO_DIR="${FIXTURE_DIR}"
+else
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+  readonly REPO_DIR
+fi
+
+readonly CANONICAL='#!/usr/bin/env bash'
+
+# The table. Each row is `<tracked path>::<the exact shebang it may carry>`,
+# and the separator is `::` rather than a tab because a tab in a source line is
+# invisible in a diff and this file is meant to be edited by hand.
+#
+# One row today. .ci/check-inactive-on-old-bash is POSIX sh on purpose: it is
+# the stock-bash-3.2 compat leg's entry point, so it must run on a shell that
+# predates everything the rest of this repo assumes. Its own header explains
+# that at :3-11, and docs/architecture.md:428,970 records it -- but until this
+# row existed, run-lint-checks skipped it by MECHANISM (its first line is not
+# the canonical string) rather than by name, which is indistinguishable from
+# the bug this gate closes.
+readonly SHEBANG_EXEMPT=(
+  '.ci/check-inactive-on-old-bash::#!/bin/sh'
+)
+
+# @description Report whether a shebang line names bash as its interpreter, in
+#              any spelling.
+#
+#              Word-wise on the basename rather than a substring match, so
+#              `#!/bin/bash`, `#!/usr/local/bin/bash --posix` and
+#              `#!/usr/bin/env -S bash` all count while `#!/usr/bin/bashful`
+#              does not. IFS is set locally: the file-global IFS is newline-tab,
+#              which would leave a space-separated shebang unsplit.
+# @arg $1 shebang the full first line, `#!` included
+# @exitcode 0 the line names bash
+# @exitcode 1 it names something else
+function names_bash() {
+  local -r shebang="$1"
+  local -a words=()
+  local word
+  IFS=$' \t' read -r -a words <<< "${shebang#'#!'}"
+  for word in ${words[@]+"${words[@]}"}; do
+    if [[ "${word##*/}" == 'bash' ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# @description Print the exempt shebang declared for a path, if any.
+# @arg $1 path the tracked path
+# @stdout the declared shebang, or nothing when the path is not exempt
+function exempt_shebang_for() {
+  local -r path="$1"
+  local row
+  for row in "${SHEBANG_EXEMPT[@]}"; do
+    if [[ "${row%%::*}" == "${path}" ]]; then
+      printf '%s\n' "${row#*::}"
+      return 0
+    fi
+  done
+  return 0
+}
+
+# @description Grade one tracked file's shebang.
+# @arg $1 path the tracked path, relative to the repo root
+# @arg $2 shebang the file's first line, known to start with `#!`
+# @exitcode 0 canonical, or an exemption it matches exactly
+# @exitcode 1 non-canonical, or an exemption it contradicts
+function check_shebang() {
+  local -r path="$1"
+  local -r shebang="$2"
+  local expected
+  expected="$(exempt_shebang_for "${path}")"
+
+  if [[ -n "${expected}" ]]; then
+    if [[ "${shebang}" == "${expected}" ]]; then
+      return 0
+    fi
+    printf 'FAIL: %s is exempt for the shebang %s but carries %s\n' \
+      "${path}" "\"${expected}\"" "\"${shebang}\"" >&2
+    printf '      Either restore that shebang, or -- if the exemption is over\n' >&2
+    printf '      -- drop its row from SHEBANG_EXEMPT in this file.\n' >&2
+    return 1
+  fi
+
+  if [[ "${shebang}" == "${CANONICAL}" ]]; then
+    return 0
+  fi
+
+  if names_bash "${shebang}"; then
+    printf 'FAIL: %s has a non-canonical bash shebang %s; use %s\n' \
+      "${path}" "\"${shebang}\"" "\"${CANONICAL}\"" >&2
+    printf '      .ci/run-lint-checks admits an extensionless file into\n' >&2
+    printf '      shellcheck and shfmt only on an exact match of that string,\n' >&2
+    printf '      so any other spelling is silently unlinted (#171).\n' >&2
+    return 1
+  fi
+
+  printf 'FAIL: %s carries the non-bash shebang %s\n' "${path}" "\"${shebang}\"" >&2
+  printf '      If that is deliberate, declare it: add a SHEBANG_EXEMPT row\n' >&2
+  printf '      in this file naming the path and that exact shebang, with a\n' >&2
+  printf '      comment saying why. A file no linter covers must say so by\n' >&2
+  printf '      name rather than by accident of its first line.\n' >&2
+  return 1
+}
+
+function main() {
+  local rc=0 checked=0 exempt=0 path first_line
+  local -a tracked=()
+  mapfile -t tracked < <(git -C "${REPO_DIR}" ls-files)
+
+  for path in ${tracked[@]+"${tracked[@]}"}; do
+    case "${path}" in
+      # check-bats-no-shebang owns these; see the header.
+      *.bats) continue ;;
+      *) ;;
+    esac
+    [[ -r "${REPO_DIR}/${path}" ]] || continue
+    # Reset first, then `|| :` rather than `|| first_line=''`: a file whose
+    # only line lacks a trailing newline makes `read` set the variable AND
+    # return 1, and the assignment form would blank the shebang it just read.
+    # An empty or unreadable file leaves the reset value and is skipped below.
+    first_line=''
+    IFS= read -r first_line < "${REPO_DIR}/${path}" || :
+    [[ "${first_line}" == '#!'* ]] || continue
+    checked=$((checked + 1))
+    if [[ -n "$(exempt_shebang_for "${path}")" ]]; then
+      exempt=$((exempt + 1))
+    fi
+    check_shebang "${path}" "${first_line}" || rc=1
+  done
+
+  # An exemption whose subject has vanished is a comment about a file nobody
+  # can read. Report it here rather than letting the row sit unmatched forever.
+  local row exempt_path
+  for row in "${SHEBANG_EXEMPT[@]}"; do
+    exempt_path="${row%%::*}"
+    if [[ ! -r "${REPO_DIR}/${exempt_path}" ]]; then
+      printf 'FAIL: SHEBANG_EXEMPT names %s, which is not a tracked file\n' \
+        "${exempt_path}" >&2
+      printf '      Drop the row, or restore the file it excuses.\n' >&2
+      rc=1
+    fi
+  done
+
+  # A scan that found nothing would pass everything. Same class of bug as an
+  # empty tool list in check-devshell-provides, and worth one line to make
+  # impossible: every gate, hook and runner in this tree carries a shebang, so
+  # a count of zero means the file list, not the tree, went wrong.
+  if ((checked == 0)); then
+    printf 'FAIL: no tracked file carries a shebang — an empty scan is not a clean pass\n' >&2
+    rc=1
+  fi
+
+  if ((rc == 0)); then
+    printf 'ok: %s shebangs canonical across the tracked tree (%s exempt)\n' \
+      "$((checked - exempt))" "${exempt}" >&2
+  fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  return "${rc}"
+}
+
+main "$@"

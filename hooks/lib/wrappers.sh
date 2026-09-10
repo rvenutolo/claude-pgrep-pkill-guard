@@ -139,6 +139,7 @@ function pipe_carry_clear() {
 # @arg $5 seg_heredoc the heredoc ordinal the segment read, or empty
 # @arg $6 seg_redir 1 when the segment redirected its output
 # @arg $@ the segment's operand words, quotes already stripped
+# @exitcode 0 always; the caller runs under errexit and a non-zero status here would fire the fail-open trap
 # shellcheck disable=SC2034 # the carry_* namerefs are the caller's variables, which shellcheck cannot follow
 function segment_pipe_carry() {
   local -n carry_heredoc="$1" carry_text="$2" carry_text_set="$3"

@@ -119,11 +119,13 @@ function probe_keys() {
   printf '%s' "${keys}"
 }
 
-# @description Classify one `--full` pgrep/pkill invocation. `--ignore-ancestors` used to exempt an
-#              invocation outright. It excludes ANCESTORS only: a sibling waiter whose command line
-#              carries the same literal is still matched, so two waiters for one event deadlock each
-#              other (Gap 1, 2026-08-26). It therefore still clears a kill -- the session shell is an
-#              ancestor -- and still fixes an inflated count, but it never clears a loop.
+# @description Classify one pgrep/pkill invocation the caller has already established carries
+#              `--full`: deny for a kill or a loop, warn for a consumed result. `--ignore-ancestors`
+#              used to exempt an invocation outright. It excludes ANCESTORS only: a sibling waiter
+#              whose command line carries the same literal is still matched, so two waiters for one
+#              event deadlock each other (Gap 1, 2026-08-26). It therefore still clears a kill -- the
+#              session shell is an ancestor -- and still fixes an inflated count, but it never clears
+#              a loop.
 # @arg $1 tokens_var name of the command's token array
 # @arg $2 command the raw command
 # @arg $3 tokens the scanner's token stream for the command
@@ -237,7 +239,7 @@ function classify_command() {
   done <<< "${tokens}"
 
   local verdict='allow'
-  local idx offset name args finding
+  local idx offset name args invocation_finding
   # The pgrep tier only has work when the command names the tool; the token
   # stream is still needed below for the task-poll tier.
   local invocations=''
@@ -248,10 +250,10 @@ function classify_command() {
     [[ -z "${idx}" ]] && continue
     args="$(invocation_args "${tokens}" "${idx}")"
     has_flag "${args}" '--full' 'f' || continue
-    if finding="$(classify_invocation CMD_TOKENS "${command}" "${tokens}" "${idx}" "${name}" "${args}")"; then
-      case "${finding}" in
+    if invocation_finding="$(classify_invocation CMD_TOKENS "${command}" "${tokens}" "${idx}" "${name}" "${args}")"; then
+      case "${invocation_finding}" in
         deny:*)
-          printf '%s\n' "${finding}"
+          printf '%s\n' "${invocation_finding}"
           return 0
           ;;
         warn) verdict='warn' ;;
@@ -269,12 +271,12 @@ function classify_command() {
     fi
   fi
 
-  local inner
-  if inner="$(classify_wrapper_payloads "${command}" "${tokens}" "${depth}")"; then
-    case "${inner}" in
+  local payload_finding
+  if payload_finding="$(classify_wrapper_payloads "${command}" "${tokens}" "${depth}")"; then
+    case "${payload_finding}" in
       warn) verdict='warn' ;;
       *)
-        printf '%s\n' "${inner}"
+        printf '%s\n' "${payload_finding}"
         return 0
         ;;
     esac

@@ -150,7 +150,7 @@ function record_commit() {
   printf 'guard, split\n' > "${root}/hooks/pgrep-pkill-guard.sh"
   git -C "${root}" add hooks/pgrep-pkill-guard.sh
   commit_fixture "${root}" 'perf: split the guard'
-  run "${CHECK}" "${root}"
+  BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'bench/RESULTS.md is stale'
   assert_output --partial 'changed in 1 commit(s) since'
@@ -185,7 +185,7 @@ readonly HOOK_VERSION='1.1.0' # x-release-please-version
 HOOK
   git -C "${root}" add hooks/pgrep-pkill-guard.sh
   commit_fixture "${root}" 'perf: split the guard, and release it'
-  run "${CHECK}" "${root}"
+  BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'bench/RESULTS.md is stale'
 }
@@ -202,7 +202,7 @@ readonly HOOK_VERSION='1.1.0'; sleep 1 # x-release-please-version
 HOOK
   git -C "${root}" add hooks/pgrep-pkill-guard.sh
   commit_fixture "${root}" 'chore: sneak a command onto the version line'
-  run "${CHECK}" "${root}"
+  BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'bench/RESULTS.md is stale'
 }
@@ -236,7 +236,7 @@ HOOK
 ' > "${root}/hooks/pgrep-pkill-guard-body.sh"
   git -C "${root}" add hooks/pgrep-pkill-guard-body.sh
   commit_fixture "${root}" 'refactor: add a body file'
-  run "${CHECK}" "${root}"
+  BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'bench/RESULTS.md is stale'
 }
@@ -256,7 +256,7 @@ HOOK
   discarded="$(short_head "${root}")"
   git -C "${root}" reset -q --hard HEAD~1
   record_commit "${root}" "${discarded}"
-  run "${CHECK}" "${root}"
+  BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'exists but is not'
   assert_output --partial 'reachable from HEAD'
@@ -319,4 +319,56 @@ RESULTS
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'is missing or unreadable'
+}
+
+# --- Advisory versus strict ---------------------------------------------------
+#
+# Freshness is a release-time property (see the header of .ci/check-bench-fresh).
+# Without BENCH_FRESH_STRICT the two stale verdicts warn and exit 0; the CI gate
+# job sets the variable only on release-please's branch. The malformed-report
+# verdicts above are a broken FILE rather than stale numbers, and fail either way.
+
+@test "bench fresh: a stale report only warns without BENCH_FRESH_STRICT" {
+  local -r root="${BATS_TEST_TMPDIR}/advisory-stale"
+  make_bench_fixture "${root}"
+  printf 'guard, split\n' > "${root}/hooks/pgrep-pkill-guard.sh"
+  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  commit_fixture "${root}" 'perf: split the guard'
+  # Explicitly unset: a caller's environment must not leak a strict verdict in.
+  BENCH_FRESH_STRICT='' run "${CHECK}" "${root}"
+  assert_success
+  assert_output --partial 'WARN: bench/RESULTS.md is stale'
+  assert_output --partial 'perf: split the guard'
+  assert_output --partial 'before the next release'
+  refute_output --partial 'FAIL:'
+}
+
+@test "bench fresh: an unreachable recorded commit only warns without BENCH_FRESH_STRICT" {
+  # Same fixture construction as "an unreachable recorded commit is a different
+  # failure" above: a commit is made, discarded off HEAD, and then recorded as
+  # if it were still current.
+  local -r root="${BATS_TEST_TMPDIR}/advisory-unreachable"
+  make_bench_fixture "${root}"
+  printf 'guard, superseded\n' > "${root}/hooks/pgrep-pkill-guard.sh"
+  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  commit_fixture "${root}" 'perf: a commit that will be discarded'
+  local discarded
+  discarded="$(short_head "${root}")"
+  git -C "${root}" reset -q --hard HEAD~1
+  record_commit "${root}" "${discarded}"
+  BENCH_FRESH_STRICT='' run "${CHECK}" "${root}"
+  assert_success
+  assert_output --partial 'WARN:'
+  assert_output --partial 'reachable from HEAD'
+  refute_output --partial 'FAIL:'
+}
+
+@test "bench fresh: a malformed report still fails without BENCH_FRESH_STRICT" {
+  local -r root="${BATS_TEST_TMPDIR}/advisory-malformed"
+  make_bench_fixture "${root}"
+  # shellcheck disable=SC2016 # the backticks are markdown table syntax, not a substitution
+  printf '| commit | `unknown` |\n' > "${root}/bench/RESULTS.md"
+  BENCH_FRESH_STRICT='' run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial 'no usable commit row'
 }

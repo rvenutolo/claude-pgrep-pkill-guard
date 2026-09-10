@@ -320,7 +320,11 @@ The same test cuts the other way for one shape: a repository path containing
 those calls pay the full `jq`-and-scanner cost whatever the command itself is.
 
 One machine, one moment. The full table, the method and the provenance are in
-[bench/RESULTS.md](bench/RESULTS.md); `just bench` regenerates it.
+[bench/RESULTS.md](bench/RESULTS.md); `just bench` regenerates it. The figures
+describe the latest **release**, not necessarily the tip of `main`:
+`.ci/check-bench-fresh` warns when `hooks/` has moved since the recorded
+commit and fails only on a release PR, so the report is regenerated once per
+release rather than once per change.
 
 ## Opting one command out
 

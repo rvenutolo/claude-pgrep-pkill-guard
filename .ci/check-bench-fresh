@@ -27,8 +27,10 @@
 #
 #                1. reachable, hooks/ untouched since         -> pass
 #                2. reachable, hooks/ changed since           -> FAIL, stale
+#                   (FAIL when BENCH_FRESH_STRICT is set, else WARN and exit 0)
 #                3. present in the object store, NOT reachable -> FAIL, but with
 #                   different wording, because the comparison was never made
+#                   (FAIL when BENCH_FRESH_STRICT is set, else WARN and exit 0)
 #                4. absent from the object store               -> SKIP
 #                5. reachable, hooks/ changed since, but the NET difference is
 #                   only the release-please version line       -> pass
@@ -38,6 +40,13 @@
 #              remedy is an hour of wall-clock benchmarking, and the release
 #              cannot merge until someone pays it -- for a string the hook
 #              prints and never branches on. See exempt_reason.
+#
+#              Strict only on a release. Every verdict is computed the same
+#              way in both modes; what BENCH_FRESH_STRICT changes is whether
+#              verdicts 2 and 3 convict. ci.yml sets it on the gate job when
+#              the PR branch is release-please's, so a release with stale
+#              numbers is red until `just bench` runs on main and merges, and
+#              an ordinary hooks/ PR sees a WARN it can read and move past.
 #
 #              Verdict 3 is not a corner case invented for symmetry. `4c189fb`,
 #              the sha this gate was written against, is exactly it: the object
@@ -75,9 +84,10 @@
 #         fabricated: every verdict below still comes from real `git` queries
 #         against a real repository, so a fixture exercises the code the real
 #         run takes rather than a parallel branch.
-# @exitcode 0 the report is fresh, or the recorded commit is unavailable (skip)
-# @exitcode 1 the report is stale, the recorded commit is unreachable, or the
-#             provenance table could not be read
+# @exitcode 0 the report is fresh, the recorded commit is unavailable (skip), or the
+#             report is stale and BENCH_FRESH_STRICT is unset (warn)
+# @exitcode 1 the report is stale or its commit unreachable with BENCH_FRESH_STRICT
+#             set, or the report is missing or malformed
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -138,6 +148,27 @@ readonly VERSION_LINE_RE="^[+-]readonly HOOK_VERSION='[0-9]+\.[0-9]+\.[0-9]+' # 
 # as a crash inside a plumbing command.
 # shellcheck disable=SC2016 # the backticks are markdown table syntax, not a substitution
 readonly PROVENANCE_RE='^\|[[:space:]]*commit[[:space:]]*\|[[:space:]]*`([0-9a-fA-F]{7,40})`[[:space:]]*\|[[:space:]]*$'
+
+# Freshness is a RELEASE-time property. The README quotes the report's figures
+# for the hook a consumer installs, which is a release, and a wall-clock
+# benchmark on an idle machine is not something every hooks/ PR can pay -- the
+# gate that demanded it was one people would learn to route around. So the two
+# stale verdicts below convict only when this variable is set, which ci.yml
+# does on release-please's branch alone; everywhere else they WARN and exit 0.
+# A missing or malformed report is a different thing -- a broken file, not old
+# numbers -- and fails in both modes.
+readonly STRICT="${BENCH_FRESH_STRICT:-}"
+
+# @description Print the verdict prefix for a staleness finding: FAIL when
+#              strict, WARN otherwise.
+# @stdout `FAIL` or `WARN`
+function stale_prefix() {
+  if [[ -n "${STRICT}" ]]; then
+    printf 'FAIL\n'
+  else
+    printf 'WARN\n'
+  fi
+}
 
 # @description Print the commit sha recorded in the report's provenance table.
 #              Reads line by line and stops at the first match: the provenance
@@ -279,16 +310,20 @@ function main() {
   # Verdict 3. Reachability is asked against HEAD, not against main, because
   # regeneration lands on a branch -- see the header.
   if ! git -C "${REPO_DIR}" merge-base --is-ancestor "${recorded}" HEAD; then
-    printf 'FAIL: %s records commit %s, which exists but is not\n' "${REPORT}" "${recorded}" >&2
+    printf '%s: %s records commit %s, which exists but is not\n' "$(stale_prefix)" "${REPORT}" "${recorded}" >&2
     printf '      reachable from HEAD -- history was rewritten, or that commit\n' >&2
     printf '      was superseded on its branch before the branch merged.\n' >&2
     printf '      This is NOT a statement about %s: no comparison was\n' "${BENCH_SUBJECT}" >&2
     printf '      possible, so the report describes a tree that no longer\n' >&2
     printf '      exists in this history. Regenerate with: just bench\n' >&2
-    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
-    trap - ERR
-    return 1
+    if [[ -n "${STRICT}" ]]; then
+      # A gate reporting its own verdict is not a crash: drop the ERR trap so
+      # the diagnostics above are the last thing the reader sees (#43,
+      # invariant 6).
+      trap - ERR
+      return 1
+    fi
+    return 0
   fi
 
   # Verdicts 1 and 2. Through a command substitution rather than
@@ -318,8 +353,8 @@ function main() {
 
     local -a commits=()
     mapfile -t commits <<< "${changes}"
-    printf 'FAIL: %s is stale: it was generated at %s, and %s has\n' \
-      "${REPORT}" "${recorded}" "${BENCH_SUBJECT}" >&2
+    printf '%s: %s is stale: it was generated at %s, and %s has\n' \
+      "$(stale_prefix)" "${REPORT}" "${recorded}" "${BENCH_SUBJECT}" >&2
     printf '      changed in %s commit(s) since:\n' "${#commits[@]}" >&2
     local commit
     for commit in "${commits[@]}"; do
@@ -327,10 +362,18 @@ function main() {
     done
     printf '      The README quotes these figures as measured. Regenerate\n' >&2
     printf '      with: just bench\n' >&2
-    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
-    trap - ERR
-    return 1
+    if [[ -z "${STRICT}" ]]; then
+      printf '      Advisory here: the gate convicts only on a release PR, so\n' >&2
+      printf '      regenerate on main before the next release.\n' >&2
+    fi
+    if [[ -n "${STRICT}" ]]; then
+      # A gate reporting its own verdict is not a crash: drop the ERR trap so
+      # the diagnostics above are the last thing the reader sees (#43,
+      # invariant 6).
+      trap - ERR
+      return 1
+    fi
+    return 0
   fi
 
   printf 'ok: %s was generated at %s; %s is unchanged since\n' \

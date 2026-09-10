@@ -42,6 +42,13 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      # Bench freshness is a release-time property: .ci/check-bench-fresh warns
+      # on stale numbers everywhere and convicts only when this is set, which
+      # is on release-please's branch alone. A release with stale figures is
+      # red until `just bench` runs on main and merges; an ordinary hooks/ PR
+      # is not asked to pay a wall-clock benchmark.
+      BENCH_FRESH_STRICT: ${{ github.head_ref == 'release-please--branches--main' && '1' || '' }}
     strategy:
       fail-fast: false
       matrix:

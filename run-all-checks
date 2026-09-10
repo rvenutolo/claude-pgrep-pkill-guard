@@ -102,9 +102,11 @@ function main() {
   # comparison happened at all, or absent from the object store, which is a SKIP
   # so that a shallow clone never gets a red gate over history it never fetched.
   # The fifth is the release-please version line: it lives inside hooks/, so
-  # every release PR carried a hooks/ diff and the gate demanded a wall-clock
-  # re-run over a string the hook never branches on. A net difference confined
-  # to that one line passes.
+  # every release PR carried a hooks/ diff. A net difference confined to that
+  # one line passes. And staleness itself convicts only under
+  # BENCH_FRESH_STRICT, which ci.yml sets on release-please's branch alone:
+  # everywhere else the gate warns, because a wall-clock benchmark is a
+  # release-time cost, not a per-PR one.
   # check-bats-libs-in-sync ties the two independent places bats-support and
   # bats-assert are pinned: the flake inputs the hermetic gate loads them from,
   # and the SHAs .github/actions/bats-ambient/action.yml clones them at for the

@@ -120,6 +120,7 @@ function pipe_producer_payload() {
 # @arg $1 heredoc_var name of the carried heredoc ordinal variable
 # @arg $2 text_var name of the carried literal payload variable
 # @arg $3 text_set_var name of the flag saying whether text_var is meaningful
+# @exitcode 0 always; it ends on an assignment
 function pipe_carry_clear() {
   local -n carry_heredoc="$1" carry_text="$2" carry_text_set="$3"
   carry_heredoc=''

@@ -250,7 +250,8 @@ function classify_command() {
     [[ -z "${idx}" ]] && continue
     args="$(invocation_args "${tokens}" "${idx}")"
     has_flag "${args}" '--full' 'f' || continue
-    if invocation_finding="$(classify_invocation CMD_TOKENS "${command}" "${tokens}" "${idx}" "${name}" "${args}")"; then
+    if invocation_finding="$(classify_invocation CMD_TOKENS "${command}" "${tokens}" "${idx}" "${name}" \
+      "${args}")"; then
       case "${invocation_finding}" in
         deny:*)
           printf '%s\n' "${invocation_finding}"

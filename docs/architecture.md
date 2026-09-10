@@ -775,10 +775,10 @@ now appears three times. In `hooks/lib/classify.sh`, in `repeat_tier_reason`
 directly above that assignment:
 
 ```text
-# The `||` is load-bearing beyond the obvious fallback: it is what
-# keeps this whole command substitution off errexit's radar for its
-# entire dynamic extent, so nothing inside repeat_check can trip the
-# top-level ERR trap. Do not turn this into a plain assignment.
+# The `||` is load-bearing beyond the obvious fallback: it is what keeps this
+# whole command substitution off errexit's radar for its entire dynamic
+# extent, so nothing inside repeat_check can trip the top-level ERR trap. Do
+# not turn this into a plain assignment.
 ```
 
 And twice more on a `source`, where the same construct does the same job for a

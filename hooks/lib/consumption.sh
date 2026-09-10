@@ -115,16 +115,16 @@ function feeds_a_kill_forward() {
 # @exitcode 1 it is an argument word, or sits inside an array literal
 function kill_in_command_position() {
   local -n toks="$1"
-  local m="$2"
-  while ((m >= 0)); do
-    if is_prefix_command "${toks[m]##*/}" || is_assignment_word "${toks[m]}"; then
-      m=$((m - 1))
+  local index="$2"
+  while ((index >= 0)); do
+    if is_prefix_command "${toks[index]##*/}" || is_assignment_word "${toks[index]}"; then
+      index=$((index - 1))
       continue
     fi
-    if [[ "${toks[m]}" == '(' ]] && ((m > 0)) && [[ "${toks[m - 1]}" == *= ]]; then
+    if [[ "${toks[index]}" == '(' ]] && ((index > 0)) && [[ "${toks[index - 1]}" == *= ]]; then
       return 1
     fi
-    if is_operator "${toks[m]}" || is_keyword "${toks[m]}"; then return 0; fi
+    if is_operator "${toks[index]}" || is_keyword "${toks[index]}"; then return 0; fi
     return 1
   done
   return 0
@@ -156,6 +156,9 @@ function feeds_a_kill_backward() {
       '$' | '(' | '`') ;;
       -*) ;;
       'kill')
+        # A bare call whose non-zero status is the verdict: safe only because feeds_a_kill invokes
+        # this function as the right-hand side of `||`, which keeps the whole dynamic extent off
+        # errexit's radar. Call it the same way from anywhere new.
         kill_in_command_position "${tokens_var}" "$((k - 1))"
         return
         ;;

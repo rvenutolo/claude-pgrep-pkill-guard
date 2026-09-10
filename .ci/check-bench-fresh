@@ -316,10 +316,11 @@ function main() {
     printf '      This is NOT a statement about %s: no comparison was\n' "${BENCH_SUBJECT}" >&2
     printf '      possible, so the report describes a tree that no longer\n' >&2
     printf '      exists in this history. Regenerate with: just bench\n' >&2
-    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
-    trap - ERR
     if [[ -n "${STRICT}" ]]; then
+      # A gate reporting its own verdict is not a crash: drop the ERR trap so
+      # the diagnostics above are the last thing the reader sees (#43,
+      # invariant 6).
+      trap - ERR
       return 1
     fi
     return 0
@@ -365,10 +366,11 @@ function main() {
       printf '      Advisory here: the gate convicts only on a release PR, so\n' >&2
       printf '      regenerate on main before the next release.\n' >&2
     fi
-    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
-    trap - ERR
     if [[ -n "${STRICT}" ]]; then
+      # A gate reporting its own verdict is not a crash: drop the ERR trap so
+      # the diagnostics above are the last thing the reader sees (#43,
+      # invariant 6).
+      trap - ERR
       return 1
     fi
     return 0

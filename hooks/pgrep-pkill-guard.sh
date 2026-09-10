@@ -77,8 +77,8 @@ function load_body() {
   # The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
   # repeat_check call inside the body: it keeps a failing `source` off the ERR
   # trap, so a corrupt sibling produces this message rather than a bare `{}`.
-  # shellcheck source=/dev/null # the sibling is linted on its own as hooks/*.sh; following it
-  # from here would re-lint 2100 lines against a context it never sees in isolation.
+  # shellcheck source=/dev/null # the loader and the parts it sources are linted on their own as
+  # hooks/**/*.sh; following it from here would lint them against a context they never see alone.
   source "${body}" || {
     printf '{"systemMessage":"%s"}\n' \
       "${HOOK_NAME}: pgrep-pkill-guard-body.sh failed to load; the pgrep/pkill guard is INACTIVE for this command."

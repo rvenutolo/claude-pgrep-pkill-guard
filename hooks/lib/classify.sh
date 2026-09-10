@@ -119,6 +119,92 @@ function probe_keys() {
   printf '%s' "${keys}"
 }
 
+# @description Classify one pgrep/pkill invocation the caller has already established carries
+#              `--full`: deny for a kill or a loop, warn for a consumed result. `--ignore-ancestors`
+#              used to exempt an invocation outright. It excludes ANCESTORS only: a sibling waiter
+#              whose command line carries the same literal is still matched, so two waiters for one
+#              event deadlock each other (Gap 1, 2026-08-26). It therefore still clears a kill -- the
+#              session shell is an ancestor -- and still fixes an inflated count, but it never clears
+#              a loop.
+# @arg $1 tokens_var name of the command's token array
+# @arg $2 command the raw command
+# @arg $3 tokens the scanner's token stream for the command
+# @arg $4 idx the invocation's token index
+# @arg $5 name `pgrep` or `pkill`
+# @arg $6 args the invocation's argument tokens (invocation_args output)
+# @stdout `deny:kill<TAB>name`, `deny:loop<TAB>name`, or `warn`
+# @exitcode 0 a verdict was printed
+# @exitcode 1 the invocation is clean or exempt; nothing printed
+function classify_invocation() {
+  local -r tokens_var="$1" command="$2" tokens="$3" idx="$4" name="$5" args="$6"
+  local operand context ignores_ancestors=0
+  has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
+  operand="$(pattern_operand "${command}" "${args}")"
+  bracket_mitigation_holds "${command}" "${operand}" && return 1
+  if [[ "${name}" == 'pkill' ]] || feeds_a_kill "${tokens_var}" "${idx}"; then
+    ((ignores_ancestors == 1)) && return 1
+    printf 'deny:kill\t%s\n' "${name}"
+    return 0
+  fi
+  context="$(loop_context "${tokens}" "${idx}")"
+  case "${context}" in
+    cond)
+      printf 'deny:loop\t%s\n' "${name}"
+      return 0
+      ;;
+    body)
+      if result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}" \
+        && body_has_terminator "${tokens}" "${idx}"; then
+        printf 'deny:loop\t%s\n' "${name}"
+        return 0
+      fi
+      ;;
+  esac
+  ((ignores_ancestors == 1)) && return 1
+  if result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}"; then
+    printf 'warn\n'
+    return 0
+  fi
+  return 1
+}
+
+# @description Classify the code a shell wrapper in this command would run: a `bash -c '...'`
+#              payload, or a heredoc body fed to `bash`, gets the same classification the outer
+#              command just got. A deny inside wins outright; a warn inside only lifts an allow.
+#              Bounded by MAX_PAYLOAD_DEPTH so a payload that wraps a payload cannot recurse forever.
+# @arg $1 command the raw command
+# @arg $2 tokens the scanner's token stream for the command
+# @arg $3 depth the current nesting depth
+# @stdout `inactive`, a `deny:...` verdict line, or `warn`
+# @exitcode 0 a verdict was printed
+# @exitcode 1 no payload changes the outer verdict; nothing printed
+function classify_wrapper_payloads() {
+  local -r command="$1" tokens="$2" depth="$3"
+  ((depth < MAX_PAYLOAD_DEPTH)) || return 1
+  local payload payload_verdict lifted=0
+  while IFS= read -r -d '' payload; do
+    [[ -z "${payload}" ]] && continue
+    payload_verdict="$(classify_command "${payload}" "$((depth + 1))")"
+    # An untrustworthy inner scan must not be reported as a clean allow.
+    if [[ "${payload_verdict}" == inactive* ]]; then
+      printf 'inactive\n'
+      return 0
+    fi
+    case "${payload_verdict}" in
+      deny:*)
+        printf '%s\n' "${payload_verdict}"
+        return 0
+        ;;
+      warn) lifted=1 ;;
+    esac
+  done < <(shell_wrapper_payloads "${command}" "${tokens}")
+  if ((lifted == 1)); then
+    printf 'warn\n'
+    return 0
+  fi
+  return 1
+}
+
 # @description Classify a Bash command string.
 # @arg $1 command the command string
 # @arg $2 depth wrapper-payload recursion depth, 0 for the command the user actually ran
@@ -153,7 +239,7 @@ function classify_command() {
   done <<< "${tokens}"
 
   local verdict='allow'
-  local idx offset name args operand context
+  local idx offset name args invocation_finding
   # The pgrep tier only has work when the command names the tool; the token
   # stream is still needed below for the task-poll tier.
   local invocations=''
@@ -164,37 +250,16 @@ function classify_command() {
     [[ -z "${idx}" ]] && continue
     args="$(invocation_args "${tokens}" "${idx}")"
     has_flag "${args}" '--full' 'f' || continue
-    # `--ignore-ancestors` used to exempt an invocation outright. It excludes
-    # ANCESTORS only: a sibling waiter whose command line carries the same
-    # literal is still matched, so two waiters for one event deadlock each
-    # other (Gap 1, 2026-08-26). It therefore still clears a kill -- the
-    # session shell is an ancestor -- and still fixes an inflated count, but
-    # it never clears a loop.
-    local ignores_ancestors=0
-    has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
-    operand="$(pattern_operand "${command}" "${args}")"
-    bracket_mitigation_holds "${command}" "${operand}" && continue
-    if [[ "${name}" == 'pkill' ]] || feeds_a_kill CMD_TOKENS "${idx}"; then
-      ((ignores_ancestors == 1)) && continue
-      printf 'deny:kill\t%s\n' "${name}"
-      return 0
-    fi
-    context="$(loop_context "${tokens}" "${idx}")"
-    case "${context}" in
-      cond)
-        printf 'deny:loop\t%s\n' "${name}"
-        return 0
-        ;;
-      body)
-        if result_is_consumed CMD_TOKENS "${idx}" "${args}" "${command}" "${tokens}" \
-          && body_has_terminator "${tokens}" "${idx}"; then
-          printf 'deny:loop\t%s\n' "${name}"
+    if invocation_finding="$(classify_invocation CMD_TOKENS "${command}" "${tokens}" "${idx}" "${name}" \
+      "${args}")"; then
+      case "${invocation_finding}" in
+        deny:*)
+          printf '%s\n' "${invocation_finding}"
           return 0
-        fi
-        ;;
-    esac
-    ((ignores_ancestors == 1)) && continue
-    result_is_consumed CMD_TOKENS "${idx}" "${args}" "${command}" "${tokens}" && verdict='warn'
+          ;;
+        warn) verdict='warn' ;;
+      esac
+    fi
   done <<< "${invocations}"
 
   # A loop on a harness task-output file is denied whatever the pgrep tier
@@ -207,32 +272,81 @@ function classify_command() {
     fi
   fi
 
-  # A `bash -c '...'` payload, or a heredoc body fed to `bash`, is code that
-  # runs here, so it gets the same classification the outer command just got.
-  # A deny inside wins outright; a warn inside only lifts an allow, so an
-  # outer warn is never downgraded.
-  if ((depth < MAX_PAYLOAD_DEPTH)); then
-    local payload payload_verdict
-    while IFS= read -r -d '' payload; do
-      [[ -z "${payload}" ]] && continue
-      payload_verdict="$(classify_command "${payload}" "$((depth + 1))")"
-      # An untrustworthy inner scan must not be reported as a clean allow.
-      if [[ "${payload_verdict}" == inactive* ]]; then
-        printf 'inactive\n'
+  local payload_finding
+  if payload_finding="$(classify_wrapper_payloads "${command}" "${tokens}" "${depth}")"; then
+    case "${payload_finding}" in
+      warn) verdict='warn' ;;
+      *)
+        printf '%s\n' "${payload_finding}"
         return 0
-      fi
-      case "${payload_verdict}" in
-        deny:*)
-          printf '%s\n' "${payload_verdict}"
-          return 0
-          ;;
-        warn) verdict='warn' ;;
-      esac
-    done < <(shell_wrapper_payloads "${command}" "${tokens}")
+        ;;
+    esac
   fi
 
   printf '%s\n' "${verdict}"
 }
+
+# @description The guard's runtime preconditions, checked only once a payload has passed the
+#              prefilter: a command with no trigger token returns `{}` whether or not `jq` exists, so
+#              warning about an inactive guard on those calls would be noise about a call the guard
+#              was never going to act on. Without `jq`, `awk` or the scanner the guard would die and
+#              the ERR trap would allow silently -- the exact failure this hook exists to prevent --
+#              so each failure is reported as INACTIVE, loudly, on stdout.
+# @noargs
+# @stdout on failure, one `{"systemMessage":...}` line
+# @exitcode 0 every precondition holds
+# @exitcode 1 one does not; the message is already on stdout
+function inspect_preconditions() {
+  if ! command -v jq > /dev/null 2>&1; then
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: jq not found on PATH; the pgrep poll-loop guard is INACTIVE for this command."
+    return 1
+  fi
+  if ! command -v awk > /dev/null 2>&1; then
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: awk not found on PATH; the pgrep poll-loop guard is INACTIVE for this command."
+    return 1
+  fi
+  if [[ ! -r "${SCANNER}" ]]; then
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: scanner pgrep-scan.awk is missing; the pgrep poll-loop guard is INACTIVE for this command."
+    return 1
+  fi
+  return 0
+}
+
+# @description The stateful tier. Runs only after the stateless tiers have allowed (or warned),
+#              only for commands that can carry a probe key, and only with a session id that is a
+#              plain file name -- no id, no rule, never a global fallback that would leak across
+#              concurrent sessions. It costs a second scanner pass on those commands and nothing on
+#              any other.
+# @arg $1 command the decoded command
+# @arg $2 session_id the hook payload's session id, possibly empty
+# @stdout the repeat deny reason, when the rule fires
+# @exitcode 0 a reason was printed
+# @exitcode 1 the rule does not apply, or did not fire; nothing printed
+# @exitcode 2 the rescan failed; the caller reports the scanner as INACTIVE
+function repeat_tier_reason() {
+  local -r command="$1" session_id="$2"
+  [[ "${session_id}" =~ ^[A-Za-z0-9._-]+$ && "${session_id}" != '.' && "${session_id}" != '..' ]] || return 1
+  [[ "${command}" == *pgrep* || "${command}" == *.output* ]] || return 1
+  local keys rt_tokens reason
+  # Split out of the nested substitution deliberately: with the scan inlined
+  # into probe_keys' arguments, a scanner failure would be swallowed by the
+  # `|| keys=''` below and read as "this command carries no probe key".
+  rt_tokens="$(scan_command "${command}")" || return 2
+  keys="$(probe_keys "${command}" "${rt_tokens}")" || keys=''
+  [[ -n "${keys}" ]] || return 1
+  # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
+  # whole command substitution off errexit's radar for its entire dynamic
+  # extent, so nothing inside repeat_check can trip the top-level ERR trap. Do
+  # not turn this into a plain assignment.
+  reason="$(repeat_check "${session_id}" "${keys}")" || reason=''
+  [[ -n "${reason}" ]] || return 1
+  printf '%s\n' "${reason}"
+  return 0
+}
+
 # @description Everything the guard does once the prefilter has decided the payload is worth
 #              looking at: the preconditions, the jq extraction, the stateless tiers, the
 #              stateful repeat tier, and emission. Split out of `main` so the entry script can
@@ -252,26 +366,7 @@ function inspect_command() {
   # with no trigger token returns `{}` whether or not `jq` exists, so warning
   # about an inactive guard on those calls is noise about a call the guard was
   # never going to act on. The first pgrep loop the user types still warns them.
-  if ! command -v jq > /dev/null 2>&1; then
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: jq not found on PATH; the pgrep poll-loop guard is INACTIVE for this command."
-    return 0
-  fi
-
-  # Without these two the scanner call dies, the ERR trap allows, and the guard is
-  # silently dead -- which is the exact failure mode this hook exists to prevent.
-  # Fail open loudly, the same way the jq branch does.
-  if ! command -v awk > /dev/null 2>&1; then
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: awk not found on PATH; the pgrep poll-loop guard is INACTIVE for this command."
-    return 0
-  fi
-
-  if [[ ! -r "${SCANNER}" ]]; then
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: scanner pgrep-scan.awk is missing; the pgrep poll-loop guard is INACTIVE for this command."
-    return 0
-  fi
+  inspect_preconditions || return 0
 
   # One jq spawn instead of two, since it runs on every Bash call. The command
   # can contain literal tabs and newlines, which @tsv escapes as `\t` / `\n`
@@ -309,32 +404,15 @@ function inspect_command() {
     return 0
   fi
 
-  # The stateful tier runs only after the stateless tiers have allowed (or
-  # warned), only for commands that can carry a probe key, and only with a
-  # session id that is a plain file name -- no id, no rule, never a global
-  # fallback that would leak across concurrent sessions. It costs a second
-  # scanner pass on those commands and nothing on any other.
-  local repeat_reason=''
-  if [[ "${session_id}" =~ ^[A-Za-z0-9._-]+$ && "${session_id}" != '.' && "${session_id}" != '..' ]] \
-    && [[ "${command}" == *pgrep* || "${command}" == *.output* ]]; then
-    local keys rt_tokens
-    # Split out of the nested substitution deliberately: with the scan inlined
-    # into probe_keys' arguments, a scanner failure would be swallowed by the
-    # `|| keys=''` below and read as "this command carries no probe key".
-    if rt_tokens="$(scan_command "${command}")"; then
-      keys="$(probe_keys "${command}" "${rt_tokens}")" || keys=''
-    else
-      printf '{"systemMessage":"%s"}\n' \
-        "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
-      return 0
-    fi
-    if [[ -n "${keys}" ]]; then
-      # The `||` is load-bearing beyond the obvious fallback: it is what
-      # keeps this whole command substitution off errexit's radar for its
-      # entire dynamic extent, so nothing inside repeat_check can trip the
-      # top-level ERR trap. Do not turn this into a plain assignment.
-      repeat_reason="$(repeat_check "${session_id}" "${keys}")" || repeat_reason=''
-    fi
+  local repeat_reason='' repeat_rc=0
+  # `|| repeat_rc=$?` rather than a plain assignment: the `||` keeps the whole
+  # substitution -- and repeat_check inside it -- off errexit's radar, and the
+  # status tells a rescan failure (2) apart from "no rule fired" (1).
+  repeat_reason="$(repeat_tier_reason "${command}" "${session_id}")" || repeat_rc=$?
+  if ((repeat_rc == 2)); then
+    printf '{"systemMessage":"%s"}\n' \
+      "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+    return 0
   fi
   # Only a string shaped like repeat_message's output is treated as a deny
   # reason. If the ERR trap ever fired inside the substitution above despite

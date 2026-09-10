@@ -347,3 +347,4 @@
 "if timeout 5 pgrep --full java; then echo yes; fi"	warn
 "! doas -n pgrep --full java"	warn
 "if true; then pgrep --full java; fi"	allow
+"bash <<EOF4\nbash <<EOF3\nbash <<EOF2\nbash <<EOF1\nbash <<EOF0\npkill --full zzznoproccc\nEOF0\nEOF1\nEOF2\nEOF3\nEOF4"	allow

@@ -30,7 +30,7 @@
 # .version, with no BOOTSTRAP_VERSION escape hatch -- that exemption is scoped to
 # .release-please-manifest.json, because a WRONG version in a bug report is worse
 # than a missing one.
-readonly HOOK_VERSION='1.0.0' # x-release-please-version
+readonly HOOK_VERSION='1.1.0' # x-release-please-version
 
 # Resolved by resolve_scanner below, which inspect_command calls once. Declared
 # here so `set -u` has a definition to see on any path that never resolves it.

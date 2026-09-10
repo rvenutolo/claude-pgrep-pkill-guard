@@ -116,6 +116,50 @@ function pipe_producer_payload() {
   return 0
 }
 
+# @description Drop whatever a finished pipeline segment left for the next command.
+# @arg $1 heredoc_var name of the carried heredoc ordinal variable
+# @arg $2 text_var name of the carried literal payload variable
+# @arg $3 text_set_var name of the flag saying whether text_var is meaningful
+function pipe_carry_clear() {
+  local -n carry_heredoc="$1" carry_text="$2" carry_text_set="$3"
+  carry_heredoc=''
+  carry_text=''
+  carry_text_set=0
+}
+
+# @description Decide what a pipeline segment that just ended at a `|` leaves on the pipe for the
+#              next command. A `cat` whose only operand is `-` (or none) and that read a heredoc
+#              carries that heredoc's ordinal; an `echo`/`printf` whose literal can be
+#              reconstructed carries the text. A segment that redirected its output carries nothing:
+#              the pipe never sees it.
+# @arg $1 heredoc_var name of the carried heredoc ordinal variable (set)
+# @arg $2 text_var name of the carried literal payload variable (set)
+# @arg $3 text_set_var name of the flag saying whether text_var is meaningful (set)
+# @arg $4 seg_cmd the segment's command word
+# @arg $5 seg_heredoc the heredoc ordinal the segment read, or empty
+# @arg $6 seg_redir 1 when the segment redirected its output
+# @arg $@ the segment's operand words, quotes already stripped
+# shellcheck disable=SC2034 # the carry_* namerefs are the caller's variables, which shellcheck cannot follow
+function segment_pipe_carry() {
+  local -n carry_heredoc="$1" carry_text="$2" carry_text_set="$3"
+  local -r seg_cmd="$4" seg_heredoc="$5" seg_redir="$6"
+  shift 6
+  local seg_ok=1 w payload
+  carry_heredoc=''
+  carry_text=''
+  carry_text_set=0
+  ((seg_redir == 1)) && seg_ok=0
+  for w in "$@"; do
+    [[ "${w}" == '-' ]] || seg_ok=0
+  done
+  if ((seg_ok == 1)) && [[ "${seg_cmd}" == 'cat' && -n "${seg_heredoc}" ]]; then
+    carry_heredoc="${seg_heredoc}"
+  elif ((seg_redir == 0)) && payload="$(pipe_producer_payload "${seg_cmd}" "$@")"; then
+    carry_text="${payload}"
+    carry_text_set=1
+  fi
+}
+
 # @description Find the payloads of local shell wrappers and print each one's raw text,
 #              NUL-terminated, with any surrounding quotes stripped.
 #
@@ -195,7 +239,7 @@ function shell_wrapper_payloads() {
   # only the very next command word may claim. `pending_text` is the wrapper's
   # claimed literal payload, held until its simple command ends the same way a
   # heredoc ordinal is.
-  local seg_cmd='' seg_heredoc='' seg_redir=0 seg_ok payload w
+  local seg_cmd='' seg_heredoc='' seg_redir=0
   local -a seg_words=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
   local pending_text='' pending_text_set=0
@@ -215,6 +259,9 @@ function shell_wrapper_payloads() {
   # than `>f`), in which case the next token is the target and is not an
   # operand either.
   local -r redir_re='^[0-9]*(&?[<>]|[<>]{2})' redir_bare_re='^[0-9]*[<>&|]+$'
+  # The rest of this loop stays inline on purpose: each block reads and writes
+  # eight or more of the locals above, and a helper with that many namerefs is
+  # harder to read than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     word="${token##*/}"
@@ -346,36 +393,19 @@ function shell_wrapper_payloads() {
 
     if is_operator "${token}"; then
       if [[ "${token}" == '|' ]] && ((last_pipe_offset != offset - 1)); then
-        pipe_heredoc=''
-        pipe_text=''
-        pipe_text_set=0
-        seg_ok=1
-        ((seg_redir == 1)) && seg_ok=0
-        for w in ${seg_words[@]+"${seg_words[@]}"}; do
-          [[ "${w}" == '-' ]] || seg_ok=0
-        done
-        if ((seg_ok == 1)) && [[ "${seg_cmd}" == 'cat' && -n "${seg_heredoc}" ]]; then
-          pipe_heredoc="${seg_heredoc}"
-        elif ((seg_redir == 0)) \
-          && payload="$(pipe_producer_payload "${seg_cmd}" ${seg_words[@]+"${seg_words[@]}"})"; then
-          pipe_text="${payload}"
-          pipe_text_set=1
-        fi
+        segment_pipe_carry pipe_heredoc pipe_text pipe_text_set \
+          "${seg_cmd}" "${seg_heredoc}" "${seg_redir}" ${seg_words[@]+"${seg_words[@]}"}
         last_pipe_offset="${offset}"
       elif [[ "${token}" == '|' ]]; then
         # The second `|` of a `||`, which is a conditional list and not a pipe:
         # nothing crosses it, so drop what the first `|` armed.
-        pipe_heredoc=''
-        pipe_text=''
-        pipe_text_set=0
+        pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
         last_pipe_offset="${offset}"
       elif [[ "${token}" == '&' ]] && ((last_pipe_offset == offset - 1)); then
         # `|&` extends the pipe it follows, so the carry it armed stands.
         last_pipe_offset="${offset}"
       else
-        pipe_heredoc=''
-        pipe_text=''
-        pipe_text_set=0
+        pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
       fi
       seg_cmd=''
       seg_heredoc=''
@@ -412,15 +442,11 @@ function shell_wrapper_payloads() {
         pending_text="${pipe_text}"
         pending_text_set=1
       fi
-      pipe_heredoc=''
-      pipe_text=''
-      pipe_text_set=0
+      pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
     elif ((at_cmd == 1 && next_at_cmd == 0)); then
       # A command word that is not a local wrapper: whatever the pipe carried is
       # this command's input, and nothing here runs it as a script.
-      pipe_heredoc=''
-      pipe_text=''
-      pipe_text_set=0
+      pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
     fi
     at_cmd="${next_at_cmd}"
   done <<< "${tokens}"

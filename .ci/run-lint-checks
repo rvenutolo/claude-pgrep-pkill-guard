@@ -39,6 +39,20 @@ function log() {
 #              `# shellcheck shell=bash` directive is required. shfmt does need
 #              help -- the bats dialect reaches it from .editorconfig, see the
 #              comment on that file's `[*.bats]` section.
+#
+#              The extensionless arm matches the canonical shebang as an EXACT
+#              string, and what makes that safe is a separate gate, not this
+#              function: .ci/check-shell-shebangs fails loudly on a tracked
+#              file whose shebang names bash in any other spelling, and forces
+#              a non-bash interpreter to be declared by name. Without it, a
+#              script written `#!/bin/bash` is dropped from both shellcheck and
+#              shfmt with no diagnostic at all, and the empty-scan guard in
+#              `main` below does not catch it -- that fires only when the list
+#              is entirely empty, never when it is one file short (#171).
+#              Loosening the match here instead would be the wrong shape: this
+#              function's whole contract is one path per line, it runs inside a
+#              process substitution feeding `mapfile`, and a non-zero return
+#              from it reaches nobody.
 # @noargs
 # @stdout one path per line
 function shell_files() {

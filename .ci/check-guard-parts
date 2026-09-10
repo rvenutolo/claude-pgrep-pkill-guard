@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+
+# @description Assert the loader's `GUARD_PARTS` table agrees with what is
+#              actually on disk under hooks/lib/: every row names a part that
+#              exists and defines the function the row pairs it with, and every
+#              part is named by exactly one row.
+#
+#              hooks/pgrep-pkill-guard-body.sh pins nine function names as
+#              STRINGS, and proves a part loaded by calling `declare -F` on the
+#              paired name (#147). That makes a rename that misses the table a
+#              runtime failure: the guard prints INACTIVE and allows the
+#              command through. The bats suite does catch it -- renaming one
+#              row's function reddens 18 tests, because every case that reaches
+#              the body gets INACTIVE instead of a verdict -- but nothing said
+#              so at LINT time, and the runtime message named the FILE, which
+#              had loaded perfectly well. This gate is the lint-time half, and
+#              it runs in milliseconds against the text of the table.
+#
+#              The reverse direction matters just as much and had no signal at
+#              all: a part under hooks/lib/ that no row names is never sourced,
+#              so its functions simply do not exist at runtime. That is the
+#              same bug with the halves swapped, and it fails the same way.
+#
+#              Static, deliberately. A dynamic check would have to source the
+#              loader and `declare -F` the names for real, which is the shape
+#              invariant 3 forbids -- and the runtime proof already exists in
+#              the bats suite. Duplicating it here would buy nothing and tie a
+#              gate to the guard's internals.
+#
+#              It finds a definition by matching `function <name>()` at column
+#              zero, which is how all 46 functions under hooks/lib/ are written
+#              and what the bash style rules require. The failure text says so,
+#              because a definition written another way would read as missing.
+#              Policing that style is not this gate's job: the style rules own
+#              it.
+# @arg $1 dir optional fixture directory, treated as the repo root: the loader
+#         and the parts are read from it rather than from the real checkout. It
+#         exists so the bats suite can drive the real matcher over a fabricated
+#         tree -- a stale row, an unlisted part, an empty table -- in
+#         milliseconds. Without it the only possible test would be "exits 0 on
+#         the real repo", which a script that unconditionally returned 0 would
+#         also pass.
+# @exitcode 0 the table and hooks/lib/ agree in both directions
+# @exitcode 1 a row is stale or malformed, a part is unlisted, or the table is
+#             empty
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+readonly FIXTURE_DIR="${1:-}"
+
+# In fixture mode the directory IS the repo root, and it must be taken at face
+# value: `git rev-parse --show-toplevel` run from a bats temp directory would
+# either fail or -- worse -- resolve to some enclosing repo, and the suite would
+# then be grading the author's checkout instead of its own fixture.
+if [[ -n "${FIXTURE_DIR}" ]]; then
+  readonly REPO_DIR="${FIXTURE_DIR}"
+else
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+  readonly REPO_DIR
+fi
+
+readonly LOADER='hooks/pgrep-pkill-guard-body.sh'
+readonly LIB_DIR='hooks/lib'
+
+# @description Print the `GUARD_PARTS` rows from the loader, one per line,
+#              stripped of indentation and the surrounding single quotes.
+#
+#              A bash read loop rather than sed or awk: the table is nine lines
+#              and this needs no external process, no locale assumption, and no
+#              BSD-versus-GNU question. The loop stops at the closing paren, so
+#              a later array in the same file cannot leak in.
+# @arg $1 loader path to the loader file
+# @stdout one `<file>:<function>` row per line
+function guard_part_rows() {
+  local -r loader="$1"
+  local line row inside=0
+  while IFS= read -r line; do
+    if ((inside == 0)); then
+      if [[ "${line}" == 'readonly -a GUARD_PARTS=('* ]]; then
+        inside=1
+      fi
+      continue
+    fi
+    if [[ "${line}" == ')'* ]]; then
+      break
+    fi
+    # Trim leading and trailing whitespace, then the quotes, with parameter
+    # expansion only. A comment line inside the array is legal bash and is not
+    # a row.
+    row="${line#"${line%%[![:space:]]*}"}"
+    row="${row%"${row##*[![:space:]]}"}"
+    if [[ -z "${row}" || "${row}" == '#'* ]]; then
+      continue
+    fi
+    row="${row#\'}"
+    row="${row%\'}"
+    printf '%s\n' "${row}"
+  done < "${loader}"
+}
+
+# @description Grade one row of the table.
+# @arg $1 row the `<file>:<function>` row
+# @exitcode 0 the part exists and defines the paired function
+# @exitcode 1 the row is malformed, the part is missing, or the function is not
+#             defined in it
+function check_row() {
+  local -r row="$1"
+
+  if [[ "${row}" != *:* || "${row}" == *:*:* ]]; then
+    printf 'FAIL: GUARD_PARTS row %s is not <file>:<function>\n' "\"${row}\"" >&2
+    return 1
+  fi
+
+  local -r part="${row%%:*}"
+  local -r function_name="${row#*:}"
+
+  if [[ -z "${part}" || -z "${function_name}" ]]; then
+    printf 'FAIL: GUARD_PARTS row %s has an empty half\n' "\"${row}\"" >&2
+    return 1
+  fi
+
+  local -r path="${LIB_DIR}/${part}"
+  if [[ ! -r "${REPO_DIR}/${path}" ]]; then
+    printf 'FAIL: GUARD_PARTS names %s, which does not exist\n' "${path}" >&2
+    printf '      The loader sources every row in order; a row without a file\n' >&2
+    printf '      stands the guard down on every call.\n' >&2
+    return 1
+  fi
+
+  if ! grep -q "^function ${function_name}()" -- "${REPO_DIR}/${path}"; then
+    printf 'FAIL: %s does not define %s, which its GUARD_PARTS row pairs it with\n' \
+      "${path}" "${function_name}()" >&2
+    printf '      The loader proves a part loaded by asking declare -F for\n' >&2
+    printf '      that name, so a rename that misses the table makes the guard\n' >&2
+    printf '      print INACTIVE and allow the command through (#147). Rename\n' >&2
+    printf '      the row and the function together.\n' >&2
+    printf '      Note: a definition is matched as the word function, the\n' >&2
+    printf '      name and (), at column zero -- which is how every part is\n' >&2
+    printf '      written.\n' >&2
+    return 1
+  fi
+
+  return 0
+}
+
+function main() {
+  local rc=0
+
+  if [[ ! -r "${REPO_DIR}/${LOADER}" ]]; then
+    printf 'FAIL: %s is missing or unreadable; there is no table to check\n' \
+      "${LOADER}" >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    trap - ERR
+    return 1
+  fi
+
+  local -a rows=()
+  mapfile -t rows < <(guard_part_rows "${REPO_DIR}/${LOADER}")
+
+  # A table that scanned nothing would pass everything. Same class of bug as an
+  # empty tool list in check-devshell-provides: if the array's spelling in the
+  # loader ever changes, this gate must say so rather than agree with silence.
+  if ((${#rows[@]} == 0)); then
+    printf 'FAIL: no GUARD_PARTS rows found in %s\n' "${LOADER}" >&2
+    printf '      Either the table is empty or this gate no longer recognises\n' >&2
+    printf '      it; an empty scan is not a clean pass.\n' >&2
+    trap - ERR
+    return 1
+  fi
+
+  local row
+  for row in "${rows[@]}"; do
+    check_row "${row}" || rc=1
+  done
+
+  # The reverse direction: a part nothing names is never sourced, so every
+  # function in it is undefined at runtime. Nothing reported that before this
+  # gate existed.
+  local -a parts=()
+  mapfile -t parts < <(git -C "${REPO_DIR}" ls-files "${LIB_DIR}/*.sh")
+
+  if ((${#parts[@]} == 0)); then
+    printf 'FAIL: no tracked %s/*.sh parts found — an empty scan is not a clean pass\n' \
+      "${LIB_DIR}" >&2
+    rc=1
+  fi
+
+  local path part listed
+  for path in ${parts[@]+"${parts[@]}"}; do
+    part="${path#"${LIB_DIR}/"}"
+    listed=0
+    for row in "${rows[@]}"; do
+      if [[ "${row%%:*}" == "${part}" ]]; then
+        listed=$((listed + 1))
+      fi
+    done
+    if ((listed == 0)); then
+      printf 'FAIL: %s is not named by any GUARD_PARTS row\n' "${path}" >&2
+      printf '      The loader sources an explicit list, not a glob, so an\n' >&2
+      printf '      unlisted part is never sourced and every function in it is\n' >&2
+      printf '      undefined at runtime. Add its row, or delete the file.\n' >&2
+      rc=1
+    elif ((listed > 1)); then
+      printf 'FAIL: %s is named by %s GUARD_PARTS rows; it must be sourced once\n' \
+        "${path}" "${listed}" >&2
+      rc=1
+    fi
+  done
+
+  if ((rc == 0)); then
+    printf 'ok: %s GUARD_PARTS rows resolve, and every %s/*.sh part is listed once\n' \
+      "${#rows[@]}" "${LIB_DIR}" >&2
+  fi
+  # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  return "${rc}"
+}
+
+main "$@"

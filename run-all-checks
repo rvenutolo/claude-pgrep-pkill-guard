@@ -92,6 +92,16 @@ function main() {
   # the grep the doc tells a reader to run (#85). It is a presence check over a
   # table of phrases, collapsing line breaks and `#` continuations first, so
   # rewrapping a comment stays allowed and deleting one does not.
+  # check-guard-parts holds the loader's GUARD_PARTS table to what is actually
+  # under hooks/lib/. The loader pins nine function names as STRINGS and proves
+  # a part loaded by calling `declare -F` on the paired name (#147), so a
+  # rename that misses the table makes the guard print INACTIVE and allow the
+  # command through. The bats suite does catch that -- 18 tests redden, because
+  # every case reaching the body gets INACTIVE instead of a verdict -- but
+  # nothing said so at lint time, and the runtime message named the FILE, which
+  # had loaded perfectly well. It checks the reverse direction too, which had no
+  # signal at all: a part no row names is never sourced, so every function in it
+  # is undefined at runtime.
   # check-shell-shebangs asserts that every tracked file carrying a shebang
   # carries `#!/usr/bin/env bash`, or is one of the named exemptions with the
   # exact spelling it is allowed. run-lint-checks admits an extensionless file
@@ -142,6 +152,7 @@ function main() {
   "${REPO_DIR}/.ci/check-bats-no-shebang" || rc=1
   "${REPO_DIR}/.ci/check-shell-shebangs" || rc=1
   "${REPO_DIR}/.ci/check-fast-path-size" || rc=1
+  "${REPO_DIR}/.ci/check-guard-parts" || rc=1
   "${REPO_DIR}/.ci/check-err-trap-hygiene" || rc=1
   "${REPO_DIR}/.ci/check-uses-sha-pinned" || rc=1
   "${REPO_DIR}/.ci/check-versions-in-sync" || rc=1

@@ -53,6 +53,7 @@ readonly CONFIG_FILE="${REPO_DIR}/lychee.toml"
 
 # @description Log a step banner to stderr, in the house format.
 # @arg $1 message the text to log
+# @stderr the `[<script>] <message>` line
 function log() {
   local -r message="$1"
   printf '[%s] %s\n' "${0##*/}" "${message}" >&2

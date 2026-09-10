@@ -242,6 +242,7 @@ function formatter_commands() {
 #              platform", the check would pass on Linux, and the macOS gate
 #              would break at some later, unrelated commit.
 # @arg $@ entries tool<TAB>annotation, one per declared entry
+# @stderr one FAIL line per entry that does not resolve
 # @exitcode 0 every entry resolves or was legitimately skipped
 # @exitcode 1 an entry does not resolve, or carries an unknown annotation
 function forward_check() {
@@ -280,6 +281,7 @@ function forward_check() {
 # @description Assert every devShell package is justified -- it ships a declared
 #              tool, or it backs a formatter .treefmt.nix enables.
 # @arg $@ tools the declared tools
+# @stderr one FAIL line per unjustified package, or per failed inventory read
 # @exitcode 0 every package is justified
 # @exitcode 1 at least one package justifies nothing, or the inventory is empty
 function reverse_check() {

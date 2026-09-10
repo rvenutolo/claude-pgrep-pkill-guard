@@ -55,6 +55,7 @@ readonly BOOTSTRAP_VERSION='0.0.0'
 # @arg $1 file the JSON file to read
 # @arg $2 filter the jq filter to apply
 # @stdout the extracted value
+# @stderr one FAIL line naming the file and filter, on any failure path
 # @exitcode 0 the field exists and is a non-null scalar
 # @exitcode 1 the file is missing, unparsable, or the field is absent
 function read_version() {
@@ -83,6 +84,7 @@ function read_version() {
 #              empty string that would then "agree" with nothing.
 # @arg $1 file the bash file to read
 # @stdout the extracted version
+# @stderr one FAIL line naming the file, on any failure path
 # @exitcode 0 the constant exists, is annotated, and is semver-shaped
 # @exitcode 1 the file is missing, or the constant is absent, unannotated or malformed
 function read_hook_version() {

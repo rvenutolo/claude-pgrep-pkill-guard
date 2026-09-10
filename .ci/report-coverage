@@ -46,6 +46,12 @@ IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
+# @description Print one fatal diagnostic to stderr and exit 1. Drops the ERR
+#              trap on the way out, so a gate reporting its own verdict ends on
+#              that diagnostic rather than on a trap line about this function.
+# @arg $1 message the diagnostic text
+# @stderr the `[<script>] FATAL: <message>` line
+# @exitcode 1 always
 function die() {
   printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

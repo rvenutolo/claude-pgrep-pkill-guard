@@ -121,6 +121,7 @@ function exempt_shebang_for() {
 # @description Grade one tracked file's shebang.
 # @arg $1 path the tracked path, relative to the repo root
 # @arg $2 shebang the file's first line, known to start with `#!`
+# @stderr one FAIL line, plus its remedy, for a shebang that does not grade clean
 # @exitcode 0 canonical, or an exemption it matches exactly
 # @exitcode 1 non-canonical, or an exemption it contradicts
 function check_shebang() {

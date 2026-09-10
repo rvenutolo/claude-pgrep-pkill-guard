@@ -106,6 +106,7 @@ readonly JQ_PROGRAM='
 #              .ci/report-coverage (#169). The script name is what tells a
 #              reader which tool in a pipeline gave up.
 # @arg $1 message the diagnostic text
+# @stderr the `[<script>] FATAL: <message>` line
 # @exitcode 1 always
 function die() {
   printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2

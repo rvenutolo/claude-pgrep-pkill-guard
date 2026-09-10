@@ -54,6 +54,10 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR
 
+# @description Print one fatal diagnostic to stderr and exit 1.
+# @arg $1 message the diagnostic text
+# @stderr the `[<script>] FATAL: <message>` line
+# @exitcode 1 always
 function die() {
   printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
   exit 1
@@ -96,6 +100,9 @@ function use_bwk_awk() {
   esac
 }
 
+# @description Log a step banner to stderr, in the house format.
+# @arg $1 message the text to log
+# @stderr the `[<script>] <message>` line
 function log() {
   printf '[%s] %s\n' "${0##*/}" "$1" >&2
 }

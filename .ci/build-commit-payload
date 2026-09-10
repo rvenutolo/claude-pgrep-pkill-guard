@@ -100,10 +100,15 @@ readonly JQ_PROGRAM='
 #              written to stdout on the way out: a caller piping this script
 #              straight into `gh api graphql --input -` must not receive a
 #              half-formed document alongside the failure.
+#
+#              `[<script>] FATAL: <message>` is the house format for a fatal
+#              diagnostic, matching `die` in run-tests, bench/run and
+#              .ci/report-coverage (#169). The script name is what tells a
+#              reader which tool in a pipeline gave up.
 # @arg $1 message the diagnostic text
 # @exitcode 1 always
 function die() {
-  printf '%s: %s\n' "${0##*/}" "$1" >&2
+  printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
   exit 1
 }
 

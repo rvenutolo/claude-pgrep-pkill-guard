@@ -161,6 +161,7 @@ readonly STRICT="${BENCH_FRESH_STRICT:-}"
 
 # @description Print the verdict prefix for a staleness finding: FAIL when
 #              strict, WARN otherwise.
+# @noargs
 # @stdout `FAIL` or `WARN`
 function stale_prefix() {
   if [[ -n "${STRICT}" ]]; then
@@ -174,6 +175,7 @@ function stale_prefix() {
 #              Reads line by line and stops at the first match: the provenance
 #              table is the first table in the file, and a second `commit` row
 #              would be a different report entirely.
+# @noargs
 # @stdout the recorded short sha
 # @stderr a diagnostic when no usable row is found
 # @exitcode 0 a commit row was found and its cell holds a hex sha

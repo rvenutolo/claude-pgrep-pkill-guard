@@ -155,6 +155,7 @@ function check_parses() {
 #              string names a directory that vendors its own plugin.json. jq
 #              cannot stat a path, so this is the one invariant that runs in
 #              bash rather than inside JQ_PROGRAM.
+# @noargs
 # @exitcode 0 every string source has a vendored .claude-plugin/plugin.json
 # @exitcode 1 at least one is missing
 function check_i8_vendored_sources() {

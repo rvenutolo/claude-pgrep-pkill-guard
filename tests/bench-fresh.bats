@@ -21,13 +21,29 @@ function make_bench_fixture() {
   local -r root="$1"
   mkdir -p "${root}/hooks" "${root}/bench"
   git -c init.defaultBranch=main init -q "${root}"
-  printf 'guard\n' > "${root}/hooks/pgrep-pkill-guard.sh"
+  write_hook "${root}" '1.0.0'
   printf 'readme\n' > "${root}/README.md"
   git -C "${root}" add hooks/pgrep-pkill-guard.sh README.md
   commit_fixture "${root}" 'seed'
   write_results "${root}" "$(short_head "${root}")"
   git -C "${root}" add bench/RESULTS.md
   commit_fixture "${root}" 'chore: regenerate bench/RESULTS.md'
+}
+
+# @description Write the fixture's hook file, carrying the same annotated
+#              version line release-please rewrites in the real one. The seed
+#              carries it so a case can bump it the way a release PR does --
+#              a one-line edit inside hooks/ -- rather than by rewriting the
+#              file, which would prove nothing about the exemption.
+# @arg $1 root the fixture repo
+# @arg $2 version the version to record on the annotated line
+function write_hook() {
+  local -r root="$1"
+  local -r version="$2"
+  cat > "${root}/hooks/pgrep-pkill-guard.sh" << HOOK
+guard
+readonly HOOK_VERSION='${version}' # x-release-please-version
+HOOK
 }
 
 # @description Commit whatever is staged in the fixture repo.
@@ -140,6 +156,89 @@ function record_commit() {
   assert_output --partial 'changed in 1 commit(s) since'
   assert_output --partial 'perf: split the guard'
   assert_output --partial 'just bench'
+}
+
+@test "bench fresh: a release-please version bump alone is not stale" {
+  # The state release PR #50 sat in for twelve days. release-please-config.json
+  # lists hooks/pgrep-pkill-guard-body.sh as a generic extra-file, so every
+  # release PR carries a one-line hooks/ diff -- and the gate demanded an hour
+  # of wall-clock benchmarking over a string the hook never branches on.
+  local -r root="${BATS_TEST_TMPDIR}/version-bump"
+  make_bench_fixture "${root}"
+  write_hook "${root}" '1.1.0'
+  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  commit_fixture "${root}" 'chore(main): release 1.1.0'
+  run "${CHECK}" "${root}"
+  assert_success
+  assert_output --partial 'the only difference is the release-please version line'
+  refute_output --partial 'is stale'
+}
+
+@test "bench fresh: a version bump carrying a real hooks/ change is stale" {
+  # The exemption must not become a laundry chute: a commit that bumps the
+  # version AND touches the code is exactly the commit whose numbers moved.
+  local -r root="${BATS_TEST_TMPDIR}/bump-plus-change"
+  make_bench_fixture "${root}"
+  cat > "${root}/hooks/pgrep-pkill-guard.sh" << 'HOOK'
+guard, split
+readonly HOOK_VERSION='1.1.0' # x-release-please-version
+HOOK
+  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  commit_fixture "${root}" 'perf: split the guard, and release it'
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial 'bench/RESULTS.md is stale'
+}
+
+@test "bench fresh: a line that only wears the annotation is stale" {
+  # The regex is anchored end to end for this: a line that carries the
+  # annotation while also doing work is not what release-please writes, and
+  # forgiving it would forgive arbitrary code.
+  local -r root="${BATS_TEST_TMPDIR}/annotation-smuggling"
+  make_bench_fixture "${root}"
+  cat > "${root}/hooks/pgrep-pkill-guard.sh" << 'HOOK'
+guard
+readonly HOOK_VERSION='1.1.0'; sleep 1 # x-release-please-version
+HOOK
+  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  commit_fixture "${root}" 'chore: sneak a command onto the version line'
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial 'bench/RESULTS.md is stale'
+}
+
+@test "bench fresh: a hooks/ change reverted before HEAD is not stale" {
+  # The verdict is a property of two trees, not of the path between them. Two
+  # commits touched hooks/, so `git log` is not empty -- but the tree HEAD
+  # carries is the one the report was measured against.
+  local -r root="${BATS_TEST_TMPDIR}/reverted"
+  make_bench_fixture "${root}"
+  local recorded_tree
+  recorded_tree="$(git -C "${root}" rev-parse HEAD)"
+  printf 'guard, experimental
+' > "${root}/hooks/pgrep-pkill-guard.sh"
+  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  commit_fixture "${root}" 'perf: try something'
+  git -C "${root}" checkout -q "${recorded_tree}" -- hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  commit_fixture "${root}" 'revert: back it out'
+  run "${CHECK}" "${root}"
+  assert_success
+  assert_output --partial 'byte-identical to the recorded tree'
+}
+
+@test "bench fresh: a new file in hooks/ is stale even with the version line" {
+  # The allowlist walk must reject `new file mode`, not skip past it as
+  # unrecognised metadata: a second hook file is new code on every call.
+  local -r root="${BATS_TEST_TMPDIR}/new-file"
+  make_bench_fixture "${root}"
+  printf 'helper
+' > "${root}/hooks/pgrep-pkill-guard-body.sh"
+  git -C "${root}" add hooks/pgrep-pkill-guard-body.sh
+  commit_fixture "${root}" 'refactor: add a body file'
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial 'bench/RESULTS.md is stale'
 }
 
 @test "bench fresh: an unreachable recorded commit is a different failure" {

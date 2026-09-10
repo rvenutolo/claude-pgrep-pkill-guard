@@ -881,7 +881,8 @@ Tracked counterpart: the prefilter comment block in `main`.
 `hooks/pgrep-pkill-guard.sh` must stay under 200 lines.
 `.ci/check-fast-path-size` enforces it, and `run-all-checks` runs that gate
 with the rest. It is **187 lines** today: 152 immediately after the #55 split,
-plus the human-mode dispatch and the `load_body` extraction from #34.
+plus the human-mode dispatch and the `load_body` extraction from #34,
+plus the two-line invariant-marker comment from 095494b.
 
 **Why:** bash parses a whole script before it executes any of it, at roughly
 1.2 us per line, and this hook runs on every Bash tool call in every session —

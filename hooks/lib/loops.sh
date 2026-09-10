@@ -7,9 +7,6 @@
 # script owns all three, and a sourced file that sets them reconfigures its
 # caller. Never add `shopt -s inherit_errexit` (invariant 2). POSIX short
 # flags, not GNU long options: this runs on BSD userland too (invariant 1).
-# shellcheck disable=SC2034 # cross-part names: some names defined here are
-# read by another part, or passed by nameref into one, and shellcheck sees a
-# single file at a time.
 
 # @description Determine whether a token index sits inside a while/until condition, inside any loop
 #              body, or outside every loop. A for/select head reports "none": it is evaluated once,
@@ -119,6 +116,7 @@ function body_has_terminator() {
   local -r tokens="$1" target="$2"
   local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token
   local -a barrier=()
+  # shellcheck disable=SC2034 # offset is the record's first field; only the token matters here
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     ((idx == target)) && seen=1

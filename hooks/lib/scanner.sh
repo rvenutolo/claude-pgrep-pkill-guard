@@ -8,9 +8,6 @@
 # reconfigures its caller. Never add `shopt -s inherit_errexit` (invariant 2).
 # POSIX short flags, not GNU long options: this runs on BSD userland too
 # (invariant 1).
-# shellcheck disable=SC2034 # cross-part names: some names defined here are
-# read by another part, or passed by nameref into one, and shellcheck sees a
-# single file at a time.
 
 # @description Resolve the path to the awk scanner and freeze it. Called once, from
 #              inspect_command. HOOK_DIR was resolved by the entry script before it sourced this
@@ -62,6 +59,7 @@ function scan_command() {
 # @arg $1 tokens newline-separated "<offset>\t<token>" records from scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>"
 function find_invocations() {
+  # shellcheck disable=SC2034 # written through prefix_chain_step's namerefs in lib/tokens.sh
   local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0
   local -r tokens="$1"
   while IFS=$'\t' read -r offset token; do

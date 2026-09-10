@@ -7,9 +7,6 @@
 # all three, and a sourced file that sets them reconfigures its caller. Never
 # add `shopt -s inherit_errexit` (invariant 2). POSIX short flags, not GNU
 # long options: this runs on BSD userland too (invariant 1).
-# shellcheck disable=SC2034 # cross-part names: some names defined here are
-# read by another part, or passed by nameref into one, and shellcheck sees a
-# single file at a time.
 
 # Wrappers that run their `-c` payload as code ON THIS MACHINE, in this process
 # tree, so the payload's `bash -c ...` ancestor is the same one a pgrep inside it
@@ -28,6 +25,7 @@ readonly -a LOCAL_USER_SWITCH_WRAPPERS=('su' 'runuser')
 
 # How many wrapper payloads deep to follow. `bash -c 'bash -c "..."'` resolves at
 # 2; the limit is a runaway backstop, not a judgement about nesting.
+# shellcheck disable=SC2034 # read by lib/classify.sh
 readonly MAX_PAYLOAD_DEPTH=4
 
 # @description How many non-flag operands may precede a wrapper's `-c` before the wrapper stops

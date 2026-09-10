@@ -7,8 +7,8 @@
 # globals the parts share and sources the parts themselves.
 #
 # The split exists for one reason: bash parses ~1.2 us per line before it runs
-# any of them (#55), and at 2203 lines that was 2.4 ms on every Bash call in
-# every session, four fifths of what the guard cost. Keeping this file out of
+# any of them (#55), and at 2200-odd lines that was 2.4 ms on every Bash call
+# in every session, four fifths of what the guard cost. Keeping this file out of
 # the fast path is the whole point -- do not move anything here into the entry
 # script, and see invariant 5 in docs/architecture.md for the ceiling that
 # enforces it. The logic itself lives in hooks/lib/, one file per concern,
@@ -33,13 +33,13 @@
 # .version, with no BOOTSTRAP_VERSION escape hatch -- that exemption is scoped to
 # .release-please-manifest.json, because a WRONG version in a bug report is worse
 # than a missing one.
-# shellcheck disable=SC2034 # read by print_version in lib/human.sh, sourced below
+# shellcheck disable=SC2034 # read inline by human_mode in lib/human.sh, sourced below
 readonly HOOK_VERSION='1.1.0' # x-release-please-version
 
 # Resolved by resolve_scanner in lib/scanner.sh, which inspect_command calls
-# once. Declared here so `set -u` has a definition to see on any path that never
-# resolves it.
-# shellcheck disable=SC2034 # set and read by lib/scanner.sh, sourced below
+# once, and read from there and from lib/classify.sh. Declared here so `set -u`
+# has a definition to see on any path that never resolves it.
+# shellcheck disable=SC2034 # set by lib/scanner.sh, read there and in lib/classify.sh
 SCANNER=''
 
 # The parts, in load order. An explicit list rather than a glob: a glob's order

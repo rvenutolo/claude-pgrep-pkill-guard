@@ -7,9 +7,6 @@
 # entry script owns all three, and a sourced file that sets them reconfigures
 # its caller. Never add `shopt -s inherit_errexit` (invariant 2). POSIX short
 # flags, not GNU long options: this runs on BSD userland too (invariant 1).
-# shellcheck disable=SC2034 # cross-part names: some names defined here are
-# read by another part, or passed by nameref into one, and shellcheck sees a
-# single file at a time.
 
 # @description Allow the command but attach model-visible context.
 #              additionalContext is the only PreToolUse field verified to reach
@@ -41,6 +38,7 @@ function emit_deny() {
 }
 
 # shellcheck disable=SC2016
+# shellcheck disable=SC2034 # read by lib/classify.sh
 readonly WARN_MESSAGE='Note: this `pgrep --full` also matches the process running this very command.
 The Bash tool executes commands as `bash -c ...`, so the search pattern appears in an ancestor
 process command line and is always found. The result is therefore inflated by one, and an exit status

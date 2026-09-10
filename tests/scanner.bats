@@ -353,6 +353,8 @@ build_inactive_fixture() {
   # never reaches the awk and scanner checks these probes exist to exercise --
   # they would report `inactive` for the wrong reason and pass regardless (#55).
   cp "${BODY}" "${PROBE_DIR}/pgrep-pkill-guard-body.sh"
+  # And the parts the body sources, for the same reason.
+  cp -R "${LIB_DIR}" "${PROBE_DIR}/lib"
   cp "${SCANNER}" "${PROBE_DIR}/pgrep-scan.awk"
 }
 
@@ -410,6 +412,35 @@ orphan_probe() {
   out="$(orphan_probe)"
   [[ "${out}" == *'INACTIVE'* ]]
   [[ "${out}" == *'failed to load'* ]]
+}
+
+# @description Like orphan_probe, but with the loader copied beside the entry
+#              script too, so what the probe finds -- or does not -- is lib/.
+# @noargs
+# @stdout the hook's JSON verdict
+loader_probe() {
+  cp "${BODY}" "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
+  orphan_probe
+}
+
+@test "scanner: a missing lib/ announces the guard inactive, naming the first part" {
+  local out
+  out="$(loader_probe)"
+  [[ "${out}" == *'INACTIVE'* ]]
+  [[ "${out}" == *'lib/tokens.sh'* ]]
+  # Exactly one JSON line: the loader exits rather than returning, so the entry
+  # script's own fail-open branch must not fire a second message.
+  [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
+}
+
+@test "scanner: a part that fails to load announces the guard inactive, naming it" {
+  cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
+  printf 'function {{{\n' > "${BATS_TEST_TMPDIR}/lib/wrappers.sh"
+  local out
+  out="$(loader_probe)"
+  [[ "${out}" == *'INACTIVE'* ]]
+  [[ "${out}" == *'lib/wrappers.sh'* ]]
+  [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
 }
 
 # --- The jq @tsv / printf %b round-trip -------------------------------------

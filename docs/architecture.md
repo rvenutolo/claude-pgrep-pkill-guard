@@ -37,10 +37,11 @@ In execution order:
    `${command:offset:length}`. Bash string operations are locale-aware, so under
    a UTF-8 locale a single multibyte character earlier in the command shifts
    every later slice and silently voids the bracket mitigation. Exported rather
-   than merely set, so it also covers the sourced body and the awk that body
-   spawns.
+   than merely set, so it also covers the sourced body, its parts under
+   `hooks/lib/`, and the awk they spawn.
 2. `readonly HOOK_NAME`, which sits this high only because the version guard
-   below names it. Every other constant is in the body.
+   below names it. Every other constant is past the prefilter: `HOOK_VERSION`
+   and `SCANNER` in the loader, the rest in the parts under `hooks/lib/`.
 3. The bash-version guard: bash older than 4.3 prints the INACTIVE
    `systemMessage` and exits immediately. It runs before everything else
    because it is the one guard that has to: the rest of the guard leans on
@@ -97,33 +98,58 @@ In execution order:
    `resolve_scanner` — the awk scanner, so no path pays a second process for
    the second lookup. Two branches then stand down loudly, exactly as the
    precondition guards inside the body do: the sibling missing or unreadable,
-   and the `source` itself failing. The `||` on that `source` is what keeps a
-   corrupt sibling off the `ERR` trap, which would otherwise answer a broken
-   install with a bare `{}`. It is a function rather than the inline block it
-   was before #34 because two call sites now need it, and a second copy of
-   ~15 lines would spend the fast-path budget invariant 5 exists to protect.
+   and the `source` itself failing. The sibling's own source loop adds the same
+   pair, once per part, naming the part. The `||` on that `source` is what
+   keeps a corrupt sibling off the `ERR` trap, which would otherwise answer a
+   broken install with a bare `{}`. It is a function rather than the inline
+   block it was before #34 because two call sites now need it, and a second
+   copy of ~15 lines would spend the fast-path budget invariant 5 exists to
+   protect.
    Both callers read it as `load_body || return 0`: the `systemMessage` is
    already on stdout by then, so the caller's only remaining job is to stop.
    With the body loaded, `main` calls `inspect_command "${input}"`.
 
-### `hooks/pgrep-pkill-guard-body.sh`
+### `hooks/pgrep-pkill-guard-body.sh` and `hooks/lib/`
 
-The rest of the guard: every constant except `HOOK_NAME`, every function except
-`emit_allow`, `resolve_hook_dir`, `load_body` and `main`, and `inspect_command`,
-which is what used to be the second half of `main`. A call the prefilter
-short-circuits never parses a line of it, which is the entire reason the file
-exists.
+The loader. It holds `HOOK_VERSION`, `SCANNER`, and an explicit ordered list of
+the nine parts under `hooks/lib/`, sourcing each and failing open (INACTIVE,
+naming the part) if one is missing or will not load. Between them those parts
+are the rest of the guard: every constant except `HOOK_NAME`, `HOOK_VERSION` and
+`SCANNER`, and every function except `emit_allow`, `resolve_hook_dir`,
+`load_body` and `main` — `inspect_command` among them, which is what used to be
+the second half of `main`. A call the prefilter short-circuits never parses a
+line of any of it, which is the entire reason the split exists.
 
-It is **sourced, never executed** — no shebang, no exec bit — and it sets no
-`set -Eeuo pipefail`, no `IFS` and no `ERR` trap, because it runs in the entry
-script's shell and would be reconfiguring its caller rather than itself
-(invariant 2).
+The list is explicit rather than a glob: a glob's order depends on the locale, a
+stray file dropped into `lib/` would be sourced unasked, and the fail-open
+message needs a name to print. Order does not affect correctness — every part
+defines only functions and `readonly` constants, and nothing runs until
+`inspect_command` or `human_mode` is called — so it is arranged for a reader,
+low-level helpers first. That is the order below.
 
-Three of its members sit off the hook's path entirely, reached only from the
-dispatch at step 5. `print_help` holds the help text as a single quoted heredoc
-— usage, the stdin/stdout contract, the options, the `jq --null-input` probe
-recipe the README also carries, `PGREP_PKILL_GUARD_STATE_DIR` and its
-resolution order, the exit codes, and the project URL. `human_mode` is what the
+| Part                 | Holds                                                                                                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lib/tokens.sh`      | `COMMAND_POSITION_KEYWORDS`, `PREFIX_COMMANDS`, `is_prefix_command`, `prefix_value_option`, `prefix_operand_budget`, `prefix_breaks_chain`, `prefix_chain_step`, `is_assignment_word`, `is_keyword`, `is_operator` |
+| `lib/scanner.sh`     | `resolve_scanner`, `scan_command`, `find_invocations`, `invocation_args`, `has_flag`, `PGREP_VALUE_OPTIONS`, `pattern_operand`, `bracket_mitigation_holds`                                                         |
+| `lib/loops.sh`       | `loop_context`, `body_has_terminator`, `loop_body_has_kill`                                                                                                                                                        |
+| `lib/messages.sh`    | `emit_warn`, `emit_deny`, `WARN_MESSAGE`, `WRITE_TOOL_LEAD`, `deny_message`, `repeat_message`                                                                                                                      |
+| `lib/consumption.sh` | `XARGS_VALUE_OPTIONS`, `is_xargs_value_option`, `feeds_a_kill`, `invocation_is_captured`, `next_command_reads_status`, `result_is_consumed`                                                                        |
+| `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrapper_operand_budget`, `pipe_producer_payload`, `shell_wrapper_payloads`                                                             |
+| `lib/repeat.sh`      | `REPEAT_THRESHOLD`, `REPEAT_WINDOW_SECONDS`, `REPEAT_MAX_ENTRIES`, `repeat_check`                                                                                                                                  |
+| `lib/classify.sh`    | `TASK_OUTPUT_PATH_RE`, `task_poll_detected`, `probe_keys`, `classify_command`, `inspect_command`                                                                                                                   |
+| `lib/human.sh`       | `print_help`, `human_mode`                                                                                                                                                                                         |
+
+The loader and every part are **sourced, never executed** — no shebang, no exec
+bit — and none of them sets `set -Eeuo pipefail`, `IFS` or an `ERR` trap,
+because they run in the entry script's shell and would be reconfiguring their
+caller rather than themselves (invariant 2).
+
+Three members sit off the hook's path entirely, reached only from the dispatch
+at step 5, and two of them are all of `lib/human.sh`. `print_help` holds the
+help text as a single quoted heredoc — usage, the stdin/stdout contract, the
+options, the `jq --null-input` probe recipe the README also carries,
+`PGREP_PKILL_GUARD_STATE_DIR` and its resolution order, the exit codes, and the
+project URL. `human_mode` is what the
 dispatch actually calls: it scans **every** argument for `-h` or `--help` first
 and prints help whatever else was passed (clig.dev, so `--bogus --help` still
 helps), accepts `--version` only as the lone argument, answers a bare run on a
@@ -309,11 +335,14 @@ state failure allows the command**, and the ones a user could act on emit a
 `systemMessage` saying the guard is INACTIVE for that command.
 
 The loud path covers bash below 4.3, a missing or unloadable
-`hooks/pgrep-pkill-guard-body.sh`, a missing `jq` or `awk`, an unreadable
-scanner, and an awk that fails the integrity trailer. The two sibling branches
-are the split's own contribution to the list: an entry script that could not
-find or load its body would otherwise be an installed plugin that quietly does
-nothing.
+`hooks/pgrep-pkill-guard-body.sh`, a missing or unloadable part under
+`hooks/lib/`, a missing `jq` or `awk`, an unreadable scanner, and an awk that
+fails the integrity trailer. The sibling branches are the split's own
+contribution to the list: an entry script that could not find or load its body,
+or a body that could not find or load a part, would otherwise be an installed
+plugin that quietly does nothing. The part branch names the part it could not
+load, and `exit 0`s from inside the sourced loader rather than returning, so the
+entry script's own `|| { … }` does not print a second JSON line after it.
 
 The bash-version guard is the only one of those that runs before the payload
 prefilter. Every other loud warning fires only for commands that carry a
@@ -401,7 +430,7 @@ compat leg, pins the guard answering first on that shell; the flags take the
 same branch by construction, since the version guard runs before `main` is ever
 called.
 
-Answering the asked question would mean a third file in `hooks/`, written
+Answering the asked question would mean one more file in `hooks/`, written
 bash-3.2-safe, sourced ahead of the version guard, carrying its own codemap
 entry here and its own two fail-open branches for being missing or unloadable —
 a large structural price on the one file whose length is a per-call latency tax
@@ -591,9 +620,11 @@ leave the loss exactly where it was; `--bash-handle-sh-invocation`,
 0.00% described above. The upstream bug is not worked around here: this repo
 carries no kcov patch or overlay by decision.
 
-**So `.ci/report-coverage` refuses an incomplete report.** Both `hooks/` files
-must appear in the report's `files[]` with a non-zero covered-line count, or the
-step dies naming the file. That catches the odd-count shape exactly, and the
+**So `.ci/report-coverage` refuses an incomplete report.** Every one of the
+hook's bash files — the entry script, the loader, and all nine parts under
+`hooks/lib/` — must appear in the report's `files[]` with a non-zero
+covered-line count, or the step dies naming the file. That catches the
+odd-count shape exactly, and the
 `"files": []` shape was already caught by the older refuse-to-report-nothing
 rule. It does **not** catch the resync shape, where both files are present and
 some windows are missing, and no gate here does: a canary suite ordered last was
@@ -609,10 +640,11 @@ run was shown to be missing at least eight body-file lines: with such a probe
 appended the body file reads 395 of 514 rather than 387, and
 `is_xargs_value_option` goes from 0 hits to 5.
 
-**Two zeros in the body file are neither artifact nor gap: they are
-unreachable.** `loop_context`'s closing `printf 'none\n'` and
-`invocation_is_captured`'s closing `return 1` are defensive returns that no input
-reaches. `invocation_is_captured` iterates `for ((idx = 0; idx <= target;
+**Two zeros past the prefilter are neither artifact nor gap: they are
+unreachable.** `loop_context`'s closing `printf 'none\n'` in
+`hooks/lib/loops.sh` and `invocation_is_captured`'s closing `return 1` in
+`hooks/lib/consumption.sh` are defensive returns that no input reaches.
+`invocation_is_captured` iterates `for ((idx = 0; idx <= target;
 idx++))` and returns unconditionally at `idx == target`, so the loop cannot run
 past it; `loop_context` reads the same token stream that produced `target`,
 counts indices the same way, and likewise returns there. Falling off either loop
@@ -649,9 +681,9 @@ document went on describing it.
 
 The rest of the repo uses GNU long options (`mkdir --parents`, `rm --force`).
 `hooks/` is exempt and must use POSIX short flags — `mkdir -p -m 0700`,
-`rm -f`, `mv -f`. The exemption covers both halves of the split guard: the entry
-script and the body it sources ship to the same machines and run in the same
-shell.
+`rm -f`, `mv -f`. The exemption covers every piece of the split guard: the entry
+script, the loader it sources, and the nine parts under `hooks/lib/` all ship to
+the same machines and run in the same shell.
 
 **Why:** the hook runs on whatever userland the user's machine ships. macOS
 ships BSD coreutils, whose `mkdir` has no long options at all — no `--parents`,
@@ -661,8 +693,11 @@ Everything else in the repo — `.ci/`, `run-all-checks`, `run-tests`,
 `.githooks/`, `.justfile`, the workflows — keeps long options, because those run
 only inside the hermetic Nix devShell where GNU coreutils is guaranteed.
 
-**Tracked comments:** the two `POSIX short flags, deliberately` comments in
-`hooks/pgrep-pkill-guard-body.sh`, in `repeat_check` and in its write path:
+**Tracked comments:** three files carry the `POSIX short flags, deliberately`
+phrase, and `.ci/check-invariant-markers` lists exactly those three. The first
+is `hooks/lib/repeat.sh`, in `repeat_check`, which is the one rule in the guard
+that touches the filesystem — its write path a few lines below carries the same
+rationale in its own words, for the `rm` and `mv` calls there:
 
 ```text
 # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
@@ -671,8 +706,10 @@ only inside the hermetic Nix devShell where GNU coreutils is guaranteed.
 # exactly that reason -- the guard has to run on whatever userland ships.
 ```
 
-and a third in `resolve_hook_dir` in `hooks/pgrep-pkill-guard.sh`, which is the
-entry script's one and only external command:
+The second is the header of `hooks/pgrep-pkill-guard-body.sh`, which extends the
+rule to every part it loads. The third is in `resolve_hook_dir` in
+`hooks/pgrep-pkill-guard.sh`, which is the entry script's one and only external
+command:
 
 ```text
 # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is not guaranteed
@@ -705,8 +742,9 @@ long option anywhere else in `run-tests`' main path is the same bug again.
 
 ### 2. `hooks/` never sets `shopt -s inherit_errexit`
 
-Every gate script in the repo sets it. Neither of the hook's two files may, and
-no one may turn the assignment below into a plain one.
+Every gate script in the repo sets it. None of the hook's bash files may — the
+entry script, the loader, or any part under `hooks/lib/` — and no one may turn
+the assignment below into a plain one.
 
 ```bash
 repeat_reason="$(repeat_check "${session_id}" "${keys}")" || repeat_reason=''
@@ -722,16 +760,18 @@ filesystem condition becoming a trapped error on an unrelated command. The
 fallback is also why `inspect_command` accepts the result as a deny only when it
 is shaped like `repeat_message`'s output.
 
-**And the body sets none of the four.** `hooks/pgrep-pkill-guard-body.sh` is
-sourced into the entry script's shell rather than run in one of its own, so on
-top of `inherit_errexit` it must never set `set -Eeuo pipefail`, `IFS`, or the
+**And the body sets none of the four — nor does any part.**
+`hooks/pgrep-pkill-guard-body.sh` and each `hooks/lib/*.sh` it sources are
+sourced into the entry script's shell rather than run in one of their own, so on
+top of `inherit_errexit` they must never set `set -Eeuo pipefail`, `IFS`, or the
 `ERR` trap either. The entry script owns all four and they are already in force
-by the time the `source` runs; a sourced file that sets them is not configuring
-itself, it is reconfiguring its caller. That is also why the body carries no
-shebang and no executable bit — it is not a script that can be run.
+by the time the first `source` runs; a sourced file that sets them is not
+configuring itself, it is reconfiguring its caller. That is also why none of
+them carries a shebang or an executable bit — they are not scripts that can be
+run.
 
 **Tracked comment:** `The || is load-bearing beyond the obvious fallback`, which
-now appears twice. In `hooks/pgrep-pkill-guard-body.sh`, in `inspect_command`
+now appears three times. In `hooks/lib/classify.sh`, in `inspect_command`
 directly above that assignment:
 
 ```text
@@ -741,14 +781,19 @@ directly above that assignment:
 # top-level ERR trap. Do not turn this into a plain assignment.
 ```
 
-And in `hooks/pgrep-pkill-guard.sh`, above the `source` of the body, where the
-same construct does the same job for a corrupt sibling:
+And twice more on a `source`, where the same construct does the same job for a
+file that will not load. In `hooks/pgrep-pkill-guard.sh`, above the `source` of
+the body:
 
 ```text
 # The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
 # repeat_check call inside the body: it keeps a failing `source` off the ERR
 # trap, so a corrupt sibling produces this message rather than a bare `{}`.
 ```
+
+and in `hooks/pgrep-pkill-guard-body.sh`, on the loop that sources the parts,
+where it also explains the `exit 0` that keeps the entry script from printing a
+second JSON line after it.
 
 ### 3. No test sources the hook or calls an internal function
 
@@ -763,12 +808,14 @@ test that reaches inside pins an implementation detail and blocks refactoring �
 and the roughly 1450 lines of embedded self-test that this suite replaced did
 exactly that.
 
-`hooks/pgrep-pkill-guard-body.sh` is not a loophole in this. It exists to be
-sourced, but that is the entry script's business alone — no test may source it
-either. The two tests that cover the split, in `tests/scanner.bats`, copy the
-entry script into a temporary directory and run it there with no sibling beside
-it, and then with a deliberately broken one; both assert on the INACTIVE JSON
-the subprocess writes, and neither sources anything.
+`hooks/pgrep-pkill-guard-body.sh` is not a loophole in this, and neither are the
+parts under `hooks/lib/`. They exist to be sourced, but that is the entry
+script's and the loader's business alone — no test may source any of them. The
+four tests that cover the split, in `tests/scanner.bats`, copy the entry script
+into a temporary directory and run it there with no sibling beside it, then with
+a deliberately broken one, then with the loader present but `lib/` absent, then
+with one part overwritten by a syntax error; all four assert on the INACTIVE
+JSON the subprocess writes, and none of them sources anything.
 
 **The one exception** is `hooks/pgrep-scan.awk`, which has its own public
 interface: a command on stdin, offset/token records and an integrity trailer on
@@ -833,8 +880,9 @@ Tracked counterpart: the prefilter comment block in `main`.
 
 `hooks/pgrep-pkill-guard.sh` must stay under 200 lines.
 `.ci/check-fast-path-size` enforces it, and `run-all-checks` runs that gate
-with the rest. It is **185 lines** today: 152 immediately after the #55 split,
-plus the human-mode dispatch and the `load_body` extraction from #34.
+with the rest. It is **187 lines** today: 152 immediately after the #55 split,
+plus the human-mode dispatch and the `load_body` extraction from #34,
+plus the two-line invariant-marker comment from 095494b.
 
 **Why:** bash parses a whole script before it executes any of it, at roughly
 1.2 us per line, and this hook runs on every Bash tool call in every session —
@@ -845,8 +893,8 @@ with `bash -n` over valid prefixes of the pre-split 2203-line guard (400 reps,
 on every call, four fifths of what the guard cost, and it is why #55 split the
 file in two.
 
-**The ceiling is the point, not an obstacle to it.** A new helper belongs in
-`hooks/pgrep-pkill-guard-body.sh`, which the fast path never parses; raising the
+**The ceiling is the point, not an obstacle to it.** A new helper belongs in the
+matching part under `hooks/lib/`, which the fast path never parses; raising the
 number spends those milliseconds again, a few dozen microseconds at a time. #34
 is the worked example: the dispatch and the `load_body` extraction cost the
 entry script 33 lines because they have to sit there, and the 140 lines of help

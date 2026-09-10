@@ -276,16 +276,18 @@ a script whole before it executes a line of it, at roughly 1.2 us per line, so
 remained. Splitting the file took an ordinary command from about 5.6 ms to about
 2.5.
 
-The split is the reason `hooks/` holds two scripts.
+The split is the reason `hooks/` holds an entry script and a body at all.
 `hooks/pgrep-pkill-guard.sh` is the entry script — 152 lines when the split
 landed, 187 today — carrying only what an ordinary call actually executes: the
 locale, the bash-version guard, the `ERR` trap, `emit_allow`, the
 `--help`/`--version` dispatch, the builtin read of stdin, and the prefilter.
 Everything the prefilter short-circuits past lives in
 `hooks/pgrep-pkill-guard-body.sh`, which the entry script sources only after the
-prefilter has failed to decide, and which an ordinary command never reads. Parse cost alone, measured with `bash -n`
-over 400 repetitions: an empty script costs 4.12 ms, the entry script 4.25 ms
-(+0.13), the old single file 6.49 ms (+2.38). A smaller split was measured and
+prefilter has failed to decide, and which an ordinary command never reads. That
+file is itself a loader for nine parts under `hooks/lib/`, one per concern; none
+of them is parsed on the fast path either. Parse cost alone, measured with
+`bash -n` over 400 repetitions: an empty script costs 4.12 ms, the entry script
+4.25 ms (+0.13), the old single file 6.49 ms (+2.38). A smaller split was measured and
 rejected — moving only `deny_message`, the wrapper recursion and `repeat_check`
 leaves about 1700 lines on the fast path and recovers about 0.6 ms.
 

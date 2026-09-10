@@ -89,8 +89,9 @@ function main() {
   # Report integrity, before anything is printed. See the header: kcov 43 can
   # lose a whole traced file and still emit a well-formed report, so "the JSON
   # parsed and had a percentage in it" is not evidence that the percentage means
-  # anything. These two files are the entire subject of the measurement; if
-  # either is absent or empty the run measured something else.
+  # anything. These files -- the entry script, the loader and every part
+  # under hooks/lib/ -- are the entire subject of the measurement; if any is
+  # absent or empty the run measured something else.
   #
   # Matched on the BASENAME, never on an absolute path. kcov records the path as
   # it existed on the machine that produced the report -- a Nix build sandbox, a
@@ -100,6 +101,18 @@ function main() {
   local -ra required_hook_files=(
     'pgrep-pkill-guard.sh'
     'pgrep-pkill-guard-body.sh'
+    # The parts the body sources. Every one is driven by the suite: human.sh by
+    # tests/cli.bats, repeat.sh by tests/repeat.bats, the rest by every
+    # inspected payload.
+    'tokens.sh'
+    'scanner.sh'
+    'loops.sh'
+    'messages.sh'
+    'consumption.sh'
+    'wrappers.sh'
+    'repeat.sh'
+    'classify.sh'
+    'human.sh'
   )
   local required_hook_file matched
   for required_hook_file in "${required_hook_files[@]}"; do

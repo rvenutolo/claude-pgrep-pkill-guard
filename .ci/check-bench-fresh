@@ -20,7 +20,7 @@
 #              author's job to re-run -- a gate that fired on every bench/run
 #              edit would be a gate people learned to ignore.
 #
-#              FOUR verdicts, not two. The obvious design -- `git log
+#              FIVE verdicts, not two. The obvious design -- `git log
 #              <recorded>..HEAD -- hooks/` is empty, pass, else fail -- assumes
 #              the recorded commit is reachable from HEAD, and neither of the
 #              two ways it can fail to be is hypothetical:
@@ -30,6 +30,14 @@
 #                3. present in the object store, NOT reachable -> FAIL, but with
 #                   different wording, because the comparison was never made
 #                4. absent from the object store               -> SKIP
+#                5. reachable, hooks/ changed since, but the NET difference is
+#                   only the release-please version line       -> pass
+#
+#              Verdict 5 exists because release-please owns a line inside
+#              hooks/. Without it every release PR is red on a gate whose only
+#              remedy is an hour of wall-clock benchmarking, and the release
+#              cannot merge until someone pays it -- for a string the hook
+#              prints and never branches on. See exempt_reason.
 #
 #              Verdict 3 is not a corner case invented for symmetry. `4c189fb`,
 #              the sha this gate was written against, is exactly it: the object
@@ -59,7 +67,7 @@
 #              --is-ancestor` against HEAD rather than membership of main.
 # @arg $1 dir optional fixture directory, treated as the repo root: both the
 #         report and the git history are read from there. It exists so the bats
-#         suite can drive all four verdicts over a purpose-built two-commit
+#         suite can drive all five verdicts over a purpose-built two-commit
 #         repository in milliseconds. Without it the only possible test would be
 #         "exits 0 on the real repo", which a script that unconditionally
 #         returned 0 would also pass -- the same reasoning as
@@ -99,6 +107,25 @@ readonly RESULTS_FILE="${REPO_DIR}/${REPORT}"
 # The one path whose history invalidates the report. A pathspec, so it is what
 # `git log` is handed rather than a prefix this script matches by hand.
 readonly BENCH_SUBJECT='hooks/'
+
+# The one line inside hooks/ that release-please rewrites, exactly as it writes
+# it:
+#
+#   readonly HOOK_VERSION='1.0.0' # x-release-please-version
+#
+# release-please-config.json lists hooks/pgrep-pkill-guard-body.sh as a generic
+# extra-file, so every release PR carries a one-line diff to hooks/ and nothing
+# else. Before this exemption that diff made the gate fail on every release PR,
+# and the only way through was a benchmark re-run -- a wall-clock measurement
+# demanded by a change to a string that is never executed. #50 sat red for
+# twelve days over exactly that.
+#
+# Anchored end to end, and the version cell required to look like a semver, so
+# a line that merely carries the annotation while also doing something --
+# `readonly HOOK_VERSION='1.1.0'; warm_cache # x-release-please-version` -- is
+# NOT exempt and still fails the gate. The leading `[+-]` is the diff marker,
+# not part of the source line.
+readonly VERSION_LINE_RE="^[+-]readonly HOOK_VERSION='[0-9]+\.[0-9]+\.[0-9]+' # x-release-please-version$"
 
 # The provenance row, as bench/run writes it:
 #
@@ -146,6 +173,73 @@ function commit_present() {
   # object, so without it a sha that happened to name a blob or a tree would
   # sail past this and fail confusingly two commands later.
   git -C "${REPO_DIR}" cat-file -e "${sha}^{commit}" 2> /dev/null
+}
+
+# @description Decide whether the NET hooks/ difference between the recorded
+#              commit and HEAD is something that cannot move the numbers, and if
+#              so name it for the diagnostic.
+#
+#              Net, not per-commit, and that is the whole point. The question
+#              the report answers is "do these figures describe the tree that is
+#              here now", which is a property of two trees and not of the path
+#              between them. A release PR that bumps the version and a branch
+#              that changes hooks/ and reverts it are both, to a stopwatch, no
+#              change at all.
+#
+#              The diff is walked line by line with an allowlist rather than a
+#              denylist: only the five metadata lines a unified diff can emit
+#              here are skipped, only a content line matching VERSION_LINE_RE is
+#              forgiven, and ANYTHING else -- `old mode`, `new file mode`,
+#              `Binary files ... differ`, a content line that is not the version
+#              line -- returns 1. A denylist would have to enumerate every way
+#              git can describe a change, and the one it forgot would read as
+#              exempt. `--no-renames` is set so a rename arrives as a delete
+#              plus an add, whose content lines then fail the regex, rather than
+#              as a `similarity index` line this would have to reason about; the
+#              prefixes are set explicitly so `--- `/`+++ ` headers are always
+#              `a/`- or `b/`-prefixed and cannot be confused with a content line
+#              that starts the same way.
+# @arg $1 sha the recorded commit
+# @stdout the reason the difference is harmless, for the caller's `ok:` line
+# @exitcode 0 nothing in the net difference can change the measured cost
+# @exitcode 1 hooks/ genuinely differs, or the diff could not be read
+function exempt_reason() {
+  local -r recorded="$1"
+  local diff line
+  local saw_version=''
+
+  if ! diff="$(git -C "${REPO_DIR}" diff --unified=0 --no-color --no-renames \
+    --src-prefix=a/ --dst-prefix=b/ "${recorded}..HEAD" -- "${BENCH_SUBJECT}")"; then
+    return 1
+  fi
+
+  while IFS= read -r line; do
+    case "${line}" in
+      '' | 'diff --git '* | 'index '* | '--- a/'* | '--- /dev/null' | '+++ b/'* | '+++ /dev/null' | '@@ '*)
+        continue
+        ;;
+      [+-]*)
+        if [[ "${line}" =~ ${VERSION_LINE_RE} ]]; then
+          saw_version='yes'
+          continue
+        fi
+        return 1
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  done <<< "${diff}"
+
+  # Two different exemptions, said differently, because a reader who sees this
+  # line is being told why a gate that fired did not convict, and "the version
+  # line moved" and "the tree came back to where it started" send them to
+  # different places if they disagree.
+  if [[ -n "${saw_version}" ]]; then
+    printf 'the only difference is the release-please version line\n'
+  else
+    printf 'hooks/ is byte-identical to the recorded tree\n'
+  fi
 }
 
 function main() {
@@ -211,6 +305,17 @@ function main() {
   fi
 
   if [[ -n "${changes}" ]]; then
+    # Verdict 5, checked before the stale verdict is announced: commits touched
+    # hooks/, but the net difference is one release-please cannot have made
+    # slower. See exempt_reason.
+    local reason
+    if reason="$(exempt_reason "${recorded}")"; then
+      printf 'ok: %s was generated at %s; %s changed since, but\n' \
+        "${REPORT}" "${recorded}" "${BENCH_SUBJECT}" >&2
+      printf '    %s, so the figures still describe this tree.\n' "${reason}" >&2
+      return 0
+    fi
+
     local -a commits=()
     mapfile -t commits <<< "${changes}"
     printf 'FAIL: %s is stale: it was generated at %s, and %s has\n' \

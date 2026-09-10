@@ -42,38 +42,49 @@ readonly HOOK_VERSION='1.1.0' # x-release-please-version
 # shellcheck disable=SC2034 # set by lib/scanner.sh, read there and in lib/classify.sh
 SCANNER=''
 
-# The parts, in load order. An explicit list rather than a glob: a glob's order
-# depends on the locale, a stray file dropped into lib/ would be sourced
-# unasked, and the fail-open message below needs a name to print. Order does
-# not affect correctness -- every part only defines functions and readonly
-# constants, and nothing runs until inspect_command or human_mode is called --
-# so it is arranged for a reader: low-level helpers first.
+# The parts, in load order, each paired with one function it must define. An
+# explicit list rather than a glob: a glob's order depends on the locale, a
+# stray file dropped into lib/ would be sourced unasked, and the fail-open
+# message below needs a name to print. Order does not affect correctness --
+# every part only defines functions and readonly constants, and nothing runs
+# until inspect_command or human_mode is called -- so it is arranged for a
+# reader: low-level helpers first.
+#
+# The paired function is how the loop below tells a part that loaded from one
+# that did not. `source` yields the status of the sourced file's LAST top-level
+# command, so its status alone cannot: a part that ended in a `[[ ... ]]` or a
+# `grep` returning non-zero would look exactly like a missing one and stand the
+# guard down on every call (#147). A function that was defined is the proof
+# that the file was found, parsed to the end, and ran.
 readonly -a GUARD_PARTS=(
-  'tokens.sh'
-  'scanner.sh'
-  'loops.sh'
-  'messages.sh'
-  'consumption.sh'
-  'wrappers.sh'
-  'repeat.sh'
-  'classify.sh'
-  'human.sh'
+  'tokens.sh:is_keyword'
+  'scanner.sh:resolve_scanner'
+  'loops.sh:loop_context'
+  'messages.sh:emit_deny'
+  'consumption.sh:result_is_consumed'
+  'wrappers.sh:shell_wrapper_payloads'
+  'repeat.sh:repeat_check'
+  'classify.sh:inspect_command'
+  'human.sh:human_mode'
 )
 
 # HOOK_DIR and HOOK_NAME are the entry script's: this file runs in its shell.
 for guard_part in "${GUARD_PARTS[@]}"; do
   # The `||` is load-bearing beyond the obvious fallback, exactly as it is on
   # the entry script's source of this file: it keeps a failing `source` off
-  # the ERR trap, so a missing or corrupt part produces this message rather
-  # than the trap's bare `{}`. `exit 0`, not `return 1`: the entry script's
-  # own `|| { ... }` around its source of this file would otherwise print a
-  # second JSON line, and an exit from a sourced file is what the ERR trap
-  # itself does. Fail open, loudly -- the same INACTIVE wording as every other
-  # precondition in the guard.
+  # the ERR trap, so a missing or corrupt part reaches the check below rather
+  # than the trap's bare `{}`. The status itself is discarded on purpose -- see
+  # the list above for why it cannot be trusted -- and `declare -F` is the
+  # verdict. Both are builtins: no fork on the path that already paid for jq.
+  # `exit 0`, not `return 1`: the entry script's own `|| { ... }` around its
+  # source of this file would otherwise print a second JSON line, and an exit
+  # from a sourced file is what the ERR trap itself does. Fail open, loudly --
+  # the same INACTIVE wording as every other precondition in the guard.
   # shellcheck source=/dev/null # each part is linted on its own as hooks/lib/*.sh
-  source "${HOOK_DIR}/lib/${guard_part}" || {
+  source "${HOOK_DIR}/lib/${guard_part%%:*}" || :
+  declare -F "${guard_part#*:}" > /dev/null || {
     printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: lib/${guard_part} is missing or failed to load; the pgrep/pkill guard is INACTIVE for this command."
+      "${HOOK_NAME}: lib/${guard_part%%:*} is missing or failed to load; the pgrep/pkill guard is INACTIVE for this command."
     exit 0
   }
 done

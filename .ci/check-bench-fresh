@@ -170,13 +170,6 @@ function stale_prefix() {
   fi
 }
 
-# @description Exit status for a staleness finding: 1 when strict, 0 otherwise.
-# @exitcode 1 strict
-# @exitcode 0 advisory
-function stale_status() {
-  [[ -z "${STRICT}" ]]
-}
-
 # @description Print the commit sha recorded in the report's provenance table.
 #              Reads line by line and stops at the first match: the provenance
 #              table is the first table in the file, and a second `commit` row
@@ -326,8 +319,10 @@ function main() {
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
     # diagnostics above are the last thing the reader sees (#43, invariant 6).
     trap - ERR
-    stale_status
-    return
+    if [[ -n "${STRICT}" ]]; then
+      return 1
+    fi
+    return 0
   fi
 
   # Verdicts 1 and 2. Through a command substitution rather than
@@ -373,8 +368,10 @@ function main() {
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
     # diagnostics above are the last thing the reader sees (#43, invariant 6).
     trap - ERR
-    stale_status
-    return
+    if [[ -n "${STRICT}" ]]; then
+      return 1
+    fi
+    return 0
   fi
 
   printf 'ok: %s was generated at %s; %s is unchanged since\n' \

@@ -353,6 +353,8 @@ build_inactive_fixture() {
   # never reaches the awk and scanner checks these probes exist to exercise --
   # they would report `inactive` for the wrong reason and pass regardless (#55).
   cp "${BODY}" "${PROBE_DIR}/pgrep-pkill-guard-body.sh"
+  # And the parts the body sources, for the same reason.
+  cp -R "${LIB_DIR}" "${PROBE_DIR}/lib"
   cp "${SCANNER}" "${PROBE_DIR}/pgrep-scan.awk"
 }
 

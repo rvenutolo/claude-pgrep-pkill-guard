@@ -317,7 +317,7 @@ function next_command_reads_status() {
 # @exitcode 1 the result is only displayed
 function result_is_consumed() {
   local -n toks="$1"
-  local -r target="$2" args="$3" command="$4" tokens="$5"
+  local -r tokens_var="$1" target="$2" args="$3" command="$4" tokens="$5"
   local offset token
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
@@ -384,7 +384,7 @@ function result_is_consumed() {
   done
 
   # `p=$(pgrep ...)`: the output is captured rather than printed.
-  invocation_is_captured "$1" "${target}" && return 0
+  invocation_is_captured "${tokens_var}" "${target}" && return 0
 
   # `pgrep --full x; rc=$?`: the status is read by the next command in the list.
   next_command_reads_status "${command}" "${tokens}" "${target}" && return 0

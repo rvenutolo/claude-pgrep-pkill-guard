@@ -110,7 +110,9 @@ function has_flag() {
     [[ -z "${token}" ]] && continue
     [[ "${token}" == '--' ]] && return 1
     [[ "${token}" == "${long}" ]] && return 0
-    if [[ "${token}" == -[a-zA-Z]* && "${token}" != --* && "${token}" == *"${short}"* ]]; then return 0; fi
+    if [[ "${token}" == -[a-zA-Z]* && "${token}" != --* && "${token}" == *"${short}"* ]]; then
+      return 0
+    fi
   done <<< "${args}"
   return 1
 }
@@ -169,7 +171,9 @@ function pattern_operand() {
   done <<< "${args}"
   [[ -z "${operand_offset}" ]] && return 0
   local raw="${command:operand_offset:operand_length}"
-  if [[ "${raw}" == \"*\" || "${raw}" == \'*\' ]]; then raw="${raw:1:${#raw}-2}"; fi
+  if [[ "${raw}" == \"*\" || "${raw}" == \'*\' ]]; then
+    raw="${raw:1:${#raw}-2}"
+  fi
   printf '%s' "${raw}"
 }
 

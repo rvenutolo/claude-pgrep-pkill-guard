@@ -242,6 +242,15 @@ ABSENT_TOOL='pgpk-guard-no-such-tool'
   # The skip must be audible. A silent pass here is the failure mode the
   # annotation could most easily hide.
   assert_output --partial "SKIP: ${ABSENT_TOOL} is linux-only; not checked on Darwin"
+  # ...and it is a diagnostic, so it lands on stderr like every other one this
+  # gate prints. `run` merges the two streams, so the assertion above cannot
+  # tell them apart; run it again with stdout alone and require it empty.
+  # Not `run --separate-stderr`: that needs bats_require_minimum_version 1.5.0,
+  # and this suite has no devShell skip -- the two ambient compat legs run it
+  # against whatever bats the runner ships.
+  run bash -c '"$1" "$2" 2> /dev/null' _ "${CHECK}" "${root}"
+  assert_success
+  [ -z "${output}" ]
 }
 
 @test "devshell provides: a linux-only tool that is absent still fails on Linux" {

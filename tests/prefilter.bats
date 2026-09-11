@@ -17,7 +17,7 @@ setup() {
 readonly -a TRIGGER_TOKENS=('pgrep' 'kill' '\.output')
 TRIGGER_RE="$(
   IFS='|'
-  echo "${TRIGGER_TOKENS[*]}"
+  printf '%s\n' "${TRIGGER_TOKENS[*]}"
 )"
 readonly TRIGGER_RE
 

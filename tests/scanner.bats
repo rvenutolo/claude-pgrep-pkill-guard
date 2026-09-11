@@ -517,7 +517,7 @@ loader_probe() {
 @test "scanner: the token stream carries an integrity trailer" {
   local out
   out="$(scan 'ls -la')"
-  [[ "${out}" == *"<SCAN:6>"* ]]
+  [[ "${out}" == *'<SCAN:6>'* ]]
 }
 
 @test "scanner: the trailer reports zero for empty input" {

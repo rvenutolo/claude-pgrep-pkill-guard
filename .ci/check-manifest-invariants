@@ -52,7 +52,7 @@ readonly HOOKS_JSON="${ROOT}/hooks/hooks.json"
 # the bidi embedding/override controls, and 8294-8297 are the bidi isolates.
 # All of them render as nothing and can make two different names look
 # identical.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # the `$` names below are jq bindings, not shell expansions
 readonly JQ_PROGRAM='
 def hidden_chars:
   explode | any(

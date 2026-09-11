@@ -73,7 +73,7 @@ readonly CONFIG_NAME='config.yml'
 # message strings.
 #
 # $items is a yq binding, not a shell variable; hence the SC2016 disable.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # `$items` is a yq binding, not a shell expansion
 readonly FORM_PROGRAM='
 [ .body | select((. | tag) == "!!seq") | to_entries | .[] ] as $items
 | (

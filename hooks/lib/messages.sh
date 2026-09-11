@@ -37,7 +37,7 @@ function emit_deny() {
   }'
 }
 
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
 # shellcheck disable=SC2034 # read by lib/classify.sh
 readonly WARN_MESSAGE='Note: this `pgrep --full` also matches the process running this very command.
 The Bash tool executes commands as `bash -c ...`, so the search pattern appears in an ancestor
@@ -48,7 +48,7 @@ status is being used for anything.'
 # Every deny leads with the escape hatch for the one legitimate reason to put a
 # denied shape in a Bash command: writing prose that quotes it. It used to
 # trail the fixes, where it was read last or not at all.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
 readonly WRITE_TOOL_LEAD='If this command WRITES text that contains such an example (a heredoc, `echo`, or `printf` into
 a file) rather than running one, use the Write tool instead; this guard only inspects Bash commands.'
 
@@ -64,7 +64,7 @@ function deny_message() {
 
   case "${kind}" in
     loop)
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # backticks are markdown spans in the deny text
       preamble='This loop can never exit. The Bash tool runs commands as `bash -c ...`, so the search
 pattern is by construction part of an ancestor process command line. `pgrep --full` matches that
 ancestor, the loop always sees a live process, and it spins until something kills it.
@@ -73,7 +73,7 @@ ancestor, the loop always sees a live process, and it spins until something kill
 same event -- a sibling background shell whose command line carries the same literal -- is matched
 by the first, and the first by the second, and both spin until killed. Never write two waiters for
 one event.'
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # `$pid` and backticks are literal deny text
       fixes='Two fixes, in order of preference:
 
 1. Do not poll. A background task re-invokes you with a task notification when it finishes: stop
@@ -84,13 +84,13 @@ one event.'
    recorded when the process was started (`$!`, a PID file). A PID cannot match a sibling.'
       ;;
     kill)
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # backticks are markdown spans in the deny text
       preamble='This matches the invoking shell itself. The Bash tool runs commands as `bash -c ...`,
 so the search pattern is part of an ancestor process command line, and killing that match terminates
 the session shell.'
       # Kill denials get targeting advice, not anti-polling advice, and the
       # examples name the tool that was actually invoked (#152).
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # `$pid` and backticks are literal deny text
       fixes='Three fixes, in order of preference:
 
 1. Kill by PID, not by pattern. Use a PID recorded when the process was started (`kill "$pid"`, a
@@ -103,12 +103,12 @@ the session shell.'
       ;;
     task-poll)
       # The path is interpolated by concatenation so the backticks stay literal.
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # backticks are markdown spans in the deny text
       preamble='This loop polls a harness task-output file (`'"${detail}"'`). Background tasks are
 tracked by the harness itself: when one finishes you are re-invoked with a task notification naming
 that path, so polling it from a shell only wastes the wait -- and if the task is killed the file may
 never change, so the loop never exits.'
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # backticks are markdown spans in the deny text
       fixes='Two fixes, in order of preference:
 
 1. Stop here. Read the file when the task notification arrives; nothing you run before then can
@@ -146,7 +146,7 @@ Repeating a one-shot check by hand is a poll loop with the model as the \`sleep\
 session the same way. The limit is ${REPEAT_THRESHOLD} probes per target per ${REPEAT_WINDOW_SECONDS} s, per session."
   case "${key}" in
     task:*)
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # backticks are markdown spans in the repeat text
       fixes='Two fixes, in order of preference:
 
 1. Stop here. The task notification names this path when the task finishes; Read it then.
@@ -154,7 +154,7 @@ session the same way. The limit is ${REPEAT_THRESHOLD} probes per target per ${R
    id -- one call returns the output and the exit code.'
       ;;
     *)
-      # shellcheck disable=SC2016
+      # shellcheck disable=SC2016 # `$pid` and backticks are literal repeat text
       fixes='Two fixes, in order of preference:
 
 1. Do not poll. If this is a background task, its notification re-invokes you when it finishes --

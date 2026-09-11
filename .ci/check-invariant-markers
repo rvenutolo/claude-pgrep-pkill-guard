@@ -124,6 +124,7 @@ function collapsed_text() {
 # @description Report whether one marker phrase appears in one file.
 # @arg $1 phrase the marker phrase
 # @arg $2 relative_path the file to search, relative to the repo root
+# @stderr one FAIL line when the file is unreadable or the phrase is absent
 # @exitcode 0 the phrase is present
 # @exitcode 1 the file is unreadable, or the phrase is absent
 function check_marker() {

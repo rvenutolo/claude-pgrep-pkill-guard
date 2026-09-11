@@ -104,6 +104,7 @@ function guard_part_rows() {
 
 # @description Grade one row of the table.
 # @arg $1 row the `<file>:<function>` row
+# @stderr one FAIL line, plus its remedy, for a row that does not grade clean
 # @exitcode 0 the part exists and defines the paired function
 # @exitcode 1 the row is malformed, the part is missing, or the function is not
 #             defined in it

@@ -58,6 +58,7 @@ readonly LIBRARIES=(
 
 # @description Print one violation to stderr, in the house format.
 # @arg $1 message the violation text
+# @stderr the `FAIL: <message>` line
 function fail() {
   printf 'FAIL: %s\n' "$1" >&2
 }

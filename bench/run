@@ -244,7 +244,7 @@ function cohort_stats() {
 function cpu_model() {
   local model=''
   if [[ -r /proc/cpuinfo ]]; then
-    model="$(awk -F ': ' '/^model name/ { print $2; exit }' /proc/cpuinfo || true)"
+    model="$(awk --field-separator=': ' '/^model name/ { print $2; exit }' /proc/cpuinfo || true)"
   fi
   if [[ -z "${model}" ]] && command -v sysctl > /dev/null 2>&1; then
     model="$(sysctl -n machdep.cpu.brand_string 2> /dev/null || true)"
@@ -258,7 +258,7 @@ function cpu_model() {
 function tool_version() {
   local -r tool="$1"
   local line=''
-  line="$("${tool}" --version 2> /dev/null | head -n 1 || true)"
+  line="$("${tool}" --version 2> /dev/null | head --lines=1 || true)"
   printf '%s\n' "${line:-unknown}"
 }
 

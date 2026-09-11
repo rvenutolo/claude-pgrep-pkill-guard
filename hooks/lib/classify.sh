@@ -394,15 +394,17 @@ function inspect_command() {
   IFS=$'\t' read -r decision deny_detail <<< "$(classify_command "${command}")"
   # main owns stdout; classify_command does not, so it hands the condition up as
   # a verdict and the message is emitted here.
-  if [[ "${decision}" == 'inactive' ]]; then
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
-    return 0
-  fi
-  if [[ "${decision}" == deny:* ]]; then
-    emit_deny "$(deny_message "${decision#deny:}" "${deny_detail}")"
-    return 0
-  fi
+  case "${decision}" in
+    'inactive')
+      printf '{"systemMessage":"%s"}\n' \
+        "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+      return 0
+      ;;
+    deny:*)
+      emit_deny "$(deny_message "${decision#deny:}" "${deny_detail}")"
+      return 0
+      ;;
+  esac
 
   local repeat_reason='' repeat_rc=0
   # `|| repeat_rc=$?` rather than a plain assignment: the `||` keeps the whole

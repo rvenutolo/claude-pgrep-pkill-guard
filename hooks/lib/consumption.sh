@@ -70,17 +70,22 @@ function feeds_a_kill_forward() {
         prev="${word}"
         case "${segment}" in
           head)
-            if [[ "${word}" == 'kill' ]]; then
-              return 0
-            elif [[ "${word}" == 'xargs' ]]; then
-              segment='xargs'
-              xargs_skip=0
-            elif [[ "${word}" == 'while' || "${word}" == 'until' ]]; then
-              loop_body_has_kill "${tokens_var}" "${idx}" && return 0
-              segment='other'
-            elif ! is_prefix_command "${word}"; then
-              segment='other'
-            fi
+            case "${word}" in
+              'kill') return 0 ;;
+              'xargs')
+                segment='xargs'
+                xargs_skip=0
+                ;;
+              'while' | 'until')
+                loop_body_has_kill "${tokens_var}" "${idx}" && return 0
+                segment='other'
+                ;;
+              *)
+                if ! is_prefix_command "${word}"; then
+                  segment='other'
+                fi
+                ;;
+            esac
             ;;
           xargs)
             if ((xargs_skip == 1)); then

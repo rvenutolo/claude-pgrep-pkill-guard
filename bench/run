@@ -71,7 +71,7 @@ readonly -a TYPICAL_COMMANDS=(
 #
 # Every backtick below is a markdown code span in the generated report, not a
 # command substitution; hence the SC2016 disable.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # the backticks are markdown spans in the report, not substitutions
 declare -rA COHORT_PATH=(
   [baseline]='process spawn and pipe only, no hook -- the floor'
   [skipped]='the prefilter short-circuit -- no `jq`, no scanner pass'
@@ -356,7 +356,7 @@ function package_temp() {
 # Single quotes throughout, and the backticks inside them are markdown code
 # spans in the generated report, not command substitutions. Double quotes here
 # would turn every one of them into one; hence the function-wide SC2016 disable.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # function-wide: the backticks are markdown spans in the report
 function write_report() {
   local -r samples_dir="$1" reps="$2" smoke="$3"
   local cohort n min p50 p95 max total=0

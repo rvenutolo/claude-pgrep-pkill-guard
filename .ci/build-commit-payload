@@ -55,7 +55,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 #
 # `$input` is a GraphQL variable name, not a shell expansion; hence the SC2016
 # disable and the single quotes that make it one.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # `$input` is a GraphQL variable, not a shell expansion
 readonly MUTATION='mutation ($input: CreateCommitOnBranchInput!) {
   createCommitOnBranch(input: $input) {
     commit {
@@ -73,7 +73,7 @@ readonly MUTATION='mutation ($input: CreateCommitOnBranchInput!) {
 #
 # $changes and the other $-prefixed bindings are jq syntax, not shell
 # expansions; hence the SC2016 disable.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # `$changes` and friends are jq bindings, not shell expansions
 readonly JQ_PROGRAM='
 {
   query: $mutation,

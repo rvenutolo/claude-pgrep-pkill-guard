@@ -11,7 +11,7 @@
 # these, so .ci/check-bats-no-shebang forbids one): shellcheck scopes a
 # file-level directive to everything after it, and infers bash for a
 # shebang-less file.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # file-level: the fragments below are scanner input, not substitutions
 
 setup() {
   load 'test_helper/common'

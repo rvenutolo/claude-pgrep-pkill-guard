@@ -86,7 +86,7 @@ fi
 # they can stay single-quoted: every `${...}` below is Nix syntax, and letting
 # bash near it would expand the lot. The substitution happens at the call site.
 #
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # every `${...}` below is Nix syntax, not a shell expansion
 readonly PACKAGES_EXPR='
 let
   flake = builtins.getFlake (toString REPO_PLACEHOLDER);
@@ -102,7 +102,7 @@ builtins.concatStringsSep "\n" (map line flake.devShells.${system}.default.nativ
 # would let the two halves of the reverse pass disagree whenever the working
 # tree and the flake source differ.
 #
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016 # every `${...}` below is Nix syntax, not a shell expansion
 readonly FORMATTERS_EXPR='
 let
   flake = builtins.getFlake (toString REPO_PLACEHOLDER);

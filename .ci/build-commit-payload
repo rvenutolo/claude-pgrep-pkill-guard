@@ -143,7 +143,7 @@ function main() {
   local scratch
   scratch="$(mktemp --directory)"
   # shellcheck disable=SC2064  # expand scratch NOW, not when the trap fires
-  trap "rm --recursive --force '${scratch}'" EXIT
+  trap "rm --recursive --force -- '${scratch}'" EXIT
 
   # One JSON object per staged change, appended to a single accumulator file and
   # slurped back in below. Deletions carry no blob and stay cheap.

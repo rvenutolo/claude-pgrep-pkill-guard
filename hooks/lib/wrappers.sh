@@ -345,7 +345,7 @@ function shell_wrapper_payloads() {
         pending_text_set=0
       elif ((saw_c == 1)) && [[ "${word}" != -* ]]; then
         raw="${command:offset:${#token}}"
-        if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && ${#raw} -ge 2 ]]; then
+        if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
           printf '%s\0' "${raw:1:${#raw}-2}"
         fi
         in_wrapper=0
@@ -386,7 +386,7 @@ function shell_wrapper_payloads() {
     # itself or a prefix's own option, neither of which the producer prints.
     if ((at_cmd == 0)) && ! is_operator "${token}" && ! is_keyword "${token}"; then
       raw="${command:offset:${#token}}"
-      if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && ${#raw} -ge 2 ]]; then
+      if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
         seg_words+=("${raw:1:${#raw}-2}")
       else
         seg_words+=("${raw}")

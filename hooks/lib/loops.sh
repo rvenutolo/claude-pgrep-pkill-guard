@@ -70,7 +70,11 @@ function loop_context() {
     fi
     case "${token}" in
       '(')
-        if ((dollar == 1)); then stack+=('capture'); else stack+=('subshell'); fi
+        if ((dollar == 1)); then
+          stack+=('capture')
+        else
+          stack+=('subshell')
+        fi
         ;;
       ')')
         # Only a `)` that actually closes something pops. A case-pattern `)`
@@ -92,8 +96,16 @@ function loop_context() {
         fi
         ;;
     esac
-    if [[ "${token}" == *'$' ]]; then dollar=1; else dollar=0; fi
-    if is_operator "${token}" || is_keyword "${token}"; then at_cmd=1; else at_cmd=0; fi
+    if [[ "${token}" == *'$' ]]; then
+      dollar=1
+    else
+      dollar=0
+    fi
+    if is_operator "${token}" || is_keyword "${token}"; then
+      at_cmd=1
+    else
+      at_cmd=0
+    fi
     idx=$((idx + 1))
   done <<< "${tokens}"
   printf 'none\n'
@@ -132,7 +144,11 @@ function body_has_terminator() {
     fi
     case "${token}" in
       '(')
-        if ((dollar == 1)); then barrier+=('capture'); else barrier+=('subshell'); fi
+        if ((dollar == 1)); then
+          barrier+=('capture')
+        else
+          barrier+=('subshell')
+        fi
         ;;
       ')')
         # Same rule as loop_context: a case-pattern `)` has no opener and must
@@ -150,8 +166,16 @@ function body_has_terminator() {
         fi
         ;;
     esac
-    if [[ "${token}" == *'$' ]]; then dollar=1; else dollar=0; fi
-    if is_operator "${token}" || is_keyword "${token}"; then at_cmd=1; else at_cmd=0; fi
+    if [[ "${token}" == *'$' ]]; then
+      dollar=1
+    else
+      dollar=0
+    fi
+    if is_operator "${token}" || is_keyword "${token}"; then
+      at_cmd=1
+    else
+      at_cmd=0
+    fi
     idx=$((idx + 1))
   done <<< "${tokens}"
   return 1
@@ -217,7 +241,11 @@ function loop_body_has_kill() {
         'kill') return 0 ;;
       esac
     fi
-    if is_operator "${token}" || is_keyword "${token}"; then at_cmd=1; else at_cmd=0; fi
+    if is_operator "${token}" || is_keyword "${token}"; then
+      at_cmd=1
+    else
+      at_cmd=0
+    fi
     idx=$((idx + 1))
   done
   return 1

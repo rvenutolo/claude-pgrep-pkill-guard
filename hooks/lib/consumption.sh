@@ -124,7 +124,9 @@ function kill_in_command_position() {
     if [[ "${toks[index]}" == '(' ]] && ((index > 0)) && [[ "${toks[index - 1]}" == *= ]]; then
       return 1
     fi
-    if is_operator "${toks[index]}" || is_keyword "${toks[index]}"; then return 0; fi
+    if is_operator "${toks[index]}" || is_keyword "${toks[index]}"; then
+      return 0
+    fi
     return 1
   done
   return 0
@@ -223,10 +225,16 @@ function invocation_is_captured() {
     fi
     case "${token}" in
       '(')
-        if ((dollar == 1)); then stack+=('capture'); else stack+=('subshell'); fi
+        if ((dollar == 1)); then
+          stack+=('capture')
+        else
+          stack+=('subshell')
+        fi
         ;;
       ')')
-        if ((${#stack[@]} > 0)); then unset 'stack[${#stack[@]}-1]'; fi
+        if ((${#stack[@]} > 0)); then
+          unset 'stack[${#stack[@]}-1]'
+        fi
         ;;
       '`')
         if ((${#stack[@]} > 0)) && [[ "${stack[${#stack[@]} - 1]}" == 'backtick' ]]; then
@@ -236,7 +244,11 @@ function invocation_is_captured() {
         fi
         ;;
     esac
-    if [[ "${token}" == *'$' ]]; then dollar=1; else dollar=0; fi
+    if [[ "${token}" == *'$' ]]; then
+      dollar=1
+    else
+      dollar=0
+    fi
   done
   return 1
 }
@@ -305,7 +317,9 @@ function result_is_consumed() {
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     [[ "${token}" == '--count' ]] && return 0
-    if [[ "${token}" == -[a-zA-Z]* && "${token}" != --* && "${token}" == *c* ]]; then return 0; fi
+    if [[ "${token}" == -[a-zA-Z]* && "${token}" != --* && "${token}" == *c* ]]; then
+      return 0
+    fi
   done <<< "${args}"
 
   # An enclosing `if` / `elif`, or a negation, reads the exit status as a boolean.

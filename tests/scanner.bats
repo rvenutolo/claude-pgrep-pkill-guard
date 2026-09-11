@@ -332,7 +332,11 @@ inactive_probe() {
   local output
   output="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}' \
     | env -i "PATH=${path}" "${script}" 2> /dev/null || true)" # the probe asserts on the JSON, not the exit status
-  if [[ "${output}" == *INACTIVE* ]]; then printf 'inactive\n'; else printf 'active\n'; fi
+  if [[ "${output}" == *INACTIVE* ]]; then
+    printf 'inactive\n'
+  else
+    printf 'active\n'
+  fi
 }
 
 # @description Build a throwaway hook copy plus a stub PATH holding only what the

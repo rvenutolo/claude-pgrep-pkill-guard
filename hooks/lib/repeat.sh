@@ -52,21 +52,31 @@ function repeat_check() {
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
   # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR /
   # TMPDIR, which the caller owns the mode of.
-  if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then return 0; fi
+  if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then
+    return 0
+  fi
   # `mkdir -p` on a dir that already exists changes neither its owner nor its
   # mode, so under the /tmp fallback another local user who pre-creates this
   # directory (or replaces it with a symlink to one they control) would
   # otherwise be trusted just as much as one we created ourselves.
   [[ -O "${dir}" && ! -L "${dir}" ]] || return 0
-  if ! printf -v now '%(%s)T' -1 2> /dev/null; then return 0; fi
-  if [[ -e "${file}" && ! -f "${file}" ]]; then return 0; fi
+  if ! printf -v now '%(%s)T' -1 2> /dev/null; then
+    return 0
+  fi
+  if [[ -e "${file}" && ! -f "${file}" ]]; then
+    return 0
+  fi
   # Same reasoning as the dir check above, one level down: a pre-planted file
   # we don't own is not state we can trust to prune, count, or overwrite.
-  if [[ -f "${file}" && ! -O "${file}" ]]; then return 0; fi
+  if [[ -f "${file}" && ! -O "${file}" ]]; then
+    return 0
+  fi
 
   local kept='' epoch key content
   if [[ -f "${file}" ]]; then
-    if [[ ! -r "${file}" ]]; then return 0; fi
+    if [[ ! -r "${file}" ]]; then
+      return 0
+    fi
     # Read via `cat`, not a `<` redirect (and deliberately not the `$(< file)`
     # builtin fast path): a failed open inside `$(< file)` is a word-expansion
     # error that bash treats as fatal to the shell that hits it, NOT as an
@@ -81,7 +91,9 @@ function repeat_check() {
     # before that process's own open() attempt, so a TOCTOU race (the file
     # removed between the -r check above and this read) is fully silenced,
     # not just made non-fatal.
-    if ! content="$(cat "${file}" 2> /dev/null)"; then return 0; fi
+    if ! content="$(cat "${file}" 2> /dev/null)"; then
+      return 0
+    fi
     # `<<<` appends exactly one newline regardless of whether the file (and
     # therefore `content`, which command substitution already stripped
     # trailing newlines from) had one, so every line -- including a

@@ -82,7 +82,8 @@ function log() {
 
 function main() {
   if ! command -v magick > /dev/null 2>&1; then
-    printf 'FAIL: ImageMagick (magick) is not on PATH; it is not in the devShell by design — see this script'\''s header\n' >&2
+    printf 'FAIL: %s\n' \
+      "ImageMagick (magick) is not on PATH; it is not in the devShell by design — see this script's header" >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
     # diagnostics above are the last thing the reader sees (#43, invariant 6).
     trap - ERR

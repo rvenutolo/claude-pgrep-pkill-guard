@@ -120,7 +120,7 @@ function main() {
     'classify.sh'
     'human.sh'
   )
-  local required_hook_file matched
+  local required_hook_file matched no_entry_msg zero_covered_msg
   for required_hook_file in "${required_hook_files[@]}"; do
     # One jq pass yields "<entries matched> <covered lines summed>". covered_lines
     # goes through tonumber because kcov writes some numeric fields as JSON
@@ -132,10 +132,16 @@ function main() {
       ' "${reports[0]}"
     )"
     if [[ "${matched%% *}" == '0' ]]; then
-      die "coverage report lists no entry for hooks/${required_hook_file} — kcov 43 drops a traced file outright when it loses xtrace sync, so the percentage in ${reports[0]} describes a different codebase; see #128"
+      no_entry_msg="coverage report lists no entry for hooks/${required_hook_file} — kcov 43 drops a"
+      no_entry_msg+=" traced file outright when it loses xtrace sync, so the percentage in ${reports[0]}"
+      no_entry_msg+=" describes a different codebase; see #128"
+      die "${no_entry_msg}"
     fi
     if [[ "${matched##* }" == '0' ]]; then
-      die "coverage report records zero covered lines for hooks/${required_hook_file} — the suite drives that file on every case, so a zero means collection failed, not that the code is untested; see #128 and ${reports[0]}"
+      zero_covered_msg="coverage report records zero covered lines for hooks/${required_hook_file} — the"
+      zero_covered_msg+=" suite drives that file on every case, so a zero means collection failed, not that"
+      zero_covered_msg+=" the code is untested; see #128 and ${reports[0]}"
+      die "${zero_covered_msg}"
     fi
   done
 

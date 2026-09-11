@@ -21,7 +21,7 @@ function main() {
     printf '%s: not a git repo\n' "${0##*/}" >&2
     exit 1
   fi
-  current="$(git -C "${repo_dir}" config --local --get core.hooksPath || printf '')"
+  current="$(git -C "${repo_dir}" config --local --get core.hooksPath || printf '')" # exits 1 when the key is unset
   if [[ "${current}" == '.githooks' ]]; then
     exit 0
   fi

@@ -46,6 +46,15 @@
 #             test failed, or the suite mutated the repo
 
 set -Eeuo pipefail
+# `inherit_errexit` is a bash 4.2 builtin option: on stock macOS bash 3.2 the
+# shell aborts with `shopt: inherit_errexit: invalid shell option name`, which
+# tells a coworker running ./run-tests nothing about what to install. Check
+# first, and say what to do. Must stay ABOVE the `shopt` line it is protecting.
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 2))); then
+  printf '%s: bash 4.2+ required to run the suite (found %s.%s). On macOS: brew install bash.\n' \
+    "${0##*/}" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" >&2
+  exit 1
+fi
 shopt -s inherit_errexit
 IFS=$'\n\t'
 

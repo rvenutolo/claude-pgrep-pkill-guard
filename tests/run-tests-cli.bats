@@ -199,3 +199,21 @@ BATS
   run env -u COVERAGE "${RUN_TESTS}" "${suite}"
   assert_success
 }
+
+@test "run-tests: --awk=bwk removes its shim directory on exit" {
+  require_bwk_awk
+  # The shim is a mktemp directory holding a single `awk -> nawk` symlink, made
+  # under TMPDIR. Point TMPDIR at a fixture dir and the leak becomes visible:
+  # after the run, nothing named `awk` should survive anywhere beneath it.
+  #
+  # Asserting on the symlink rather than on "the directory is empty" is what
+  # keeps this case stable: the inner bats makes and removes temp dirs of its
+  # own under the same TMPDIR, and grading their absence would grade bats.
+  local -r suite="${BATS_TEST_TMPDIR}/suite9/ok.bats"
+  local -r tmp="${BATS_TEST_TMPDIR}/tmpdir"
+  make_trivial_suite "${suite}"
+  mkdir -p "${tmp}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --awk=bwk "${suite}"
+  assert_success
+  [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
+}

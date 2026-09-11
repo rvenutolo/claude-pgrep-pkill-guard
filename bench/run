@@ -538,7 +538,7 @@ function main() {
   fi
 
   local rep
-  for rep in $(seq 0 "${reps}"); do
+  for ((rep = 0; rep <= reps; rep++)); do
     # Rep 0 is a discarded warm-up pass: cold page cache and cold filesystem
     # metadata must not land in the published numbers.
     local recording=1

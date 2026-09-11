@@ -127,7 +127,7 @@ function main() {
   # it rather than emitting it raw, the same class of assumption invariant 4
   # already rests on.
   local input=''
-  IFS= read -r -d '' input || :
+  IFS= read -r -d '' input || : # an empty delimiter returns 1 at EOF with the payload stored
 
   # The prefilter. Everything below this point costs a `jq` spawn and at least
   # one `awk` scanner pass, and on an ordinary Bash call both find nothing:

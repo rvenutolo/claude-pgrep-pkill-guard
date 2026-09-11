@@ -81,7 +81,7 @@ for guard_part in "${GUARD_PARTS[@]}"; do
   # from a sourced file is what the ERR trap itself does. Fail open, loudly --
   # the same INACTIVE wording as every other precondition in the guard.
   # shellcheck source=/dev/null # each part is linted on its own as hooks/lib/*.sh
-  source "${HOOK_DIR}/lib/${guard_part%%:*}" || :
+  source "${HOOK_DIR}/lib/${guard_part%%:*}" || : # source yields the part's last command status, not load success
   declare -F "${guard_part#*:}" > /dev/null || {
     # Two messages, because the two causes send a reader to different places
     # and the file's own readability is the only thing that separates them.

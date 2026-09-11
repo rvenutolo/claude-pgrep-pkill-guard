@@ -244,10 +244,11 @@ function cohort_stats() {
 function cpu_model() {
   local model=''
   if [[ -r /proc/cpuinfo ]]; then
-    model="$(awk --field-separator=': ' '/^model name/ { print $2; exit }' /proc/cpuinfo || true)"
+    model="$(awk --field-separator=': ' '/^model name/ { print $2; exit }' \
+      /proc/cpuinfo || true)" # awk exits 1 only if the read fails; best effort
   fi
   if [[ -z "${model}" ]] && command -v sysctl > /dev/null 2>&1; then
-    model="$(sysctl -n machdep.cpu.brand_string 2> /dev/null || true)"
+    model="$(sysctl -n machdep.cpu.brand_string 2> /dev/null || true)" # absent on Linux; the probe is best effort
   fi
   printf '%s\n' "${model:-unknown}"
 }
@@ -258,7 +259,7 @@ function cpu_model() {
 function tool_version() {
   local -r tool="$1"
   local line=''
-  line="$("${tool}" --version 2> /dev/null | head --lines=1 || true)"
+  line="$("${tool}" --version 2> /dev/null | head --lines=1 || true)" # a tool without --version degrades the row
   printf '%s\n' "${line:-unknown}"
 }
 

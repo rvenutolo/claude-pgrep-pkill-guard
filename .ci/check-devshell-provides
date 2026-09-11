@@ -330,7 +330,7 @@ function reverse_check() {
   local -a tool_paths=()
   local resolved
   for tool in "${tools[@]}"; do
-    resolved="$(command -v "${tool}" 2> /dev/null || true)"
+    resolved="$(command -v "${tool}" 2> /dev/null || true)" # command -v exits 1 off PATH; empty is the not-found signal
     if [[ -n "${resolved}" ]]; then
       tool_paths+=("${resolved}")
     fi

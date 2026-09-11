@@ -137,7 +137,7 @@ function main() {
   if ((${#awk_files[@]} > 0)); then
     local awk_file
     for awk_file in "${awk_files[@]}"; do
-      LC_ALL=C gawk --lint=fatal --posix -f "${REPO_DIR}/${awk_file}" < '/dev/null' > '/dev/null' || rc=1
+      LC_ALL=C gawk --lint=fatal --posix --file="${REPO_DIR}/${awk_file}" < '/dev/null' > '/dev/null' || rc=1
     done
   else
     log 'no awk files found - this is a failure, not a clean pass'

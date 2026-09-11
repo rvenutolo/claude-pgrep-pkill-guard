@@ -95,10 +95,14 @@ function main() {
     return 1
   fi
 
+  # GNU coreutils long options, even though this script runs against the
+  # ambient PATH rather than the devShell. It already cannot run on BSD
+  # coreutils -- `mktemp --directory` below has no BSD equivalent spelling --
+  # so a short `rm -rf` here would buy no portability, only inconsistency.
   local work=''
   work="$(mktemp --directory)"
   # shellcheck disable=SC2064 # expand work now, not at trap time
-  trap "rm -rf -- '${work}'" EXIT
+  trap "rm --recursive --force -- '${work}'" EXIT
 
   local source_w=''
   source_w="$(magick identify -format '%w' "${SOURCE}")"

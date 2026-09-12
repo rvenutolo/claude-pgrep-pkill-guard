@@ -57,7 +57,7 @@ SCANNER=''
 # guard down on every call (#147). A function that was defined is the proof
 # that the file was found, parsed to the end, and ran.
 readonly -a GUARD_PARTS=(
-  'tokens.sh:is_keyword'
+  'tokens.sh:tokens::is_keyword'
   'scanner.sh:resolve_scanner'
   'loops.sh:loop_context'
   'messages.sh:emit_deny'

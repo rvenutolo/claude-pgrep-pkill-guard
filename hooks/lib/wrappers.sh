@@ -232,7 +232,7 @@ function shell_wrapper_payloads() {
   local -r command="$1" tokens="$2"
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
   local offset token word next_at_cmd raw budget
-  # shellcheck disable=SC2034 # written through prefix_chain_step's namerefs, which shellcheck cannot follow
+  # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
   local heredoc_seq=0 body_seq=0 pending='' leading_pending='' wanted=' ' expect_delim=0 len fd
   local expect_redir_target=0
@@ -315,7 +315,7 @@ function shell_wrapper_payloads() {
       # bare operator can be an operator rather than the target. It ends the
       # simple command and must reach the flush below like any other.
       expect_redir_target=0
-      is_operator "${token}" || continue
+      tokens::is_operator "${token}" || continue
     fi
     if [[ "${token}" != '<NL>' && "${token}" =~ ${redir_re} ]]; then
       [[ "${token}" =~ ${redir_bare_re} ]] && expect_redir_target=1
@@ -333,7 +333,7 @@ function shell_wrapper_payloads() {
       if [[ "${word}" == -*s* && "${word}" != --* ]]; then
         saw_s=1
       fi
-      if is_operator "${token}"; then
+      if tokens::is_operator "${token}"; then
         [[ -n "${pending}" ]] && wanted+="${pending} "
         ((pending_text_set == 1)) && printf '%s\0' "${pending_text}"
         in_wrapper=0
@@ -384,7 +384,7 @@ function shell_wrapper_payloads() {
     # The segment's operand words, kept in case it turns out to be a producer
     # on the left of a pipe. A word still in command position is the command
     # itself or a prefix's own option, neither of which the producer prints.
-    if ((at_cmd == 0)) && ! is_operator "${token}" && ! is_keyword "${token}"; then
+    if ((at_cmd == 0)) && ! tokens::is_operator "${token}" && ! tokens::is_keyword "${token}"; then
       raw="${command:offset:${#token}}"
       if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
         seg_words+=("${raw:1:${#raw}-2}")
@@ -393,7 +393,7 @@ function shell_wrapper_payloads() {
       fi
     fi
 
-    if is_operator "${token}"; then
+    if tokens::is_operator "${token}"; then
       if [[ "${token}" == '|' ]] && ((last_pipe_offset != offset - 1)); then
         segment_pipe_carry pipe_heredoc pipe_text pipe_text_set \
           "${seg_cmd}" "${seg_heredoc}" "${seg_redir}" ${seg_words[@]+"${seg_words[@]}"}
@@ -414,10 +414,10 @@ function shell_wrapper_payloads() {
       seg_redir=0
       seg_words=()
       leading_pending=''
-    elif is_keyword "${token}"; then
+    elif tokens::is_keyword "${token}"; then
       leading_pending=''
     fi
-    if prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
+    if tokens::prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
       next_at_cmd=1
     else
       next_at_cmd=0

@@ -27,11 +27,11 @@ function make_parts_fixture() {
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
-  'tokens.sh:is_keyword'
+  'tokens.sh:tokens::is_keyword'
   'classify.sh:inspect_command'
 )
 BODY
-  printf 'function is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
+  printf 'function tokens::is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
   printf 'function inspect_command() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"
   git -C "${root}" init --quiet
   git -C "${root}" add --all
@@ -121,8 +121,8 @@ BODY
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
-  'tokens.sh:is_keyword'
-  'tokens.sh:is_keyword'
+  'tokens.sh:tokens::is_keyword'
+  'tokens.sh:tokens::is_keyword'
   'classify.sh:inspect_command'
 )
 BODY
@@ -210,7 +210,7 @@ PART
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   # low-level helpers first
-  'tokens.sh:is_keyword'
+  'tokens.sh:tokens::is_keyword'
   'classify.sh:inspect_command'
 )
 BODY
@@ -228,7 +228,7 @@ BODY
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
-  'tokens.sh:is_keyword'
+  'tokens.sh:tokens::is_keyword'
   'classify.sh:inspect_command'
 )
 readonly -a SOMETHING_ELSE=(

@@ -16,7 +16,7 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # Words that run another command and so preserve command position for the word
 # after them. `sudo pkill --full java` is the single most likely session-killing
 # form, so the guard must see through the prefix -- and through the prefix's own
-# options, which is what prefix_chain_step below is for. `timeout` belongs here
+# options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill.
 readonly -a PREFIX_COMMANDS=('sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout')
 
@@ -25,7 +25,7 @@ readonly -a PREFIX_COMMANDS=('sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeo
 # @arg $1 token the token to test
 # @exitcode 0 the token is a prefix command
 # @exitcode 1 it is not
-function is_prefix_command() {
+function tokens::is_prefix_command() {
   local -r token="$1"
   local prefix
   for prefix in "${PREFIX_COMMANDS[@]}"; do
@@ -49,7 +49,7 @@ function is_prefix_command() {
 # @arg $2 word the option word to test
 # @exitcode 0 the option consumes the next word
 # @exitcode 1 it does not
-function prefix_value_option() {
+function tokens::prefix_value_option() {
   local -r prefix="$1" word="$2"
   case "${prefix}" in
     'sudo')
@@ -97,7 +97,7 @@ function prefix_value_option() {
 #              `pkill` is an argument to the script, from reading as a kill.
 # @arg $1 prefix the prefix command
 # @stdout the operand count
-function prefix_operand_budget() {
+function tokens::prefix_operand_budget() {
   case "$1" in
     'timeout') printf '1' ;;
     *) printf '0' ;;
@@ -111,12 +111,12 @@ function prefix_operand_budget() {
 #
 #              The table is deliberately partial: it holds the spellings a person actually types.
 #              Every omission (`sudo -K`, `env --help`, ...) costs a false deny, never a false
-#              allow, so completeness here buys much less than it does in prefix_value_option.
+#              allow, so completeness here buys much less than it does in tokens::prefix_value_option.
 # @arg $1 prefix the prefix command
 # @arg $2 word the option word to test
 # @exitcode 0 the option ends the chain
 # @exitcode 1 it does not
-function prefix_breaks_chain() {
+function tokens::prefix_breaks_chain() {
   local -r prefix="$1" word="$2"
   case "${prefix}" in
     'command')
@@ -155,14 +155,14 @@ function prefix_breaks_chain() {
 # @arg $6 operands name of the caller's variable holding the chain's remaining operand budget
 # @exitcode 0 the next word is in command position
 # @exitcode 1 it is not
-function prefix_chain_step() {
+function tokens::prefix_chain_step() {
   local -r token="$1" word="$2" at_cmd="$3"
   # Namerefs must not share a name with the caller's variable, or bash refuses
   # the assignment as a circular reference, so each carries a _ref suffix. The
   # positional locals are equally unsafe as caller names: never pass a variable
   # called token, word, or at_cmd to this function by name.
   local -n chain_ref="$4" skip_ref="$5" operands_ref="$6"
-  if is_operator "${token}"; then
+  if tokens::is_operator "${token}"; then
     # Every operator restores command position, but a pipe leaves a sentinel
     # behind: `time` may prefix only the FIRST command of a pipeline, so past a
     # `|` it is an ordinary word PATH resolves to GNU time. The `&` arm keeps
@@ -185,7 +185,7 @@ function prefix_chain_step() {
   # `git command x` the word `command` is an argument, not a prefix. The prefix
   # test runs before the keyword test because `time` is both, and only the
   # prefix reading understands its `-o file`.
-  if ((at_cmd == 1)) && is_prefix_command "${word}"; then
+  if ((at_cmd == 1)) && tokens::is_prefix_command "${word}"; then
     # `time` is bash's reserved word only as the very first word of a command:
     # `time -o f cmd` runs `-o`, not GNU time. Behind a prefix (`env time`,
     # `sudo -u bob time`) or an assignment (`FOO=1 time`) the word is one those
@@ -200,10 +200,10 @@ function prefix_chain_step() {
       chain_ref="${word}"
     fi
     skip_ref=0
-    operands_ref="$(prefix_operand_budget "${word}")"
+    operands_ref="$(tokens::prefix_operand_budget "${word}")"
     return 0
   fi
-  if is_keyword "${token}"; then
+  if tokens::is_keyword "${token}"; then
     chain_ref=''
     skip_ref=0
     operands_ref=0
@@ -213,7 +213,7 @@ function prefix_chain_step() {
     chain_ref=''
     return 1
   fi
-  if is_assignment_word "${token}"; then
+  if tokens::is_assignment_word "${token}"; then
     # An assignment is not a chain, but it does mean the next word is no longer
     # the command's first: `FOO=1 time ...` runs GNU time, not the reserved
     # word. The sentinel records that and matches no arm of either table.
@@ -232,14 +232,14 @@ function prefix_chain_step() {
     return 0
   fi
   if [[ "${chain_ref}" != '--' ]]; then
-    if prefix_breaks_chain "${chain_ref}" "${word}"; then
+    if tokens::prefix_breaks_chain "${chain_ref}" "${word}"; then
       chain_ref=''
       return 1
     fi
     if [[ "${word}" == -* ]]; then
       # A flag's value is never itself in command position, but the word after
       # it is; a flag that takes no value keeps command position directly.
-      if prefix_value_option "${chain_ref}" "${word}"; then
+      if tokens::prefix_value_option "${chain_ref}" "${word}"; then
         skip_ref=1
         return 1
       fi
@@ -261,7 +261,7 @@ function prefix_chain_step() {
 # @arg $1 token the token to test
 # @exitcode 0 the token is a shell assignment word
 # @exitcode 1 it is not
-function is_assignment_word() {
+function tokens::is_assignment_word() {
   local -r token="$1"
   [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]]
 }
@@ -271,7 +271,7 @@ function is_assignment_word() {
 # @arg $1 token the token to test
 # @exitcode 0 the token is such a keyword
 # @exitcode 1 it is not
-function is_keyword() {
+function tokens::is_keyword() {
   local -r token="$1"
   local keyword
   for keyword in "${COMMAND_POSITION_KEYWORDS[@]}"; do
@@ -285,7 +285,7 @@ function is_keyword() {
 # @arg $1 token the token to test
 # @exitcode 0 the token is an operator
 # @exitcode 1 it is not
-function is_operator() {
+function tokens::is_operator() {
   case "$1" in
     ';' | '&' | '|' | '(' | ')' | '{' | '}' | '<NL>' | '`') return 0 ;;
     *) return 1 ;;

@@ -81,7 +81,7 @@ function feeds_a_kill_forward() {
                 segment='other'
                 ;;
               *)
-                if ! is_prefix_command "${word}"; then
+                if ! tokens::is_prefix_command "${word}"; then
                   segment='other'
                 fi
                 ;;
@@ -97,7 +97,7 @@ function feeds_a_kill_forward() {
               : # `-I{}` placeholder braces, not a new command word
             elif is_xargs_value_option "${word}"; then
               xargs_skip=1
-            elif [[ "${word}" != -* ]] && ! is_prefix_command "${word}"; then
+            elif [[ "${word}" != -* ]] && ! tokens::is_prefix_command "${word}"; then
               segment='other'
             fi
             ;;
@@ -122,14 +122,14 @@ function kill_in_command_position() {
   local -n toks="$1"
   local index="$2"
   while ((index >= 0)); do
-    if is_prefix_command "${toks[index]##*/}" || is_assignment_word "${toks[index]}"; then
+    if tokens::is_prefix_command "${toks[index]##*/}" || tokens::is_assignment_word "${toks[index]}"; then
       index=$((index - 1))
       continue
     fi
     if [[ "${toks[index]}" == '(' ]] && ((index > 0)) && [[ "${toks[index - 1]}" == *= ]]; then
       return 1
     fi
-    if is_operator "${toks[index]}" || is_keyword "${toks[index]}"; then
+    if tokens::is_operator "${toks[index]}" || tokens::is_keyword "${toks[index]}"; then
       return 0
     fi
     return 1
@@ -344,8 +344,8 @@ function result_is_consumed() {
     case "${word}" in
       'if' | 'elif' | '!') return 0 ;;
       *)
-        if ! is_prefix_command "${word}" \
-          && { is_operator "${toks[k]}" || is_keyword "${toks[k]}"; }; then
+        if ! tokens::is_prefix_command "${word}" \
+          && { tokens::is_operator "${toks[k]}" || tokens::is_keyword "${toks[k]}"; }; then
           break
         fi
         ;;

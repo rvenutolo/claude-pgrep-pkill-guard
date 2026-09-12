@@ -59,7 +59,7 @@ function scan_command() {
 # @arg $1 tokens newline-separated "<offset>\t<token>" records from scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>"
 function find_invocations() {
-  # shellcheck disable=SC2034 # written through prefix_chain_step's namerefs in lib/tokens.sh
+  # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs in lib/tokens.sh
   local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0
   local -r tokens="$1"
   while IFS=$'\t' read -r offset token; do
@@ -68,7 +68,7 @@ function find_invocations() {
     if ((at_cmd == 1)) && [[ "${word}" == 'pgrep' || "${word}" == 'pkill' ]]; then
       printf '%s\t%s\t%s\n' "${idx}" "${offset}" "${word}"
     fi
-    if prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
+    if tokens::prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
       at_cmd=1
     else
       at_cmd=0
@@ -89,7 +89,7 @@ function invocation_args() {
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((idx > target)); then
-      is_operator "${token}" && break
+      tokens::is_operator "${token}" && break
       printf '%s\t%s\n' "${offset}" "${token}"
     fi
     idx=$((idx + 1))

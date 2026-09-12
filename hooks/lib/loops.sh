@@ -101,7 +101,7 @@ function loop_context() {
     else
       dollar=0
     fi
-    if is_operator "${token}" || is_keyword "${token}"; then
+    if tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
       at_cmd=0
@@ -171,7 +171,7 @@ function body_has_terminator() {
     else
       dollar=0
     fi
-    if is_operator "${token}" || is_keyword "${token}"; then
+    if tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
       at_cmd=0
@@ -241,7 +241,7 @@ function loop_body_has_kill() {
         'kill') return 0 ;;
       esac
     fi
-    if is_operator "${token}" || is_keyword "${token}"; then
+    if tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
       at_cmd=0

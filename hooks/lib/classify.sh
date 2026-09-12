@@ -43,7 +43,7 @@ function task_poll_detected() {
     raw="${command:offset:${#token}}"
     path=''
     is_ref=0
-    if is_assignment_word "${token}"; then
+    if tokens::is_assignment_word "${token}"; then
       if [[ "${raw}" =~ ${TASK_OUTPUT_PATH_RE} ]]; then
         bound_names+=("${token%%=*}")
         bound_paths+=("${BASH_REMATCH[0]}")

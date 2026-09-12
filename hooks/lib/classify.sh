@@ -141,7 +141,7 @@ function classify_invocation() {
   scanner::has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
   operand="$(scanner::pattern_operand "${command}" "${args}")"
   scanner::bracket_mitigation_holds "${command}" "${operand}" && return 1
-  if [[ "${name}" == 'pkill' ]] || feeds_a_kill "${tokens_var}" "${idx}"; then
+  if [[ "${name}" == 'pkill' ]] || consumption::feeds_a_kill "${tokens_var}" "${idx}"; then
     ((ignores_ancestors == 1)) && return 1
     printf 'deny:kill\t%s\n' "${name}"
     return 0
@@ -153,7 +153,7 @@ function classify_invocation() {
       return 0
       ;;
     body)
-      if result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}" \
+      if consumption::result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}" \
         && loops::body_has_terminator "${tokens}" "${idx}"; then
         printf 'deny:loop\t%s\n' "${name}"
         return 0
@@ -161,7 +161,7 @@ function classify_invocation() {
       ;;
   esac
   ((ignores_ancestors == 1)) && return 1
-  if result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}"; then
+  if consumption::result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}"; then
     printf 'warn\n'
     return 0
   fi
@@ -227,7 +227,7 @@ function classify_command() {
   }
 
   # Parsed once and shared by every invocation in this command, instead of
-  # each of feeds_a_kill / result_is_consumed / invocation_is_captured
+  # each of consumption::feeds_a_kill / consumption::result_is_consumed / consumption::invocation_is_captured
   # re-parsing the full token stream from scratch per invocation. A command
   # with many invocations (a long chain of pgrep calls) made that rescan
   # quadratic; array indexing does not.

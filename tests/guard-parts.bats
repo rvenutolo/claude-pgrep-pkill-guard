@@ -148,6 +148,42 @@ BODY
   assert_output --partial 'is not <file>:<function>'
 }
 
+@test "guard parts: a namespaced function half is graded, not rejected for its colons" {
+  # The row separator is the first colon; `tokens::is_keyword` adds two more.
+  # A colon count would call every row in the real table malformed.
+  local -r root="${BATS_TEST_TMPDIR}/namespaced"
+  make_parts_fixture "${root}"
+  cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
+# shellcheck shell=bash
+readonly -a GUARD_PARTS=(
+  'tokens.sh:tokens::is_keyword'
+  'classify.sh:inspect_command'
+)
+BODY
+  printf 'function tokens::is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
+  git -C "${root}" add --all
+  run "${CHECK}" "${root}"
+  assert_success
+}
+
+@test "guard parts: a function half that is not a function name is still malformed" {
+  # The relaxation above grades the remainder as a name rather than counting
+  # colons; a trailing `:extra` is not one, and must not slip through.
+  local -r root="${BATS_TEST_TMPDIR}/bad-half"
+  make_parts_fixture "${root}"
+  cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
+# shellcheck shell=bash
+readonly -a GUARD_PARTS=(
+  'tokens.sh:is_keyword:extra'
+  'classify.sh:inspect_command'
+)
+BODY
+  git -C "${root}" add --all
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial 'is not <file>:<function>'
+}
+
 @test "guard parts: an indented definition does not count as a definition" {
   # `declare -F` sees a function only once its enclosing definition has RUN, and
   # nothing in a part runs at load time. A nested definition therefore does not

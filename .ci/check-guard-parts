@@ -111,7 +111,7 @@ function guard_part_rows() {
 function check_row() {
   local -r row="$1"
 
-  if [[ "${row}" != *:* || "${row}" == *:*:* ]]; then
+  if [[ "${row}" != *:* ]]; then
     printf 'FAIL: GUARD_PARTS row %s is not <file>:<function>\n' "\"${row}\"" >&2
     return 1
   fi
@@ -121,6 +121,16 @@ function check_row() {
 
   if [[ -z "${part}" || -z "${function_name}" ]]; then
     printf 'FAIL: GUARD_PARTS row %s has an empty half\n' "\"${row}\"" >&2
+    return 1
+  fi
+
+  # The row separator is the FIRST colon, not the only one: the parts are
+  # namespaced, so a function half reads `tokens::is_keyword` and a row carries
+  # three colons. Counting them -- which this used to do -- would reject every
+  # row in the table. The remainder after the first colon is graded as a
+  # function name instead, which is the check that was actually wanted.
+  if [[ ! "${function_name}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z_][a-zA-Z0-9_]*)*$ ]]; then
+    printf 'FAIL: GUARD_PARTS row %s is not <file>:<function>\n' "\"${row}\"" >&2
     return 1
   fi
 

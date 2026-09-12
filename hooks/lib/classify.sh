@@ -231,11 +231,11 @@ function classify_command() {
   # re-parsing the full token stream from scratch per invocation. A command
   # with many invocations (a long chain of pgrep calls) made that rescan
   # quadratic; array indexing does not.
-  local -a CMD_TOKENS=()
+  local -a cmd_tokens=()
   local _ raw_token
   while IFS=$'\t' read -r _ raw_token; do
     [[ -z "${raw_token}" ]] && continue
-    CMD_TOKENS+=("${raw_token}")
+    cmd_tokens+=("${raw_token}")
   done <<< "${tokens}"
 
   local verdict='allow'
@@ -250,7 +250,7 @@ function classify_command() {
     [[ -z "${idx}" ]] && continue
     args="$(invocation_args "${tokens}" "${idx}")"
     has_flag "${args}" '--full' 'f' || continue
-    if invocation_finding="$(classify_invocation CMD_TOKENS "${command}" "${tokens}" "${idx}" "${name}" \
+    if invocation_finding="$(classify_invocation cmd_tokens "${command}" "${tokens}" "${idx}" "${name}" \
       "${args}")"; then
       case "${invocation_finding}" in
         deny:*)

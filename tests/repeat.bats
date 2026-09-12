@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   # Every repeat-tier case is redirected into a per-test temp dir. This export
   # and the hook's own read of the same name must always be renamed in ONE

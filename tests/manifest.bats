@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   PLUGIN_JSON="${REPO_DIR}/.claude-plugin/plugin.json"
   MARKET_JSON="${REPO_DIR}/.claude-plugin/marketplace.json"

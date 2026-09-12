@@ -3,7 +3,7 @@
 # on stdout, which a merged capture cannot tell apart from a payload.
 bats_require_minimum_version 1.5.0
 
-setup() {
+function setup() {
   load 'test_helper/common'
   BUILD="${REPO_DIR}/.ci/build-commit-payload"
 

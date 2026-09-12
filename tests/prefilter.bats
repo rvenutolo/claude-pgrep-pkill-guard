@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
 }

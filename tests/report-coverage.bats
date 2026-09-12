@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   REPORTER="${REPO_DIR}/.ci/report-coverage"
 }

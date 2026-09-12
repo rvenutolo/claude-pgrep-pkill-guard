@@ -223,10 +223,10 @@ function segment_pipe_carry() {
 #              Payloads are NUL-terminated because a heredoc body is usually several lines and
 #              has to reach classify_command as one command.
 #
-#              Command position is tracked exactly as find_invocations tracks it, including the
+#              Command position is tracked exactly as scanner::find_invocations tracks it, including the
 #              prefix-word chain, so `sudo bash -c ...` is reached.
 # @arg $1 command the raw command string
-# @arg $2 tokens the token stream from scan_command
+# @arg $2 tokens the token stream from scanner::scan_command
 # @stdout one payload per NUL, quotes stripped; nothing if there are none
 function shell_wrapper_payloads() {
   local -r command="$1" tokens="$2"

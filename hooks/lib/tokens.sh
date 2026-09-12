@@ -137,7 +137,7 @@ function tokens::prefix_breaks_chain() {
 
 # @description Advance command-position tracking by one token and report whether the word AFTER it
 #              is in command position. This is the whole prefix-chain rule, in one place because
-#              find_invocations and shell_wrapper_payloads both need it and a second copy would
+#              scanner::find_invocations and shell_wrapper_payloads both need it and a second copy would
 #              drift -- the bare-word version was already duplicated when it was wrong (#188).
 #
 #              An operator or keyword restores command position and clears the chain. A prefix word

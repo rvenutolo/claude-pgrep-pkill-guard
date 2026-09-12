@@ -19,7 +19,7 @@
 #              simply inside a substitution with no loop of its own still belongs to whatever cond/body
 #              span encloses that substitution, which is why `until [ -z "$(pgrep --full x)" ]; do ...`
 #              still reports `cond` -- the lookup skips barrier markers to find the nearest real span.
-# @arg $1 tokens the token stream from scan_command
+# @arg $1 tokens the token stream from scanner::scan_command
 # @arg $2 target index of the invocation token
 # @stdout none, cond, or body
 function loop_context() {
@@ -120,7 +120,7 @@ function loop_context() {
 #              followed it, and loop_context (which has the barrier) answered `body` for the same
 #              command -- two readers of one structure disagreeing (#8). The barrier is opaque in
 #              both directions: while one is open, every loop keyword is ignored.
-# @arg $1 tokens the token stream from scan_command
+# @arg $1 tokens the token stream from scanner::scan_command
 # @arg $2 target index of the invocation token
 # @exitcode 0 a terminator is present in the enclosing body
 # @exitcode 1 no terminator

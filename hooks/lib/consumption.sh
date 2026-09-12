@@ -275,7 +275,7 @@ function invocation_is_captured() {
 #              reading raw text is a single-quoted literal `$?` counting as a read; that direction
 #              only over-warns, and no realistic command writes one right after a pgrep.
 # @arg $1 command the raw command string
-# @arg $2 tokens the token stream from scan_command
+# @arg $2 tokens the token stream from scanner::scan_command
 # @arg $3 target index of the invocation token
 # @exitcode 0 the following command reads the exit status
 # @exitcode 1 it does not
@@ -312,7 +312,7 @@ function next_command_reads_status() {
 # @arg $2 target index of the invocation token
 # @arg $3 args the invocation's argument lines
 # @arg $4 command the raw command string, for the `$?` check
-# @arg $5 tokens the token stream from scan_command, for the `$?` check
+# @arg $5 tokens the token stream from scanner::scan_command, for the `$?` check
 # @exitcode 0 the result is consumed
 # @exitcode 1 the result is only displayed
 function result_is_consumed() {
@@ -331,7 +331,7 @@ function result_is_consumed() {
   # Walk back over prefix words so `if sudo pgrep --full x` still counts.
   #
   # Anything between the invocation and the operator or keyword that opened its
-  # command is prefix material by construction: find_invocations only reports an
+  # command is prefix material by construction: scanner::find_invocations only reports an
   # invocation in command position, so a word reached here is a prefix command,
   # one of its flags, that flag's value, or an assignment word. Testing for a
   # prefix COMMAND alone stopped at the value word and hid the enclosing `if` of

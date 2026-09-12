@@ -19,7 +19,7 @@ readonly TASK_OUTPUT_PATH_RE='claude-[0-9]+/[^[:space:]]*/tasks/[^[:space:]/]+\.
 #              task-output file (Gap 2, 2026-08-26). The harness re-invokes the model when a task
 #              finishes, so a shell loop on that file only wastes the wait, and never exits if the
 #              task was killed. The scanner masks quoted text, so every token is examined through
-#              its RAW slice of the command -- the same byte-offset contract pattern_operand
+#              its RAW slice of the command -- the same byte-offset contract scanner::pattern_operand
 #              relies on -- which is what makes a quoted path visible. A `NAME=<path>` assignment
 #              word binds NAME, and a later `$NAME` / `${NAME...}` counts as a reference to that
 #              path; a later reassignment of the same NAME to something else is not tracked, so
@@ -30,7 +30,7 @@ readonly TASK_OUTPUT_PATH_RE='claude-[0-9]+/[^[:space:]]*/tasks/[^[:space:]/]+\.
 #              path sits after `done`), and an echoed loop (its keywords are masked, so
 #              loop_context sees no loop) all report nothing.
 # @arg $1 command the raw command string
-# @arg $2 tokens the token stream from scan_command
+# @arg $2 tokens the token stream from scanner::scan_command
 # @stdout the polled path, starting at `claude-`, when one is found
 # @exitcode 0 a poll loop on a task-output file was found
 # @exitcode 1 none
@@ -82,7 +82,7 @@ function task_poll_detected() {
 #              every pgrep in command position that has a pattern operand -- any pgrep, not only
 #              --full. pkill is a kill, not a probe. Wrapper payloads are not descended.
 # @arg $1 command the raw command string
-# @arg $2 tokens the token stream from scan_command
+# @arg $2 tokens the token stream from scanner::scan_command
 # @stdout the keys, newline-terminated; nothing when there are none
 function probe_keys() {
   local -r command="$1" tokens="$2"
@@ -104,8 +104,8 @@ function probe_keys() {
   if [[ "${command}" == *pgrep* ]]; then
     while IFS=$'\t' read -r idx offset name; do
       [[ -z "${idx}" || "${name}" != 'pgrep' ]] && continue
-      args="$(invocation_args "${tokens}" "${idx}")"
-      operand="$(pattern_operand "${command}" "${args}")"
+      args="$(scanner::invocation_args "${tokens}" "${idx}")"
+      operand="$(scanner::pattern_operand "${command}" "${args}")"
       [[ -z "${operand}" ]] && continue
       key="pgrep:${operand}"
       # Same reasoning as the task-key site above: a state line is
@@ -114,7 +114,7 @@ function probe_keys() {
       if [[ $'\n'"${keys}" != *$'\n'"${key}"$'\n'* ]]; then
         keys+="${key}"$'\n'
       fi
-    done <<< "$(find_invocations "${tokens}")"
+    done <<< "$(scanner::find_invocations "${tokens}")"
   fi
   printf '%s' "${keys}"
 }
@@ -131,16 +131,16 @@ function probe_keys() {
 # @arg $3 tokens the scanner's token stream for the command
 # @arg $4 idx the invocation's token index
 # @arg $5 name `pgrep` or `pkill`
-# @arg $6 args the invocation's argument tokens (invocation_args output)
+# @arg $6 args the invocation's argument tokens (scanner::invocation_args output)
 # @stdout `deny:kill<TAB>name`, `deny:loop<TAB>name`, or `warn`
 # @exitcode 0 a verdict was printed
 # @exitcode 1 the invocation is clean or exempt; nothing printed
 function classify_invocation() {
   local -r tokens_var="$1" command="$2" tokens="$3" idx="$4" name="$5" args="$6"
   local operand context ignores_ancestors=0
-  has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
-  operand="$(pattern_operand "${command}" "${args}")"
-  bracket_mitigation_holds "${command}" "${operand}" && return 1
+  scanner::has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
+  operand="$(scanner::pattern_operand "${command}" "${args}")"
+  scanner::bracket_mitigation_holds "${command}" "${operand}" && return 1
   if [[ "${name}" == 'pkill' ]] || feeds_a_kill "${tokens_var}" "${idx}"; then
     ((ignores_ancestors == 1)) && return 1
     printf 'deny:kill\t%s\n' "${name}"
@@ -221,7 +221,7 @@ function classify_command() {
   # pgrep-scan.awk). Return a verdict rather than printing: this function runs
   # inside a command substitution, so a printf here would be captured, not
   # emitted, and the guard would go silently dead.
-  tokens="$(scan_command "${command}")" || {
+  tokens="$(scanner::scan_command "${command}")" || {
     printf 'inactive\n'
     return 0
   }
@@ -244,12 +244,12 @@ function classify_command() {
   # stream is still needed below for the task-poll tier.
   local invocations=''
   if [[ "${command}" == *pgrep* || "${command}" == *pkill* ]]; then
-    invocations="$(find_invocations "${tokens}")"
+    invocations="$(scanner::find_invocations "${tokens}")"
   fi
   while IFS=$'\t' read -r idx offset name; do
     [[ -z "${idx}" ]] && continue
-    args="$(invocation_args "${tokens}" "${idx}")"
-    has_flag "${args}" '--full' 'f' || continue
+    args="$(scanner::invocation_args "${tokens}" "${idx}")"
+    scanner::has_flag "${args}" '--full' 'f' || continue
     if invocation_finding="$(classify_invocation cmd_tokens "${command}" "${tokens}" "${idx}" "${name}" \
       "${args}")"; then
       case "${invocation_finding}" in
@@ -334,7 +334,7 @@ function repeat_tier_reason() {
   # Split out of the nested substitution deliberately: with the scan inlined
   # into probe_keys' arguments, a scanner failure would be swallowed by the
   # `|| keys=''` below and read as "this command carries no probe key".
-  rt_tokens="$(scan_command "${command}")" || return 2
+  rt_tokens="$(scanner::scan_command "${command}")" || return 2
   keys="$(probe_keys "${command}" "${rt_tokens}")" || keys=''
   [[ -n "${keys}" ]] || return 1
   # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
@@ -359,7 +359,7 @@ function inspect_command() {
   # Past the short-circuit the scanner is about to be needed, so resolve it now.
   # This is the first thing below the prefilter because the scanner readability
   # guard a few lines down is one of its two readers.
-  resolve_scanner
+  scanner::resolve_scanner
 
   # Below here the guard is actually going to look at the command, so the
   # preconditions matter. These sit AFTER the prefilter on purpose: a command

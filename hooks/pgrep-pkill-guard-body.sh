@@ -36,7 +36,7 @@
 # shellcheck disable=SC2034 # read inline by human_mode in lib/human.sh, sourced below
 readonly HOOK_VERSION='1.1.0' # x-release-please-version
 
-# Resolved by resolve_scanner in lib/scanner.sh, which inspect_command calls
+# Resolved by scanner::resolve_scanner in lib/scanner.sh, which inspect_command calls
 # once, and read from there and from lib/classify.sh. Declared here so `set -u`
 # has a definition to see on any path that never resolves it.
 # shellcheck disable=SC2034 # set by lib/scanner.sh, read there and in lib/classify.sh
@@ -58,7 +58,7 @@ SCANNER=''
 # that the file was found, parsed to the end, and ran.
 readonly -a GUARD_PARTS=(
   'tokens.sh:tokens::is_keyword'
-  'scanner.sh:resolve_scanner'
+  'scanner.sh:scanner::resolve_scanner'
   'loops.sh:loop_context'
   'messages.sh:emit_deny'
   'consumption.sh:result_is_consumed'

@@ -28,7 +28,7 @@ readonly TRIGGER_RE
     [ "${expected}" = 'allow' ] && continue
     checked=$((checked + 1))
     command="$(jq --raw-output . <<< "${cmd_json}")"
-    if ! printf '%s' "${command}" | grep -qE "${TRIGGER_RE}"; then
+    if [[ ! "${command}" =~ ${TRIGGER_RE} ]]; then
       echo "row would be dropped by the prefilter: ${command}" >&2
       echo "verdict: ${expected}" >&2
       missing=$((missing + 1))
@@ -57,7 +57,7 @@ readonly TRIGGER_RE
       [ -z "${cmd_json}" ] && continue
       [ "${expected}" = 'allow' ] && continue
       command="$(jq --raw-output . <<< "${cmd_json}")"
-      printf '%s' "${command}" | grep -qE "${reduced}" || uncovered=$((uncovered + 1))
+      [[ "${command}" =~ ${reduced} ]] || uncovered=$((uncovered + 1))
     done < "${CASES}"
     echo "without '${tokens[${i}]}': ${uncovered} rows uncovered" >&3
     [ "${uncovered}" -gt 0 ] || {

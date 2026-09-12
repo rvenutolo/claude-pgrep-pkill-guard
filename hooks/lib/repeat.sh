@@ -130,7 +130,7 @@ function repeat_check() {
       ages+="$((now - epoch)) s ago, "
     done <<< "${kept}"
     if ((count >= REPEAT_THRESHOLD - 1)); then
-      repeat_message "${probe_key}" "$((count + 1))" "${ages%, }"
+      messages::repeat_message "${probe_key}" "$((count + 1))" "${ages%, }"
       return 0
     fi
     kept+="${now}"$'\t'"${probe_key}"$'\n'

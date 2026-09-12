@@ -13,7 +13,7 @@
 #              the model on an allowed call; systemMessage renders to the user
 #              only, and permissionDecisionReason is fed back under deny alone.
 # @arg $1 text the message the model should read
-function emit_warn() {
+function messages::emit_warn() {
   local -r text="$1"
   jq --null-input --arg msg "${text}" '{
     hookSpecificOutput: {
@@ -26,7 +26,7 @@ function emit_warn() {
 
 # @description Emit a deny decision.
 # @arg $1 text the reason shown to the model
-function emit_deny() {
+function messages::emit_deny() {
   local -r text="$1"
   jq --null-input --arg msg "${text}" '{
     hookSpecificOutput: {
@@ -57,7 +57,7 @@ a file) rather than running one, use the Write tool instead; this guard only ins
 # @arg $2 detail the tool for kill (pgrep or pkill; defaults to pgrep), or the polled path for
 #         task-poll
 # @stdout the reason text: the Write-tool lead, a preamble, and a fixes list
-function deny_message() {
+function messages::deny_message() {
   local -r kind="$1"
   local -r detail="${2:-pgrep}"
   local preamble fixes
@@ -132,13 +132,13 @@ A single `cat`, `grep`, or `test` of the file is fine; a loop on it is not.'
   printf '%s\n\n%s\n\n%s\n' "${WRITE_TOOL_LEAD}" "${preamble}" "${fixes}"
 }
 
-# @description Build the deny reason for a repeat denial. Built here rather than in deny_message
+# @description Build the deny reason for a repeat denial. Built here rather than in messages::deny_message
 #              because it carries state (the count and the ages of the earlier probes).
 # @arg $1 key the probe key, `task:<path>` or `pgrep:<operand>`
 # @arg $2 count this probe's ordinal within the window
 # @arg $3 ages the earlier probes' ages, e.g. "42 s ago, 15 s ago"
 # @stdout the reason text
-function repeat_message() {
+function messages::repeat_message() {
   local -r key="$1" count="$2" ages="$3"
   local preamble fixes
   preamble="This is probe ${count} of \`${key}\` within ${REPEAT_WINDOW_SECONDS} s (earlier: ${ages}).

@@ -78,7 +78,7 @@ declare -rA COHORT_PATH=(
   [typical]='the `skipped` path, driven by ordinary commands rather than the corpus'
   [quiet]='bash startup, one `jq` spawn, one scanner pass'
   [inspect]='the above, plus a second scanner pass, `probe_keys` and `repeat_check`'
-  [deny]='the stateless tiers plus `deny_message`; no state'
+  [deny]='the stateless tiers plus `messages::deny_message`; no state'
 )
 
 # @description Print usage on stdout.
@@ -105,7 +105,7 @@ asserts on -- grouped into the code paths the hook's `main` actually takes:
   inspect   allow/warn verdicts whose command matches `pgrep` or `.output`, so
             the stateful tier runs: a second scanner pass, probe_keys and
             repeat_check
-  deny      deny verdicts: the stateless tiers plus deny_message, no state
+  deny      deny verdicts: the stateless tiers plus messages::deny_message, no state
 
 Options:
   --reps N        repetitions over the corpus (default 15)

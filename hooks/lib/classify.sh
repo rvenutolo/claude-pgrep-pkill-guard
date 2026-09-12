@@ -401,7 +401,7 @@ function inspect_command() {
       return 0
       ;;
     deny:*)
-      emit_deny "$(deny_message "${decision#deny:}" "${deny_detail}")"
+      messages::emit_deny "$(messages::deny_message "${decision#deny:}" "${deny_detail}")"
       return 0
       ;;
   esac
@@ -416,18 +416,18 @@ function inspect_command() {
       "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
     return 0
   fi
-  # Only a string shaped like repeat_message's output is treated as a deny
+  # Only a string shaped like messages::repeat_message's output is treated as a deny
   # reason. If the ERR trap ever fired inside the substitution above despite
   # the guard, it would print emit_allow's `{}` to stdout -- non-empty, but
   # not a reason -- and this check keeps that from being emitted as one.
   if [[ "${repeat_reason}" == "${WRITE_TOOL_LEAD}"* ]]; then
-    emit_deny "${repeat_reason}"
+    messages::emit_deny "${repeat_reason}"
     return 0
   fi
 
   case "${decision}" in
     warn)
-      emit_warn "${WARN_MESSAGE}"
+      messages::emit_warn "${WARN_MESSAGE}"
       ;;
     *)
       emit_allow

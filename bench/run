@@ -77,7 +77,7 @@ declare -rA COHORT_PATH=(
   [skipped]='the prefilter short-circuit -- no `jq`, no scanner pass'
   [typical]='the `skipped` path, driven by ordinary commands rather than the corpus'
   [quiet]='bash startup, one `jq` spawn, one scanner pass'
-  [inspect]='the above, plus a second scanner pass, `probe_keys` and `repeat_check`'
+  [inspect]='the above, plus a second scanner pass, `probe_keys` and `repeat::repeat_check`'
   [deny]='the stateless tiers plus `messages::deny_message`; no state'
 )
 
@@ -104,7 +104,7 @@ asserts on -- grouped into the code paths the hook's `main` actually takes:
             is skipped
   inspect   allow/warn verdicts whose command matches `pgrep` or `.output`, so
             the stateful tier runs: a second scanner pass, probe_keys and
-            repeat_check
+            repeat::repeat_check
   deny      deny verdicts: the stateless tiers plus messages::deny_message, no state
 
 Options:
@@ -550,7 +550,7 @@ function main() {
     # once, so without this, repetition 3 onward would silently stop timing the
     # `inspect` path and start timing `deny:repeat`. Wiping per COMMAND was
     # rejected instead: it would never exercise the read-and-prune half of
-    # repeat_check, which is most of that function's cost.
+    # repeat::repeat_check, which is most of that function's cost.
     rm --recursive --force -- "${state_dir}"
 
     for i in "${indices[@]}"; do

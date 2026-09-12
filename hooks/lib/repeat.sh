@@ -40,7 +40,7 @@ readonly REPEAT_MAX_ENTRIES=5000
 # @arg $2 keys the probe keys from probe_keys
 # @stdout the deny reason when a key reaches the threshold; nothing otherwise
 # @exitcode 0 always
-function repeat_check() {
+function repeat::repeat_check() {
   local -r session_id="$1" keys="$2"
   local -r dir="${PGREP_PKILL_GUARD_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/pgrep-pkill-guard}"
   local -r file="${dir}/${session_id}"

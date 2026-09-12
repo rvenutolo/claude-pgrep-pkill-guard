@@ -63,7 +63,7 @@ readonly -a GUARD_PARTS=(
   'messages.sh:messages::emit_deny'
   'consumption.sh:consumption::result_is_consumed'
   'wrappers.sh:wrappers::shell_wrapper_payloads'
-  'repeat.sh:repeat_check'
+  'repeat.sh:repeat::repeat_check'
   'classify.sh:inspect_command'
   'human.sh:human_mode'
 )

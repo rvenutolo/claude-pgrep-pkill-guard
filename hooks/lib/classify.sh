@@ -339,9 +339,9 @@ function repeat_tier_reason() {
   [[ -n "${keys}" ]] || return 1
   # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
   # whole command substitution off errexit's radar for its entire dynamic
-  # extent, so nothing inside repeat_check can trip the top-level ERR trap. Do
+  # extent, so nothing inside repeat::repeat_check can trip the top-level ERR trap. Do
   # not turn this into a plain assignment.
-  reason="$(repeat_check "${session_id}" "${keys}")" || reason=''
+  reason="$(repeat::repeat_check "${session_id}" "${keys}")" || reason=''
   [[ -n "${reason}" ]] || return 1
   printf '%s\n' "${reason}"
   return 0
@@ -408,7 +408,7 @@ function inspect_command() {
 
   local repeat_reason='' repeat_rc=0
   # `|| repeat_rc=$?` rather than a plain assignment: the `||` keeps the whole
-  # substitution -- and repeat_check inside it -- off errexit's radar, and the
+  # substitution -- and repeat::repeat_check inside it -- off errexit's radar, and the
   # status tells a rescan failure (2) apart from "no rule fired" (1).
   repeat_reason="$(repeat_tier_reason "${command}" "${session_id}")" || repeat_rc=$?
   if ((repeat_rc == 2)); then

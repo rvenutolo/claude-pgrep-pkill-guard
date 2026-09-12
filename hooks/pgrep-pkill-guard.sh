@@ -75,7 +75,7 @@ function load_body() {
     return 1
   fi
   # The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
-  # repeat_check call inside the body: it keeps a failing `source` off the ERR
+  # repeat::repeat_check call inside the body: it keeps a failing `source` off the ERR
   # trap, so a corrupt sibling produces this message rather than a bare `{}`.
   # shellcheck source=/dev/null # the loader and the parts it sources are linted on their own as
   # hooks/**/*.sh; following it from here would lint them against a context they never see alone.
@@ -107,7 +107,7 @@ function main() {
     # usage error (its own comment says why that is the one deliberate non-zero
     # exit here), and a plain non-zero command would trip the ERR trap above and
     # be rewritten into an allow. The `||` keeps human_mode off errexit's radar
-    # for its whole dynamic extent, the same trick the body's repeat_check call
+    # for its whole dynamic extent, the same trick the body's repeat::repeat_check call
     # uses; the `exit` is what carries the status out to the shell.
     human_mode "$@" || exit "$?"
     return 0
@@ -140,7 +140,7 @@ function main() {
   #     contains `pgrep`, `pkill`, or `.output` -- every stateless deny/warn/
   #     inactive verdict has to pass through that gate on its way out.
   #   - the repeat tier below is separately restricted to commands containing
-  #     `pgrep` or `.output` (see the comment above the repeat_check call), so
+  #     `pgrep` or `.output` (see the comment above the repeat::repeat_check call), so
   #     no verdict can arise from the state file alone either.
   #
   # `pkill` contains `kill`, which is why `pkill` is not in the pattern below

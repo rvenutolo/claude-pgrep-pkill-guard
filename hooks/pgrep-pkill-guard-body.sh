@@ -33,7 +33,7 @@
 # .version, with no BOOTSTRAP_VERSION escape hatch -- that exemption is scoped to
 # .release-please-manifest.json, because a WRONG version in a bug report is worse
 # than a missing one.
-# shellcheck disable=SC2034 # read inline by human_mode in lib/human.sh, sourced below
+# shellcheck disable=SC2034 # read inline by human::human_mode in lib/human.sh, sourced below
 readonly HOOK_VERSION='1.1.0' # x-release-please-version
 
 # Resolved by scanner::resolve_scanner in lib/scanner.sh, which classify::inspect_command calls
@@ -47,7 +47,7 @@ SCANNER=''
 # stray file dropped into lib/ would be sourced unasked, and the fail-open
 # message below needs a name to print. Order does not affect correctness --
 # every part only defines functions and readonly constants, and nothing runs
-# until classify::inspect_command or human_mode is called -- so it is arranged for a
+# until classify::inspect_command or human::human_mode is called -- so it is arranged for a
 # reader: low-level helpers first.
 #
 # The paired function is how the loop below tells a part that loaded from one
@@ -65,7 +65,7 @@ readonly -a GUARD_PARTS=(
   'wrappers.sh:wrappers::shell_wrapper_payloads'
   'repeat.sh:repeat::repeat_check'
   'classify.sh:classify::inspect_command'
-  'human.sh:human_mode'
+  'human.sh:human::human_mode'
 )
 
 # HOOK_DIR and HOOK_NAME are the entry script's: this file runs in its shell.

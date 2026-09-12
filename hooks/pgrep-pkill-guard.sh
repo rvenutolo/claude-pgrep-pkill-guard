@@ -56,7 +56,7 @@ function resolve_hook_dir() {
   readonly HOOK_DIR
 }
 
-# @description Bring in the sourced body: the whole guard past the prefilter, and human_mode with
+# @description Bring in the sourced body: the whole guard past the prefilter, and human::human_mode with
 #              it. Two callers need it -- the human-mode dispatch and the JSON path -- so the
 #              resolution and both fail-open branches live here, not twice over (invariant 5).
 # @noargs
@@ -95,7 +95,7 @@ function main() {
   # Human mode. Both tests are builtins, so the fast path pays no fork and
   # nothing measurable to ask them. Claude Code invokes the hook with no
   # arguments (hooks/hooks.json passes none) and with stdin on a pipe, so neither
-  # can fire on a real hook call: what reaches human_mode came from a person.
+  # can fire on a real hook call: what reaches human::human_mode came from a person.
   #
   # Sitting AFTER the bash-version guard is deliberate: on stock macOS bash 3.2
   # `--help` prints that guard's INACTIVE message instead of help. Fixing that
@@ -103,13 +103,13 @@ function main() {
   # message that already names that reader's exact problem. Known limitation.
   if (($# > 0)) || [[ -t 0 ]]; then
     load_body || return 0
-    # `|| exit` rather than a bare call plus `return`: human_mode returns 2 on a
+    # `|| exit` rather than a bare call plus `return`: human::human_mode returns 2 on a
     # usage error (its own comment says why that is the one deliberate non-zero
     # exit here), and a plain non-zero command would trip the ERR trap above and
-    # be rewritten into an allow. The `||` keeps human_mode off errexit's radar
+    # be rewritten into an allow. The `||` keeps human::human_mode off errexit's radar
     # for its whole dynamic extent, the same trick the body's repeat::repeat_check call
     # uses; the `exit` is what carries the status out to the shell.
-    human_mode "$@" || exit "$?"
+    human::human_mode "$@" || exit "$?"
     return 0
   fi
 

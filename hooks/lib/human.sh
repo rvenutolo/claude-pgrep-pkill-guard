@@ -11,7 +11,7 @@
 # @description Print the human-facing help on stdout.
 # @noargs
 # @stdout the help text
-function print_help() {
+function human::print_help() {
   # A quoted heredoc, so nothing in the body is expanded and the probe recipe can
   # carry `${CLAUDE_PLUGIN_ROOT}` and `$cmd` verbatim -- it is meant to be copied
   # into a shell, not resolved here. The version is printed by --version rather
@@ -86,14 +86,14 @@ EOF
 # @stderr one error line plus a `--help` hint, on a usage error
 # @exitcode 0 --help or --version was handled
 # @exitcode 2 an unrecognized argument, or a bare run with stdin on a terminal
-function human_mode() {
+function human::human_mode() {
   # --help wins over everything, including arguments this script does not know:
   # `--help --bogus` and `--bogus --help` both print help and succeed (clig.dev).
   # So scan ALL arguments for it before deciding anything else.
   local arg
   for arg in "$@"; do
     if [[ "${arg}" == '-h' || "${arg}" == '--help' ]]; then
-      print_help
+      human::print_help
       return 0
     fi
   done

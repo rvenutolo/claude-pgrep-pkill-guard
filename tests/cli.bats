@@ -5,7 +5,7 @@ setup() {
 
 # The human-facing surface of hooks/pgrep-pkill-guard.sh: --help, --version, and
 # the two usage errors. Driven ONLY as a subprocess (invariant 3) -- nothing here
-# sources the hook or calls human_mode/print_help directly, because the thing
+# sources the hook or calls human::human_mode/human::print_help directly, because the thing
 # worth pinning is what a person at a terminal actually sees.
 #
 # POSIX short flags on purpose -- see the header of tests/manifest.bats.

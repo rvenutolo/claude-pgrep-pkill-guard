@@ -136,7 +136,7 @@ function main() {
   # This is sound because it is provably weaker than a gate the guard already
   # applies to the parsed command:
   #
-  #   - classify_command opens with an early `allow` unless the command
+  #   - classify::classify_command opens with an early `allow` unless the command
   #     contains `pgrep`, `pkill`, or `.output` -- every stateless deny/warn/
   #     inactive verdict has to pass through that gate on its way out.
   #   - the repeat tier below is separately restricted to commands containing
@@ -181,7 +181,7 @@ function main() {
   # file, which is why an ordinary Bash call parses ~190 lines, not 2200 (#55).
   load_body || return 0
 
-  inspect_command "${input}"
+  classify::inspect_command "${input}"
 }
 
 main "$@"

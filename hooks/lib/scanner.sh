@@ -10,7 +10,7 @@
 # (invariant 1).
 
 # @description Resolve the path to the awk scanner and freeze it. Called once, from
-#              inspect_command. HOOK_DIR was resolved by the entry script before it sourced this
+#              classify::inspect_command. HOOK_DIR was resolved by the entry script before it sourced this
 #              file, so this costs no process of its own -- see resolve_hook_dir over there.
 # @set SCANNER the absolute path to pgrep-scan.awk, or the test override
 # @noargs

@@ -221,7 +221,7 @@ function wrappers::segment_pipe_carry() {
 #              wrapper (`bash <<< 'script'`).
 #
 #              Payloads are NUL-terminated because a heredoc body is usually several lines and
-#              has to reach classify_command as one command.
+#              has to reach classify::classify_command as one command.
 #
 #              Command position is tracked exactly as scanner::find_invocations tracks it, including the
 #              prefix-word chain, so `sudo bash -c ...` is reached.

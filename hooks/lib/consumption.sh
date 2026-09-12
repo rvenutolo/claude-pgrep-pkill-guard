@@ -192,7 +192,7 @@ function consumption::feeds_a_kill_backward() {
 # @description True when the invocation's output feeds a kill, either forward (`pgrep ... | xargs
 #              kill`, `... | while read p; do kill "$p"; done`) or backward (`kill $(pgrep ...)`).
 #              The two scans are independent; see consumption::feeds_a_kill_forward and consumption::feeds_a_kill_backward.
-# @arg $1 tokens_var name of the caller's token array (built once by classify_command; every
+# @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
 #              invocation in the same command reuses it rather than re-parsing the token stream)
 # @arg $2 target index of the invocation token
 # @exitcode 0 output feeds a kill
@@ -208,7 +208,7 @@ function consumption::feeds_a_kill() {
 #              already closed, which made `for i in $(seq 1 5); do pgrep -af java; ...; done` read as
 #              a capture. `$` is not an operator token, so the opener is recognised as any token
 #              ending in `$` immediately followed by `(`, which also covers `p=$(...)`.
-# @arg $1 tokens_var name of the caller's token array, built once by classify_command
+# @arg $1 tokens_var name of the caller's token array, built once by classify::classify_command
 # @arg $2 target index of the invocation token
 # @exitcode 0 the invocation is inside a command substitution
 # @exitcode 1 it is not
@@ -308,7 +308,7 @@ function consumption::next_command_reads_status() {
 #              command in the list reading `$?`, which consumption::next_command_reads_status handles. A
 #              redirection target is not consumption: `2>&1` tokenizes as `2>`, `&`, `1`, and a lone
 #              trailing `&` is backgrounding rather than a boolean operator.
-# @arg $1 tokens_var name of the caller's token array, built once by classify_command
+# @arg $1 tokens_var name of the caller's token array, built once by classify::classify_command
 # @arg $2 target index of the invocation token
 # @arg $3 args the invocation's argument lines
 # @arg $4 command the raw command string, for the `$?` check

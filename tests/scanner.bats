@@ -315,7 +315,7 @@ tab() {
 # @description Run a copy of the hook end to end under a stripped environment and
 #              report whether it announced that the guard is inactive, rather
 #              than dying into the ERR trap's silent allow. The probe command
-#              must contain `pgrep` or `pkill`, or classify_command
+#              must contain `pgrep` or `pkill`, or classify::classify_command
 #              short-circuits before the scanner is ever reached and a dead
 #              scanner looks healthy. The child runs under `env -i`: a plain PATH
 #              prefix assignment is not enough, because a BASH_ENV inherited from
@@ -469,7 +469,7 @@ loader_probe() {
   # POSIX short flags and POSIX sed syntax on purpose, as everywhere in this
   # suite: the ambient macOS compat legs run it against BSD tools.
   cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
-  sed -e "s/classify.sh:inspect_command/classify.sh:inspect_command_gone/" \
+  sed -e "s/classify.sh:classify::inspect_command/classify.sh:inspect_command_gone/" \
     "${BODY}" > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   # Prove the fixture really is what this case claims, so it cannot pass by
   # accident against a body the sed never matched.

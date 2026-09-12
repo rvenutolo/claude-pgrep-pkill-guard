@@ -191,8 +191,8 @@ setup() {
 
 @test "repeat: a pgrep inside a wrapper payload is invisible to the repeat tier" {
   local i json
-  # Documented limit, pinned here rather than changed: probe_keys, unlike
-  # classify_command, does not descend into wrappers::shell_wrapper_payloads.
+  # Documented limit, pinned here rather than changed: classify::probe_keys, unlike
+  # classify::classify_command, does not descend into wrappers::shell_wrapper_payloads.
   for i in 1 2 3; do
     json="$(run_hook "bash -c 'pgrep -f java'" 's18')"
     [ "$(decision_of "${json}")" = 'none' ]

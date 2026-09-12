@@ -75,7 +75,7 @@ fi
 # Invariants 1 and 2 now live where the code they constrain lives: the entry
 # script and loader each still carry both phrases (the loader's own `source …
 # ||` is invariant 2's other half), while `repeat::repeat_check` moved to
-# hooks/lib/repeat.sh (invariant 1) and `inspect_command` moved to
+# hooks/lib/repeat.sh (invariant 1) and `classify::inspect_command` moved to
 # hooks/lib/classify.sh (invariant 2). Each row below lists exactly the files
 # that phrase must survive in.
 #

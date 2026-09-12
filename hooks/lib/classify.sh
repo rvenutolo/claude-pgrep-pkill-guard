@@ -34,7 +34,7 @@ readonly TASK_OUTPUT_PATH_RE='claude-[0-9]+/[^[:space:]]*/tasks/[^[:space:]/]+\.
 # @stdout the polled path, starting at `claude-`, when one is found
 # @exitcode 0 a poll loop on a task-output file was found
 # @exitcode 1 none
-function task_poll_detected() {
+function classify::task_poll_detected() {
   local -r command="$1" tokens="$2"
   local -a bound_names=() bound_paths=()
   local idx=0 offset token raw path name i context is_ref ref_re
@@ -77,14 +77,14 @@ function task_poll_detected() {
 
 # @description The targets a command probes, one key per line, deduplicated in first-seen order:
 #              `task:<path>` for every harness task-output path in the raw command (quoted or
-#              not -- raw slices, as in task_poll_detected; the key starts at `claude-`, so a
+#              not -- raw slices, as in classify::task_poll_detected; the key starts at `claude-`, so a
 #              /tmp and a $TMPDIR spelling of one file share a key), and `pgrep:<operand>` for
 #              every pgrep in command position that has a pattern operand -- any pgrep, not only
 #              --full. pkill is a kill, not a probe. Wrapper payloads are not descended.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @stdout the keys, newline-terminated; nothing when there are none
-function probe_keys() {
+function classify::probe_keys() {
   local -r command="$1" tokens="$2"
   local keys='' offset token raw key idx name args operand
   if [[ "${command}" == *.output* ]]; then
@@ -135,7 +135,7 @@ function probe_keys() {
 # @stdout `deny:kill<TAB>name`, `deny:loop<TAB>name`, or `warn`
 # @exitcode 0 a verdict was printed
 # @exitcode 1 the invocation is clean or exempt; nothing printed
-function classify_invocation() {
+function classify::classify_invocation() {
   local -r tokens_var="$1" command="$2" tokens="$3" idx="$4" name="$5" args="$6"
   local operand context ignores_ancestors=0
   scanner::has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
@@ -178,13 +178,13 @@ function classify_invocation() {
 # @stdout `inactive`, a `deny:...` verdict line, or `warn`
 # @exitcode 0 a verdict was printed
 # @exitcode 1 no payload changes the outer verdict; nothing printed
-function classify_wrapper_payloads() {
+function classify::classify_wrapper_payloads() {
   local -r command="$1" tokens="$2" depth="$3"
   ((depth < MAX_PAYLOAD_DEPTH)) || return 1
   local payload payload_verdict lifted=0
   while IFS= read -r -d '' payload; do
     [[ -z "${payload}" ]] && continue
-    payload_verdict="$(classify_command "${payload}" "$((depth + 1))")"
+    payload_verdict="$(classify::classify_command "${payload}" "$((depth + 1))")"
     # An untrustworthy inner scan must not be reported as a clean allow.
     if [[ "${payload_verdict}" == inactive* ]]; then
       printf 'inactive\n'
@@ -210,7 +210,7 @@ function classify_wrapper_payloads() {
 # @arg $2 depth wrapper-payload recursion depth, 0 for the command the user actually ran
 # @stdout allow, warn, or deny:loop / deny:kill / deny:task-poll followed by a tab and the invoked
 #         tool (or, for task-poll, the polled path)
-function classify_command() {
+function classify::classify_command() {
   local -r command="$1" depth="${2:-0}"
   if [[ "${command}" != *pgrep* && "${command}" != *pkill* && "${command}" != *.output* ]]; then
     printf 'allow\n'
@@ -250,7 +250,7 @@ function classify_command() {
     [[ -z "${idx}" ]] && continue
     args="$(scanner::invocation_args "${tokens}" "${idx}")"
     scanner::has_flag "${args}" '--full' 'f' || continue
-    if invocation_finding="$(classify_invocation cmd_tokens "${command}" "${tokens}" "${idx}" "${name}" \
+    if invocation_finding="$(classify::classify_invocation cmd_tokens "${command}" "${tokens}" "${idx}" "${name}" \
       "${args}")"; then
       case "${invocation_finding}" in
         deny:*)
@@ -266,14 +266,14 @@ function classify_command() {
   # thought of the command; a pgrep deny above has already returned.
   if [[ "${command}" == *.output* ]]; then
     local polled
-    if polled="$(task_poll_detected "${command}" "${tokens}")"; then
+    if polled="$(classify::task_poll_detected "${command}" "${tokens}")"; then
       printf 'deny:task-poll\t%s\n' "${polled}"
       return 0
     fi
   fi
 
   local payload_finding
-  if payload_finding="$(classify_wrapper_payloads "${command}" "${tokens}" "${depth}")"; then
+  if payload_finding="$(classify::classify_wrapper_payloads "${command}" "${tokens}" "${depth}")"; then
     case "${payload_finding}" in
       warn) verdict='warn' ;;
       *)
@@ -296,7 +296,7 @@ function classify_command() {
 # @stdout on failure, one `{"systemMessage":...}` line
 # @exitcode 0 every precondition holds
 # @exitcode 1 one does not; the message is already on stdout
-function inspect_preconditions() {
+function classify::inspect_preconditions() {
   if ! command -v jq > /dev/null 2>&1; then
     printf '{"systemMessage":"%s"}\n' \
       "${HOOK_NAME}: jq not found on PATH; the pgrep poll-loop guard is INACTIVE for this command."
@@ -326,16 +326,16 @@ function inspect_preconditions() {
 # @exitcode 0 a reason was printed
 # @exitcode 1 the rule does not apply, or did not fire; nothing printed
 # @exitcode 2 the rescan failed; the caller reports the scanner as INACTIVE
-function repeat_tier_reason() {
+function classify::repeat_tier_reason() {
   local -r command="$1" session_id="$2"
   [[ "${session_id}" =~ ^[A-Za-z0-9._-]+$ && "${session_id}" != '.' && "${session_id}" != '..' ]] || return 1
   [[ "${command}" == *pgrep* || "${command}" == *.output* ]] || return 1
   local keys rt_tokens reason
   # Split out of the nested substitution deliberately: with the scan inlined
-  # into probe_keys' arguments, a scanner failure would be swallowed by the
+  # into classify::probe_keys' arguments, a scanner failure would be swallowed by the
   # `|| keys=''` below and read as "this command carries no probe key".
   rt_tokens="$(scanner::scan_command "${command}")" || return 2
-  keys="$(probe_keys "${command}" "${rt_tokens}")" || keys=''
+  keys="$(classify::probe_keys "${command}" "${rt_tokens}")" || keys=''
   [[ -n "${keys}" ]] || return 1
   # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
   # whole command substitution off errexit's radar for its entire dynamic
@@ -353,7 +353,7 @@ function repeat_tier_reason() {
 #              stay small enough to parse cheaply -- see the header of this file.
 # @arg $1 input the raw hook JSON payload, exactly as read from stdin
 # @stdout the hook's JSON response
-function inspect_command() {
+function classify::inspect_command() {
   local -r input="$1"
 
   # Past the short-circuit the scanner is about to be needed, so resolve it now.
@@ -366,7 +366,7 @@ function inspect_command() {
   # with no trigger token returns `{}` whether or not `jq` exists, so warning
   # about an inactive guard on those calls is noise about a call the guard was
   # never going to act on. The first pgrep loop the user types still warns them.
-  inspect_preconditions || return 0
+  classify::inspect_preconditions || return 0
 
   # One jq spawn instead of two, since it runs on every Bash call. The command
   # can contain literal tabs and newlines, which @tsv escapes as `\t` / `\n`
@@ -391,8 +391,8 @@ function inspect_command() {
   command="$(printf '%b' "${command_escaped}")"
 
   local decision deny_detail
-  IFS=$'\t' read -r decision deny_detail <<< "$(classify_command "${command}")"
-  # main owns stdout; classify_command does not, so it hands the condition up as
+  IFS=$'\t' read -r decision deny_detail <<< "$(classify::classify_command "${command}")"
+  # main owns stdout; classify::classify_command does not, so it hands the condition up as
   # a verdict and the message is emitted here.
   case "${decision}" in
     'inactive')
@@ -410,7 +410,7 @@ function inspect_command() {
   # `|| repeat_rc=$?` rather than a plain assignment: the `||` keeps the whole
   # substitution -- and repeat::repeat_check inside it -- off errexit's radar, and the
   # status tells a rescan failure (2) apart from "no rule fired" (1).
-  repeat_reason="$(repeat_tier_reason "${command}" "${session_id}")" || repeat_rc=$?
+  repeat_reason="$(classify::repeat_tier_reason "${command}" "${session_id}")" || repeat_rc=$?
   if ((repeat_rc == 2)); then
     printf '{"systemMessage":"%s"}\n' \
       "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."

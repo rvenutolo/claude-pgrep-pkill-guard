@@ -28,11 +28,11 @@ function make_parts_fixture() {
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   'tokens.sh:tokens::is_keyword'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   printf 'function tokens::is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
-  printf 'function inspect_command() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"
+  printf 'function classify::inspect_command() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"
   git -C "${root}" init --quiet
   git -C "${root}" add --all
 }
@@ -73,7 +73,7 @@ BODY
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure
-  assert_output --partial 'hooks/lib/classify.sh does not define inspect_command()'
+  assert_output --partial 'hooks/lib/classify.sh does not define classify::inspect_command()'
   # The other row is intact and must not be dragged into the verdict.
   refute_output --partial 'tokens.sh does not define'
 }
@@ -123,7 +123,7 @@ BODY
 readonly -a GUARD_PARTS=(
   'tokens.sh:tokens::is_keyword'
   'tokens.sh:tokens::is_keyword'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   git -C "${root}" add --all
@@ -139,7 +139,7 @@ BODY
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   'tokens.sh'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   git -C "${root}" add --all
@@ -157,7 +157,7 @@ BODY
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   'tokens.sh:tokens::is_keyword'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   printf 'function tokens::is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
@@ -175,7 +175,7 @@ BODY
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   'tokens.sh:is_keyword:extra'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   git -C "${root}" add --all
@@ -192,7 +192,7 @@ BODY
   make_parts_fixture "${root}"
   cat > "${root}/hooks/lib/classify.sh" << 'PART'
 function outer() {
-  function inspect_command() {
+  function classify::inspect_command() {
     :
   }
 }
@@ -200,7 +200,7 @@ PART
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure
-  assert_output --partial 'does not define inspect_command()'
+  assert_output --partial 'does not define classify::inspect_command()'
 }
 
 @test "guard parts: a comment inside the table is not read as a row" {
@@ -211,7 +211,7 @@ PART
 readonly -a GUARD_PARTS=(
   # low-level helpers first
   'tokens.sh:tokens::is_keyword'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   git -C "${root}" add --all
@@ -229,7 +229,7 @@ BODY
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   'tokens.sh:tokens::is_keyword'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
 )
 readonly -a SOMETHING_ELSE=(
   'not-a-part.sh:not_a_function'

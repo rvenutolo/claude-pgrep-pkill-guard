@@ -37,7 +37,7 @@ readonly REPEAT_MAX_ENTRIES=5000
 #              rather than a predictable `${file}.$$` name so a planted symlink at the temp name
 #              can't turn it into a truncate-and-write-elsewhere primitive.
 # @arg $1 session_id the session id, already validated as a plain file name
-# @arg $2 keys the probe keys from probe_keys
+# @arg $2 keys the probe keys from classify::probe_keys
 # @stdout the deny reason when a key reaches the threshold; nothing otherwise
 # @exitcode 0 always
 function repeat::repeat_check() {

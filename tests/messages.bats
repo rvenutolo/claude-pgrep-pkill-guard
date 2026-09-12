@@ -19,7 +19,7 @@ function setup() {
       context) haystack="$(context_of "${json}")" ;;
       decision) haystack="$(decision_of "${json}")" ;;
       *)
-        echo "unknown field: ${field}" >&2
+        printf 'unknown field: %s\n' "${field}" >&2
         failures=$((failures + 1))
         continue
         ;;
@@ -33,20 +33,20 @@ function setup() {
       lacks) [[ "${haystack}" != *"${needle}"* ]] || ok=0 ;;
       equals) [[ "${haystack}" == "${needle}" ]] || ok=0 ;;
       *)
-        echo "unknown mode: ${mode}" >&2
+        printf 'unknown mode: %s\n' "${mode}" >&2
         ok=0
         ;;
     esac
 
     if ((ok == 0)); then
-      echo "message case failed: ${command}" >&2
-      echo "  field=${field} mode=${mode} needle=${needle}" >&2
-      echo "  got: ${haystack:0:200}" >&2
+      printf 'message case failed: %s\n' "${command}" >&2
+      printf '  field=%s mode=%s needle=%s\n' "${field}" "${mode}" "${needle}" >&2
+      printf '  got: %s\n' "${haystack:0:200}" >&2
       failures=$((failures + 1))
     fi
   done < "${CASES}"
 
-  echo "checked ${count} message rows, ${failures} failures" >&3
+  printf 'checked %s message rows, %s failures\n' "${count}" "${failures}" >&3
   [ "${count}" -eq 27 ]
   [ "${failures}" -eq 0 ]
 }

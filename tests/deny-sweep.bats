@@ -18,19 +18,19 @@ function setup() {
       *)
         # Without this arm an unknown kind leaves needle empty, and
         # [[ "$reason" != *""* ]] can never fire — a silent pass.
-        echo "unknown deny kind: ${expected}" >&2
+        printf 'unknown deny kind: %s\n' "${expected}" >&2
         failures=$((failures + 1))
         continue
         ;;
     esac
     reason="$(reason_of "${json}")"
     if [[ "${reason}" != *"${needle}"* ]]; then
-      echo "FAIL: '${command}' (${expected}) reason lacks '${needle}'" >&2
+      printf "FAIL: '%s' (%s) reason lacks '%s'\n" "${command}" "${expected}" "${needle}" >&2
       failures=$((failures + 1))
     fi
   done < "${CASES}"
 
-  echo "swept ${count} deny rows, ${failures} failures" >&3
+  printf 'swept %s deny rows, %s failures\n' "${count}" "${failures}" >&3
   # A sweep that finds no deny rows is a broken sweep, not a clean pass.
   [ "${count}" -gt 0 ]
   [ "${failures}" -eq 0 ]

@@ -342,39 +342,39 @@ inactive_probe() {
 # @description Build a throwaway hook copy plus a stub PATH holding only what the
 #              hook needs before it reaches the awk check.
 # @noargs
-# @stdout nothing; sets PROBE_DIR and STUB_DIR in the caller
+# @stdout nothing; sets probe_dir and stub_dir in the caller
 build_inactive_fixture() {
   local binary target
-  PROBE_DIR="${BATS_TEST_TMPDIR}/probe"
-  STUB_DIR="${PROBE_DIR}/bin"
-  mkdir -p "${STUB_DIR}"
+  probe_dir="${BATS_TEST_TMPDIR}/probe"
+  stub_dir="${probe_dir}/bin"
+  mkdir -p "${stub_dir}"
   for binary in bash jq dirname cat; do
     target="$(command -v "${binary}" || printf '/nonexistent')" # a missing binary becomes a dangling stub, on purpose
-    ln -s "${target}" "${STUB_DIR}/${binary}" || true           # a failed link leaves the stub PATH short, by design
+    ln -s "${target}" "${stub_dir}/${binary}" || true           # a failed link leaves the stub PATH short, by design
   done
-  cp "${HOOK}" "${PROBE_DIR}/hook.sh"
-  chmod +x "${PROBE_DIR}/hook.sh"
+  cp "${HOOK}" "${probe_dir}/hook.sh"
+  chmod +x "${probe_dir}/hook.sh"
   # The body too, or the entry script stops at its own missing-sibling branch and
   # never reaches the awk and scanner checks these probes exist to exercise --
   # they would report `inactive` for the wrong reason and pass regardless (#55).
-  cp "${BODY}" "${PROBE_DIR}/pgrep-pkill-guard-body.sh"
+  cp "${BODY}" "${probe_dir}/pgrep-pkill-guard-body.sh"
   # And the parts the body sources, for the same reason.
-  cp -R "${LIB_DIR}" "${PROBE_DIR}/lib"
-  cp "${SCANNER}" "${PROBE_DIR}/pgrep-scan.awk"
+  cp -R "${LIB_DIR}" "${probe_dir}/lib"
+  cp "${SCANNER}" "${probe_dir}/pgrep-scan.awk"
 }
 
 @test "scanner: a missing awk announces the guard inactive" {
-  local PROBE_DIR STUB_DIR
+  local probe_dir stub_dir
   build_inactive_fixture
-  run inactive_probe "${PROBE_DIR}/hook.sh" "${STUB_DIR}"
+  run inactive_probe "${probe_dir}/hook.sh" "${stub_dir}"
   assert_output 'inactive'
 }
 
 @test "scanner: a missing scanner announces the guard inactive" {
-  local PROBE_DIR STUB_DIR
+  local probe_dir stub_dir
   build_inactive_fixture
-  rm -f -- "${PROBE_DIR}/pgrep-scan.awk"
-  run inactive_probe "${PROBE_DIR}/hook.sh" "${PATH}"
+  rm -f -- "${probe_dir}/pgrep-scan.awk"
+  run inactive_probe "${probe_dir}/hook.sh" "${PATH}"
   assert_output 'inactive'
 }
 

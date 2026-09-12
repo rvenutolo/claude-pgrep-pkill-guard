@@ -146,13 +146,13 @@ function segment_pipe_carry() {
   local -n carry_heredoc="$1" carry_text="$2" carry_text_set="$3"
   local -r seg_cmd="$4" seg_heredoc="$5" seg_redir="$6"
   shift 6
-  local seg_ok=1 w payload
+  local seg_ok=1 seg_word payload
   carry_heredoc=''
   carry_text=''
   carry_text_set=0
   ((seg_redir == 1)) && seg_ok=0
-  for w in "$@"; do
-    [[ "${w}" == '-' ]] || seg_ok=0
+  for seg_word in "$@"; do
+    [[ "${seg_word}" == '-' ]] || seg_ok=0
   done
   if ((seg_ok == 1)) && [[ "${seg_cmd}" == 'cat' && -n "${seg_heredoc}" ]]; then
     carry_heredoc="${seg_heredoc}"

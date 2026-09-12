@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-bats-libs-in-sync"
   ACTION_YML="${REPO_DIR}/.github/actions/bats-ambient/action.yml"

@@ -120,7 +120,7 @@
 #              way.
 # @noargs
 # @stdout nothing; the seed banner goes to fd 3
-setup_file() {
+function setup_file() {
   export FUZZ_SEED="${FUZZ_SEED:-${RANDOM}}"
   export FUZZ_N="${FUZZ_N:-200}"
   # Generate the corpus ONCE for the whole file and hand it to the tests through
@@ -147,7 +147,7 @@ setup_file() {
     "${FUZZ_SEED}" "${FUZZ_N}" "${digest%% *}" >&3
 }
 
-setup() {
+function setup() {
   load 'test_helper/common'
   # LC_ALL=C twice over, and both are load-bearing. For `awk` it is the same
   # requirement tests/scanner.bats documents: the scanner emits BYTE offsets and
@@ -173,7 +173,7 @@ setup() {
 #              it, and top-level work runs on every one of those passes.
 # @noargs
 # @stdout nothing; sets FUZZ_FRAGMENTS in the caller
-fuzz_catalogue() {
+function fuzz_catalogue() {
   FUZZ_FRAGMENTS=(
     # Quote openers with no closer, and their backslash-escaped forms. An
     # unclosed quote is what makes quote parity the scanner's most fragile
@@ -261,7 +261,7 @@ fuzz_catalogue() {
 #              accidentally omitted and no quoting accident silently drops one.
 # @noargs
 # @stdout nothing; sets FUZZ_ALPHABET in the caller
-fuzz_alphabet() {
+function fuzz_alphabet() {
   local i byte
   FUZZ_ALPHABET=''
   for ((i = 32; i <= 126; i++)); do
@@ -286,7 +286,7 @@ fuzz_alphabet() {
 #              satisfied by accident.
 # @noargs
 # @stdout nothing; sets FUZZ_CASE in the caller
-fuzz_case() {
+function fuzz_case() {
   local -r count="${#FUZZ_FRAGMENTS[@]}"
   local -r parts=$((RANDOM % 10 + 3))
   local i
@@ -322,7 +322,7 @@ fuzz_case() {
 #         subshell bats wraps every @test in -- invisible to the rest of the
 #         file, and exactly the SC2030/SC2031 shape shellcheck warns about.
 # @stdout nothing; sets FUZZ_CORPUS in the caller
-fuzz_corpus() {
+function fuzz_corpus() {
   local -r wanted="${1:-${FUZZ_N}}"
   local -r seed="${2:-${FUZZ_SEED}}"
   local i
@@ -342,7 +342,7 @@ fuzz_corpus() {
 #              nothing from the ambient userland the compat legs run against.
 # @noargs
 # @stdout nothing; sets FUZZ_CORPUS in the caller
-fuzz_read_corpus() {
+function fuzz_read_corpus() {
   local item
   FUZZ_CORPUS=()
   while IFS= read -r -d '' item; do
@@ -359,7 +359,7 @@ fuzz_read_corpus() {
 # @stdout the token stream
 # @exitcode whatever awk exited with -- the caller checks it, this helper does
 #           not swallow it
-scan_terminated() {
+function scan_terminated() {
   printf '%s\n' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
 
@@ -370,7 +370,7 @@ scan_terminated() {
 # @arg $1 command the command string to tokenize
 # @stdout the token stream
 # @exitcode whatever awk exited with
-scan_raw() {
+function scan_raw() {
   printf '%s' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
 
@@ -397,7 +397,7 @@ scan_raw() {
 # @stdout nothing; sets TRAILER_REASON in the caller on failure
 # @exitcode 0 trailer present, well-formed, and carrying ${2}
 # @exitcode 1 otherwise
-trailer_check() {
+function trailer_check() {
   local -r out="$1"
   local -r expect="$2"
   # `$(...)` already stripped any trailing newline, and the scanner emits none
@@ -430,7 +430,7 @@ trailer_check() {
 # @arg $2 input  the offending input
 # @arg $3 detail what went wrong
 # @exitcode 1 always
-fuzz_fail() {
+function fuzz_fail() {
   local -r index="$1"
   local -r input="$2"
   local -r detail="$3"
@@ -462,7 +462,7 @@ fuzz_fail() {
 # @stdout nothing; writes elapsed seconds to BATS_FILE_TMPDIR
 # @exitcode 0 every case in the corpus held
 # @exitcode 1 a case failed; fuzz_fail has already printed it on fd 3
-fuzz_scan_pass() {
+function fuzz_scan_pass() {
   local -r mode="$1"
   local -r scan="scan_${mode}"
   local i status expect out

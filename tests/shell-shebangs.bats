@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-shell-shebangs"
 }

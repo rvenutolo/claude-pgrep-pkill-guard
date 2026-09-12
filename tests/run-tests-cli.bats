@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   RUN_TESTS="${REPO_DIR}/run-tests"
 }

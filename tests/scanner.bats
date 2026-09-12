@@ -13,7 +13,7 @@
 # shebang-less file.
 # shellcheck disable=SC2016 # file-level: the fragments below are scanner input, not substitutions
 
-setup() {
+function setup() {
   load 'test_helper/common'
 }
 
@@ -25,7 +25,7 @@ setup() {
 #              how it tells `foo` from `foo\n` without depending on RS.
 # @arg $1 command the command string to tokenize
 # @stdout the token stream, one "<offset>\t<token>" record per line
-scan() {
+function scan() {
   printf '%s\n' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
 
@@ -35,7 +35,7 @@ scan() {
 #              instead of a word boundary.
 # @noargs
 # @stdout one tab character
-tab() {
+function tab() {
   printf '\t'
 }
 
@@ -326,7 +326,7 @@ tab() {
 # @arg $1 script path to the hook copy to run
 # @arg $2 path the PATH that copy should see
 # @stdout inactive or active
-inactive_probe() {
+function inactive_probe() {
   local -r script="$1"
   local -r path="$2"
   local output
@@ -343,7 +343,7 @@ inactive_probe() {
 #              hook needs before it reaches the awk check.
 # @noargs
 # @stdout nothing; sets probe_dir and stub_dir in the caller
-build_inactive_fixture() {
+function build_inactive_fixture() {
   local binary target
   probe_dir="${BATS_TEST_TMPDIR}/probe"
   stub_dir="${probe_dir}/bin"
@@ -391,7 +391,7 @@ build_inactive_fixture() {
 #              makes bash print a syntax error, and only stdout is the contract.
 # @noargs
 # @stdout the hook's JSON verdict
-orphan_probe() {
+function orphan_probe() {
   local -r copy="${BATS_TEST_TMPDIR}/pgrep-pkill-guard.sh"
   cp "${HOOK}" "${copy}"
   chmod +x "${copy}"
@@ -423,7 +423,7 @@ orphan_probe() {
 #              script too, so what the probe finds -- or does not -- is lib/.
 # @noargs
 # @stdout the hook's JSON verdict
-loader_probe() {
+function loader_probe() {
   cp "${BODY}" "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   orphan_probe
 }

@@ -1,4 +1,4 @@
-setup() {
+function setup() {
   load 'test_helper/common'
   CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
 }
@@ -9,7 +9,7 @@ setup() {
 # @arg $2 expected the recorded verdict: allow, warn, or deny:<kind>
 # @exitcode 0 the row still holds
 # @exitcode 1 it does not
-assert_row() {
+function assert_row() {
   local -r command="$1"
   local -r expected="$2"
   local json decision reason needle

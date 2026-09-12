@@ -62,7 +62,7 @@ readonly -a GUARD_PARTS=(
   'loops.sh:loops::loop_context'
   'messages.sh:messages::emit_deny'
   'consumption.sh:consumption::result_is_consumed'
-  'wrappers.sh:shell_wrapper_payloads'
+  'wrappers.sh:wrappers::shell_wrapper_payloads'
   'repeat.sh:repeat_check'
   'classify.sh:inspect_command'
   'human.sh:human_mode'

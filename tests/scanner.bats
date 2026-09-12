@@ -91,7 +91,7 @@ tab() {
 }
 
 @test "scanner: a heredoc body marker carries the body offset and length" {
-  # The marker is what shell_wrapper_payloads slices a wrapper's body by, so its
+  # The marker is what wrappers::shell_wrapper_payloads slices a wrapper's body by, so its
   # offset and length are asserted exactly: the body is `pkill --full x\n`, 15
   # bytes starting after the 12-byte `cat <<'EOF'\n`.
   local out
@@ -452,7 +452,7 @@ loader_probe() {
   # The file IS there, so this is the other branch: the loader must say the
   # part did not define its paired function, and name that function, rather
   # than call a present file missing.
-  [[ "${out}" == *'did not define shell_wrapper_payloads'* ]]
+  [[ "${out}" == *'did not define wrappers::shell_wrapper_payloads'* ]]
   [[ "${out}" != *'is missing or unreadable'* ]]
   [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
 }

@@ -197,7 +197,7 @@ function classify_wrapper_payloads() {
         ;;
       warn) lifted=1 ;;
     esac
-  done < <(shell_wrapper_payloads "${command}" "${tokens}")
+  done < <(wrappers::shell_wrapper_payloads "${command}" "${tokens}")
   if ((lifted == 1)); then
     printf 'warn\n'
     return 0

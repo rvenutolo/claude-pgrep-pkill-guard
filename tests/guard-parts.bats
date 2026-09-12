@@ -94,7 +94,7 @@ BODY
   # every function in it is undefined at runtime.
   local -r root="${BATS_TEST_TMPDIR}/unlisted"
   make_parts_fixture "${root}"
-  printf 'function loop_context() {\n  :\n}\n' > "${root}/hooks/lib/loops.sh"
+  printf 'function loops::loop_context() {\n  :\n}\n' > "${root}/hooks/lib/loops.sh"
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure

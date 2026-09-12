@@ -22,7 +22,7 @@
 # @arg $1 tokens the token stream from scanner::scan_command
 # @arg $2 target index of the invocation token
 # @stdout none, cond, or body
-function loop_context() {
+function loops::loop_context() {
   local -r tokens="$1" target="$2"
   local -a stack=()
   local idx=0 at_cmd=1 dollar=0 offset token
@@ -113,18 +113,18 @@ function loop_context() {
 
 # @description True when the loop body enclosing an invocation contains a break, exit or return in
 #              command position, which makes a body-position pgrep the effective termination test.
-#              A `$(`, a backtick, or a plain `(` opens a scope barrier, mirroring loop_context: a
+#              A `$(`, a backtick, or a plain `(` opens a scope barrier, mirroring loops::loop_context: a
 #              `do`/`done`/`break` inside a substitution belongs to the shell that substitution runs,
 #              so it must neither pop the enclosing body's depth nor count as its terminator. Without
 #              the barrier a literal `done` inside `$( )` zeroed the depth and hid a real `break` that
-#              followed it, and loop_context (which has the barrier) answered `body` for the same
+#              followed it, and loops::loop_context (which has the barrier) answered `body` for the same
 #              command -- two readers of one structure disagreeing (#8). The barrier is opaque in
 #              both directions: while one is open, every loop keyword is ignored.
 # @arg $1 tokens the token stream from scanner::scan_command
 # @arg $2 target index of the invocation token
 # @exitcode 0 a terminator is present in the enclosing body
 # @exitcode 1 no terminator
-function body_has_terminator() {
+function loops::body_has_terminator() {
   local -r tokens="$1" target="$2"
   local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token
   local -a barrier=()
@@ -151,7 +151,7 @@ function body_has_terminator() {
         fi
         ;;
       ')')
-        # Same rule as loop_context: a case-pattern `)` has no opener and must
+        # Same rule as loops::loop_context: a case-pattern `)` has no opener and must
         # not pop anything.
         if ((${#barrier[@]} > 0)) && [[ "${barrier[${#barrier[@]} - 1]}" == 'subshell' ||
           "${barrier[${#barrier[@]} - 1]}" == 'capture' ]]; then
@@ -190,14 +190,14 @@ function body_has_terminator() {
 #              "$p"; done` (head_idx is the `while` token itself, invoked from the forward pipeline
 #              scan). Either way this walks forward past the head's condition/iterable list to find
 #              the matching `do`, then scans that body (respecting nested do/done depth, the way
-#              body_has_terminator does) for a command-position `kill`. A loop whose body never
+#              loops::body_has_terminator does) for a command-position `kill`. A loop whose body never
 #              kills (`for f in $(pgrep -f java); do echo "$f"; done`) must return 1 so the caller
 #              falls through to the ordinary warn path.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 head_idx index of the `in`/`while`/`until` token whose body's `do` follows
 # @exitcode 0 the loop body kills
 # @exitcode 1 it does not, or no body was found
-function loop_body_has_kill() {
+function loops::loop_body_has_kill() {
   local -n toks="$1"
   local -r head_idx="$2"
   local idx=$((head_idx + 1)) token found_do=0 body_depth=1 at_cmd=1

@@ -28,7 +28,7 @@ readonly TASK_OUTPUT_PATH_RE='claude-[0-9]+/[^[:space:]]*/tasks/[^[:space:]/]+\.
 #              pattern worth chasing). Only cond position, or body position with a
 #              break/exit/return, is a poll: a lone read, a `while read ...; done < <path>` (the
 #              path sits after `done`), and an echoed loop (its keywords are masked, so
-#              loop_context sees no loop) all report nothing.
+#              loops::loop_context sees no loop) all report nothing.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @stdout the polled path, starting at `claude-`, when one is found
@@ -63,9 +63,9 @@ function task_poll_detected() {
       done
     fi
     if ((is_ref == 1)); then
-      context="$(loop_context "${tokens}" "${idx}")"
+      context="$(loops::loop_context "${tokens}" "${idx}")"
       if [[ "${context}" == 'cond' ]] \
-        || { [[ "${context}" == 'body' ]] && body_has_terminator "${tokens}" "${idx}"; }; then
+        || { [[ "${context}" == 'body' ]] && loops::body_has_terminator "${tokens}" "${idx}"; }; then
         printf '%s\n' "${path}"
         return 0
       fi
@@ -146,7 +146,7 @@ function classify_invocation() {
     printf 'deny:kill\t%s\n' "${name}"
     return 0
   fi
-  context="$(loop_context "${tokens}" "${idx}")"
+  context="$(loops::loop_context "${tokens}" "${idx}")"
   case "${context}" in
     cond)
       printf 'deny:loop\t%s\n' "${name}"
@@ -154,7 +154,7 @@ function classify_invocation() {
       ;;
     body)
       if result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}" \
-        && body_has_terminator "${tokens}" "${idx}"; then
+        && loops::body_has_terminator "${tokens}" "${idx}"; then
         printf 'deny:loop\t%s\n' "${name}"
         return 0
       fi

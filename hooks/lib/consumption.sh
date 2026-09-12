@@ -42,7 +42,7 @@ function is_xargs_value_option() {
 #              heads one, with flags and prefix words allowed in between: `pgrep --full x | grep -i
 #              kill` merely searches for the word and kills nothing. A segment headed by
 #              `while`/`until` (`pgrep -f java | while read -r p; do kill "$p"; done`) defers to
-#              loop_body_has_kill rather than being written off as `other`.
+#              loops::loop_body_has_kill rather than being written off as `other`.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 target index of the invocation token
 # @exitcode 0 a kill consumes the output downstream
@@ -77,7 +77,7 @@ function feeds_a_kill_forward() {
                 xargs_skip=0
                 ;;
               'while' | 'until')
-                loop_body_has_kill "${tokens_var}" "${idx}" && return 0
+                loops::loop_body_has_kill "${tokens_var}" "${idx}" && return 0
                 segment='other'
                 ;;
               *)
@@ -145,9 +145,9 @@ function kill_in_command_position() {
 #              `-s`/`--signal` (`kill -s TERM $(pgrep ...)`) is also skipped rather than treated as an
 #              unrecognized stop word: it is recognized by peeking at the token immediately before
 #              it, since scanning backward means the value is reached before its flag. A bare `in` is
-#              only a for/select head -- and thus worth deferring to loop_body_has_kill -- when the
+#              only a for/select head -- and thus worth deferring to loops::loop_body_has_kill -- when the
 #              token two back (past the loop variable) is actually `for`/`select`; otherwise it is an
-#              ordinary argument word (`echo in $(...)`) and the forward walk in loop_body_has_kill
+#              ordinary argument word (`echo in $(...)`) and the forward walk in loops::loop_body_has_kill
 #              could cross into an unrelated later loop's body.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 target index of the invocation token
@@ -171,7 +171,7 @@ function feeds_a_kill_backward() {
         ;;
       'in')
         if ((k >= 2)) && { [[ "${toks[k - 2]}" == 'for' ]] || [[ "${toks[k - 2]}" == 'select' ]]; }; then
-          loop_body_has_kill "${tokens_var}" "${k}" && return 0
+          loops::loop_body_has_kill "${tokens_var}" "${k}" && return 0
         fi
         return 1
         ;;

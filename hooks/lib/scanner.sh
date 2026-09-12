@@ -10,11 +10,11 @@
 # (invariant 1).
 
 # @description Resolve the path to the awk scanner and freeze it. Called once, from
-#              inspect_command. HOOK_DIR was resolved by the entry script before it sourced this
+#              classify::inspect_command. HOOK_DIR was resolved by the entry script before it sourced this
 #              file, so this costs no process of its own -- see resolve_hook_dir over there.
 # @set SCANNER the absolute path to pgrep-scan.awk, or the test override
 # @noargs
-function resolve_scanner() {
+function scanner::resolve_scanner() {
   # Test seam: lets the suite point the hook at a deliberately broken scanner to
   # prove the integrity check deactivates the guard loudly. Production never sets
   # it; the default is resolved relative to the entry script.
@@ -32,7 +32,7 @@ function resolve_scanner() {
 # @exitcode 0 the stream is trustworthy
 # @exitcode 1 the scanner tokenized the command incorrectly; the caller must
 #             deactivate the guard rather than trust the stream
-function scan_command() {
+function scanner::scan_command() {
   local -r command="$1"
   local raw expected
   # The scanner reads lines and reassembles them, so the input MUST end with
@@ -56,10 +56,10 @@ function scan_command() {
 #              this the assignment hides the invocation from the whole scan -- not just from the
 #              kill/loop tiers -- because `at_cmd` drops to 0 and the pgrep/pkill token itself is
 #              never recorded.
-# @arg $1 tokens newline-separated "<offset>\t<token>" records from scan_command
+# @arg $1 tokens newline-separated "<offset>\t<token>" records from scanner::scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>"
-function find_invocations() {
-  # shellcheck disable=SC2034 # written through prefix_chain_step's namerefs in lib/tokens.sh
+function scanner::find_invocations() {
+  # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs in lib/tokens.sh
   local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0
   local -r tokens="$1"
   while IFS=$'\t' read -r offset token; do
@@ -68,7 +68,7 @@ function find_invocations() {
     if ((at_cmd == 1)) && [[ "${word}" == 'pgrep' || "${word}" == 'pkill' ]]; then
       printf '%s\t%s\t%s\n' "${idx}" "${offset}" "${word}"
     fi
-    if prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
+    if tokens::prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
       at_cmd=1
     else
       at_cmd=0
@@ -79,17 +79,17 @@ function find_invocations() {
 
 # @description Collect one invocation's argument tokens: everything after the command name, up to
 #              the operator that ends the simple command.
-# @arg $1 tokens the token stream from scan_command
+# @arg $1 tokens the token stream from scanner::scan_command
 # @arg $2 target index of the pgrep/pkill token itself
 # @stdout lines of "<offset>\t<token>"
-function invocation_args() {
+function scanner::invocation_args() {
   local -r tokens="$1"
   local -r target="$2"
   local idx=0 offset token
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((idx > target)); then
-      is_operator "${token}" && break
+      tokens::is_operator "${token}" && break
       printf '%s\t%s\n' "${offset}" "${token}"
     fi
     idx=$((idx + 1))
@@ -103,7 +103,7 @@ function invocation_args() {
 # @arg $3 short the short cluster letter, for example f
 # @exitcode 0 the flag is present
 # @exitcode 1 it is absent
-function has_flag() {
+function scanner::has_flag() {
   local -r args="$1" long="$2" short="$3"
   local offset token
   while IFS=$'\t' read -r offset token; do
@@ -131,7 +131,7 @@ readonly -a PGREP_VALUE_OPTIONS=(
 # @arg $1 command the raw command string
 # @arg $2 args newline-separated "<offset>\t<token>" lines
 # @stdout the operand with surrounding quotes removed, or empty
-function pattern_operand() {
+function scanner::pattern_operand() {
   local -r command="$1" args="$2"
   local operand_offset='' operand_length=0 skip=0 past_terminator=0 offset token value_option
   while IFS=$'\t' read -r offset token; do
@@ -185,7 +185,7 @@ function pattern_operand() {
 # @arg $2 operand the pattern operand, quotes already stripped
 # @exitcode 0 the mitigation holds
 # @exitcode 1 no bracket class, or the bare literal occurs elsewhere
-function bracket_mitigation_holds() {
+function scanner::bracket_mitigation_holds() {
   local -r command="$1" operand="$2"
   [[ -z "${operand}" ]] && return 1
   [[ "${operand}" != *\[?\]* ]] && return 1

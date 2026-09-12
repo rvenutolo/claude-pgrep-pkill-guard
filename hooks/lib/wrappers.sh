@@ -45,7 +45,7 @@ readonly MAX_PAYLOAD_DEPTH=4
 # @stdout the operand budget, when the token names a local wrapper
 # @exitcode 0 the token is a local wrapper
 # @exitcode 1 it is not
-function wrapper_operand_budget() {
+function wrappers::wrapper_operand_budget() {
   local -r token="$1"
   local wrapper
   for wrapper in "${LOCAL_SHELL_WRAPPERS[@]}"; do
@@ -84,7 +84,7 @@ function wrapper_operand_budget() {
 # @stdout the payload text, when there is one
 # @exitcode 0 a payload was printed
 # @exitcode 1 this producer hands the wrapper nothing knowable
-function pipe_producer_payload() {
+function wrappers::pipe_producer_payload() {
   local -r name="$1"
   shift
   local -a literals=()
@@ -121,7 +121,7 @@ function pipe_producer_payload() {
 # @arg $2 text_var name of the carried literal payload variable
 # @arg $3 text_set_var name of the flag saying whether text_var is meaningful
 # @exitcode 0 always; it ends on an assignment
-function pipe_carry_clear() {
+function wrappers::pipe_carry_clear() {
   local -n carry_heredoc="$1" carry_text="$2" carry_text_set="$3"
   carry_heredoc=''
   carry_text=''
@@ -142,7 +142,7 @@ function pipe_carry_clear() {
 # @arg $@ the segment's operand words, quotes already stripped
 # @exitcode 0 always; the caller runs under errexit and a non-zero status here would fire the fail-open trap
 # shellcheck disable=SC2034 # the carry_* namerefs are the caller's variables, which shellcheck cannot follow
-function segment_pipe_carry() {
+function wrappers::segment_pipe_carry() {
   local -n carry_heredoc="$1" carry_text="$2" carry_text_set="$3"
   local -r seg_cmd="$4" seg_heredoc="$5" seg_redir="$6"
   shift 6
@@ -156,7 +156,7 @@ function segment_pipe_carry() {
   done
   if ((seg_ok == 1)) && [[ "${seg_cmd}" == 'cat' && -n "${seg_heredoc}" ]]; then
     carry_heredoc="${seg_heredoc}"
-  elif ((seg_redir == 0)) && payload="$(pipe_producer_payload "${seg_cmd}" "$@")"; then
+  elif ((seg_redir == 0)) && payload="$(wrappers::pipe_producer_payload "${seg_cmd}" "$@")"; then
     carry_text="${payload}"
     carry_text_set=1
   fi
@@ -168,7 +168,7 @@ function segment_pipe_carry() {
 #              A `-c` payload counts only when all three hold: the wrapper is in command position
 #              (so `ssh host bash -c ...` and a bare `echo bash -c ...` are both skipped, since
 #              neither runs the payload here); a `-c` precedes it, in the same simple command,
-#              within the wrapper's operand budget (see wrapper_operand_budget -- this is what
+#              within the wrapper's operand budget (see wrappers::wrapper_operand_budget -- this is what
 #              keeps `bash deploy.sh -c '...'`, where the `-c` belongs to the script, from being
 #              read as a payload); and the raw slice is a single fully quoted word. That last
 #              condition is what keeps the recursion honest -- a double-quoted payload containing
@@ -208,7 +208,7 @@ function segment_pipe_carry() {
 #              from stdin, so the left of the pipe is what it runs -- but only when that side hands
 #              the text through unchanged: `cat` with no operand but `-`, and no redirection of its
 #              own, passes a heredoc body through, and `echo` / `printf` pass a literal operand (see
-#              pipe_producer_payload). A filter may emit something other than what it was given, so
+#              wrappers::pipe_producer_payload). A filter may emit something other than what it was given, so
 #              `sed <<EOF | bash` is not read as a payload -- denying on text that never reaches the
 #              wrapper is a false deny. The wrapper must be the pipe's very NEXT stage, since an
 #              intermediate one (`cat <<EOF | tee f | bash`) can change the text on the way. Past the
@@ -221,18 +221,18 @@ function segment_pipe_carry() {
 #              wrapper (`bash <<< 'script'`).
 #
 #              Payloads are NUL-terminated because a heredoc body is usually several lines and
-#              has to reach classify_command as one command.
+#              has to reach classify::classify_command as one command.
 #
-#              Command position is tracked exactly as find_invocations tracks it, including the
+#              Command position is tracked exactly as scanner::find_invocations tracks it, including the
 #              prefix-word chain, so `sudo bash -c ...` is reached.
 # @arg $1 command the raw command string
-# @arg $2 tokens the token stream from scan_command
+# @arg $2 tokens the token stream from scanner::scan_command
 # @stdout one payload per NUL, quotes stripped; nothing if there are none
-function shell_wrapper_payloads() {
+function wrappers::shell_wrapper_payloads() {
   local -r command="$1" tokens="$2"
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
   local offset token word next_at_cmd raw budget
-  # shellcheck disable=SC2034 # written through prefix_chain_step's namerefs, which shellcheck cannot follow
+  # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
   local heredoc_seq=0 body_seq=0 pending='' leading_pending='' wanted=' ' expect_delim=0 len fd
   local expect_redir_target=0
@@ -315,7 +315,7 @@ function shell_wrapper_payloads() {
       # bare operator can be an operator rather than the target. It ends the
       # simple command and must reach the flush below like any other.
       expect_redir_target=0
-      is_operator "${token}" || continue
+      tokens::is_operator "${token}" || continue
     fi
     if [[ "${token}" != '<NL>' && "${token}" =~ ${redir_re} ]]; then
       [[ "${token}" =~ ${redir_bare_re} ]] && expect_redir_target=1
@@ -333,7 +333,7 @@ function shell_wrapper_payloads() {
       if [[ "${word}" == -*s* && "${word}" != --* ]]; then
         saw_s=1
       fi
-      if is_operator "${token}"; then
+      if tokens::is_operator "${token}"; then
         [[ -n "${pending}" ]] && wanted+="${pending} "
         ((pending_text_set == 1)) && printf '%s\0' "${pending_text}"
         in_wrapper=0
@@ -384,7 +384,7 @@ function shell_wrapper_payloads() {
     # The segment's operand words, kept in case it turns out to be a producer
     # on the left of a pipe. A word still in command position is the command
     # itself or a prefix's own option, neither of which the producer prints.
-    if ((at_cmd == 0)) && ! is_operator "${token}" && ! is_keyword "${token}"; then
+    if ((at_cmd == 0)) && ! tokens::is_operator "${token}" && ! tokens::is_keyword "${token}"; then
       raw="${command:offset:${#token}}"
       if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
         seg_words+=("${raw:1:${#raw}-2}")
@@ -393,31 +393,31 @@ function shell_wrapper_payloads() {
       fi
     fi
 
-    if is_operator "${token}"; then
+    if tokens::is_operator "${token}"; then
       if [[ "${token}" == '|' ]] && ((last_pipe_offset != offset - 1)); then
-        segment_pipe_carry pipe_heredoc pipe_text pipe_text_set \
+        wrappers::segment_pipe_carry pipe_heredoc pipe_text pipe_text_set \
           "${seg_cmd}" "${seg_heredoc}" "${seg_redir}" ${seg_words[@]+"${seg_words[@]}"}
         last_pipe_offset="${offset}"
       elif [[ "${token}" == '|' ]]; then
         # The second `|` of a `||`, which is a conditional list and not a pipe:
         # nothing crosses it, so drop what the first `|` armed.
-        pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
+        wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
         last_pipe_offset="${offset}"
       elif [[ "${token}" == '&' ]] && ((last_pipe_offset == offset - 1)); then
         # `|&` extends the pipe it follows, so the carry it armed stands.
         last_pipe_offset="${offset}"
       else
-        pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
+        wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
       fi
       seg_cmd=''
       seg_heredoc=''
       seg_redir=0
       seg_words=()
       leading_pending=''
-    elif is_keyword "${token}"; then
+    elif tokens::is_keyword "${token}"; then
       leading_pending=''
     fi
-    if prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
+    if tokens::prefix_chain_step "${token}" "${word}" "${at_cmd}" chain chain_skip chain_operands; then
       next_at_cmd=1
     else
       next_at_cmd=0
@@ -425,7 +425,7 @@ function shell_wrapper_payloads() {
     if ((at_cmd == 1 && next_at_cmd == 0)); then
       seg_cmd="${word}"
     fi
-    if ((at_cmd == 1)) && budget="$(wrapper_operand_budget "${word}")"; then
+    if ((at_cmd == 1)) && budget="$(wrappers::wrapper_operand_budget "${word}")"; then
       in_wrapper=1
       saw_c=0
       saw_s=0
@@ -444,11 +444,11 @@ function shell_wrapper_payloads() {
         pending_text="${pipe_text}"
         pending_text_set=1
       fi
-      pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
+      wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
     elif ((at_cmd == 1 && next_at_cmd == 0)); then
       # A command word that is not a local wrapper: whatever the pipe carried is
       # this command's input, and nothing here runs it as a script.
-      pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
+      wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
     fi
     at_cmd="${next_at_cmd}"
   done <<< "${tokens}"

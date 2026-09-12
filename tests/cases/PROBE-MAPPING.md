@@ -3,8 +3,8 @@
 `run_scanner_tests` in the pre-port `hooks/pgrep-pkill-guard.sh` (lines 2670–2949)
 held **64 `assert_equals` calls**. They were not uniform: roughly half drove the
 awk scanner's token stream, and the rest reached into bash internals
-(`has_flag`, `pattern_operand`, `bracket_mitigation_holds`, `loop_context`,
-`body_has_terminator`, `main`'s private jq decode) through probe helpers that no
+(`scanner::has_flag`, `scanner::pattern_operand`, `scanner::bracket_mitigation_holds`, `loops::loop_context`,
+`loops::body_has_terminator`, `main`'s private jq decode) through probe helpers that no
 subprocess-only test can call.
 
 This table records the disposition of every one of the 64, per spec amendment
@@ -76,9 +76,9 @@ Assertion 8 asserts that the pkill inside `$( )` in an **unquoted** heredoc body
 **is** seen (offset 12) — re-entering code context means the invocation is
 visible. The masking case is the **quoted** delimiter, assertion 6.
 
-## `flag_probe` → `has_flag` (5) → `tests/cases/verdicts.tsv`
+## `flag_probe` → `scanner::has_flag` (5) → `tests/cases/verdicts.tsv`
 
-The end-to-end lever is that `classify_command` `continue`s past any invocation
+The end-to-end lever is that `classify::classify_command` `continue`s past any invocation
 without `--full`, and that `--ignore-ancestors` clears a kill.
 
 | #   | Hook line | Original label              | Appended verdict row                                | Verdict     | Kind                                                           |
@@ -89,9 +89,9 @@ without `--full`, and that `--ignore-ancestors` clears a kill.
 | 35  | 2713      | long ignore-ancestors       | `pkill --ignore-ancestors --full zzflaglongia`      | `allow`     | discriminating (vs the existing `pkill --full java` deny rows) |
 | 36  | 2716      | short `-A`                  | `pkill -Af zzflagshortia`                           | `allow`     | discriminating                                                 |
 
-## `pattern_probe` → `pattern_operand` (6) → `tests/cases/verdicts.tsv`
+## `pattern_probe` → `scanner::pattern_operand` (6) → `tests/cases/verdicts.tsv`
 
-The end-to-end lever is `bracket_mitigation_holds`, the only consumer of the
+The end-to-end lever is `scanner::bracket_mitigation_holds`, the only consumer of the
 operand: a correctly extracted `[x]`-class operand clears a `pkill` to `allow`,
 while any wrong slice leaves the mitigation unproven and the command denies.
 
@@ -100,11 +100,11 @@ while any wrong slice leaves the mitigation unproven and the command denies.
 | 37  | 2703      | line continuation keeps later byte offsets aligned | a `pkill --full` whose `"[u]nittest discover"` operand sits on the next line, after a backslash line continuation | `allow` | discriminating — a one-byte offset shift slices a different operand and denies                                                                                                   |
 | 38  | 2718      | operand is last non-flag arg                       | `pkill --full "[z]zoperandlast discover"`                                                                         | `allow` | discriminating                                                                                                                                                                   |
 | 39  | 2720      | operand skips a flag value                         | `pkill --full "[z]zoperandskip" --delimiter ,`                                                                    | `allow` | discriminating — the value option is placed **last** on purpose; with the original's `--delimiter , java` ordering the trailing operand wins either way and the skip is untested |
-| 40  | 2722      | operand ignores a redirection target               | `pkill --full "[z]zoperandredir" > /tmp/out`                                                                      | `allow` | discriminating — `>` is not an operator, so the target really is inside `invocation_args`                                                                                        |
+| 40  | 2722      | operand ignores a redirection target               | `pkill --full "[z]zoperandredir" > /tmp/out`                                                                      | `allow` | discriminating — `>` is not an operator, so the target really is inside `scanner::invocation_args`                                                                               |
 | 41  | 2724      | operand after `--` is not swallowed as a flag      | `pkill --full -- "-[z]zoperandterm"`                                                                              | `allow` | discriminating — the operand starts with a dash, so only the past-terminator arm can pick it                                                                                     |
 | 42  | 2902      | byte offsets stay aligned across a heredoc body    | `cat <<'EOF'`…`EOF`<newline>`pkill --full "[a] b"`                                                                | `allow` | discriminating                                                                                                                                                                   |
 
-## `bracket_probe` → `bracket_mitigation_holds` (7) → `tests/cases/verdicts.tsv`
+## `bracket_probe` → `scanner::bracket_mitigation_holds` (7) → `tests/cases/verdicts.tsv`
 
 | #   | Hook line | Original label                          | Verdict row                                                                               | Verdict     | Kind           |
 | --- | --------- | --------------------------------------- | ----------------------------------------------------------------------------------------- | ----------- | -------------- |
@@ -116,9 +116,9 @@ while any wrong slice leaves the mitigation unproven and the command denies.
 | 48  | 2739      | single then multi-char class            | `pkill --full "[d]needle[abc]"` (appended)                                                | `deny:kill` | discriminating |
 | 49  | 2742      | stray class opener is unreconstructable | `pkill --full "abc[def[g]hij"` (appended)                                                 | `deny:kill` | discriminating |
 
-## `context_probe` → `loop_context` (9) → `tests/cases/verdicts.tsv`
+## `context_probe` → `loops::loop_context` (9) → `tests/cases/verdicts.tsv`
 
-The end-to-end lever is the `case "${context}"` switch in `classify_command`:
+The end-to-end lever is the `case "${context}"` switch in `classify::classify_command`:
 `cond` denies outright, `body` denies when the result is consumed **and** the
 body carries a terminator, and `none` can only ever reach `warn`.
 
@@ -134,7 +134,7 @@ body carries a terminator, and `none` can only ever reach `warn`.
 | 57  | 2769      | a subshell close still pops                                       | `while true; do (echo hi); pgrep --full zzctxsubshell \|\| break; done`                  | `deny:loop` | **pin** — see "Pins", below                                          |
 | 58  | 2777      | a `done` inside a substitution cannot pop the enclosing body span | `while true; do echo "$(: ; done)"; pgrep --full zzctxsubdone \|\| break; sleep 5; done` | `deny:loop` | intact since #8 — see "Pins", below                                  |
 
-## `terminator_probe` → `body_has_terminator` (3) → `tests/cases/verdicts.tsv`
+## `terminator_probe` → `loops::body_has_terminator` (3) → `tests/cases/verdicts.tsv`
 
 | #   | Hook line | Original label                   | Appended verdict row                                                                     | Verdict     | Kind                                                                                                                                                                                   |
 | --- | --------- | -------------------------------- | ---------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -178,17 +178,17 @@ the real code rather than assumed.
   `body`, not `cond`. `body` only denies when the result is consumed **and** the
   body has a terminator; this invocation is neither. `none` and `body` therefore
   produce the same `allow`. The row still pins that verdict.
-- **#57 (2769), "a subshell close still pops".** In `loop_context` the context
+- **#57 (2769), "a subshell close still pops".** In `loops::loop_context` the context
   lookup walks **down** the stack past barrier markers, so a `subshell` marker
   left un-popped on top of the enclosing `body` is skipped and the answer is
   `body` either way. There is no command shape where the missing pop changes the
   JSON verdict.
 - **#58 (2777), "a `done` inside a substitution cannot pop the enclosing body
-  span".** Pinned as `warn` at extraction time, because `body_has_terminator`
+  span".** Pinned as `warn` at extraction time, because `loops::body_has_terminator`
   had no scope barrier of its own: the stray `done` zeroed its depth counter
-  and it reported "no terminator" regardless of what `loop_context` said, so
+  and it reported "no terminator" regardless of what `loops::loop_context` said, so
   `body`-without-terminator and `none` both fell through to `warn` and the
-  assertion could not discriminate. Issue #8 gave `body_has_terminator` the
+  assertion could not discriminate. Issue #8 gave `loops::body_has_terminator` the
   same barrier, the row's verdict moved to `deny:loop`, and the assertion
   discriminates again: with both barriers removed the row (and its sibling
   `zzsubdone` rows) flip back to `warn`. That flip was checked once by hand

@@ -27,12 +27,12 @@ function make_parts_fixture() {
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
-  'tokens.sh:is_keyword'
-  'classify.sh:inspect_command'
+  'tokens.sh:tokens::is_keyword'
+  'classify.sh:classify::inspect_command'
 )
 BODY
-  printf 'function is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
-  printf 'function inspect_command() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"
+  printf 'function tokens::is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
+  printf 'function classify::inspect_command() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"
   git -C "${root}" init --quiet
   git -C "${root}" add --all
 }
@@ -73,7 +73,7 @@ BODY
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure
-  assert_output --partial 'hooks/lib/classify.sh does not define inspect_command()'
+  assert_output --partial 'hooks/lib/classify.sh does not define classify::inspect_command()'
   # The other row is intact and must not be dragged into the verdict.
   refute_output --partial 'tokens.sh does not define'
 }
@@ -94,7 +94,7 @@ BODY
   # every function in it is undefined at runtime.
   local -r root="${BATS_TEST_TMPDIR}/unlisted"
   make_parts_fixture "${root}"
-  printf 'function loop_context() {\n  :\n}\n' > "${root}/hooks/lib/loops.sh"
+  printf 'function loops::loop_context() {\n  :\n}\n' > "${root}/hooks/lib/loops.sh"
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure
@@ -121,9 +121,9 @@ BODY
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
-  'tokens.sh:is_keyword'
-  'tokens.sh:is_keyword'
-  'classify.sh:inspect_command'
+  'tokens.sh:tokens::is_keyword'
+  'tokens.sh:tokens::is_keyword'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   git -C "${root}" add --all
@@ -139,7 +139,43 @@ BODY
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   'tokens.sh'
-  'classify.sh:inspect_command'
+  'classify.sh:classify::inspect_command'
+)
+BODY
+  git -C "${root}" add --all
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_output --partial 'is not <file>:<function>'
+}
+
+@test "guard parts: a namespaced function half is graded, not rejected for its colons" {
+  # The row separator is the first colon; `tokens::is_keyword` adds two more.
+  # A colon count would call every row in the real table malformed.
+  local -r root="${BATS_TEST_TMPDIR}/namespaced"
+  make_parts_fixture "${root}"
+  cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
+# shellcheck shell=bash
+readonly -a GUARD_PARTS=(
+  'tokens.sh:tokens::is_keyword'
+  'classify.sh:classify::inspect_command'
+)
+BODY
+  printf 'function tokens::is_keyword() {\n  :\n}\n' > "${root}/hooks/lib/tokens.sh"
+  git -C "${root}" add --all
+  run "${CHECK}" "${root}"
+  assert_success
+}
+
+@test "guard parts: a function half that is not a function name is still malformed" {
+  # The relaxation above grades the remainder as a name rather than counting
+  # colons; a trailing `:extra` is not one, and must not slip through.
+  local -r root="${BATS_TEST_TMPDIR}/bad-half"
+  make_parts_fixture "${root}"
+  cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
+# shellcheck shell=bash
+readonly -a GUARD_PARTS=(
+  'tokens.sh:is_keyword:extra'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   git -C "${root}" add --all
@@ -156,7 +192,7 @@ BODY
   make_parts_fixture "${root}"
   cat > "${root}/hooks/lib/classify.sh" << 'PART'
 function outer() {
-  function inspect_command() {
+  function classify::inspect_command() {
     :
   }
 }
@@ -164,7 +200,7 @@ PART
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure
-  assert_output --partial 'does not define inspect_command()'
+  assert_output --partial 'does not define classify::inspect_command()'
 }
 
 @test "guard parts: a comment inside the table is not read as a row" {
@@ -174,8 +210,8 @@ PART
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
   # low-level helpers first
-  'tokens.sh:is_keyword'
-  'classify.sh:inspect_command'
+  'tokens.sh:tokens::is_keyword'
+  'classify.sh:classify::inspect_command'
 )
 BODY
   git -C "${root}" add --all
@@ -192,8 +228,8 @@ BODY
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
 # shellcheck shell=bash
 readonly -a GUARD_PARTS=(
-  'tokens.sh:is_keyword'
-  'classify.sh:inspect_command'
+  'tokens.sh:tokens::is_keyword'
+  'classify.sh:classify::inspect_command'
 )
 readonly -a SOMETHING_ELSE=(
   'not-a-part.sh:not_a_function'

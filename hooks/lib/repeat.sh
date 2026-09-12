@@ -37,10 +37,10 @@ readonly REPEAT_MAX_ENTRIES=5000
 #              rather than a predictable `${file}.$$` name so a planted symlink at the temp name
 #              can't turn it into a truncate-and-write-elsewhere primitive.
 # @arg $1 session_id the session id, already validated as a plain file name
-# @arg $2 keys the probe keys from probe_keys
+# @arg $2 keys the probe keys from classify::probe_keys
 # @stdout the deny reason when a key reaches the threshold; nothing otherwise
 # @exitcode 0 always
-function repeat_check() {
+function repeat::repeat_check() {
   local -r session_id="$1" keys="$2"
   local -r dir="${PGREP_PKILL_GUARD_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/pgrep-pkill-guard}"
   local -r file="${dir}/${session_id}"
@@ -130,7 +130,7 @@ function repeat_check() {
       ages+="$((now - epoch)) s ago, "
     done <<< "${kept}"
     if ((count >= REPEAT_THRESHOLD - 1)); then
-      repeat_message "${probe_key}" "$((count + 1))" "${ages%, }"
+      messages::repeat_message "${probe_key}" "$((count + 1))" "${ages%, }"
       return 0
     fi
     kept+="${now}"$'\t'"${probe_key}"$'\n'

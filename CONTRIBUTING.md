@@ -165,7 +165,7 @@ Shellcheck-clean, shfmt-formatted bash throughout, with one deliberate split:
   `rm -f`, `mv -f`). Everything else — `.ci/`, `run-all-checks`, `run-tests`,
   `.githooks/`, `.justfile`, the workflows — uses GNU long options.
 - **`hooks/` must never set `shopt -s inherit_errexit`**, and the
-  `repeat_reason="$(repeat_check ...)" || repeat_reason=''` assignment in `main`
+  `repeat_reason="$(repeat::repeat_check ...)" || repeat_reason=''` assignment in `main`
   must never become a plain one.
 
 Both look like inconsistencies and are not; the reasons are invariants 1 and 2

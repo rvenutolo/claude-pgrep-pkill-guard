@@ -290,7 +290,7 @@ function reverse_check() {
   # Both statuses are tested explicitly rather than left to errexit. main calls
   # this function as `reverse_check ... || rc=1`, and that trailing `||` turns
   # errexit off for the function's entire dynamic extent -- the same mechanism
-  # the guard relies on for repeat_check. So a failed `nix eval` here does NOT
+  # the guard relies on for repeat::repeat_check. So a failed `nix eval` here does NOT
   # abort: without these guards it would fall through as an empty inventory and
   # be reported as "the devShell declares no packages", which is a wrong verdict
   # wearing the costume of a real one. `mapfile < <(...)` has the same hazard

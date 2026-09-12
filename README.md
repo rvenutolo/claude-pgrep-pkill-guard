@@ -288,7 +288,7 @@ file is itself a loader for nine parts under `hooks/lib/`, one per concern; none
 of them is parsed on the fast path either. Parse cost alone, measured with
 `bash -n` over 400 repetitions: an empty script costs 4.12 ms, the entry script
 4.25 ms (+0.13), the old single file 6.49 ms (+2.38). A smaller split was measured and
-rejected — moving only `deny_message`, the wrapper recursion and `repeat_check`
+rejected — moving only `messages::deny_message`, the wrapper recursion and `repeat::repeat_check`
 leaves about 1700 lines on the fast path and recovers about 0.6 ms.
 
 Like the spawn removal before it, the split was measured as an interleaved

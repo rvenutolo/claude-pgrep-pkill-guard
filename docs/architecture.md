@@ -52,25 +52,25 @@ In execution order:
    installed once, here; the body is sourced into this same shell and inherits
    it rather than setting one of its own (invariant 2).
 5. The human-mode dispatch, `main`'s first act: `if (($# > 0)) || [[ -t 0 ]]`,
-   which loads the body and hands the arguments to `human_mode` — `--help`,
+   which loads the body and hands the arguments to `human::human_mode` — `--help`,
    `--version` and the usage errors, none of which live here, because fifty
    lines of help text on the fast path is fifty lines of parse on every call
    that will never read them. Both tests are builtins, so an ordinary call pays
    no fork and nothing measurable to ask them, and neither can fire on a real
    hook call: `hooks/hooks.json` passes no arguments and Claude Code hands the
-   hook stdin on a pipe, so anything reaching `human_mode` came from a person.
+   hook stdin on a pipe, so anything reaching `human::human_mode` came from a person.
    Without the dispatch, running the script by hand hangs on the `read` at
    step 6, waiting for an EOF a terminal does not send until the user finds
    Ctrl-D (#34).
 
-   The call is written `human_mode "$@" || exit "$?"`, not as a bare call
-   followed by `return`. `human_mode` returns 2 on a usage error, and a bare
+   The call is written `human::human_mode "$@" || exit "$?"`, not as a bare call
+   followed by `return`. `human::human_mode` returns 2 on a usage error, and a bare
    non-zero command is exactly what the `ERR` trap at step 4 catches: probed
    with a reduced copy of this script, the bare form turned that 2 into
    `emit_allow; exit 0`, so the guard answered a mistyped flag with `{}` and a
-   success. The `||` keeps `human_mode` off errexit's radar for its whole
+   success. The `||` keeps `human::human_mode` off errexit's radar for its whole
    dynamic extent — the same construct invariant 2 protects on the
-   `repeat_check` call — and the `exit` is what carries the status out to the
+   `repeat::repeat_check` call — and the `exit` is what carries the status out to the
    shell.
 
    Sitting after the version guard at step 3 is deliberate, and it costs
@@ -95,7 +95,7 @@ In execution order:
 8. Past the prefilter, `main` calls `load_body` — the same function step 5
    calls. It runs `resolve_hook_dir` to freeze `HOOK_DIR`: one `dirname` fork
    and exec, which locates both the sibling and — through the sibling's
-   `resolve_scanner` — the awk scanner, so no path pays a second process for
+   `scanner::resolve_scanner` — the awk scanner, so no path pays a second process for
    the second lookup. Two branches then stand down loudly, exactly as the
    precondition guards inside the body do: the sibling missing or unreadable,
    and the `source` itself failing. The sibling's own source loop adds one
@@ -109,7 +109,7 @@ In execution order:
    protect.
    Both callers read it as `load_body || return 0`: the `systemMessage` is
    already on stdout by then, so the caller's only remaining job is to stop.
-   With the body loaded, `main` calls `inspect_command "${input}"`.
+   With the body loaded, `main` calls `classify::inspect_command "${input}"`.
 
 ### `hooks/pgrep-pkill-guard-body.sh` and `hooks/lib/`
 
@@ -133,7 +133,7 @@ that was defined proves the file was found, parsed to the end, and ran.
 Between them those parts
 are the rest of the guard: every constant except `HOOK_NAME`, `HOOK_VERSION` and
 `SCANNER`, and every function except `emit_allow`, `resolve_hook_dir`,
-`load_body` and `main` — `inspect_command` among them, which is what used to be
+`load_body` and `main` — `classify::inspect_command` among them, which is what used to be
 the second half of `main`. A call the prefilter short-circuits never parses a
 line of any of it, which is the entire reason the split exists.
 
@@ -141,20 +141,20 @@ The list is explicit rather than a glob: a glob's order depends on the locale, a
 stray file dropped into `lib/` would be sourced unasked, and the fail-open
 message needs a name to print. Order does not affect correctness — every part
 defines only functions and `readonly` constants, and nothing runs until
-`inspect_command` or `human_mode` is called — so it is arranged for a reader,
+`classify::inspect_command` or `human::human_mode` is called — so it is arranged for a reader,
 low-level helpers first. That is the order below.
 
-| Part                 | Holds                                                                                                                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lib/tokens.sh`      | `COMMAND_POSITION_KEYWORDS`, `PREFIX_COMMANDS`, `is_prefix_command`, `prefix_value_option`, `prefix_operand_budget`, `prefix_breaks_chain`, `prefix_chain_step`, `is_assignment_word`, `is_keyword`, `is_operator`       |
-| `lib/scanner.sh`     | `resolve_scanner`, `scan_command`, `find_invocations`, `invocation_args`, `has_flag`, `PGREP_VALUE_OPTIONS`, `pattern_operand`, `bracket_mitigation_holds`                                                               |
-| `lib/loops.sh`       | `loop_context`, `body_has_terminator`, `loop_body_has_kill`                                                                                                                                                              |
-| `lib/messages.sh`    | `emit_warn`, `emit_deny`, `WARN_MESSAGE`, `WRITE_TOOL_LEAD`, `deny_message`, `repeat_message`                                                                                                                            |
-| `lib/consumption.sh` | `XARGS_VALUE_OPTIONS`, `is_xargs_value_option`, `feeds_a_kill_forward`, `kill_in_command_position`, `feeds_a_kill_backward`, `feeds_a_kill`, `invocation_is_captured`, `next_command_reads_status`, `result_is_consumed` |
-| `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrapper_operand_budget`, `pipe_producer_payload`, `pipe_carry_clear`, `segment_pipe_carry`, `shell_wrapper_payloads`                         |
-| `lib/repeat.sh`      | `REPEAT_THRESHOLD`, `REPEAT_WINDOW_SECONDS`, `REPEAT_MAX_ENTRIES`, `repeat_check`                                                                                                                                        |
-| `lib/classify.sh`    | `TASK_OUTPUT_PATH_RE`, `task_poll_detected`, `probe_keys`, `classify_invocation`, `classify_wrapper_payloads`, `classify_command`, `inspect_preconditions`, `repeat_tier_reason`, `inspect_command`                      |
-| `lib/human.sh`       | `print_help`, `human_mode`                                                                                                                                                                                               |
+| Part                 | Holds                                                                                                                                                                                                                                                                                                                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/tokens.sh`      | `COMMAND_POSITION_KEYWORDS`, `PREFIX_COMMANDS`, `tokens::is_prefix_command`, `tokens::prefix_value_option`, `tokens::prefix_operand_budget`, `tokens::prefix_breaks_chain`, `tokens::prefix_chain_step`, `tokens::is_assignment_word`, `tokens::is_keyword`, `tokens::is_operator`                                               |
+| `lib/scanner.sh`     | `scanner::resolve_scanner`, `scanner::scan_command`, `scanner::find_invocations`, `scanner::invocation_args`, `scanner::has_flag`, `PGREP_VALUE_OPTIONS`, `scanner::pattern_operand`, `scanner::bracket_mitigation_holds`                                                                                                        |
+| `lib/loops.sh`       | `loops::loop_context`, `loops::body_has_terminator`, `loops::loop_body_has_kill`                                                                                                                                                                                                                                                 |
+| `lib/messages.sh`    | `messages::emit_warn`, `messages::emit_deny`, `WARN_MESSAGE`, `WRITE_TOOL_LEAD`, `messages::deny_message`, `messages::repeat_message`                                                                                                                                                                                            |
+| `lib/consumption.sh` | `XARGS_VALUE_OPTIONS`, `consumption::is_xargs_value_option`, `consumption::feeds_a_kill_forward`, `consumption::kill_in_command_position`, `consumption::feeds_a_kill_backward`, `consumption::feeds_a_kill`, `consumption::invocation_is_captured`, `consumption::next_command_reads_status`, `consumption::result_is_consumed` |
+| `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrappers::wrapper_operand_budget`, `wrappers::pipe_producer_payload`, `wrappers::pipe_carry_clear`, `wrappers::segment_pipe_carry`, `wrappers::shell_wrapper_payloads`                                                                               |
+| `lib/repeat.sh`      | `REPEAT_THRESHOLD`, `REPEAT_WINDOW_SECONDS`, `REPEAT_MAX_ENTRIES`, `repeat::repeat_check`                                                                                                                                                                                                                                        |
+| `lib/classify.sh`    | `TASK_OUTPUT_PATH_RE`, `classify::task_poll_detected`, `classify::probe_keys`, `classify::classify_invocation`, `classify::classify_wrapper_payloads`, `classify::classify_command`, `classify::inspect_preconditions`, `classify::repeat_tier_reason`, `classify::inspect_command`                                              |
+| `lib/human.sh`       | `human::print_help`, `human::human_mode`                                                                                                                                                                                                                                                                                         |
 
 The loader and every part are **sourced, never executed** — no shebang, no exec
 bit — and none of them sets `set -Eeuo pipefail`, `IFS` or an `ERR` trap,
@@ -162,11 +162,11 @@ because they run in the entry script's shell and would be reconfiguring their
 caller rather than themselves (invariant 2).
 
 Three members sit off the hook's path entirely, reached only from the dispatch
-at step 5, and two of them are all of `lib/human.sh`. `print_help` holds the
+at step 5, and two of them are all of `lib/human.sh`. `human::print_help` holds the
 help text as a single quoted heredoc — usage, the stdin/stdout contract, the
 options, the `jq --null-input` probe recipe the README also carries,
 `PGREP_PKILL_GUARD_STATE_DIR` and its resolution order, the exit codes, and the
-project URL. `human_mode` is what the
+project URL. `human::human_mode` is what the
 dispatch actually calls: it scans **every** argument for `-h` or `--help` first
 and prints help whatever else was passed (clig.dev, so `--bogus --help` still
 helps), accepts `--version` only as the lone argument, answers a bare run on a
@@ -194,13 +194,13 @@ extending it here would let `--version` print a confidently wrong number into a
 bug report. A missing version is an inconvenience; a wrong one sends the
 maintainer to the wrong commit.
 
-Picking up where step 8 above left off, `inspect_command`:
+Picking up where step 8 above left off, `classify::inspect_command`:
 
-1. `resolve_scanner`, then the precondition guards, each of which stands down
+1. `scanner::resolve_scanner`, then the precondition guards, each of which stands down
    loudly: `jq` missing from `PATH`, `awk` missing from `PATH`, the scanner file
    unreadable. These run only once the prefilter has let a payload through,
    since a payload the prefilter would have returned `{}` for was never going to
-   reach `jq` or the scanner either way. `resolve_scanner` costs no process of
+   reach `jq` or the scanner either way. `scanner::resolve_scanner` costs no process of
    its own: it reads the `HOOK_DIR` the entry script resolved before sourcing
    this file, and declares the global `readonly` once it sets it, so the path is
    frozen for the rest of the call.
@@ -209,16 +209,16 @@ Picking up where step 8 above left off, `inspect_command`:
    survives the prefilter. `@tsv` escapes literal tabs and newlines in the
    command, which `printf '%b'` then decodes in one left-to-right pass. A
    `tool_name` other than `Bash` allows immediately.
-3. `classify_command` runs the stateless tiers and prints a verdict plus a tab
+3. `classify::classify_command` runs the stateless tiers and prints a verdict plus a tab
    and the detail its message needs (the invoked tool, or the polled path).
-   `inspect_command` owns stdout; the classifier hands the verdict up rather
+   `classify::inspect_command` owns stdout; the classifier hands the verdict up rather
    than writing the decision itself.
 4. The stateful `repeat` tier, which runs only after the stateless tiers have
    allowed or warned.
 5. Emission. `emit_allow` — which lives in the entry script, because the
-   prefilter needs it there — prints a bare `{}`; `emit_warn` prints an `allow`
-   decision carrying `additionalContext`; `emit_deny` prints a `deny`
-   decision carrying `permissionDecisionReason`, built by `deny_message` from
+   prefilter needs it there — prints a bare `{}`; `messages::emit_warn` prints an `allow`
+   decision carrying `additionalContext`; `messages::emit_deny` prints a `deny`
+   decision carrying `permissionDecisionReason`, built by `messages::deny_message` from
    the kind and its detail. `additionalContext` is the only `PreToolUse`
    field verified to reach the model on an allowed call — `systemMessage`
    renders to the user only, and `permissionDecisionReason` is fed back under
@@ -226,7 +226,7 @@ Picking up where step 8 above left off, `inspect_command`:
 
 ### `hooks/pgrep-scan.awk`
 
-Called from `scan_command` as `printf '%s\n' "${command}" | LC_ALL=C awk -f`.
+Called from `scanner::scan_command` as `printf '%s\n' "${command}" | LC_ALL=C awk -f`.
 In one linear pass it masks the regions that are text rather than code — single
 and double quoted strings, comments, heredoc bodies — while letting a command
 substitution re-enter code context even inside double quotes, which is what
@@ -235,7 +235,7 @@ makes `until [ -z "$(pgrep --full x)" ]` visible. It then emits one
 `<HD:len>` marker at the first byte of each heredoc body.
 
 The last line is the **integrity trailer**, `\t<SCAN:n>`, where `n` is the byte
-count of the command the scanner reassembled. `scan_command` requires that to
+count of the command the scanner reassembled. `scanner::scan_command` requires that to
 equal `${#command}` before it trusts a single offset, and strips the trailer
 before returning the stream. The check catches any awk that strips, splits or
 reshapes bytes on the way through and would otherwise desync every offset while
@@ -249,23 +249,23 @@ otherwise tell `foo` from `foo\n` at end of input.
 
 ### Verdict kinds
 
-`classify_command` prints one of:
+`classify::classify_command` prints one of:
 
-| Verdict          | Meaning                                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `deny:kill`      | a pattern kill whose pattern matches the invoking shell                                        |
-| `deny:loop`      | a loop whose termination test is a full-command-line pattern search                            |
-| `deny:task-poll` | a loop whose termination test reads a harness task-output file                                 |
-| `warn`           | a `pgrep --full` whose result is consumed but which is neither a loop nor a kill               |
-| `allow`          | everything else                                                                                |
-| `inactive`       | the scanner failed its integrity trailer; `inspect_command` emits the INACTIVE `systemMessage` |
+| Verdict          | Meaning                                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `deny:kill`      | a pattern kill whose pattern matches the invoking shell                                                  |
+| `deny:loop`      | a loop whose termination test is a full-command-line pattern search                                      |
+| `deny:task-poll` | a loop whose termination test reads a harness task-output file                                           |
+| `warn`           | a `pgrep --full` whose result is consumed but which is neither a loop nor a kill                         |
+| `allow`          | everything else                                                                                          |
+| `inactive`       | the scanner failed its integrity trailer; `classify::inspect_command` emits the INACTIVE `systemMessage` |
 
 `repeat` is the fifth deny kind and is not one of these: it is decided after
-classification, in `inspect_command`, because it is the only stateful rule.
+classification, in `classify::inspect_command`, because it is the only stateful rule.
 
 ### The per-session state file
 
-`repeat` — and only `repeat` — touches the filesystem. `repeat_check` resolves
+`repeat` — and only `repeat` — touches the filesystem. `repeat::repeat_check` resolves
 the state directory as `${PGREP_PKILL_GUARD_STATE_DIR}`, else
 `${XDG_RUNTIME_DIR}/pgrep-pkill-guard`, else `${TMPDIR}/pgrep-pkill-guard`,
 else `/tmp/pgrep-pkill-guard`, and keeps one file per session named for the
@@ -380,12 +380,12 @@ A hook that blocked on its own breakage would be worse than no hook: it would
 turn an installed plugin into an outage on every Bash call. A hook that went
 quiet on its own breakage would be worse still, because the user would never
 learn they were unprotected. That trade-off is why the `ERR` trap allows, why
-the scanner's integrity check is in-band, and why `repeat_check` is written as
+the scanner's integrity check is in-band, and why `repeat::repeat_check` is written as
 a long sequence of `|| return 0` guards rather than as assertions.
 
-**There is exactly one exception, and it is on argv.** `human_mode` returns 2
+**There is exactly one exception, and it is on argv.** `human::human_mode` returns 2
 for an unrecognized argument and for a bare run with stdin on a terminal, and
-the entry script's `human_mode "$@" || exit "$?"` is written precisely so that
+the entry script's `human::human_mode "$@" || exit "$?"` is written precisely so that
 2 survives the `ERR` trap and becomes the process's exit status. A `PreToolUse`
 hook exiting 2 means _block the tool call_, so this is the one path in the repo
 that does not fail open. It is safe because arguments cannot reach the script
@@ -586,7 +586,7 @@ the one the caveat used to name alone:
   single line (`'do') depth=$((depth + 1)) ;;`) does not have the problem.
 
 Together these were **51 of the body file's 76 uncovered lines** at the tip that
-closed #132 — including all thirty of `deny_message`'s, which is the function
+closed #132 — including all thirty of `messages::deny_message`'s, which is the function
 this caveat exists to explain.
 
 **An apostrophe in a traced command eats the rest of the trace.** This is a
@@ -625,7 +625,7 @@ What the loss looks like, measured on this suite:
 
 That last row is why the failure went unnoticed for a release: the full-suite
 report lists both files with plausible counts and is still missing data. It cost
-an issue — #126 was filed against `is_xargs_value_option` and `loop_body_has_kill`
+an issue — #126 was filed against `consumption::is_xargs_value_option` and `loops::loop_body_has_kill`
 as functions "nothing enters", and both are in fact driven by rows that had been
 in `verdicts.tsv` for months.
 
@@ -655,19 +655,19 @@ think should reach it and run `just coverage` again. bats runs files in order, s
 a canary at the end sits outside most swallow windows. That is how the 76.42%
 run was shown to be missing at least eight body-file lines: with such a probe
 appended the body file reads 395 of 514 rather than 387, and
-`is_xargs_value_option` goes from 0 hits to 5.
+`consumption::is_xargs_value_option` goes from 0 hits to 5.
 
 **Two zeros past the prefilter are neither artifact nor gap: they are
-unreachable.** `loop_context`'s closing `printf 'none\n'` in
-`hooks/lib/loops.sh` and `invocation_is_captured`'s closing `return 1` in
+unreachable.** `loops::loop_context`'s closing `printf 'none\n'` in
+`hooks/lib/loops.sh` and `consumption::invocation_is_captured`'s closing `return 1` in
 `hooks/lib/consumption.sh` are defensive returns that no input reaches.
-`invocation_is_captured` iterates `for ((idx = 0; idx <= target;
+`consumption::invocation_is_captured` iterates `for ((idx = 0; idx <= target;
 idx++))` and returns unconditionally at `idx == target`, so the loop cannot run
-past it; `loop_context` reads the same token stream that produced `target`,
+past it; `loops::loop_context` reads the same token stream that produced `target`,
 counts indices the same way, and likewise returns there. Falling off either loop
 would need a `target` beyond the end of the stream it came from. Both guards
 stay — this is a redundancy, not a defect, the same finding #131 recorded for
-`loop_body_has_kill`'s `((found_do == 1)) || return 1` — and neither gets a test
+`loops::loop_body_has_kill`'s `((found_do == 1)) || return 1` — and neither gets a test
 row, because a row that cannot be written is not a coverage gap.
 
 What the report is good for is the per-line hit counts, read with all of the
@@ -712,7 +712,7 @@ only inside the hermetic Nix devShell where GNU coreutils is guaranteed.
 
 **Tracked comments:** three files carry the `POSIX short flags, deliberately`
 phrase, and `.ci/check-invariant-markers` lists exactly those three. The first
-is `hooks/lib/repeat.sh`, in `repeat_check`, which is the one rule in the guard
+is `hooks/lib/repeat.sh`, in `repeat::repeat_check`, which is the one rule in the guard
 that touches the filesystem — its write path a few lines below carries the same
 rationale in its own words, for the `rm` and `mv` calls there:
 
@@ -764,18 +764,18 @@ entry script, the loader, or any part under `hooks/lib/` — and no one may turn
 the assignment below into a plain one.
 
 ```bash
-repeat_reason="$(repeat_check "${session_id}" "${keys}")" || repeat_reason=''
+repeat_reason="$(repeat::repeat_check "${session_id}" "${keys}")" || repeat_reason=''
 ```
 
 **Why:** the trailing `||` is what keeps that entire command substitution off
-errexit's radar for its whole dynamic extent, so nothing inside `repeat_check`
+errexit's radar for its whole dynamic extent, so nothing inside `repeat::repeat_check`
 — the guard's one stateful, filesystem-touching rule — can trip the top-level
 `ERR` trap. `inherit_errexit` pushes errexit back inside the substitution and
 reintroduces exactly the failure path the guard exists to avoid: a transient
 filesystem condition becoming a trapped error on an unrelated command. The
 `||` is load-bearing well beyond its visible role as a fallback, and the
-fallback is also why `inspect_command` accepts the result as a deny only when it
-is shaped like `repeat_message`'s output.
+fallback is also why `classify::inspect_command` accepts the result as a deny only when it
+is shaped like `messages::repeat_message`'s output.
 
 **And the body sets none of the four — nor does any part.**
 `hooks/pgrep-pkill-guard-body.sh` and each `hooks/lib/*.sh` it sources are
@@ -788,13 +788,13 @@ them carries a shebang or an executable bit — they are not scripts that can be
 run.
 
 **Tracked comment:** `The || is load-bearing beyond the obvious fallback`, which
-now appears three times. In `hooks/lib/classify.sh`, in `repeat_tier_reason`
+now appears three times. In `hooks/lib/classify.sh`, in `classify::repeat_tier_reason`
 directly above that assignment:
 
 ```text
 # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
 # whole command substitution off errexit's radar for its entire dynamic
-# extent, so nothing inside repeat_check can trip the top-level ERR trap. Do
+# extent, so nothing inside repeat::repeat_check can trip the top-level ERR trap. Do
 # not turn this into a plain assignment.
 ```
 
@@ -804,7 +804,7 @@ the body:
 
 ```text
 # The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
-# repeat_check call inside the body: it keeps a failing `source` off the ERR
+# repeat::repeat_check call inside the body: it keeps a failing `source` off the ERR
 # trap, so a corrupt sibling produces this message rather than a bare `{}`.
 ```
 
@@ -817,7 +817,7 @@ second JSON line after it.
 Tests drive the hook **only as a subprocess with hook JSON on stdin**, and
 assert on the JSON it writes to stdout. `tests/test_helper/common.bash` is the
 whole interface: `hook_json`, `run_hook`, then `decision_of`, `reason_of` and
-`context_of` over the response. No `source`, no calling `classify_command` or
+`context_of` over the response. No `source`, no calling `classify::classify_command` or
 any other internal directly.
 
 **Why:** the JSON contract is the only thing Claude Code actually depends on. A
@@ -847,10 +847,10 @@ stdout. `tests/scanner.bats` may drive it directly with `awk -f`, always under
 
 `main` returns `{}` without spawning `jq` or `awk` when the raw hook payload
 contains none of those three substrings. The proof is containment, not
-enumeration. `classify_command` itself opens with an early `allow` unless the
+enumeration. `classify::classify_command` itself opens with an early `allow` unless the
 COMMAND contains `pgrep`, `pkill`, or `.output`, and every stateless `deny`,
 `warn`, or `inactive` verdict has to pass through that gate on its way out.
-`inspect_command` separately restricts the stateful repeat tier to commands
+`classify::inspect_command` separately restricts the stateful repeat tier to commands
 containing `pgrep` or `.output`, so no verdict can arise from the per-session
 state file alone either. The guard, in other words, already prefilters on the parsed
 command before this prefilter ever runs. The new check applies the identical
@@ -971,7 +971,7 @@ gives up exactly one report, the one nobody wanted; the `||` gives up every
 report `main` could ever have produced.
 
 **The same construct, wanted, one directory over.** Invariant 2 depends on that
-suppression deliberately: `repeat_reason="$(repeat_check …)" || repeat_reason=''`
+suppression deliberately: `repeat_reason="$(repeat::repeat_check …)" || repeat_reason=''`
 is what keeps the guard's one stateful, filesystem-touching rule off the trap's
 radar, so a transient filesystem condition cannot surface as a trapped error.
 Load-bearing there, silent gate failure here. The mechanic is identical and only

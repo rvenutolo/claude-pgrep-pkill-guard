@@ -57,6 +57,8 @@ function tab() {
 
 @test "scanner: a command substitution inside double quotes is visible" {
   local out
+  # The `[ ]` below is payload, not this suite's own code: it is the command text
+  # handed to the scanner, so it stays a POSIX test rather than becoming `[[ ]]`.
   out="$(scan 'until [ -z "$(pgrep --full x)" ]; do sleep 5; done')"
   run awk -F'\t' '$2 == "pgrep" {print $1}' <<< "${out}"
   assert_output '14'
@@ -499,7 +501,7 @@ function loader_probe() {
   local out
   out="$(loader_probe)"
   [[ "${out}" != *'INACTIVE'* ]]
-  [ "$(decision_of "${out}")" = 'deny' ]
+  [[ "$(decision_of "${out}")" == 'deny' ]]
 }
 
 # --- The jq @tsv / printf %b round-trip -------------------------------------
@@ -513,7 +515,7 @@ function loader_probe() {
   local command json
   command="$(printf 'echo\tone\npkill --full java')"
   json="$(run_hook "${command}")"
-  [ "$(decision_of "${json}")" = 'deny' ]
+  [[ "$(decision_of "${json}")" == 'deny' ]]
   [[ "$(reason_of "${json}")" == *'--ignore-ancestors'* ]]
 }
 

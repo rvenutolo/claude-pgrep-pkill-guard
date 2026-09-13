@@ -26,7 +26,7 @@ function setup() {
   # exit status: `printf 'x' | base64` is `eA==`, four bytes and no more.
   # POSIX short flags in the probes on purpose -- `wc -c` pads on BSD, hence
   # the tr.
-  if [ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ] \
+  if [[ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ]] \
     || ! mktemp --directory --dry-run > /dev/null 2>&1 \
     || ! rm --recursive --force "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null; then
     skip 'not GNU coreutils; .ci/ scripts are graded inside the devShell'
@@ -284,11 +284,11 @@ function field() {
   line="$(printf 'PAYLOAD_FILLER_%060d' 0)"
   local i=0
   : > "${big}"
-  while [ "${i}" -lt 2800 ]; do
+  while [[ "${i}" -lt 2800 ]]; do
     printf '%s\n' "${line}" >> "${big}"
     i=$((i + 1))
   done
-  [ "$(wc -c < "${big}")" -gt 131072 ]
+  [[ "$(wc -c < "${big}")" -gt 131072 ]]
 
   git -C "${root}" add big.txt
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
@@ -302,5 +302,5 @@ function field() {
   local emitted expected
   emitted="$(field '.variables.input.fileChanges.additions[0].contents')"
   expected="$(b64 < "${big}")"
-  [ "${emitted}" = "${expected}" ]
+  [[ "${emitted}" == "${expected}" ]]
 }

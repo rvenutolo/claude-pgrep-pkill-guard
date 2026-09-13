@@ -78,7 +78,7 @@ function use_fixture_path() {
   local -r root="$1"
   local dir
   for dir in "${root}"/store/*/bin; do
-    if [ -d "${dir}" ]; then
+    if [[ -d "${dir}" ]]; then
       PATH="${dir}:${PATH}"
     fi
   done
@@ -250,7 +250,7 @@ ABSENT_TOOL='pgpk-guard-no-such-tool'
   # against whatever bats the runner ships.
   run bash -c '"$1" "$2" 2> /dev/null' _ "${CHECK}" "${root}"
   assert_success
-  [ -z "${output}" ]
+  [[ -z "${output}" ]]
 }
 
 @test "devshell provides: a linux-only tool that is absent still fails on Linux" {

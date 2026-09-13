@@ -7,7 +7,7 @@ function setup() {
   local cmd_json command field mode needle_json needle
   local count=0 failures=0 json haystack ok
   while IFS=$'\t' read -r cmd_json field mode needle_json; do
-    [ -z "${cmd_json}" ] && continue
+    [[ -z "${cmd_json}" ]] && continue
     count=$((count + 1))
     command="$(jq --raw-output . <<< "${cmd_json}")"
     needle="$(jq --raw-output . <<< "${needle_json}")"
@@ -47,6 +47,6 @@ function setup() {
   done < "${CASES}"
 
   printf 'checked %s message rows, %s failures\n' "${count}" "${failures}" >&3
-  [ "${count}" -eq 27 ]
-  [ "${failures}" -eq 0 ]
+  [[ "${count}" -eq 27 ]]
+  [[ "${failures}" -eq 0 ]]
 }

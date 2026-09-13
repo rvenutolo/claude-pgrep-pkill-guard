@@ -6,7 +6,7 @@ function setup() {
 @test "deny-sweep: every deny reason names its own kind's mitigation" {
   local cmd_json command expected needle json reason count=0 failures=0
   while IFS=$'\t' read -r cmd_json expected; do
-    [ -z "${cmd_json}" ] && continue
+    [[ -z "${cmd_json}" ]] && continue
     case "${expected}" in deny:*) ;; *) continue ;; esac
     command="$(jq --raw-output . <<< "${cmd_json}")"
     json="$(run_hook "${command}")"
@@ -32,6 +32,6 @@ function setup() {
 
   printf 'swept %s deny rows, %s failures\n' "${count}" "${failures}" >&3
   # A sweep that finds no deny rows is a broken sweep, not a clean pass.
-  [ "${count}" -gt 0 ]
-  [ "${failures}" -eq 0 ]
+  [[ "${count}" -gt 0 ]]
+  [[ "${failures}" -eq 0 ]]
 }

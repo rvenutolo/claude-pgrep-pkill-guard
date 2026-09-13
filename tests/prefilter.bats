@@ -29,13 +29,13 @@ readonly TRIGGER_RE
     checked=$((checked + 1))
     command="$(jq --raw-output . <<< "${cmd_json}")"
     if [[ ! "${command}" =~ ${TRIGGER_RE} ]]; then
-      echo "row would be dropped by the prefilter: ${command}" >&2
-      echo "verdict: ${expected}" >&2
+      printf 'row would be dropped by the prefilter: %s\n' "${command}" >&2
+      printf 'verdict: %s\n' "${expected}" >&2
       missing=$((missing + 1))
     fi
   done < "${CASES}"
 
-  echo "checked ${checked} non-allow rows, ${missing} uncovered" >&3
+  printf 'checked %s non-allow rows, %s uncovered\n' "${checked}" "${missing}" >&3
   [ "${checked}" -gt 0 ]
   [ "${missing}" -eq 0 ]
 }
@@ -59,9 +59,9 @@ readonly TRIGGER_RE
       command="$(jq --raw-output . <<< "${cmd_json}")"
       [[ "${command}" =~ ${reduced} ]] || uncovered=$((uncovered + 1))
     done < "${CASES}"
-    echo "without '${tokens[${i}]}': ${uncovered} rows uncovered" >&3
+    printf "without '%s': %s rows uncovered\n" "${tokens[${i}]}" "${uncovered}" >&3
     [ "${uncovered}" -gt 0 ] || {
-      echo "token '${tokens[${i}]}' is redundant; drop it from the hook too" >&2
+      printf "token '%s' is redundant; drop it from the hook too\n" "${tokens[${i}]}" >&2
       return 1
     }
   done

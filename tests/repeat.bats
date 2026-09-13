@@ -48,7 +48,7 @@ function setup() {
   for needle in 'probe 3' '300 s' 'TaskOutput' 'block: true' 'If this command WRITES' \
     "task:${TASK_PATH#/tmp/}"; do
     [[ "${reason}" == *"${needle}"* ]] || {
-      echo "reason lacks '${needle}': ${reason:0:200}" >&2
+      printf "reason lacks '%s': %s\n" "${needle}" "${reason:0:200}" >&2
       return 1
     }
   done
@@ -136,7 +136,7 @@ function setup() {
   done
   for needle in 'kill -0' 'pgrep:java' 'TaskOutput'; do
     [[ "${reason}" == *"${needle}"* ]] || {
-      echo "reason lacks '${needle}': ${reason:0:200}" >&2
+      printf "reason lacks '%s': %s\n" "${needle}" "${reason:0:200}" >&2
       return 1
     }
   done

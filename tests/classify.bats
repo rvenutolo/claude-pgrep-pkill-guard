@@ -20,24 +20,24 @@ function assert_row() {
   case "${expected}" in
     allow)
       [ "${decision}" = 'none' ] || {
-        echo "expected bare {} for: ${command}" >&2
-        echo "got: ${json}" >&2
+        printf 'expected bare {} for: %s\n' "${command}" >&2
+        printf 'got: %s\n' "${json}" >&2
         return 1
       }
       ;;
     warn)
       [ "${decision}" = 'allow' ] || {
-        echo "expected allow+context for: ${command}; got ${decision}" >&2
+        printf 'expected allow+context for: %s; got %s\n' "${command}" "${decision}" >&2
         return 1
       }
       [ -n "$(context_of "${json}")" ] || {
-        echo "expected non-empty additionalContext for: ${command}" >&2
+        printf 'expected non-empty additionalContext for: %s\n' "${command}" >&2
         return 1
       }
       ;;
     deny:*)
       [ "${decision}" = 'deny' ] || {
-        echo "expected deny for: ${command}; got ${decision}" >&2
+        printf 'expected deny for: %s; got %s\n' "${command}" "${decision}" >&2
         return 1
       }
       case "${expected#deny:}" in
@@ -45,18 +45,18 @@ function assert_row() {
         loop) needle='kill -0' ;;
         task-poll) needle='TaskOutput' ;;
         *)
-          echo "unknown deny kind: ${expected}" >&2
+          printf 'unknown deny kind: %s\n' "${expected}" >&2
           return 1
           ;;
       esac
       [[ "${reason}" == *"${needle}"* ]] || {
-        echo "deny reason for '${command}' lacks '${needle}'" >&2
-        echo "reason: ${reason}" >&2
+        printf "deny reason for '%s' lacks '%s'\n" "${command}" "${needle}" >&2
+        printf 'reason: %s\n' "${reason}" >&2
         return 1
       }
       ;;
     *)
-      echo "unknown expected verdict: ${expected}" >&2
+      printf 'unknown expected verdict: %s\n' "${expected}" >&2
       return 1
       ;;
   esac
@@ -73,7 +73,7 @@ function assert_row() {
     fi
   done < "${CASES}"
 
-  echo "checked ${count} rows, ${failures} failures" >&3
+  printf 'checked %s rows, %s failures\n' "${count}" "${failures}" >&3
   [ "${count}" -eq 350 ]
   [ "${failures}" -eq 0 ]
 }

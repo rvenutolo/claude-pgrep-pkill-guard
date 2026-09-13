@@ -15,7 +15,7 @@ function make_trivial_suite() {
   mkdir -p "$(dirname "${path}")"
   cat > "${path}" << 'BATS'
 @test "trivial fixture case" {
-  [ 1 -eq 1 ]
+  [[ 1 -eq 1 ]]
 }
 BATS
 }
@@ -86,8 +86,8 @@ function require_kcov() {
   run "${RUN_TESTS}" --report "${out}" "${suite}"
   assert_success
   assert_output --partial 'trivial fixture case'
-  [ -d "${out}" ]
-  [ -n "$(find "${out}" -name '*.xml' -print -quit)" ]
+  [[ -d "${out}" ]]
+  [[ -n "$(find "${out}" -name '*.xml' -print -quit)" ]]
 }
 
 @test "run-tests: --report creates a directory that does not exist yet" {
@@ -96,7 +96,7 @@ function require_kcov() {
   make_trivial_suite "${suite}"
   run "${RUN_TESTS}" --report "${out}" "${suite}"
   assert_success
-  [ -d "${out}" ]
+  [[ -d "${out}" ]]
 }
 
 @test "run-tests: --report with no argument is rejected" {
@@ -126,7 +126,7 @@ function require_kcov() {
   make_trivial_suite "${suite}"
   run "${RUN_TESTS}" "${suite}"
   assert_success
-  [ -z "$(find "${BATS_TEST_TMPDIR}" -name '*.xml' -print -quit)" ]
+  [[ -z "$(find "${BATS_TEST_TMPDIR}" -name '*.xml' -print -quit)" ]]
 }
 
 @test "run-tests: --coverage with no argument is rejected" {
@@ -149,10 +149,13 @@ function require_kcov() {
   run "${RUN_TESTS}" --coverage "${out}" "${suite}"
   assert_success
   assert_output --partial 'trivial fixture case'
-  [ -d "${out}" ]
+  [[ -d "${out}" ]]
   # Exactly the shape .ci/report-coverage looks for: one level down, and not the
   # empty kcov-merged/ kcov leaves beside it.
-  [ -n "$(find "${out}" -mindepth 2 -maxdepth 2 -path '*/kcov-merged/*' -prune -o -name 'coverage.json' -print -quit)" ]
+  local coverage_json
+  coverage_json="$(find "${out}" -mindepth 2 -maxdepth 2 -path '*/kcov-merged/*' -prune \
+    -o -name 'coverage.json' -print -quit)"
+  [[ -n "${coverage_json}" ]]
 }
 
 @test "run-tests: --coverage creates a directory that does not exist yet" {
@@ -162,7 +165,7 @@ function require_kcov() {
   make_trivial_suite "${suite}"
   run "${RUN_TESTS}" --coverage "${out}" "${suite}"
   assert_success
-  [ -d "${out}" ]
+  [[ -d "${out}" ]]
 }
 
 @test "run-tests: --coverage and --report compose in either order" {
@@ -171,10 +174,10 @@ function require_kcov() {
   make_trivial_suite "${suite}"
   run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/c1" --report "${BATS_TEST_TMPDIR}/r3" "${suite}"
   assert_success
-  [ -n "$(find "${BATS_TEST_TMPDIR}/r3" -name '*.xml' -print -quit)" ]
+  [[ -n "$(find "${BATS_TEST_TMPDIR}/r3" -name '*.xml' -print -quit)" ]]
   run "${RUN_TESTS}" --report "${BATS_TEST_TMPDIR}/r4" --coverage "${BATS_TEST_TMPDIR}/c2" "${suite}"
   assert_success
-  [ -n "$(find "${BATS_TEST_TMPDIR}/r4" -name '*.xml' -print -quit)" ]
+  [[ -n "$(find "${BATS_TEST_TMPDIR}/r4" -name '*.xml' -print -quit)" ]]
 }
 
 @test "run-tests: COVERAGE is not exported when --coverage is absent" {
@@ -193,7 +196,7 @@ function require_kcov() {
   mkdir -p "$(dirname "${suite}")"
   cat > "${suite}" << 'BATS'
 @test "COVERAGE is unset" {
-  [ -z "${COVERAGE:-}" ]
+  [[ -z "${COVERAGE:-}" ]]
 }
 BATS
   run env -u COVERAGE "${RUN_TESTS}" "${suite}"

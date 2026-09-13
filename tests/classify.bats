@@ -19,24 +19,24 @@ function assert_row() {
 
   case "${expected}" in
     allow)
-      [ "${decision}" = 'none' ] || {
+      [[ "${decision}" == 'none' ]] || {
         printf 'expected bare {} for: %s\n' "${command}" >&2
         printf 'got: %s\n' "${json}" >&2
         return 1
       }
       ;;
     warn)
-      [ "${decision}" = 'allow' ] || {
+      [[ "${decision}" == 'allow' ]] || {
         printf 'expected allow+context for: %s; got %s\n' "${command}" "${decision}" >&2
         return 1
       }
-      [ -n "$(context_of "${json}")" ] || {
+      [[ -n "$(context_of "${json}")" ]] || {
         printf 'expected non-empty additionalContext for: %s\n' "${command}" >&2
         return 1
       }
       ;;
     deny:*)
-      [ "${decision}" = 'deny' ] || {
+      [[ "${decision}" == 'deny' ]] || {
         printf 'expected deny for: %s; got %s\n' "${command}" "${decision}" >&2
         return 1
       }
@@ -65,7 +65,7 @@ function assert_row() {
 @test "classify: every recorded verdict still holds" {
   local cmd_json command expected failures=0 count=0
   while IFS=$'\t' read -r cmd_json expected; do
-    [ -z "${cmd_json}" ] && continue
+    [[ -z "${cmd_json}" ]] && continue
     count=$((count + 1))
     command="$(jq --raw-output . <<< "${cmd_json}")"
     if ! assert_row "${command}" "${expected}"; then
@@ -74,6 +74,6 @@ function assert_row() {
   done < "${CASES}"
 
   printf 'checked %s rows, %s failures\n' "${count}" "${failures}" >&3
-  [ "${count}" -eq 350 ]
-  [ "${failures}" -eq 0 ]
+  [[ "${count}" -eq 350 ]]
+  [[ "${failures}" -eq 0 ]]
 }

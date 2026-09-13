@@ -24,8 +24,8 @@ readonly TRIGGER_RE
 @test "prefilter: every non-allow row carries a trigger token" {
   local cmd_json expected command missing=0 checked=0
   while IFS=$'\t' read -r cmd_json expected; do
-    [ -z "${cmd_json}" ] && continue
-    [ "${expected}" = 'allow' ] && continue
+    [[ -z "${cmd_json}" ]] && continue
+    [[ "${expected}" == 'allow' ]] && continue
     checked=$((checked + 1))
     command="$(jq --raw-output . <<< "${cmd_json}")"
     if [[ ! "${command}" =~ ${TRIGGER_RE} ]]; then
@@ -36,8 +36,8 @@ readonly TRIGGER_RE
   done < "${CASES}"
 
   printf 'checked %s non-allow rows, %s uncovered\n' "${checked}" "${missing}" >&3
-  [ "${checked}" -gt 0 ]
-  [ "${missing}" -eq 0 ]
+  [[ "${checked}" -gt 0 ]]
+  [[ "${missing}" -eq 0 ]]
 }
 
 @test "prefilter: the token set is minimal" {
@@ -49,18 +49,18 @@ readonly TRIGGER_RE
   for i in "${!tokens[@]}"; do
     reduced=''
     for j in "${!tokens[@]}"; do
-      [ "${i}" = "${j}" ] && continue
+      [[ "${i}" == "${j}" ]] && continue
       reduced="${reduced:+${reduced}|}${tokens[${j}]}"
     done
     uncovered=0
     while IFS=$'\t' read -r cmd_json expected; do
-      [ -z "${cmd_json}" ] && continue
-      [ "${expected}" = 'allow' ] && continue
+      [[ -z "${cmd_json}" ]] && continue
+      [[ "${expected}" == 'allow' ]] && continue
       command="$(jq --raw-output . <<< "${cmd_json}")"
       [[ "${command}" =~ ${reduced} ]] || uncovered=$((uncovered + 1))
     done < "${CASES}"
     printf "without '%s': %s rows uncovered\n" "${tokens[${i}]}" "${uncovered}" >&3
-    [ "${uncovered}" -gt 0 ] || {
+    [[ "${uncovered}" -gt 0 ]] || {
       printf "token '%s' is redundant; drop it from the hook too\n" "${tokens[${i}]}" >&2
       return 1
     }

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.2.0](https://github.com/rvenutolo/claude-pgrep-pkill-guard/compare/v1.1.0...v1.2.0) (2026-09-13)
+
+
+### Features
+
+* gate the loader's GUARD_PARTS table against hooks/lib/ ([9bcec31](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/9bcec3164946739b3b6ff0068b2f15fcc0ed652c))
+* gate the loader's GUARD_PARTS table against hooks/lib/ ([#175](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/175)) ([f58a302](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/f58a302cfe49f1764ddf62b56250f32c79e6ca50))
+
+
+### Bug Fixes
+
+* clean up the --awk=bwk shim directory and pin run-tests' bash version ([#179](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/179)) ([8aa385f](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/8aa385f40725e7c22a848c1f6bc4017c4edac1b5))
+* clear ERR trap immediately before bench-fresh's returns ([d7b4242](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/d7b42427a5ea2a4ab08c14b64de06f4890e63775))
+* fail loudly on a non-canonical bash shebang ([0c36b10](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/0c36b10416868b9e7179492265d67db452b73900)), closes [#171](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/171)
+* fail loudly on a non-canonical bash shebang ([#173](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/173)) ([675b908](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/675b90808f692e2d8d649e4ed78975718035e772))
+* judge a loaded part by a function it defines, not by source status ([4457676](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/4457676d4639e94ae62770d4d0b4d50b8e2a276b))
+* judge a loaded part by a function it defines, not by source status ([#149](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/149)) ([b937411](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/b937411e9a706febe41851938ee012b20ae0c724))
+* remove the --awk=bwk shim directory on exit ([3d9fbfc](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/3d9fbfcf74a9450a3a8f2cd93bcf5fa8bca59d14)), closes [#167](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/167)
+* tell a stale GUARD_PARTS row apart from a part that is not there ([3824d14](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/3824d14e40469ec97c6079d7966910acd375b758))
+* write the linux-only SKIP line to stderr ([ff6de50](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/ff6de50601aff7f6c3fd4f9ba1e43dabe8e6e6a4))
+
 ## [1.1.0](https://github.com/rvenutolo/claude-pgrep-pkill-guard/compare/v1.0.0...v1.1.0) (2026-09-10)
 
 ### Features

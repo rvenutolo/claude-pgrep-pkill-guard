@@ -34,7 +34,7 @@
 # .release-please-manifest.json, because a WRONG version in a bug report is worse
 # than a missing one.
 # shellcheck disable=SC2034 # read inline by human::human_mode in lib/human.sh, sourced below
-readonly HOOK_VERSION='1.1.0' # x-release-please-version
+readonly HOOK_VERSION='1.2.0' # x-release-please-version
 
 # Resolved by scanner::resolve_scanner in lib/scanner.sh, which classify::inspect_command calls
 # once, and read from there and from lib/classify.sh. Declared here so `set -u`

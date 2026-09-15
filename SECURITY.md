@@ -31,7 +31,8 @@ The guard also stands down under conditions it can detect but not repair. In
 each of these the command is **allowed**, and a `systemMessage` tells the user
 the guard is inactive for that command:
 
-- bash older than 4.3 — the guard uses namerefs
+- bash older than 4.4 — the guard uses namerefs and expands arrays that can
+  be empty under `set -u`
 - an awk that fails the scanner's in-band integrity trailer, the check that
   proves the awk in use handed back every byte of the command
 - `jq` or `awk` missing from `PATH`, or the scanner file itself unreadable

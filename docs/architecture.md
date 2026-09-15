@@ -42,10 +42,10 @@ In execution order:
 2. `readonly HOOK_NAME`, which sits this high only because the version guard
    below names it. Every other constant is past the prefilter: `HOOK_VERSION`
    and `SCANNER` in the loader, the rest in the parts under `hooks/lib/`.
-3. The bash-version guard: bash older than 4.3 prints the INACTIVE
+3. The bash-version guard: bash older than 4.4 prints the INACTIVE
    `systemMessage` and exits immediately. It runs before everything else
    because it is the one guard that has to: the rest of the guard leans on
-   4.3+ features, so nothing after this point is safe to run on an older
+   4.4+ behaviour, so nothing after this point is safe to run on an older
    shell. It is also the only loud failure that fires ahead of the prefilter.
 4. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
    on every Bash call, and exit 2 would block the tool outright. The trap is
@@ -74,7 +74,7 @@ In execution order:
    shell.
 
    Sitting after the version guard at step 3 is deliberate, and it costs
-   `--help` on bash below 4.3; see **Known limitations** below.
+   `--help` on bash below 4.4; see **Known limitations** below.
 
 6. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
    `IFS= read -r -d '' input || :` — rather than the `input="$(cat)"` it used
@@ -351,7 +351,7 @@ One rule explains most of the code. **Every precondition failure and every
 state failure allows the command**, and the ones a user could act on emit a
 `systemMessage` saying the guard is INACTIVE for that command.
 
-The loud path covers bash below 4.3, a missing or unloadable
+The loud path covers bash below 4.4, a missing or unloadable
 `hooks/pgrep-pkill-guard-body.sh`, a missing or unloadable part under
 `hooks/lib/`, a missing `jq` or `awk`, an unreadable scanner, and an awk that
 fails the integrity trailer. The sibling branches are the split's own
@@ -437,10 +437,10 @@ revisiting the prefilter's token set in the same change.
 
 Filed as #52.
 
-### `--help` and `--version` are unavailable on bash below 4.3
+### `--help` and `--version` are unavailable on bash below 4.4
 
 The human-mode dispatch sits after the bash-version guard, so on stock macOS
-bash 3.2 both flags get that guard's `bash 4.3+ required … INACTIVE`
+bash 3.2 both flags get that guard's `bash 4.4+ required … INACTIVE`
 `systemMessage` and exit 0 — the guard answers the install question rather than
 the question that was asked. `.ci/check-inactive-on-old-bash`, the stock-bash
 compat leg, pins the guard answering first on that shell; the flags take the

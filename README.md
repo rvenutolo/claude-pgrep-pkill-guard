@@ -165,7 +165,8 @@ rot is caused by the internet, not by the pull request.
 
 What that reduces to, for the machine you are installing on:
 
-- **bash 4.3 or newer** (the guard uses namerefs)
+- **bash 4.4 or newer** (the guard uses namerefs, and expands arrays that
+  can be empty under `set -u`, which bash 4.3 rejects as unbound)
 - **`jq`**
 - **`awk`** — any POSIX awk: gawk, mawk, or one-true-awk (the stock `awk` on
   macOS and the BSDs). The scanner depends on nothing awk-specific.
@@ -174,7 +175,7 @@ What that reduces to, for the machine you are installing on:
   this README does not invent one; CI validates both plugin manifests against a
   pinned CLI (`2.1.251`, in the `validate` job).
 
-**Linux works out of the box.** Distro bash is 4.3+.
+**Linux works out of the box.** Current distro bash is 4.4+.
 
 **macOS needs one Homebrew package:**
 
@@ -189,7 +190,7 @@ silently wrongly.** Fail-open-loudly is deliberate, and it is the thing to know
 how to read. On stock bash, every command gets:
 
 ```text
-pgrep-pkill-guard: bash 4.3+ required (found 3.2); the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash.
+pgrep-pkill-guard: bash 4.4+ required (found 3.2); the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash.
 ```
 
 An in-band integrity trailer in the scanner checks that the awk in use handed

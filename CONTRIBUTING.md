@@ -30,7 +30,7 @@ nix develop
 ```
 
 That is the whole setup. The only thing the devShell does not supply is the
-bash that runs the hook by hand outside it: the guard needs **bash 4.3 or
+bash that runs the hook by hand outside it: the guard needs **bash 4.4 or
 newer**, so on macOS run `brew install bash` as the README instructs.
 
 Activate the tracked git hooks once per clone:

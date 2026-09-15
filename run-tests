@@ -46,12 +46,13 @@
 #             test failed, or the suite mutated the repo
 
 set -Eeuo pipefail
-# `inherit_errexit` is a bash 4.2 builtin option: on stock macOS bash 3.2 the
-# shell aborts with `shopt: inherit_errexit: invalid shell option name`, which
-# tells a coworker running ./run-tests nothing about what to install. Check
-# first, and say what to do. Must stay ABOVE the `shopt` line it is protecting.
-if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 2))); then
-  printf '%s: bash 4.2+ required to run the suite (found %s.%s). On macOS: brew install bash.\n' \
+# `inherit_errexit` is a bash 4.4 builtin option: on stock macOS bash 3.2, and
+# on 4.2 or 4.3, the shell aborts with `shopt: inherit_errexit: invalid shell
+# option name`, which tells a coworker running ./run-tests nothing about what to
+# install. Check first, and say what to do. Must stay ABOVE the `shopt` line it
+# is protecting.
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
+  printf '%s: bash 4.4+ required to run the suite (found %s.%s). On macOS: brew install bash.\n' \
     "${0##*/}" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" >&2
   exit 1
 fi
@@ -231,7 +232,7 @@ function main() {
   before="$(repo_state)"
   # `${report_args[@]+"${report_args[@]}"}` rather than a plain
   # `"${report_args[@]}"`: bash 4.2 and 4.3 treat expanding an EMPTY array under
-  # `set -u` as an unbound-variable error, and .ci/in-devshell advertises a 4.2
+  # `set -u` as an unbound-variable error, and the hook advertises a 4.3
   # floor. Same idiom as .ci/check-err-trap-hygiene and the guard body use, and
   # it preserves element boundaries -- a report directory whose path contains a
   # space still reaches bats as one argument. `kcov_args` is expanded the same

@@ -232,7 +232,7 @@ function main() {
   before="$(repo_state)"
   # `${report_args[@]+"${report_args[@]}"}` rather than a plain
   # `"${report_args[@]}"`: bash 4.2 and 4.3 treat expanding an EMPTY array under
-  # `set -u` as an unbound-variable error, and .ci/in-devshell advertises a 4.2
+  # `set -u` as an unbound-variable error, and the hook advertises a 4.3
   # floor. Same idiom as .ci/check-err-trap-hygiene and the guard body use, and
   # it preserves element boundaries -- a report directory whose path contains a
   # space still reaches bats as one argument. `kcov_args` is expanded the same

@@ -18,8 +18,8 @@ hook="$(dirname "$0")/../hooks/pgrep-pkill-guard.sh"
 # make this leg vacuously green.
 bash_major="$(bash -c 'echo ${BASH_VERSINFO[0]}')"
 if [ "${bash_major}" -ge 4 ]; then
-  echo "expected a bash older than 4.x on this runner, found ${bash_major}" >&2
-  echo "this leg is meant to exercise the stock-macOS bash; it is now vacuous" >&2
+  echo "FAIL: expected a bash older than 4.x on this runner, found ${bash_major}" >&2
+  echo "      this leg is meant to exercise the stock-macOS bash; it is now vacuous" >&2
   exit 1
 fi
 
@@ -27,11 +27,11 @@ out="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}
 
 case "${out}" in
   *INACTIVE*)
-    echo "ok: guard reported INACTIVE under bash ${bash_major}"
+    echo "OK: guard reported INACTIVE under bash ${bash_major}"
     exit 0
     ;;
   *)
-    echo "expected an INACTIVE systemMessage, got: ${out}" >&2
+    echo "FAIL: expected an INACTIVE systemMessage, got: ${out}" >&2
     exit 1
     ;;
 esac

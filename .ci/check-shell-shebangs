@@ -211,7 +211,7 @@ function main() {
   fi
 
   if ((rc == 0)); then
-    printf 'ok: %s shebangs canonical across the tracked tree (%s exempt)\n' \
+    printf 'OK: %s shebangs canonical across the tracked tree (%s exempt)\n' \
       "$((checked - exempt))" "${exempt}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

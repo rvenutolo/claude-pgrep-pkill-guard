@@ -108,7 +108,7 @@ function record_commit() {
   # Only the exit code is asserted, deliberately. The two ambient compat legs
   # check out at actions/checkout's default depth of 1, where the recorded
   # commit is not in the object store and the honest verdict is the skip -- so
-  # asserting on the `ok:` line here would redden those legs for a property of
+  # asserting on the `OK:` line here would redden those legs for a property of
   # the checkout rather than of the tree. Both accepted verdicts exit 0, which
   # is the part that holds everywhere.
   #

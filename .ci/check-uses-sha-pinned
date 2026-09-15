@@ -24,7 +24,7 @@ function main() {
 
   if ((${#files[@]} == 0)); then
     # Phase 1 has no workflows yet. That is legitimate, not a failure.
-    printf 'note: no workflow files tracked yet; nothing to check\n' >&2
+    printf 'OK: no workflow files tracked yet; nothing to check\n' >&2
     return 0
   fi
 

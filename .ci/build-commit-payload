@@ -142,8 +142,12 @@ function main() {
   # into `gh api graphql --input -` must not receive cleanup chatter.
   local scratch
   scratch="$(mktemp --directory)"
+  # %q, not hand-written quotes: a TMPDIR holding an apostrophe must still yield
+  # a trap string that parses when it fires.
+  local cleanup
+  printf -v cleanup 'rm --recursive --force -- %q' "${scratch}"
   # shellcheck disable=SC2064  # expand scratch NOW, not when the trap fires
-  trap "rm --recursive --force -- '${scratch}'" EXIT
+  trap "${cleanup}" EXIT
 
   # One JSON object per staged change, appended to a single accumulator file and
   # slurped back in below. Deletions carry no blob and stay cheap.

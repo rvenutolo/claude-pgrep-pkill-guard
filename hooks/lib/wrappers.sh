@@ -396,7 +396,7 @@ function wrappers::shell_wrapper_payloads() {
     if tokens::is_operator "${token}"; then
       if [[ "${token}" == '|' ]] && ((last_pipe_offset != offset - 1)); then
         wrappers::segment_pipe_carry pipe_heredoc pipe_text pipe_text_set \
-          "${seg_cmd}" "${seg_heredoc}" "${seg_redir}" ${seg_words[@]+"${seg_words[@]}"}
+          "${seg_cmd}" "${seg_heredoc}" "${seg_redir}" "${seg_words[@]}"
         last_pipe_offset="${offset}"
       elif [[ "${token}" == '|' ]]; then
         # The second `|` of a `||`, which is a conditional list and not a pipe:

@@ -164,7 +164,7 @@ function main() {
   mapfile -t candidates < <(trap_installing_files)
 
   local candidate
-  for candidate in ${candidates[@]+"${candidates[@]}"}; do
+  for candidate in "${candidates[@]}"; do
     if fail_open "${candidate}"; then
       skipped+=("${candidate}")
     else

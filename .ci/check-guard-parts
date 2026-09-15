@@ -202,7 +202,7 @@ function main() {
   fi
 
   local path part listed
-  for path in ${parts[@]+"${parts[@]}"}; do
+  for path in "${parts[@]}"; do
     part="${path#"${LIB_DIR}/"}"
     listed=0
     for row in "${rows[@]}"; do

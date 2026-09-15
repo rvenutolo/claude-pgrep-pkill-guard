@@ -75,6 +75,15 @@ function setup() {
   refute_output --partial "printf '{}"
 }
 
+@test "inactive: the old-bash branch names a 4.4 floor" {
+  # 4.4, not 4.3: bash 4.3 treats expanding an empty array under `set -u` as an
+  # unbound-variable error, and the guard expands arrays that can be empty.
+  run grep -A6 'BASH_VERSINFO\[0\] < 4' "${HOOK}"
+  assert_success
+  assert_output --partial 'BASH_VERSINFO[1] < 4))'
+  assert_output --partial 'bash 4.4+ required'
+}
+
 @test "manifest: the marketplace category is a recognised value" {
   local category
   category="$(jq --raw-output '.plugins[0].category' "${MARKET_JSON}")"

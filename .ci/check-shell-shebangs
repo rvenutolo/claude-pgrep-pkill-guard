@@ -95,7 +95,7 @@ function names_bash() {
   local -a words=()
   local word
   IFS=$' \t' read -r -a words <<< "${shebang#'#!'}"
-  for word in ${words[@]+"${words[@]}"}; do
+  for word in "${words[@]}"; do
     if [[ "${word##*/}" == 'bash' ]]; then
       return 0
     fi
@@ -167,7 +167,7 @@ function main() {
   local -a tracked=()
   mapfile -t tracked < <(git -C "${REPO_DIR}" ls-files)
 
-  for path in ${tracked[@]+"${tracked[@]}"}; do
+  for path in "${tracked[@]}"; do
     case "${path}" in
       # check-bats-no-shebang owns these; see the header.
       *.bats) continue ;;

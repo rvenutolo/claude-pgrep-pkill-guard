@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Assert the guard deactivates LOUDLY under a bash older than 4.3, rather than
+# Assert the guard deactivates LOUDLY under a bash older than 4.4, rather than
 # emitting a bare {} and leaving the user silently unprotected. Deliberately
 # POSIX sh and deliberately NOT bats: the bats harness loads bats-assert and the
 # transcribed helpers use bash-4 constructs, so on a stock-macOS runner the

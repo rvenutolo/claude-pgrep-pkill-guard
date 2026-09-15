@@ -145,7 +145,7 @@ function main() {
   done
 
   if ((rc == 0)); then
-    printf 'ok: %s bats libraries pinned identically in bats-ambient and flake.lock\n' \
+    printf 'OK: %s bats libraries pinned identically in bats-ambient and flake.lock\n' \
       "${#LIBRARIES[@]}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

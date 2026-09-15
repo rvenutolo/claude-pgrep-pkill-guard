@@ -222,10 +222,10 @@ function main() {
   fi
 
   if ((rc == 0)); then
-    printf 'ok: %s scripts install a reporting ERR trap; %s deliberate non-zero returns all clear it\n' \
+    printf 'OK: %s scripts install a reporting ERR trap; %s deliberate non-zero returns all clear it\n' \
       "${#scripts[@]}" "${returns}" >&2
     if ((${#skipped[@]} > 0)); then
-      printf 'ok: %s fail-open ERR trap(s) not policed by this rule: %s\n' \
+      printf 'OK: %s fail-open ERR trap(s) not policed by this rule: %s\n' \
         "${#skipped[@]}" "${skipped[*]}" >&2
     fi
   fi

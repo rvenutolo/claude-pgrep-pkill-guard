@@ -225,7 +225,7 @@ function main() {
   check_i8_vendored_sources || rc=1
 
   if ((rc == 0)); then
-    printf 'ok: manifests satisfy I1-I4, I8-I11 and the hooks.json parse\n' >&2
+    printf 'OK: manifests satisfy I1-I4, I8-I11 and the hooks.json parse\n' >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (#43, invariant 6).

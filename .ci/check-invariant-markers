@@ -189,7 +189,7 @@ function main() {
   done
 
   if ((rc == 0)); then
-    printf 'ok: %s invariant markers present across %s rows\n' \
+    printf 'OK: %s invariant markers present across %s rows\n' \
       "${checked}" "${#MARKERS[@]}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

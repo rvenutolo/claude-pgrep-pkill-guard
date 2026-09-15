@@ -80,7 +80,7 @@ function main() {
     printf '      rather than raising the ceiling.\n' >&2
     rc=1
   else
-    printf 'ok: %s is %s lines (ceiling %s)\n' "${FAST_PATH}" "${lines}" "${MAX_LINES}" >&2
+    printf 'OK: %s is %s lines (ceiling %s)\n' "${FAST_PATH}" "${lines}" "${MAX_LINES}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (#43, invariant 6).

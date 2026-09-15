@@ -233,7 +233,7 @@ function commit_present() {
 #              `a/`- or `b/`-prefixed and cannot be confused with a content line
 #              that starts the same way.
 # @arg $1 sha the recorded commit
-# @stdout the reason the difference is harmless, for the caller's `ok:` line
+# @stdout the reason the difference is harmless, for the caller's `OK:` line
 # @exitcode 0 nothing in the net difference can change the measured cost
 # @exitcode 1 hooks/ genuinely differs, or the diff could not be read
 function exempt_reason() {
@@ -301,7 +301,7 @@ function main() {
   # commit, and the failure would read as a broken gate rather than as absent
   # history.
   if ! commit_present "${recorded}"; then
-    printf 'skip: %s records commit %s, which is not in this clone\n' "${REPORT}" "${recorded}" >&2
+    printf 'SKIP: %s records commit %s, which is not in this clone\n' "${REPORT}" "${recorded}" >&2
     printf '      A shallow or partial clone cannot see it, so the freshness\n' >&2
     printf '      comparison is unanswerable here. Nothing is wrong with the\n' >&2
     printf '      tree. For a real answer: git fetch --unshallow. The gate job\n' >&2
@@ -347,7 +347,7 @@ function main() {
     # slower. See exempt_reason.
     local reason
     if reason="$(exempt_reason "${recorded}")"; then
-      printf 'ok: %s was generated at %s; %s changed since, but\n' \
+      printf 'OK: %s was generated at %s; %s changed since, but\n' \
         "${REPORT}" "${recorded}" "${BENCH_SUBJECT}" >&2
       printf '    %s, so the figures still describe this tree.\n' "${reason}" >&2
       return 0
@@ -378,7 +378,7 @@ function main() {
     return 0
   fi
 
-  printf 'ok: %s was generated at %s; %s is unchanged since\n' \
+  printf 'OK: %s was generated at %s; %s is unchanged since\n' \
     "${REPORT}" "${recorded}" "${BENCH_SUBJECT}" >&2
   return 0
 }

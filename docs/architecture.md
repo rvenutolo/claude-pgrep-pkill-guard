@@ -1021,8 +1021,8 @@ stays the right answer if one is ever added. It keys off what the handler
 covered without editing the gate, and the gate says so on every green run:
 
 ```text
-ok: 15 scripts install a reporting ERR trap; 21 deliberate non-zero returns all clear it
-ok: 1 fail-open ERR trap(s) not policed by this rule: hooks/pgrep-pkill-guard.sh
+OK: 15 scripts install a reporting ERR trap; 21 deliberate non-zero returns all clear it
+OK: 1 fail-open ERR trap(s) not policed by this rule: hooks/pgrep-pkill-guard.sh
 ```
 
 **Tracked comments:** the `A gate reporting its own verdict is not a crash`

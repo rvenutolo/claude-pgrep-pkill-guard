@@ -160,7 +160,7 @@ function main() {
   fi
 
   if ((rc == 0)); then
-    printf 'ok: plugin %s, marketplace %s, release-please manifest %s, hook constant %s\n' \
+    printf 'OK: plugin %s, marketplace %s, release-please manifest %s, hook constant %s\n' \
       "${plugin_version}" "${market_version}" "${manifest_version}" "${hook_version}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

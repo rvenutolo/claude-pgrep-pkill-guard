@@ -309,7 +309,7 @@ function main() {
   done
 
   if ((rc == 0)); then
-    printf 'ok: %s issue form(s) and %s satisfy the issue-forms schema, and reference only labels %s declares\n' \
+    printf 'OK: %s issue form(s) and %s satisfy the issue-forms schema, and reference only labels %s declares\n' \
       "${#forms[@]}" "${CONFIG_NAME}" "${LABELS_FILE##*/}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

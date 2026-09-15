@@ -224,7 +224,7 @@ function main() {
   done
 
   if ((rc == 0)); then
-    printf 'ok: %s GUARD_PARTS rows resolve, and every %s/*.sh part is listed once\n' \
+    printf 'OK: %s GUARD_PARTS rows resolve, and every %s/*.sh part is listed once\n' \
       "${#rows[@]}" "${LIB_DIR}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

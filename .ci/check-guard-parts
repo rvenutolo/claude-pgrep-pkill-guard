@@ -142,7 +142,7 @@ function check_row() {
     return 1
   fi
 
-  if ! grep -q "^function ${function_name}()" -- "${REPO_DIR}/${path}"; then
+  if ! grep --quiet "^function ${function_name}()" -- "${REPO_DIR}/${path}"; then
     printf 'FAIL: %s does not define %s, which its GUARD_PARTS row pairs it with\n' \
       "${path}" "${function_name}()" >&2
     printf '      The loader proves a part loaded by asking declare -F for\n' >&2

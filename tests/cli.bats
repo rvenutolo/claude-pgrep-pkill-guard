@@ -82,9 +82,9 @@ function run_cli() {
   # script reads, the one environment variable that changes its behaviour, and
   # the copy-pasteable recipe the README's "Reporting a false verdict" tells
   # them to use. Help that omits any of them is help in name only.
-  grep -q -F 'stdin' "${CLI_STDOUT}"
-  grep -q -F 'PGREP_PKILL_GUARD_STATE_DIR' "${CLI_STDOUT}"
-  grep -q -F 'jq --null-input' "${CLI_STDOUT}"
+  grep --quiet --fixed-strings 'stdin' "${CLI_STDOUT}"
+  grep --quiet --fixed-strings 'PGREP_PKILL_GUARD_STATE_DIR' "${CLI_STDOUT}"
+  grep --quiet --fixed-strings 'jq --null-input' "${CLI_STDOUT}"
 }
 
 @test "cli: --version prints exactly the program name and a semver" {
@@ -121,9 +121,9 @@ function run_cli() {
   # Diagnostics go to stderr, and stdout stays empty: a caller that pipes this
   # script's stdout into a JSON parser must not be handed an error message.
   [[ ! -s "${CLI_STDOUT}" ]]
-  grep -q -F -- '--bogus' "${CLI_STDERR}"
+  grep --quiet --fixed-strings -- '--bogus' "${CLI_STDERR}"
   # And a way out, not just a complaint.
-  grep -q -F -- '--help' "${CLI_STDERR}"
+  grep --quiet --fixed-strings -- '--help' "${CLI_STDERR}"
 }
 
 @test "cli: a bare run with stdin on a terminal exits 2 instead of hanging" {
@@ -146,8 +146,8 @@ function run_cli() {
   [[ "${status}" -eq 2 ]]
   [[ ! -s "${out}" ]]
   # Name the thing that is wrong (stdin) and the way out (--help).
-  grep -q -F 'stdin' "${err}"
-  grep -q -F -- '--help' "${err}"
+  grep --quiet --fixed-strings 'stdin' "${err}"
+  grep --quiet --fixed-strings -- '--help' "${err}"
 }
 
 @test "cli: the JSON path is unchanged by the human-mode dispatch" {

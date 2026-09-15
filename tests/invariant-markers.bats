@@ -114,9 +114,9 @@ WRAPPED
 
   # First prove the fixture really is wrapped -- otherwise this test could pass
   # against a matcher that does nothing at all.
-  run grep -c 'POSIX short flags, deliberately' "${root}/hooks/pgrep-pkill-guard.sh"
+  run grep --count 'POSIX short flags, deliberately' "${root}/hooks/pgrep-pkill-guard.sh"
   assert_failure
-  run grep -c 'load-bearing beyond the obvious fallback' "${root}/hooks/pgrep-pkill-guard.sh"
+  run grep --count 'load-bearing beyond the obvious fallback' "${root}/hooks/pgrep-pkill-guard.sh"
   assert_failure
 
   run "${CHECK}" "${root}"

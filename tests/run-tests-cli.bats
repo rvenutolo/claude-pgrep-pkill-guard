@@ -220,3 +220,17 @@ BATS
   assert_success
   [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
 }
+
+@test "run-tests: --awk=bwk removes its shim directory when TMPDIR holds a quote" {
+  require_bwk_awk
+  # Same leak check as the case above, with an apostrophe in TMPDIR. The EXIT
+  # trap is built from the shim path, and a single quote in that path must not
+  # turn the trap string into a syntax error that leaves the shim behind.
+  local -r suite="${BATS_TEST_TMPDIR}/suite10/ok.bats"
+  local -r tmp="${BATS_TEST_TMPDIR}/it's tmpdir"
+  make_trivial_suite "${suite}"
+  mkdir -p "${tmp}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --awk=bwk "${suite}"
+  assert_success
+  [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
+}

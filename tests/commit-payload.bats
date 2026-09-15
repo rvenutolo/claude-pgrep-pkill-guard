@@ -304,3 +304,21 @@ function field() {
   expected="$(b64 < "${big}")"
   [[ "${emitted}" == "${expected}" ]]
 }
+
+@test "commit payload: the scratch directory is removed when TMPDIR holds a quote" {
+  # The EXIT trap is built from the scratch path. A path carrying a single quote
+  # must still be removed on exit rather than turning the trap string into a
+  # syntax error that leaks the directory. mktemp names its directory under
+  # TMPDIR, so a fixture TMPDIR with an apostrophe in it is the whole setup, and
+  # an empty TMPDIR afterwards is the whole assertion: this script creates
+  # nothing else there.
+  local -r root="${BATS_TEST_TMPDIR}/quoted-tmpdir"
+  local -r tmp="${BATS_TEST_TMPDIR}/it's tmp"
+  make_repo "${root}"
+  printf 'alpha changed\n' > "${root}/alpha.txt"
+  git -C "${root}" add alpha.txt
+  mkdir -p "${tmp}"
+  TMPDIR="${tmp}" run --separate-stderr build_in "${root}" 'owner/repo' 'main' 'headline'
+  assert_success
+  [[ -z "$(find "${tmp}" -mindepth 1 -print -quit)" ]]
+}

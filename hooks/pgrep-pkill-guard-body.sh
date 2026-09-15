@@ -18,8 +18,8 @@
 # not set `set -Eeuo pipefail`, `IFS`, or the ERR trap. The entry script owns
 # all four, and re-setting them here would change the caller's shell. Invariant
 # 2 applies unchanged: never add `shopt -s inherit_errexit`. Invariant 1 applies
-# unchanged too -- POSIX short flags, deliberately, not GNU long options, here
-# and in every part under lib/.
+# unchanged too -- POSIX short flags, deliberately, wherever the BSD tool has no
+# long form, here and in every part under lib/.
 
 # The version `--version` reports. A literal rather than a runtime read of
 # .claude-plugin/plugin.json: that would need path resolution up out of hooks/, a

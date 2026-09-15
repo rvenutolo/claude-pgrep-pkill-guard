@@ -8,7 +8,8 @@ function setup() {
 # sources the hook or calls human::human_mode/human::print_help directly, because the thing
 # worth pinning is what a person at a terminal actually sees.
 #
-# POSIX short flags on purpose -- see the header of tests/manifest.bats.
+# POSIX short flags only where the BSD tool has no long form -- see
+# make_manifest_fixture in tests/manifest.bats.
 
 # @description Run the guard as a subprocess and capture its two streams into
 #              SEPARATE files, so a test can assert one is empty without the

@@ -161,9 +161,11 @@ repo even when bats exited 0.
 
 Shellcheck-clean, shfmt-formatted bash throughout, with one deliberate split:
 
-- **`hooks/` and `tests/*.bats` use POSIX short flags** (`mkdir -p -m 0700`,
-  `rm -f`, `mv -f`). Everything else — `.ci/`, `run-all-checks`, `run-tests`,
-  `.githooks/`, `.justfile`, the workflows — uses GNU long options.
+- **`hooks/` and `tests/*.bats` use a short flag only where macOS has no long
+  form** (`mkdir -p -m 0700`, `rm -f`, `mv -f`); where the BSD tool accepts the
+  long form (`grep --quiet`, `sort --unique`) they use it. Everything else —
+  `.ci/`, `run-all-checks`, `run-tests`, `.githooks/`, `.justfile`, the
+  workflows — uses GNU long options.
 - **`hooks/` must never set `shopt -s inherit_errexit`**, and the
   `repeat_reason="$(repeat::repeat_check ...)" || repeat_reason=''` assignment in `main`
   must never become a plain one.

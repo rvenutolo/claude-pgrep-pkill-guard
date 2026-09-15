@@ -44,7 +44,7 @@ function tab() {
 @test "scanner: a quoted mention yields no pgrep token" {
   local out
   out="$(scan 'grep -r "until ! pgrep --full x" .')"
-  run grep -c "$(tab)pgrep\$" <<< "${out}"
+  run grep --count "$(tab)pgrep\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -88,7 +88,7 @@ function tab() {
   # is code.
   local out
   out="$(scan "$(printf "cat <<'EOF'\npkill --full x\nEOF")")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -115,7 +115,7 @@ function tab() {
 @test "scanner: plain text in an unquoted heredoc body is masked" {
   local out
   out="$(scan "$(printf 'cat <<EOF\npkill --full x\nEOF')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -124,7 +124,7 @@ function tab() {
   # does; only the unquoted form re-enters code context.
   local out
   out="$(scan "$(printf 'cat <<"EOF"\npkill --full x\nEOF')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -134,7 +134,7 @@ function tab() {
   # code the shell never runs.
   local out
   out="$(scan "$(printf 'cat <<EOF\nEOFX\npkill --full x\nEOF')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -159,14 +159,14 @@ function tab() {
   # and hid the pkill after the blank line altogether.
   local out
   out="$(scan "$(printf "cat <<''\nit's fine\n\npkill --full x")")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
 @test "scanner: a quoted empty delimiter masks its body until that blank line" {
   local out
   out="$(scan "$(printf "cat <<''\nit's fine\npkill --full x\n\necho done")")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -176,14 +176,14 @@ function tab() {
   # masked as body -- here `E` closes the body and `pkill` is code again.
   local out
   out="$(scan "$(printf "cat <<E'\nx'\nE\npkill --full x")")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
 @test "scanner: a backslash-escaped delimiter is a quoted delimiter" {
   local out
   out="$(scan "$(printf 'cat <<\\EOF\n$(pkill --full x)\nEOF')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -192,14 +192,14 @@ function tab() {
   # code again.
   local out
   out="$(scan "$(printf 'cat <<-EOF\npkill --full x\n\tEOF\nls')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
 @test "scanner: code after a <<- body is tokenized" {
   local out
   out="$(scan "$(printf 'cat <<-EOF\npkill --full x\n\tEOF\nls')")"
-  run grep -c "$(tab)ls\$" <<< "${out}"
+  run grep --count "$(tab)ls\$" <<< "${out}"
   assert_output '1'
 }
 
@@ -208,28 +208,28 @@ function tab() {
   # ordinary code.
   local out
   out="$(scan "$(printf 'cat <<A <<B\na-body\nA\nb-body\nB\nls')")"
-  run grep -c '<HD:' <<< "${out}"
+  run grep --count '<HD:' <<< "${out}"
   assert_output '2'
 }
 
 @test "scanner: the first of two bodies is masked" {
   local out
   out="$(scan "$(printf 'cat <<A <<B\na-body\nA\nb-body\nB\nls')")"
-  run grep -c "$(tab)a-body\$" <<< "${out}"
+  run grep --count "$(tab)a-body\$" <<< "${out}"
   assert_output '0'
 }
 
 @test "scanner: the second of two bodies is masked" {
   local out
   out="$(scan "$(printf 'cat <<A <<B\na-body\nA\nb-body\nB\nls')")"
-  run grep -c "$(tab)b-body\$" <<< "${out}"
+  run grep --count "$(tab)b-body\$" <<< "${out}"
   assert_output '0'
 }
 
 @test "scanner: code after two bodies is tokenized" {
   local out
   out="$(scan "$(printf 'cat <<A <<B\na-body\nA\nb-body\nB\nls')")"
-  run grep -c "$(tab)ls\$" <<< "${out}"
+  run grep --count "$(tab)ls\$" <<< "${out}"
   assert_output '1'
 }
 
@@ -238,21 +238,21 @@ function tab() {
 @test "scanner: a quoted << is not a heredoc" {
   local out
   out="$(scan "$(printf 'echo "<<EOF"\npkill --full x')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
 @test "scanner: a here-string is not a heredoc" {
   local out
   out="$(scan 'cat <<< x; pkill --full x')"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
 @test "scanner: a shift inside arithmetic is not a heredoc" {
   local out
   out="$(scan "$(printf 'echo $((1<<2))\npkill --full x')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
@@ -262,7 +262,7 @@ function tab() {
   # desyncs every later heredoc's ordinal.
   local out
   out="$(scan 'echo $((1 << 2))')"
-  run grep -c '<<' <<< "${out}"
+  run grep --count '<<' <<< "${out}"
   assert_output '0'
 }
 
@@ -272,14 +272,14 @@ function tab() {
   # expression reads as a heredoc operator.
   local out
   out="$(scan "$(printf 'echo $(( (1) << 2 ))\npkill --full x')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
 @test "scanner: a shift inside an arithmetic command is not a heredoc" {
   local out
   out="$(scan "$(printf '(( x << 2 ))\npkill --full x')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
@@ -298,7 +298,7 @@ function tab() {
   # The heredoc opens at the newline inside the substitution.
   local out
   out="$(scan "$(printf 'echo "$(cat <<EOF\npkill --full x\nEOF\n)"')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '0'
 }
 
@@ -308,7 +308,7 @@ function tab() {
   # the terminator's own newline and mask to end of input.
   local out
   out="$(scan "$(printf 'cat <<EOF\nfoo \\\nEOF\npkill --full x')")"
-  run grep -c "$(tab)pkill\$" <<< "${out}"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }
 
@@ -468,14 +468,14 @@ function loader_probe() {
   # loaded perfectly well. .ci/check-guard-parts catches this at lint time;
   # this case pins what happens when it reaches runtime anyway.
   #
-  # POSIX short flags and POSIX sed syntax on purpose, as everywhere in this
-  # suite: the ambient macOS compat legs run it against BSD tools.
+  # POSIX short flags and POSIX sed syntax on purpose: BSD `cp` and `sed` have
+  # no long forms, and the ambient macOS compat legs run this suite against them.
   cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
   sed -e "s/classify.sh:classify::inspect_command/classify.sh:inspect_command_gone/" \
     "${BODY}" > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   # Prove the fixture really is what this case claims, so it cannot pass by
   # accident against a body the sed never matched.
-  run grep -c 'inspect_command_gone' "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
+  run grep --count 'inspect_command_gone' "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   assert_output '1'
   local out
   out="$(orphan_probe)"

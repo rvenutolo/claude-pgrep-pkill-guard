@@ -5,8 +5,8 @@
 # payload through. Never executed: no shebang, no exec bit, and it must not
 # set `set -Eeuo pipefail`, `IFS`, or the ERR trap -- the entry script owns
 # all three, and a sourced file that sets them reconfigures its caller. Never
-# add `shopt -s inherit_errexit` (invariant 2). POSIX short flags, not GNU
-# long options: this runs on BSD userland too (invariant 1).
+# add `shopt -s inherit_errexit` (invariant 2). Long options only where the
+# BSD tool has them: this runs on BSD userland too (invariant 1).
 
 # Wrappers that run their `-c` payload as code ON THIS MACHINE, in this process
 # tree, so the payload's `bash -c ...` ancestor is the same one a pgrep inside it

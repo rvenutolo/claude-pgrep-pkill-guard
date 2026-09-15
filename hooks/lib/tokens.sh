@@ -5,8 +5,8 @@
 # payload through. Never executed: no shebang, no exec bit, and it must not
 # set `set -Eeuo pipefail`, `IFS`, or the ERR trap -- the entry script owns
 # all three, and a sourced file that sets them reconfigures its caller. Never
-# add `shopt -s inherit_errexit` (invariant 2). POSIX short flags, not GNU
-# long options: this runs on BSD userland too (invariant 1).
+# add `shopt -s inherit_errexit` (invariant 2). Long options only where the
+# BSD tool has them: this runs on BSD userland too (invariant 1).
 
 # Keywords after which the next word is in command position.
 readonly -a COMMAND_POSITION_KEYWORDS=(

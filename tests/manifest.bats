@@ -68,7 +68,7 @@ function setup() {
   # source-level invariant so the branch can never silently regress to `{}`.
   # -A6, not -A3: the replacement puts a three-line comment between the
   # condition and the printf, which pushes INACTIVE outside a 3-line window.
-  run grep -A6 'BASH_VERSINFO\[0\] < 4' "${HOOK}"
+  run grep --after-context=6 'BASH_VERSINFO\[0\] < 4' "${HOOK}"
   assert_success
   assert_output --partial 'systemMessage'
   assert_output --partial 'INACTIVE'
@@ -78,7 +78,7 @@ function setup() {
 @test "inactive: the old-bash branch names a 4.4 floor" {
   # 4.4, not 4.3: bash 4.3 treats expanding an empty array under `set -u` as an
   # unbound-variable error, and the guard expands arrays that can be empty.
-  run grep -A6 'BASH_VERSINFO\[0\] < 4' "${HOOK}"
+  run grep --after-context=6 'BASH_VERSINFO\[0\] < 4' "${HOOK}"
   assert_success
   assert_output --partial 'BASH_VERSINFO[1] < 4))'
   assert_output --partial 'bash 4.4+ required'

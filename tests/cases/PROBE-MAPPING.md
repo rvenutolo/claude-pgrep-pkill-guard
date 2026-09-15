@@ -69,8 +69,8 @@ below — that granularity loss is the cost A1 accepted.
 | 31  | 2919      | a shift inside an arithmetic command is not a heredoc             | `scanner: a shift inside an arithmetic command is not a heredoc`             |
 
 Every one of these greps for a token anchored on a literal tab
-(`grep -c "$(tab)pkill\$"`) rather than `\b`, because `\b` is a GNU extension and
-the compat CI legs run BSD grep.
+(`grep --count "$(tab)pkill\$"`) rather than `\b`, because `\b` is a GNU
+extension and the compat CI legs run BSD grep.
 
 Assertion 8 asserts that the pkill inside `$( )` in an **unquoted** heredoc body
 **is** seen (offset 12) — re-entering code context means the invocation is

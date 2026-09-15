@@ -13,7 +13,8 @@ function setup() {
 # The single source of truth is the array: TRIGGER_RE is built by joining it,
 # so the list is stated exactly once in this file.
 #
-# POSIX short flags on purpose -- see the header of tests/manifest.bats.
+# POSIX short flags only where the BSD tool has no long form -- see
+# make_manifest_fixture in tests/manifest.bats.
 readonly -a TRIGGER_TOKENS=('pgrep' 'kill' '\.output')
 TRIGGER_RE="$(
   IFS='|'

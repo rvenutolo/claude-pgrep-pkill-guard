@@ -6,8 +6,8 @@
 # exec bit, and it must not set `set -Eeuo pipefail`, `IFS`, or the ERR trap
 # -- the entry script owns all three, and a sourced file that sets them
 # reconfigures its caller. Never add `shopt -s inherit_errexit` (invariant 2).
-# POSIX short flags, not GNU long options: this runs on BSD userland too
-# (invariant 1).
+# Long options only where the BSD tool has them: this runs on BSD userland
+# too (invariant 1).
 
 # @description Resolve the path to the awk scanner and freeze it. Called once, from
 #              classify::inspect_command. HOOK_DIR was resolved by the entry script before it sourced this

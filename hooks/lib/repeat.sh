@@ -5,8 +5,8 @@
 # payload through. Never executed: no shebang, no exec bit, and it must not
 # set `set -Eeuo pipefail`, `IFS`, or the ERR trap -- the entry script owns
 # all three, and a sourced file that sets them reconfigures its caller. Never
-# add `shopt -s inherit_errexit` (invariant 2). POSIX short flags, not GNU
-# long options: this runs on BSD userland too (invariant 1).
+# add `shopt -s inherit_errexit` (invariant 2). Long options only where the
+# BSD tool has them: this runs on BSD userland too (invariant 1).
 
 # The repeat rule (Gap 3, 2026-08-26): the first read of a target is always
 # legitimate, the second is defensible, the third inside the window is a poll
@@ -46,9 +46,9 @@ function repeat::repeat_check() {
   local -r file="${dir}/${session_id}"
   local now
   # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
-  # no long options at all (no `parents`, no `mode=`). hooks/ is the one
-  # directory in this repo exempt from the repo-wide long-options rule, for
-  # exactly that reason -- the guard has to run on whatever userland ships.
+  # no long options at all (no `parents`, no `mode=`). hooks/ takes a long
+  # option only where the BSD tool has one, and mkdir has none -- the guard has
+  # to run on whatever userland ships.
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
   # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR /
   # TMPDIR, which the caller owns the mode of.
@@ -137,9 +137,8 @@ function repeat::repeat_check() {
   done <<< "${keys}"
 
   # POSIX short flags in the `rm` and `mv` calls below, deliberately: macOS
-  # ships BSD coreutils, where `--force` does not exist. hooks/ is the one
-  # directory in this repo exempt from the repo-wide long-options rule, for
-  # exactly that reason.
+  # ships BSD coreutils, where `--force` does not exist. hooks/ takes a long
+  # option only where the BSD tool has one, and neither of these does.
   if [[ -z "${kept}" ]]; then
     # `|| true` so a bare rm failure (e.g. the directory lost write
     # permission after the mkdir check above) can never trip errexit here --

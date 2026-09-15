@@ -694,13 +694,16 @@ presence check, not a semantic one: it cannot tell you the comment is still
 true, only that the rule has not lost its footprint in the code while this
 document went on describing it.
 
-### 1. `hooks/` uses POSIX short flags, not GNU long options
+### 1. `hooks/` uses a short flag only where macOS has no long form
 
 The rest of the repo uses GNU long options (`mkdir --parents`, `rm --force`).
-`hooks/` is exempt and must use POSIX short flags — `mkdir -p -m 0700`,
-`rm -f`, `mv -f`. The exemption covers every piece of the split guard: the entry
-script, the loader it sources, and the nine parts under `hooks/lib/` all ship to
-the same machines and run in the same shell.
+`hooks/` is exempt, but only as far as macOS forces it: where the BSD tool has
+no long form it uses the POSIX short flag — `mkdir -p -m 0700`, `rm -f`,
+`mv -f` — and where the BSD tool accepts the long form (`grep --quiet`,
+`sort --unique`) it takes the long form like everything else. The exemption
+covers every piece of the split guard: the entry script, the loader it sources,
+and the nine parts under `hooks/lib/` all ship to the same machines and run in
+the same shell.
 
 **Why:** the hook runs on whatever userland the user's machine ships. macOS
 ships BSD coreutils, whose `mkdir` has no long options at all — no `--parents`,
@@ -718,9 +721,9 @@ rationale in its own words, for the `rm` and `mv` calls there:
 
 ```text
 # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
-# no long options at all (no `parents`, no `mode=`). hooks/ is the one
-# directory in this repo exempt from the repo-wide long-options rule, for
-# exactly that reason -- the guard has to run on whatever userland ships.
+# no long options at all (no `parents`, no `mode=`). hooks/ takes a long
+# option only where the BSD tool has one, and mkdir has none -- the guard has
+# to run on whatever userland ships.
 ```
 
 The second is the header of `hooks/pgrep-pkill-guard-body.sh`, which extends the
@@ -741,7 +744,9 @@ the same exemption. The three ambient compat CI legs — `compat (ubuntu,
 ambient)`, `compat (macos, homebrew bash)` and `compat (macos, stock bash 3.2)`
 — run against the tools the runner ships rather than against the devShell, and
 the first two of those run the bats suite. A `--parents` in a `.bats` file
-passes locally in the devShell and reddens a macOS job. The tracked counterpart
+passes locally in the devShell and reddens a macOS job. The rule is the same one:
+a short flag only where the BSD tool has no long form, so `grep --count` and
+`grep --quiet --fixed-strings` are fine there. The tracked counterpart
 is the `POSIX short flags on purpose` comment above `make_manifest_fixture` in
 `tests/manifest.bats`.
 

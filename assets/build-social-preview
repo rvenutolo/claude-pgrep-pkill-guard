@@ -101,8 +101,12 @@ function main() {
   # so a short `rm -rf` here would buy no portability, only inconsistency.
   local work=''
   work="$(mktemp --directory)"
+  # %q, not hand-written quotes: a TMPDIR holding an apostrophe must still yield
+  # a trap string that parses when it fires.
+  local cleanup=''
+  printf -v cleanup 'rm --recursive --force -- %q' "${work}"
   # shellcheck disable=SC2064 # expand work now, not at trap time
-  trap "rm --recursive --force -- '${work}'" EXIT
+  trap "${cleanup}" EXIT
 
   local source_w=''
   source_w="$(magick identify -format '%w' "${SOURCE}")"

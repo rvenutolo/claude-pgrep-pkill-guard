@@ -100,8 +100,12 @@ function use_bwk_awk() {
     die "nawk not found on PATH — --awk=bwk needs the devShell's one-true-awk"
   fi
   shim="$(mktemp --directory)"
+  # %q, not hand-written quotes: a TMPDIR holding an apostrophe must still yield
+  # a trap string that parses when it fires.
+  local cleanup
+  printf -v cleanup 'rm --recursive --force -- %q' "${shim}"
   # shellcheck disable=SC2064  # expand shim NOW, not when the trap fires
-  trap "rm --recursive --force -- '${shim}'" EXIT
+  trap "${cleanup}" EXIT
   ln --symbolic "${nawk}" "${shim}/awk"
   export PATH="${shim}:${PATH}"
   version="$(awk --version 2>&1 | head --lines=1)"

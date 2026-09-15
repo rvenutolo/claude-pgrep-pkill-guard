@@ -14,7 +14,7 @@
 # deliberately absent: their payload runs somewhere else (or under a different
 # ancestor), and the scanner's masking of it is correct rather than a gap. That
 # distinction -- who runs the payload -- is the whole content of this feature;
-# "is it quoted" is not the question (#155 entry 4).
+# "is it quoted" is not the question.
 readonly -a LOCAL_SHELL_WRAPPERS=('bash' 'sh' 'zsh' 'dash' 'ksh')
 
 # The same, for the user-switching wrappers. `su -c` and `runuser -c` hand the
@@ -178,7 +178,7 @@ function wrappers::segment_pipe_carry() {
 #              would classify text that is not a command.
 #
 #              A heredoc feeding the wrapper's stdin (`bash <<'EOF'`, `sudo sh <<EOF`, `0<<EOF
-#              bash`) is a payload too: the body is the script the wrapper runs, here (#184). A
+#              bash`) is a payload too: the body is the script the wrapper runs, here. A
 #              heredoc operator may carry an explicit fd like any other redirection (`0<<EOF`,
 #              `3<<-EOF`); only fd 0 -- explicit or, far more commonly, the implicit default --
 #              feeds the wrapper's stdin, so `bash 3<<EOF` is skipped: it redirects a different fd,
@@ -204,7 +204,7 @@ function wrappers::segment_pipe_carry() {
 #              order, so a heredoc's ordinal among all `<<` tokens -- fd-prefixed or not -- is its
 #              body's ordinal among the markers.
 #
-#              A payload piped into the wrapper counts too (#186). The wrapper reads its script
+#              A payload piped into the wrapper counts too. The wrapper reads its script
 #              from stdin, so the left of the pipe is what it runs -- but only when that side hands
 #              the text through unchanged: `cat` with no operand but `-`, and no redirection of its
 #              own, passes a heredoc body through, and `echo` / `printf` pass a literal operand (see
@@ -236,7 +236,7 @@ function wrappers::shell_wrapper_payloads() {
   local chain='' chain_skip=0 chain_operands=0
   local heredoc_seq=0 body_seq=0 pending='' leading_pending='' wanted=' ' expect_delim=0 len fd
   local expect_redir_target=0
-  # The pipeline carry (#186). `seg_*` is the simple command being read right
+  # The pipeline carry. `seg_*` is the simple command being read right
   # now; `pipe_*` is what an ended segment left behind for the next one, which
   # only the very next command word may claim. `pending_text` is the wrapper's
   # claimed literal payload, held until its simple command ends the same way a

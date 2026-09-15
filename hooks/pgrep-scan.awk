@@ -9,7 +9,7 @@
 # the command, which has been observed both exposing a quoted string as if it
 # were code and hiding a real poll loop inside a quoted region.
 #
-# A heredoc body is text the shell feeds to a command, not code (#184). Its
+# A heredoc body is text the shell feeds to a command, not code. Its
 # bytes are masked from the newline after the `<<` line to the terminator
 # line, which is masked too. A quoted delimiter (`<<'EOF'`, `<<"EOF"`,
 # `<<\EOF`) masks everything; an unquoted one masks like a double-quoted
@@ -132,7 +132,7 @@ BEGIN {
       # mask the rest of the line. A word also starts after a command separator,
       # so `cmd ;# note` is a comment to bash and has to be masked as one --
       # left unmasked, a substitution in the commented text restores command
-      # position and the guard denies a command bash never runs (#155 entry 7).
+      # position and the guard denies a command bash never runs.
       # `(` is deliberately not a starter here: `$(#` would swallow the closing
       # paren this scanner counts depth with. Nor are `<` and `>`, where a `#`
       # is part of a filename far more often than it opens a comment.

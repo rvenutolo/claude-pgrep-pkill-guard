@@ -264,8 +264,8 @@ function consumption::invocation_is_captured() {
 #              newline that ends the invocation's own simple command.
 #
 #              The `$?` test runs against the RAW command text rather than the token stream, because
-#              the scanner masks a double-quoted `$?` (`echo "exit=$?"`) down to filler -- the very
-#              shape #155 recorded -- and the tokens would show nothing. What the tokens do supply,
+#              the scanner masks a double-quoted `$?` (`echo "exit=$?"`) down to filler -- a shape real
+#              commands use -- and the tokens would show nothing. What the tokens do supply,
 #              and a raw substring search could not, are mask-aware separator offsets: only a `;` or
 #              newline the scanner saw as real code delimits the segment, so a `;` inside a quoted
 #              pattern cannot split it.

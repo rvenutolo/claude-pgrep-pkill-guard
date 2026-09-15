@@ -40,7 +40,7 @@ function tokens::is_prefix_command() {
 #
 #              An option missing from this table leaks -- with no operand budget to absorb it, its
 #              value is read as the command word itself, which ends the chain and hides the real
-#              command behind it (#188). The eleven `sudo` entries are its whole synopsis, checked
+#              command behind it. The eleven `sudo` entries are its whole synopsis, checked
 #              against the man page rather than recalled. That leak is the fail-open
 #              direction, and it is the deliberate trade: an operand budget generous enough to
 #              swallow an unknown option's value would read the `pkill` of `sudo deploy.sh pkill x`
@@ -138,7 +138,7 @@ function tokens::prefix_breaks_chain() {
 # @description Advance command-position tracking by one token and report whether the word AFTER it
 #              is in command position. This is the whole prefix-chain rule, in one place because
 #              scanner::find_invocations and wrappers::shell_wrapper_payloads both need it and a second copy would
-#              drift -- the bare-word version was already duplicated when it was wrong (#188).
+#              drift -- the bare-word version was already duplicated when it was wrong.
 #
 #              An operator or keyword restores command position and clears the chain. A prefix word
 #              opens one. Inside a chain, the prefix's own flags keep command position for what

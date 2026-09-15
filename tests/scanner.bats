@@ -74,7 +74,7 @@ function tab() {
 @test "scanner: a line continuation separates the words it joins" {
   # A `\`-newline is a line continuation, which bash removes outright, so the
   # words on either side must come out separate. Masked as filler they fuse into
-  # one token and the invocation stops being recognised (#172 B).
+  # one token and the invocation stops being recognised.
   local out
   out="$(scan "$(printf 'sudo \\\npkill --full java')")"
   run awk -F'\t' 'NR==2 {print $2}' <<< "${out}"
@@ -85,7 +85,7 @@ function tab() {
 
 @test "scanner: a quoted heredoc body is masked" {
   # A quoted delimiter means bash expands nothing in the body, so nothing in it
-  # is code (#184).
+  # is code.
   local out
   out="$(scan "$(printf "cat <<'EOF'\npkill --full x\nEOF")")"
   run grep -c "$(tab)pkill\$" <<< "${out}"
@@ -305,7 +305,7 @@ function tab() {
 @test "scanner: a body line ending in a backslash does not swallow the terminator" {
   # A body line ending in a backslash is literal text, not a continuation:
   # masking the backslash together with the newline it precedes would swallow
-  # the terminator's own newline and mask to end of input (#184 fix round 1).
+  # the terminator's own newline and mask to end of input.
   local out
   out="$(scan "$(printf 'cat <<EOF\nfoo \\\nEOF\npkill --full x')")"
   run grep -c "$(tab)pkill\$" <<< "${out}"

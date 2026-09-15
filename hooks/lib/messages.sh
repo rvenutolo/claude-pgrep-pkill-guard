@@ -89,7 +89,7 @@ one event.'
 so the search pattern is part of an ancestor process command line, and killing that match terminates
 the session shell.'
       # Kill denials get targeting advice, not anti-polling advice, and the
-      # examples name the tool that was actually invoked (#152).
+      # examples name the tool that was actually invoked.
       # shellcheck disable=SC2016 # `$pid` and backticks are literal deny text
       fixes='Three fixes, in order of preference:
 

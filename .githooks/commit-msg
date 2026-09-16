@@ -6,9 +6,21 @@
 # @arg $1 msg_file path to the file holding the prospective commit message
 # @exitcode 0 the message is conventional
 # @exitcode 1 it is not; the commit is aborted
+# @exitcode 2 the hook was invoked with anything other than one argument
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+
+# Git always passes exactly one argument, the message file, so any other count
+# means the hook was invoked by hand or misinstalled -- and binding an unset $1
+# under `set -u` would abort with a bare "unbound variable" instead of saying
+# so. Exit 2 rather than 1: 1 is commitlint's verdict on the message, and a
+# misinvoked hook must not look like a rejected commit. A top-level guard ahead
+# of the binding, the same file-layout exemption a version guard gets.
+if (($# != 1)); then
+  printf 'usage: %s <msg-file>\n' "${0##*/}" >&2
+  exit 2
+fi
 
 readonly MSG_FILE="$1"
 

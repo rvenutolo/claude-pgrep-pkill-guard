@@ -202,7 +202,8 @@ function consumption::feeds_a_kill_backward() {
 
 # @description True when the invocation's output feeds a kill, either forward (`pgrep ... | xargs
 #              kill`, `... | while read p; do kill "$p"; done`) or backward (`kill $(pgrep ...)`).
-#              The two scans are independent; see consumption::feeds_a_kill_forward and consumption::feeds_a_kill_backward.
+#              The two scans are independent; see consumption::feeds_a_kill_forward and
+#              consumption::feeds_a_kill_backward.
 # @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
 #              invocation in the same command reuses it rather than re-parsing the token stream)
 # @arg $2 target index of the invocation token
@@ -210,7 +211,8 @@ function consumption::feeds_a_kill_backward() {
 # @exitcode 1 it does not
 function consumption::feeds_a_kill() {
   local -r tokens_var="$1" target="$2"
-  consumption::feeds_a_kill_forward "${tokens_var}" "${target}" || consumption::feeds_a_kill_backward "${tokens_var}" "${target}"
+  consumption::feeds_a_kill_forward "${tokens_var}" "${target}" \
+    || consumption::feeds_a_kill_backward "${tokens_var}" "${target}"
 }
 
 # @description True when an invocation sits inside a command substitution, so its output is captured

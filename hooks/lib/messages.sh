@@ -8,6 +8,21 @@
 # its caller. Never add `shopt -s inherit_errexit` (invariant 2). POSIX short
 # flags, not GNU long options: this runs on BSD userland too (invariant 1).
 
+# shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
+# shellcheck disable=SC2034 # read by lib/classify.sh
+readonly WARN_MESSAGE='Note: this `pgrep --full` also matches the process running this very command.
+The Bash tool executes commands as `bash -c ...`, so the search pattern appears in an ancestor
+process command line and is always found. The result is therefore inflated by one, and an exit status
+of 0 does not mean the target process is running. Add `--ignore-ancestors` if the count or the exit
+status is being used for anything.'
+
+# Every deny leads with the escape hatch for the one legitimate reason to put a
+# denied shape in a Bash command: writing prose that quotes it. It used to
+# trail the fixes, where it was read last or not at all.
+# shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
+readonly WRITE_TOOL_LEAD='If this command WRITES text that contains such an example (a heredoc, `echo`, or `printf` into
+a file) rather than running one, use the Write tool instead; this guard only inspects Bash commands.'
+
 # @description Allow the command but attach model-visible context.
 #              additionalContext is the only PreToolUse field verified to reach
 #              the model on an allowed call; systemMessage renders to the user
@@ -36,21 +51,6 @@ function messages::emit_deny() {
     }
   }'
 }
-
-# shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
-# shellcheck disable=SC2034 # read by lib/classify.sh
-readonly WARN_MESSAGE='Note: this `pgrep --full` also matches the process running this very command.
-The Bash tool executes commands as `bash -c ...`, so the search pattern appears in an ancestor
-process command line and is always found. The result is therefore inflated by one, and an exit status
-of 0 does not mean the target process is running. Add `--ignore-ancestors` if the count or the exit
-status is being used for anything.'
-
-# Every deny leads with the escape hatch for the one legitimate reason to put a
-# denied shape in a Bash command: writing prose that quotes it. It used to
-# trail the fixes, where it was read last or not at all.
-# shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
-readonly WRITE_TOOL_LEAD='If this command WRITES text that contains such an example (a heredoc, `echo`, or `printf` into
-a file) rather than running one, use the Write tool instead; this guard only inspects Bash commands.'
 
 # @description Build the deny reason for a deny kind.
 # @arg $1 kind loop, kill, or task-poll

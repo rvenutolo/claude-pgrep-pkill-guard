@@ -108,11 +108,17 @@ function scanner::has_flag() {
   local offset token
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
-    [[ "${token}" == '--' ]] && return 1
-    [[ "${token}" == "${long}" ]] && return 0
-    if [[ "${token}" == -[a-zA-Z]* && "${token}" != --* && "${token}" == *"${short}"* ]]; then
-      return 0
-    fi
+    case "${token}" in
+      '--') return 1 ;;
+      # Quoted, so the long option matches literally rather than as a pattern.
+      "${long}") return 0 ;;
+      --*) ;;
+      -[a-zA-Z]*)
+        if [[ "${token}" == *"${short}"* ]]; then
+          return 0
+        fi
+        ;;
+    esac
   done <<< "${args}"
   return 1
 }

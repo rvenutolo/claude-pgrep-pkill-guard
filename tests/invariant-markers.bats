@@ -175,3 +175,13 @@ BROKEN
   assert_output --partial 'hooks/pgrep-pkill-guard.sh does not carry the invariant marker'
   assert_output --partial 'tests/manifest.bats does not carry the invariant marker'
 }
+
+@test "invariant markers: a surplus argument is rejected, not ignored" {
+  # Every positional is optional, so an extra argument can only be a typo -- a
+  # misplaced flag, a stray path. Swallowing it silently would run the default
+  # check and report success on something nobody asked for. Exit 2 rather than
+  # 1 keeps the misuse distinct from this script's own failure verdict.
+  run "${CHECK}" "${REPO_DIR}" extra
+  assert_failure 2
+  assert_output --partial 'usage:'
+}

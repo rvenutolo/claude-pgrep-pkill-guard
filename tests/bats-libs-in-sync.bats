@@ -98,3 +98,13 @@ function plant_mismatch() {
   assert_failure
   assert_output --partial 'bats-assert'
 }
+
+@test "bats libs in sync: a surplus argument is rejected, not ignored" {
+  # Every positional is optional, so an extra argument can only be a typo -- a
+  # misplaced flag, a stray path. Swallowing it silently would run the default
+  # check and report success on something nobody asked for. Exit 2 rather than
+  # 1 keeps the misuse distinct from this script's own failure verdict.
+  run "${CHECK}" "${ACTION_YML}" "${LOCK_JSON}" extra
+  assert_failure 2
+  assert_output --partial 'usage:'
+}

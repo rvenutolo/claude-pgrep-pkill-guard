@@ -88,12 +88,27 @@
 #             report is stale and BENCH_FRESH_STRICT is unset (warn)
 # @exitcode 1 the report is stale or its commit unreachable with BENCH_FRESH_STRICT
 #             set, or the report is missing or malformed
+# @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
 IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+# Every positional below is optional, so a surplus argument is a typo -- a
+# misplaced flag, a stray path -- not input. Silently ignoring it would run the
+# default check and report success on something nobody asked for. Exit 2 rather
+# than 1: 1 is this script's verdict on what it inspected, and "you called it
+# wrong" must stay distinguishable from "what you pointed me at is wrong". The
+# ERR trap is dropped first so a usage error reads as a usage error rather than
+# as a crash (#43, invariant 6). A top-level guard ahead of the bindings, the
+# same file-layout exemption a version guard gets.
+if (($# > 1)); then
+  printf 'usage: %s [dir]\n' "${0##*/}" >&2
+  trap - ERR
+  exit 2
+fi
 
 readonly FIXTURE_DIR="${1:-}"
 

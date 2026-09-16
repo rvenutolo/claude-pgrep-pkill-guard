@@ -91,14 +91,25 @@ function consumption::feeds_a_kill_forward() {
             if ((xargs_skip == 1)); then
               # Value word belonging to the option before it, not a command.
               xargs_skip=0
-            elif [[ "${word}" == 'kill' ]]; then
-              return 0
-            elif [[ "${word}" == '{' || "${word}" == '}' ]]; then
-              : # `-I{}` placeholder braces, not a new command word
-            elif consumption::is_xargs_value_option "${word}"; then
-              xargs_skip=1
-            elif [[ "${word}" != -* ]] && ! tokens::is_prefix_command "${word}"; then
-              segment='other'
+            else
+              case "${word}" in
+                'kill') return 0 ;;
+                '{' | '}')
+                  : # `-I{}` placeholder braces, not a new command word
+                  ;;
+                # Every XARGS_VALUE_OPTIONS entry starts with a dash, so the
+                # value-option test belongs here and nowhere else.
+                -*)
+                  if consumption::is_xargs_value_option "${word}"; then
+                    xargs_skip=1
+                  fi
+                  ;;
+                *)
+                  if ! tokens::is_prefix_command "${word}"; then
+                    segment='other'
+                  fi
+                  ;;
+              esac
             fi
             ;;
         esac
@@ -321,10 +332,15 @@ function consumption::result_is_consumed() {
   local offset token
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
-    [[ "${token}" == '--count' ]] && return 0
-    if [[ "${token}" == -[a-zA-Z]* && "${token}" != --* && "${token}" == *c* ]]; then
-      return 0
-    fi
+    case "${token}" in
+      '--count') return 0 ;;
+      --*) ;;
+      -[a-zA-Z]*)
+        if [[ "${token}" == *c* ]]; then
+          return 0
+        fi
+        ;;
+    esac
   done <<< "${args}"
 
   # An enclosing `if` / `elif`, or a negation, reads the exit status as a boolean.

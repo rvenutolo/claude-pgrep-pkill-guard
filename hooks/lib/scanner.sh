@@ -9,6 +9,12 @@
 # Long options only where the BSD tool has them: this runs on BSD userland
 # too (invariant 1).
 
+# Long options that take a separate value, so that value is not the operand.
+readonly -a PGREP_VALUE_OPTIONS=(
+  '--delimiter' '--parent' '--pgroup' '--session' '--terminal' '--uid' '--euid'
+  '--group' '--ns' '--nslist' '--signal' '--older'
+)
+
 # @description Resolve the path to the awk scanner and freeze it. Called once, from
 #              classify::inspect_command. HOOK_DIR was resolved by the entry script before it sourced this
 #              file, so this costs no process of its own -- see resolve_hook_dir over there.
@@ -122,12 +128,6 @@ function scanner::has_flag() {
   done <<< "${args}"
   return 1
 }
-
-# Long options that take a separate value, so that value is not the operand.
-readonly -a PGREP_VALUE_OPTIONS=(
-  '--delimiter' '--parent' '--pgroup' '--session' '--terminal' '--uid' '--euid'
-  '--group' '--ns' '--nslist' '--signal' '--older'
-)
 
 # @description Extract the search pattern: the last argument that is neither a flag, a flag's value,
 #              nor a redirection. Once a bare -- end-of-options terminator is seen, every later token

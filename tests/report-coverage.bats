@@ -42,11 +42,11 @@ HEALTHY_FILES='[
 #              of those is what these cases are grading. What they grade is the
 #              LOCATION rule -- exactly one coverage.json, one level down, with
 #              kcov's empty kcov-merged/ excluded -- and, since #128, the
-#              INTEGRITY rule: both hooks/ files present in files[] with a
-#              non-zero covered-line count. Both are pure JSON-and-filesystem
-#              shape and need no kcov at all. POSIX short flags on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
-#              mkdir has no --parents.
+#              INTEGRITY rule: every required hooks/ file present in files[]
+#              with a non-zero covered-line count. Both are pure
+#              JSON-and-filesystem shape and need no kcov at all. POSIX short
+#              flags on purpose: the compat CI legs run this suite against macOS
+#              BSD coreutils, whose mkdir has no --parents.
 #
 #              The fixture grew a files[] array when the integrity rule landed.
 #              It predates that rule and used to omit files[] entirely, which now

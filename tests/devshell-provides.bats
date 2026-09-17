@@ -50,6 +50,7 @@ function make_package() {
 # @description Print the path of a package's `out` output.
 # @arg $1 root fixture root
 # @arg $2 name package name
+# @stdout the package's out path, no trailing newline
 function package_out() {
   printf '%s/store/%s-out' "$1" "$2"
 }

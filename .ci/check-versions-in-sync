@@ -56,8 +56,8 @@ readonly BOOTSTRAP_VERSION='0.0.0'
 # @arg $2 filter the jq filter to apply
 # @stdout the extracted value
 # @stderr one FAIL line naming the file and filter, on any failure path
-# @exitcode 0 the field exists and is a non-null scalar
-# @exitcode 1 the file is missing, unparsable, or the field is absent
+# @exitcode 0 the field exists and is semver-shaped
+# @exitcode 1 the file is missing, unparsable, or the field is absent or malformed
 function read_version() {
   local -r file="$1" filter="$2"
   if [[ ! -f "${file}" ]]; then

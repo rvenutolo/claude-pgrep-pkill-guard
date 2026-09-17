@@ -39,6 +39,7 @@ a file) rather than running one, use the Write tool instead; this guard only ins
 #              the model on an allowed call; systemMessage renders to the user
 #              only, and permissionDecisionReason is fed back under deny alone.
 # @arg $1 text the message the model should read
+# @stdout the allow-with-additionalContext hook response
 function messages::emit_warn() {
   local -r text="$1"
   jq --null-input --arg msg "${text}" '{
@@ -52,6 +53,7 @@ function messages::emit_warn() {
 
 # @description Emit a deny decision.
 # @arg $1 text the reason shown to the model
+# @stdout the deny hook response
 function messages::emit_deny() {
   local -r text="$1"
   jq --null-input --arg msg "${text}" '{

@@ -497,6 +497,8 @@ function main() {
   TEMP_AT_START="$(package_temp)"
   readonly LOAD_AT_START TEMP_AT_START
 
+  # Index-aligned, in corpus order: row i is payload_of[i] in cohort
+  # cohort_of[i]. Iterated by index below, so the order is the semantics.
   local -a cohort_of=() payload_of=()
   local cohort payload
   while IFS=$'\t' read -r cohort payload; do

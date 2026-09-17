@@ -176,6 +176,7 @@ function check_parses() {
 # @exitcode 1 at least one is missing
 function check_i8_vendored_sources() {
   local rc=0
+  # Rows are `index<TAB>source`, one per string-source plugins[] entry.
   local -a entries
   mapfile -t entries < <(jq --raw-output \
     '.plugins | to_entries[] | select(.value.source | type == "string") | "\(.key)\t\(.value.source)"' \

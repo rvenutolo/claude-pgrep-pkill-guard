@@ -322,6 +322,8 @@ function reverse_check() {
     return 1
   fi
 
+  # packages rows are `name<TAB>outpath[<TAB>outpath...]`; formatters rows are
+  # one command path each.
   local -a packages=() formatters=()
   if [[ -n "${packages_raw}" ]]; then
     mapfile -t packages <<< "${packages_raw}"

@@ -36,6 +36,9 @@ readonly TASK_OUTPUT_PATH_RE='claude-[0-9]+/[^[:space:]]*/tasks/[^[:space:]/]+\.
 # @exitcode 1 none
 function classify::task_poll_detected() {
   local -r command="$1" tokens="$2"
+  # Index-aligned, in binding order: bound_names[i] was assigned bound_paths[i].
+  # Searched in that order below, first match wins -- not an associative array,
+  # because the order is the semantics.
   local -a bound_names=() bound_paths=()
   local idx=0 offset token raw path name i context is_ref ref_re
   while IFS=$'\t' read -r offset token; do

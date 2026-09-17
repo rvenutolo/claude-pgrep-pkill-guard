@@ -57,6 +57,8 @@ SCANNER=''
 # `grep` returning non-zero would look exactly like a missing one and stand the
 # guard down on every call (#147). A function that was defined is the proof
 # that the file was found, parsed to the end, and ran.
+#
+# Each row is `<file under lib/>:<function it must define>`.
 readonly -a GUARD_PARTS=(
   'tokens.sh:tokens::is_keyword'
   'scanner.sh:scanner::resolve_scanner'

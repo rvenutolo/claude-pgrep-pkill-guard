@@ -16,7 +16,7 @@ readonly HOOK_NAME='pgrep-pkill-guard'
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
   # Loud, not silent. A bare `{}` here would leave a coworker on stock macOS
   # bash 3.2 with an installed plugin that quietly does nothing -- the exact
-  # failure the jq/awk branches further down spend a systemMessage to prevent.
+  # failure the jq/awk branches in hooks/lib/classify.sh spend a systemMessage to prevent.
   printf '{"systemMessage":"%s%s"}\n' \
     "${HOOK_NAME}: bash 4.4+ required (found ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}); " \
     'the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash.'
@@ -27,10 +27,10 @@ fi
 # surfaces an error on every Bash call; exit 2 would block the tool outright.
 trap 'emit_allow; exit 0' ERR
 
-# Resolved lazily by resolve_hook_dir, which main calls only once the prefilter
-# has let a payload through: it locates both the sourced body and the awk
-# scanner, and it costs a `dirname` fork and exec (~1.6 ms, #54) that an
-# ordinary Bash call has no reason to pay.
+# Resolved lazily by resolve_hook_dir, via load_body: only the human-mode
+# dispatch or a payload that passed the prefilter pays for it. It locates both
+# the sourced body and the awk scanner, and costs a `dirname` fork and exec
+# (~1.6 ms, #54) that an ordinary Bash call has no reason to pay.
 #
 # Declared here rather than only inside the function so `set -u` has a
 # definition to see on any path that never resolves it.
@@ -43,9 +43,9 @@ function emit_allow() {
   printf '{}\n'
 }
 
-# @description Resolve the directory this script lives in and freeze it. Called once, from main,
-#              after the prefilter. Both consumers -- the sourced body and, through it, the awk
-#              scanner -- sit downstream of that short-circuit.
+# @description Resolve the directory this script lives in and freeze it. Called once, from
+#              load_body. Both consumers are the sourced body and, through it, the awk
+#              scanner.
 # @set HOOK_DIR the absolute, symlink-resolved directory holding this script
 # @noargs
 function resolve_hook_dir() {

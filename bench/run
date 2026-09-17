@@ -14,7 +14,7 @@
 #              what a real session pays. See bench/RESULTS.md for the published
 #              run.
 #
-#              Corpus is tests/cases/verdicts.tsv, the same 304 rows the bats
+#              Corpus is tests/cases/verdicts.tsv, the same rows the bats
 #              suite asserts on, so the benchmark cannot drift from the tests
 #              and no second corpus has to be maintained. This script never
 #              asserts a verdict -- that is tests/classify.bats's job.
@@ -109,7 +109,7 @@ asserts on -- grouped into the code paths the hook's `main` actually takes:
   deny      deny verdicts: the stateless tiers plus messages::deny_message, no state
 
 Options:
-  --reps N        repetitions over the corpus (default 15)
+  --reps N        repetitions over the corpus (default 45)
   --output PATH   write the markdown report to PATH instead of stdout
   --smoke         one repetition over one payload per cohort, validating every
                   response as JSON. Timings are printed but are NOT publishable.
@@ -479,8 +479,8 @@ function main() {
   WORK="$(mktemp --directory)"
   readonly WORK
   # The state dir is inside the same scratch tree, so the EXIT trap takes both.
-  # Overwriting the ERR trap is deliberate: from here on a failure must still
-  # clean up, and the ERR trap above only reports.
+  # A separate EXIT trap, alongside the reporting ERR trap above: from here on
+  # a failure must still clean up, and the ERR trap only reports.
   trap 'rm --recursive --force -- "${WORK}"' EXIT
 
   local -r state_dir="${WORK}/state"
@@ -489,7 +489,7 @@ function main() {
   export PGREP_PKILL_GUARD_STATE_DIR="${state_dir}"
 
   # Captured HERE, before a single payload is timed, and deliberately global so
-  # emit_report can read them: the run spawns ~15k processes, so a load average
+  # write_report can read them: the run spawns ~15k processes, so a load average
   # sampled at report time measures the benchmark rather than the machine that
   # hosted it. The package temperature has the same problem in reverse -- it is
   # the pre-run thermal headroom that shapes the whole distribution.

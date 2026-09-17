@@ -351,7 +351,8 @@ function classify::repeat_tier_reason() {
 # @description Everything the guard does once the prefilter has decided the payload is worth
 #              looking at: the preconditions, the jq extraction, the stateless tiers, the
 #              stateful repeat tier, and emission. Split out of `main` so the entry script can
-#              stay small enough to parse cheaply -- see the header of this file.
+#              stay small enough to parse cheaply -- see the header of
+#              hooks/pgrep-pkill-guard-body.sh.
 # @arg $1 input the raw hook JSON payload, exactly as read from stdin
 # @stdout the hook's JSON response
 function classify::inspect_command() {
@@ -393,8 +394,8 @@ function classify::inspect_command() {
 
   local decision deny_detail
   IFS=$'\t' read -r decision deny_detail <<< "$(classify::classify_command "${command}")"
-  # main owns stdout; classify::classify_command does not, so it hands the condition up as
-  # a verdict and the message is emitted here.
+  # classify::inspect_command owns stdout; classify::classify_command does not, so it hands
+  # the condition up as a verdict and the message is emitted here.
   case "${decision}" in
     'inactive')
       printf '{"systemMessage":"%s: %s"}\n' "${HOOK_NAME}" "${SCANNER_INACTIVE_MESSAGE}"

@@ -23,7 +23,7 @@ function main() {
   mapfile -t files < <(git -C "${REPO_DIR}" ls-files '.github/workflows/*.yml' '.github/actions/*/action.yml')
 
   if ((${#files[@]} == 0)); then
-    # Phase 1 has no workflows yet. That is legitimate, not a failure.
+    # A clone with no workflows (a fork stripped of .github/) has nothing to pin.
     printf 'OK: no workflow files tracked yet; nothing to check\n' >&2
     return 0
   fi

@@ -149,8 +149,8 @@ YAML
 
 # @description Write a labels file declaring exactly the names given, so a case
 #              can assert the mismatch rather than depending on the real
-#              .github/labels.yml. POSIX short flags on purpose -- see the
-#              header of tests/manifest.bats.
+#              .github/labels.yml. POSIX short flags on purpose -- see
+#              make_manifest_fixture in tests/manifest.bats.
 # @arg $1 path the labels file to write
 # @arg $@ rest label names to declare
 function make_labels_fixture() {

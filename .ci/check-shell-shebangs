@@ -86,7 +86,8 @@ readonly CANONICAL='#!/usr/bin/env bash'
 # One row today. .ci/check-inactive-on-old-bash is POSIX sh on purpose: it is
 # the stock-bash-3.2 compat leg's entry point, so it must run on a shell that
 # predates everything the rest of this repo assumes. Its own header explains
-# that at :3-11, and docs/architecture.md:428,970 records it -- but until this
+# that at :3-11, and docs/architecture.md records it in both its `--help` on
+# bash below 4.4 limitation and its invariant 6 exemption list -- but until this
 # row existed, run-lint-checks skipped it by MECHANISM (its first line is not
 # the canonical string) rather than by name, which is indistinguishable from
 # the bug this gate closes.

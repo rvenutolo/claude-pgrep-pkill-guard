@@ -297,7 +297,7 @@ function field() {
   # The emitted base64 must decode back to exactly the staged bytes. Compared by
   # RE-ENCODING the expected bytes rather than decoding the emitted string:
   # GNU base64 decodes with --decode and BSD with -D, and this suite runs on
-  # both compat legs. Compared with `[` rather than assert_equal so a mismatch
+  # both compat legs. Compared with `[[ ]]` rather than assert_equal so a mismatch
   # does not dump a quarter of a megabyte of base64 into the failure report.
   local emitted expected
   emitted="$(field '.variables.input.fileChanges.additions[0].contents')"

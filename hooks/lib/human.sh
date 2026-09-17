@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 #
 # Human mode: --help and --version, sourced by hooks/pgrep-pkill-guard-body.sh
-# once the entry script's prefilter has let a payload through. Never executed:
+# when the entry script's dispatch sees arguments or a terminal on stdin --
+# before, and instead of, the prefilter. Never executed:
 # no shebang, no exec bit, and it must not set `set -Eeuo pipefail`, `IFS`, or
 # the ERR trap -- the entry script owns all three, and a sourced file that
 # sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
@@ -108,9 +109,9 @@ function human::human_mode() {
   fi
 
   # No arguments means the dispatch fired on `[[ -t 0 ]]`: somebody ran the hook
-  # by hand, and the read further up would otherwise block on an EOF a terminal
-  # never sends until they find Ctrl-D. Say what the script wants instead of
-  # hanging (clig.dev).
+  # by hand, and the entry script's stdin read would otherwise block on an EOF a
+  # terminal never sends until they find Ctrl-D. Say what the script wants
+  # instead of hanging (clig.dev).
   if (($# == 0)); then
     printf '%s: reads a PreToolUse hook JSON object on stdin, and stdin is a terminal.\n' \
       "${HOOK_NAME}" >&2

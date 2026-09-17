@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Shared test setup loader for every *.bats file under tests/.
-# Each .bats file's setup() does: load '../test_helper/common'
+# Each .bats file's setup() does: load 'test_helper/common'
 #
 # Globals exported:
 #   REPO_DIR — repo root, resolved from BATS_TEST_DIRNAME

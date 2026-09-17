@@ -172,7 +172,7 @@ function setup() {
 #              scope because bats sources this file once per test to discover
 #              it, and top-level work runs on every one of those passes.
 # @noargs
-# @stdout nothing; sets FUZZ_FRAGMENTS in the caller
+# @stdout nothing; sets FUZZ_FRAGMENTS and FUZZ_GLUE in the caller
 function fuzz_catalogue() {
   FUZZ_FRAGMENTS=(
     # Quote openers with no closer, and their backslash-escaped forms. An
@@ -315,7 +315,7 @@ function fuzz_case() {
 #              FUZZ_SEED. setup_file calls this once and writes the result out;
 #              only the two anti-vacuity tests call it again, to show that a
 #              seed reproduces its corpus and that a different seed does not.
-# @arg $1 count how many cases to generate; defaults to FUZZ_N
+# @arg $1 wanted how many cases to generate; defaults to FUZZ_N
 # @arg $2 seed  which seed to generate from; defaults to FUZZ_SEED. Taken as an
 #         argument rather than by reassigning FUZZ_SEED, because a test that
 #         reassigned the exported seed would be reassigning it inside the

@@ -38,6 +38,7 @@ HOOK_DIR=''
 
 # @description Emit an allow decision.
 # @noargs
+# @stdout the allow response, `{}`
 function emit_allow() {
   printf '{}\n'
 }
@@ -61,6 +62,7 @@ function resolve_hook_dir() {
 #              it. Two callers need it -- the human-mode dispatch and the JSON path -- so the
 #              resolution and both fail-open branches live here, not twice over (invariant 5).
 # @noargs
+# @stdout on failure, one `{"systemMessage":...}` line
 # @exitcode 0 the body is loaded and its functions are callable
 # @exitcode 1 it was missing or would not load; the systemMessage saying so is already on stdout
 function load_body() {
@@ -90,8 +92,6 @@ function load_body() {
   return 0
 }
 
-# @description Entry point.
-# @noargs
 function main() {
   # Human mode. Both tests are builtins, so the fast path pays no fork and
   # nothing measurable to ask them. Claude Code invokes the hook with no

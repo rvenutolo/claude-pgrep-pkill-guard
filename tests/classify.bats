@@ -7,6 +7,7 @@ function setup() {
 #              decision, plus the mitigation needle that identifies its kind.
 # @arg $1 command the command string to classify
 # @arg $2 expected the recorded verdict: allow, warn, or deny:<kind>
+# @stderr the expected-versus-got diagnostic, on a row that no longer holds
 # @exitcode 0 the row still holds
 # @exitcode 1 it does not
 function assert_row() {

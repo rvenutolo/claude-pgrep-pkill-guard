@@ -247,7 +247,7 @@ function commit_present() {
 #              prefixes are set explicitly so `--- `/`+++ ` headers are always
 #              `a/`- or `b/`-prefixed and cannot be confused with a content line
 #              that starts the same way.
-# @arg $1 sha the recorded commit
+# @arg $1 recorded the recorded commit
 # @stdout the reason the difference is harmless, for the caller's `OK:` line
 # @exitcode 0 nothing in the net difference can change the measured cost
 # @exitcode 1 hooks/ genuinely differs, or the diff could not be read

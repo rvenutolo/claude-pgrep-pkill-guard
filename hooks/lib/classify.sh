@@ -208,7 +208,8 @@ function classify::classify_wrapper_payloads() {
 # @description Classify a Bash command string.
 # @arg $1 command the command string
 # @arg $2 depth wrapper-payload recursion depth, 0 for the command the user actually ran
-# @stdout allow, warn, or deny:loop / deny:kill / deny:task-poll followed by a tab and the invoked
+# @stdout allow, warn, inactive (the scanner stream failed its integrity check, here or in a wrapper
+#         payload), or deny:loop / deny:kill / deny:task-poll followed by a tab and the invoked
 #         tool (or, for task-poll, the polled path)
 function classify::classify_command() {
   local -r command="$1" depth="${2:-0}"

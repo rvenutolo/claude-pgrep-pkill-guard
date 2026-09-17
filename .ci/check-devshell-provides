@@ -299,7 +299,8 @@ function forward_check() {
 # @arg $@ tools the declared tools
 # @stderr one FAIL line per unjustified package, or per failed inventory read
 # @exitcode 0 every package is justified
-# @exitcode 1 at least one package justifies nothing, or the inventory is empty
+# @exitcode 1 at least one package justifies nothing, the inventory is empty, or
+#             an inventory read failed
 function reverse_check() {
   local -ra tools=("$@")
   # Both statuses are tested explicitly rather than left to errexit. main calls

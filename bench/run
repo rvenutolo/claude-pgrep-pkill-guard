@@ -83,6 +83,7 @@ declare -rA COHORT_PATH=(
 
 # @description Print usage on stdout.
 # @noargs
+# @stdout the usage text
 function usage() {
   cat << 'USAGE'
 Usage: bench/run [--reps N] [--output PATH] [--smoke] [--help]

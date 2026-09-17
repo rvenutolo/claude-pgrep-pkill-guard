@@ -36,7 +36,6 @@ function consumption::is_xargs_value_option() {
   return 1
 }
 
-# @description True when an invocation's output is piped into a kill, or when the invocation is
 # @description Forward form of consumption::feeds_a_kill: the invocation's output is piped, directly or through
 #              `xargs`, into a `kill`. `kill` must head a pipeline segment, or follow an `xargs` that
 #              heads one, with flags and prefix words allowed in between: `pgrep --full x | grep -i

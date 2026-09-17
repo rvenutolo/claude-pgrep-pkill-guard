@@ -17,8 +17,9 @@ if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); 
   # Loud, not silent. A bare `{}` here would leave a coworker on stock macOS
   # bash 3.2 with an installed plugin that quietly does nothing -- the exact
   # failure the jq/awk branches further down spend a systemMessage to prevent.
-  printf '{"systemMessage":"%s"}\n' \
-    "${HOOK_NAME}: bash 4.4+ required (found ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}); the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash."
+  printf '{"systemMessage":"%s%s"}\n' \
+    "${HOOK_NAME}: bash 4.4+ required (found ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}); " \
+    'the pgrep/pkill guard is INACTIVE for this command. On macOS: brew install bash.'
   exit 0
 fi
 

@@ -396,8 +396,7 @@ function classify::inspect_command() {
   # a verdict and the message is emitted here.
   case "${decision}" in
     'inactive')
-      printf '{"systemMessage":"%s"}\n' \
-        "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+      printf '{"systemMessage":"%s: %s"}\n' "${HOOK_NAME}" "${SCANNER_INACTIVE_MESSAGE}"
       return 0
       ;;
     deny:*)
@@ -412,8 +411,7 @@ function classify::inspect_command() {
   # status tells a rescan failure (2) apart from "no rule fired" (1).
   repeat_reason="$(classify::repeat_tier_reason "${command}" "${session_id}")" || repeat_rc=$?
   if ((repeat_rc == 2)); then
-    printf '{"systemMessage":"%s"}\n' \
-      "${HOOK_NAME}: the command scanner tokenized this command incorrectly (incompatible awk?); the pgrep/pkill guard is INACTIVE for this command."
+    printf '{"systemMessage":"%s: %s"}\n' "${HOOK_NAME}" "${SCANNER_INACTIVE_MESSAGE}"
     return 0
   fi
   # Only a string shaped like messages::repeat_message's output is treated as a deny

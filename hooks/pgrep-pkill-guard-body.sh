@@ -96,11 +96,13 @@ for guard_part in "${GUARD_PARTS[@]}"; do
     # the part's LAST top-level command, which is the whole reason this loop
     # judges by `declare -F` (#147) -- so readability is the test.
     if [[ -r "${HOOK_DIR}/lib/${guard_part%%:*}" ]]; then
-      printf '{"systemMessage":"%s"}\n' \
-        "${HOOK_NAME}: lib/${guard_part%%:*} did not define ${guard_part#*:}; it either failed to parse or its GUARD_PARTS row names the wrong function. The pgrep/pkill guard is INACTIVE for this command."
+      printf '{"systemMessage":"%s%s"}\n' \
+        "${HOOK_NAME}: lib/${guard_part%%:*} did not define ${guard_part#*:}; it either failed to parse" \
+        " or its GUARD_PARTS row names the wrong function. The pgrep/pkill guard is INACTIVE for this command."
     else
-      printf '{"systemMessage":"%s"}\n' \
-        "${HOOK_NAME}: lib/${guard_part%%:*} is missing or unreadable; the pgrep/pkill guard is INACTIVE for this command."
+      printf '{"systemMessage":"%s%s"}\n' \
+        "${HOOK_NAME}: lib/${guard_part%%:*} is missing or unreadable; " \
+        'the pgrep/pkill guard is INACTIVE for this command.'
     fi
     exit 0
   }

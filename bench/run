@@ -144,7 +144,7 @@ function die() {
 #              escaped every control character, so the payload can contain
 #              neither a tab nor a newline.
 #
-#              The split now mirrors the hook's prefilter, not the old
+#              The split mirrors the hook's prefilter rather than a
 #              quiet/inspect branch. `inspect` is a command containing `pgrep`
 #              or `.output`, which also runs the stateful tier. `quiet` is a
 #              command containing `kill` but neither of those -- for example

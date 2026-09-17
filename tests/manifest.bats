@@ -180,7 +180,7 @@ JSON
   "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
 }
 JSON
-  # beta-plugin's marketplace entry points at "./beta", and I8 now requires
+  # beta-plugin's marketplace entry points at "./beta", and I8 requires
   # every string source to vendor its own plugin.json -- so the fixture must
   # provide one, or every test that reuses this fixture would fail on I8 for
   # the wrong reason.

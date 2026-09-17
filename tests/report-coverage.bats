@@ -48,11 +48,11 @@ HEALTHY_FILES='[
 #              flags on purpose: the compat CI legs run this suite against macOS
 #              BSD coreutils, whose mkdir has no --parents.
 #
-#              The fixture grew a files[] array when the integrity rule landed.
-#              It predates that rule and used to omit files[] entirely, which now
-#              describes exactly the broken report the reporter must refuse. The
-#              fix is for the healthy fixture to carry what a healthy report
-#              carries, NOT for the reporter to tolerate a report with no files[]
+#              The healthy fixture carries a files[] array because the
+#              INTEGRITY rule requires one. A fixture with no files[] describes
+#              exactly the broken report the reporter must refuse. The fix is
+#              for the healthy fixture to carry what a healthy report carries,
+#              NOT for the reporter to tolerate a report with no files[]
 #              -- a report that has lost every file is the loudest instance of
 #              the loss #128 is about, and grandfathering it in to keep an old
 #              fixture green would gut the check on its first day.

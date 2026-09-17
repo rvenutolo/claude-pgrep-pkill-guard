@@ -13,8 +13,8 @@
 #
 #              #55 fixed it by splitting the guard in two: a small entry script
 #              that runs the payload prefilter, and
-#              hooks/pgrep-pkill-guard-body.sh, a loader for the ~2200 lines
-#              under hooks/lib/, none of it with a shebang or exec bit -- which
+#              hooks/pgrep-pkill-guard-body.sh, a loader for the parts under
+#              hooks/lib/, none of it with a shebang or exec bit -- which
 #              the entry script sources only once a payload looks worth
 #              inspecting. That win is invisible to every other check in this
 #              repo, so without this gate it would regress one helper at a time

@@ -8,9 +8,10 @@
 #              Scope is defined by subtraction, and the subtraction is the whole
 #              reason this script exists. `nix fmt` runs treefmt, and treefmt's
 #              shfmt entry includes only *.sh, *.bash, *.bats and *.envrc -- so
-#              it never touches the twenty-two EXTENSIONLESS bash scripts this
-#              repo is mostly built out of (run-all-checks, run-tests, every
-#              .ci/ and .githooks/ file, bench/run, assets/build-social-preview),
+#              it never touches the EXTENSIONLESS bash scripts this repo is
+#              mostly built out of (run-all-checks, run-tests, every bash script
+#              under .ci/, every .githooks/ file, bench/run,
+#              assets/build-social-preview),
 #              every one of which .ci/run-lint-checks nonetheless shellchecks and
 #              shfmt-diffs. treefmt knows nothing about .justfile, markdown prose
 #              or spelling either. Those gaps are exactly the four fixers below,

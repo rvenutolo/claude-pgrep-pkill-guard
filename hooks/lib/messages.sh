@@ -133,10 +133,11 @@ A single `cat`, `grep`, or `test` of the file is fine; a loop on it is not.'
       ;;
     *)
       # Unreachable stub: every kind classify::classify_command can emit (loop, kill,
-      # task-poll, repeat) has its own arm above, and tests/deny-sweep.bats
-      # fails the build on an unknown kind. Kept so an unmatched kind still
-      # produces a message instead of an unbound `case` fallthrough, and
-      # `fixes` is non-empty so the output never has a trailing empty block.
+      # task-poll) has its own arm above; repeat denials are built by
+      # messages::repeat_message instead. tests/deny-sweep.bats fails the build on an
+      # unknown kind. Kept so an unmatched kind still produces a message instead of an
+      # unbound `case` fallthrough, and `fixes` is non-empty so the output never has a
+      # trailing empty block.
       preamble='This pgrep matches its own ancestor process.'
       fixes='(no fixes: unknown deny kind)'
       ;;

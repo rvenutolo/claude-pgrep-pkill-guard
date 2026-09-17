@@ -287,7 +287,7 @@ function main() {
   local rc=0
 
   # An empty scan is a failure, never a vacuous pass -- the same guard as the
-  # `count == 0` one in .ci/check-devshell-provides. Without it this script
+  # `${#tools[@]} == 0` one in .ci/check-devshell-provides. Without it this script
   # exits 0 on a directory holding no forms at all, which is precisely the
   # regression it exists to catch.
   if ((${#forms[@]} == 0)); then

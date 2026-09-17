@@ -1,10 +1,11 @@
 # shellcheck shell=bash
 #
 # The pgrep/pkill guard's body: everything an ordinary Bash tool call never
-# reaches. hooks/pgrep-pkill-guard.sh sources this file from `main`, AFTER the
-# prefilter has decided the payload is worth looking at, and then calls
-# classify::inspect_command. This file is now only the loader -- it declares the two
-# globals the parts share and sources the parts themselves.
+# reaches. hooks/pgrep-pkill-guard.sh sources this file from load_body -- for
+# human mode, or AFTER the prefilter has decided the payload is worth looking
+# at -- and then calls classify::inspect_command or human::human_mode. This
+# file is now only the loader -- it declares the two globals the parts share
+# and sources the parts themselves.
 #
 # The split exists for one reason: bash parses ~1.2 us per line before it runs
 # any of them (#55), and at 2200-odd lines that was 2.4 ms on every Bash call
@@ -75,7 +76,7 @@ for guard_part in "${GUARD_PARTS[@]}"; do
   # the ERR trap, so a missing or corrupt part reaches the check below rather
   # than the trap's bare `{}`. The status itself is discarded on purpose -- see
   # the list above for why it cannot be trusted -- and `declare -F` is the
-  # verdict. Both are builtins: no fork on the path that already paid for jq.
+  # verdict. Both are builtins: no fork on a path that is about to pay for jq anyway.
   # `exit 0`, not `return 1`: the entry script's own `|| { ... }` around its
   # source of this file would otherwise print a second JSON line, and an exit
   # from a sourced file is what the ERR trap itself does. Fail open, loudly --

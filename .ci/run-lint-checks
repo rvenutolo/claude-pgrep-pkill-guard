@@ -124,7 +124,7 @@ function main() {
   # run it, and awk has no parse-only mode. Feeding it nothing is the closest
   # thing -- and it is also the harshest input, since the empty-stdin path is
   # the one gawk complained about (see the guard on pgrep-scan.awk's
-  # trailing-newline strip, and the commit before this one).
+  # trailing-newline strip).
   #
   # LC_ALL=C to match how the hook and tests/scanner.bats invoke it: the scanner
   # emits BYTE offsets, and a UTF-8 locale changes what `length` and `substr`
@@ -215,7 +215,7 @@ function main() {
   #
   # .github/ and not `.` : zizmor's own discovery walks for workflows, and a
   # bare `.` would descend into the author's untracked docs/superpowers/ tree
-  # for the same reason markdownlint and typos take explicit lists above.
+  # for the same reason markdownlint and typos take explicit lists below.
   if [[ -d "${REPO_DIR}/.github" ]]; then
     zizmor --no-online-audits --persona=pedantic "${REPO_DIR}/.github/" || rc=1
   else

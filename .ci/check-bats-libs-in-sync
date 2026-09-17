@@ -3,7 +3,7 @@
 # @description Assert the bats library SHAs pinned in the ambient compat action
 #              match the ones flake.lock pins for the hermetic gate. The gate
 #              legs load bats-support and bats-assert from flake inputs; the
-#              three compat legs clone them by SHA from
+#              two bats-running compat legs clone them by SHA from
 #              .github/actions/bats-ambient/action.yml. Nothing tied the two
 #              together, and they agreed only by coincidence (#101).
 #

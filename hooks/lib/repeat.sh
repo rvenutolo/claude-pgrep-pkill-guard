@@ -97,9 +97,7 @@ function repeat::repeat_check() {
     # `<<<` appends exactly one newline regardless of whether the file (and
     # therefore `content`, which command substitution already stripped
     # trailing newlines from) had one, so every line -- including a
-    # newline-less last line -- is delivered to `read` with a terminator; no
-    # `|| [[ -n ... ]]` fallback is needed here the way the write-side loops
-    # need one for a raw `<` redirect.
+    # newline-less last line -- is delivered to `read` with a terminator.
     # A leading-zero epoch (`08`) would otherwise pass this regex and then
     # trip `(( ))`'s octal parser on the arithmetic test below, so the
     # anchor excludes it: a valid epoch never starts with 0.

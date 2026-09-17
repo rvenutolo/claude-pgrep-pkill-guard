@@ -90,10 +90,10 @@ function main() {
   # drop from the chooser.
   # check-invariant-markers turns docs/architecture.md's "Design invariants"
   # section from description into enforcement: that section promises each rule
-  # is repeated as a comment in the source it constrains, and until now nothing
-  # checked it -- one marker had already been line-wrapped into invisibility to
-  # the grep the doc tells a reader to run (#85). It is a presence check over a
-  # table of phrases, collapsing line breaks and `#` continuations first, so
+  # is repeated as a comment in the source it constrains, and that promise
+  # needs enforcing: one marker had already been line-wrapped into invisibility
+  # to the grep the doc tells a reader to run (#85). It is a presence check over
+  # a table of phrases, collapsing line breaks and `#` continuations first, so
   # rewrapping a comment stays allowed and deleting one does not.
   # check-guard-parts holds the loader's GUARD_PARTS table to what is actually
   # under hooks/lib/. The loader pins nine function names as STRINGS and proves

@@ -138,7 +138,7 @@ function main() {
   fi
 
   if ((rc != 0)); then
-    log 'lychee reported at least one unreachable link'
+    printf 'FAIL: lychee reported at least one unreachable link\n' >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (#43, invariant 6).

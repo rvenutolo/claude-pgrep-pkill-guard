@@ -9,6 +9,7 @@
 # @exitcode 1 the gate failed; the push is aborted
 
 set -Eeuo pipefail
+# No inherit_errexit: this runs under the host bash, 3.2 on stock macOS, where the option does not exist.
 IFS=$'\n\t'
 
 function main() {

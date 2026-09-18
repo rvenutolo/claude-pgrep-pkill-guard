@@ -9,6 +9,7 @@
 # @exitcode 2 the hook was invoked with anything other than one argument
 
 set -Eeuo pipefail
+# No inherit_errexit: this runs under the host bash, 3.2 on stock macOS, where the option does not exist.
 IFS=$'\n\t'
 
 # Git always passes exactly one argument, the message file, so any other count

@@ -13,6 +13,7 @@
 # @exitcode 1 not a git repo
 
 set -Eeuo pipefail
+# No inherit_errexit: this runs under the host bash, 3.2 on stock macOS, where the option does not exist.
 IFS=$'\n\t'
 
 function main() {

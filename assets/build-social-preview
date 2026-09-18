@@ -108,19 +108,27 @@ function log() {
   printf '[%s] %s\n' "${0##*/}" "${message}" >&2
 }
 
+# @description Print one fatal diagnostic to stderr and exit 1. Drops the ERR
+#              trap on the way out, so a script reporting its own verdict ends
+#              on that diagnostic rather than on a trap line about this
+#              function.
+# @arg $1 message the diagnostic text
+# @stderr the `[<script>] FATAL: <message>` line
+# @exitcode 1 always
+function die() {
+  printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
+  # A script reporting its own verdict is not a crash: drop the ERR trap so the
+  # diagnostic above is the last thing the reader sees (#43, invariant 6).
+  trap - ERR
+  exit 1
+}
+
 function main() {
   if ! command -v magick > /dev/null 2>&1; then
-    printf 'FAIL: %s\n' \
-      "ImageMagick (magick) is not on PATH; it is not in the devShell by design — see this script's header" >&2
-    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
-    trap - ERR
-    return 1
+    die "ImageMagick (magick) is not on PATH; it is not in the devShell by design — see this script's header"
   fi
   if [[ ! -r "${SOURCE}" ]]; then
-    printf 'FAIL: source capture is missing or unreadable: %s\n' "${SOURCE}" >&2
-    trap - ERR
-    return 1
+    die "source capture is missing or unreadable: ${SOURCE}"
   fi
 
   # GNU coreutils long options, even though this script runs against the

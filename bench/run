@@ -123,6 +123,14 @@ Regenerate the tracked report with:
 USAGE
 }
 
+# @description Log progress to stderr in the house format.
+# @arg $1 message the text to log
+# @stderr the `[<script>] <message>` line
+function log() {
+  local -r message="$1"
+  printf '[%s] %s\n' "${0##*/}" "${message}" >&2
+}
+
 # @description Print a fatal message and exit non-zero.
 # @arg $1 message the text to print
 # @stderr the `[<script>] FATAL: <message>` line
@@ -577,7 +585,7 @@ function main() {
 
   if [[ -n "${output}" ]]; then
     write_report "${samples_dir}" "${reps}" "${smoke}" > "${output}"
-    printf '[%s] wrote %s\n' "${0##*/}" "${output}" >&2
+    log "wrote ${output}"
   else
     write_report "${samples_dir}" "${reps}" "${smoke}"
   fi

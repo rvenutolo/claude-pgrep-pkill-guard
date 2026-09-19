@@ -344,7 +344,8 @@ function inactive_probe() {
 # @description Build a throwaway hook copy plus a stub PATH holding only what the
 #              hook needs before it reaches the awk check.
 # @noargs
-# @stdout nothing; sets probe_dir and stub_dir in the caller
+# @set probe_dir the throwaway directory holding the hook copy
+# @set stub_dir the stub PATH directory inside it
 function build_inactive_fixture() {
   local binary target
   probe_dir="${BATS_TEST_TMPDIR}/probe"

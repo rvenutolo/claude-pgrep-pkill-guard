@@ -80,6 +80,7 @@ function write_inventory() {
 #              devShell. This is what lets a fixture exercise the same code the
 #              real run takes rather than a separate branch.
 # @arg $1 root fixture root
+# @set PATH the fixture packages' bin/ directories, prepended
 function use_fixture_path() {
   local -r root="$1"
   local dir

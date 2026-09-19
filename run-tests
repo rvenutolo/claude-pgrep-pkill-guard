@@ -105,7 +105,7 @@ function use_bwk_awk() {
   # a trap string that parses when it fires.
   local cleanup
   printf -v cleanup 'rm --recursive --force -- %q' "${shim}"
-  # shellcheck disable=SC2064  # expand shim NOW, not when the trap fires
+  # shellcheck disable=SC2064 # expand shim NOW, not when the trap fires
   trap "${cleanup}" EXIT
   ln --symbolic "${nawk}" "${shim}/awk"
   export PATH="${shim}:${PATH}"

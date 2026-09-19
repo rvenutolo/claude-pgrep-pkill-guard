@@ -146,7 +146,7 @@ function main() {
   # a trap string that parses when it fires.
   local cleanup
   printf -v cleanup 'rm --recursive --force -- %q' "${scratch}"
-  # shellcheck disable=SC2064  # expand scratch NOW, not when the trap fires
+  # shellcheck disable=SC2064 # expand scratch NOW, not when the trap fires
   trap "${cleanup}" EXIT
 
   # One JSON object per staged change, appended to a single accumulator file and

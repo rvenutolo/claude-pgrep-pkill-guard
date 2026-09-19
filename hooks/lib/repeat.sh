@@ -143,7 +143,7 @@ function repeat::repeat_check() {
     # this line is not itself guarded by an enclosing if/||, unlike every
     # other filesystem step in this function. `--` guards a session id that
     # happens to start with `-`.
-    rm -f -- "${file}" 2> /dev/null || true
+    rm -f -- "${file}" 2> /dev/null || true # unguarded rm: a failure must never trip errexit
     return 0
   fi
   local tmp
@@ -165,7 +165,7 @@ function repeat::repeat_check() {
     # Last command of this if-body, so unlike the sibling rm above its exit
     # status would otherwise become the if's status -- `|| true` for the
     # same reason.
-    rm -f -- "${tmp}" 2> /dev/null || true
+    rm -f -- "${tmp}" 2> /dev/null || true # last command of the if-body; its status must not leak out
   fi
   return 0
 }

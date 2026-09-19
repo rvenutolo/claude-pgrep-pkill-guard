@@ -395,8 +395,8 @@ function write_report() {
   # TEMP are read before the measurement loop, not here; see their capture site.
   printf '| governor | %s |\n' "$(cpu_governor)"
   printf '| power | %s |\n' "$(power_source)"
-  printf '| load at start | %s |\n' "${LOAD_AT_START:-unknown}"
-  printf '| package temp at start | %s |\n' "${TEMP_AT_START:-unknown}"
+  printf '| load at start | %s |\n' "${LOAD_AT_START}"
+  printf '| package temp at start | %s |\n' "${TEMP_AT_START}"
   printf '| repetitions | %s |\n' "${reps}"
   for cohort in "${COHORTS[@]}"; do
     IFS=$'\t' read -r n _ _ _ _ < <(cohort_stats "${samples_dir}/${cohort}")

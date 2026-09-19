@@ -208,7 +208,7 @@ function main() {
       # off to install something that does not exist for their platform.
       case "$(uname -s)" in
         'Darwin')
-          die "kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only (#91)"
+          die 'kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only (#91)'
           ;;
         *)
           die "kcov not found on PATH — run './.ci/in-devshell ./run-tests --coverage DIR' or 'just coverage'"

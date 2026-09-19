@@ -471,7 +471,7 @@ function loader_probe() {
   # POSIX short flags and POSIX sed syntax on purpose: BSD `cp` and `sed` have
   # no long forms, and the ambient macOS compat legs run this suite against them.
   cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
-  sed -e "s/classify.sh:classify::inspect_command/classify.sh:inspect_command_gone/" \
+  sed -e 's/classify.sh:classify::inspect_command/classify.sh:inspect_command_gone/' \
     "${BODY}" > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   # Prove the fixture really is what this case claims, so it cannot pass by
   # accident against a body the sed never matched.

@@ -172,7 +172,8 @@ function setup() {
 #              scope because bats sources this file once per test to discover
 #              it, and top-level work runs on every one of those passes.
 # @noargs
-# @stdout nothing; sets FUZZ_FRAGMENTS and FUZZ_GLUE in the caller
+# @set FUZZ_FRAGMENTS one entry per trouble spot the scanner's header names
+# @set FUZZ_GLUE the separators a case is assembled with
 function fuzz_catalogue() {
   FUZZ_FRAGMENTS=(
     # Quote openers with no closer, and their backslash-escaped forms. An
@@ -260,7 +261,7 @@ function fuzz_catalogue() {
 #              through 0x7E. Built rather than written out so no byte is
 #              accidentally omitted and no quoting accident silently drops one.
 # @noargs
-# @stdout nothing; sets FUZZ_ALPHABET in the caller
+# @set FUZZ_ALPHABET every printable ASCII byte, 0x20 through 0x7E
 function fuzz_alphabet() {
   local i byte
   FUZZ_ALPHABET=''
@@ -285,7 +286,7 @@ function fuzz_alphabet() {
 #              the "non-empty" half of the anti-vacuity test can never be
 #              satisfied by accident.
 # @noargs
-# @stdout nothing; sets FUZZ_CASE in the caller
+# @set FUZZ_CASE the generated case string
 function fuzz_case() {
   local -r count="${#FUZZ_FRAGMENTS[@]}"
   local -r parts=$((RANDOM % 10 + 3))
@@ -321,7 +322,7 @@ function fuzz_case() {
 #         reassigned the exported seed would be reassigning it inside the
 #         subshell bats wraps every @test in -- invisible to the rest of the
 #         file, and exactly the SC2030/SC2031 shape shellcheck warns about.
-# @stdout nothing; sets FUZZ_CORPUS in the caller
+# @set FUZZ_CORPUS the generated corpus, one case per element
 function fuzz_corpus() {
   local -r wanted="${1:-${FUZZ_N}}"
   local -r seed="${2:-${FUZZ_SEED}}"
@@ -341,7 +342,7 @@ function fuzz_corpus() {
 #              on NUL and is a bash builtin present since 3.2, so it needs
 #              nothing from the ambient userland the compat legs run against.
 # @noargs
-# @stdout nothing; sets FUZZ_CORPUS in the caller
+# @set FUZZ_CORPUS the corpus read back from BATS_FILE_TMPDIR
 function fuzz_read_corpus() {
   local item
   FUZZ_CORPUS=()
@@ -394,7 +395,7 @@ function scan_raw() {
 #              that is only ever read on failure.
 # @arg $1 out    the scanner's stdout
 # @arg $2 expect the expected byte count
-# @stdout nothing; sets TRAILER_REASON in the caller on failure
+# @set TRAILER_REASON why the trailer check failed; written only on failure
 # @exitcode 0 trailer present, well-formed, and carrying ${2}
 # @exitcode 1 otherwise
 function trailer_check() {

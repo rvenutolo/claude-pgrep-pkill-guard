@@ -57,7 +57,7 @@ function log() {
 # @noargs
 # @stdout one path per line
 function shell_files() {
-  local file
+  local file first_line
   while IFS= read -r file; do
     case "${file}" in
       *.sh | *.bash | *.bats) printf '%s\n' "${file}" ;;

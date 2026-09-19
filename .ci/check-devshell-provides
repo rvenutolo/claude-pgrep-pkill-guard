@@ -346,7 +346,7 @@ function reverse_check() {
   # through PATH only ever names paths that exist, and says the thing the lint
   # actually means: this package puts a tool we use into the shell.
   local -a tool_paths=()
-  local resolved
+  local resolved tool
   for tool in "${tools[@]}"; do
     resolved="$(command -v "${tool}" 2> /dev/null || true)" # command -v exits 1 off PATH; empty is the not-found signal
     if [[ -n "${resolved}" ]]; then

@@ -78,7 +78,7 @@ function github_token() {
     # does not require. stderr is dropped for the same reason -- gh's "not
     # logged in" complaint is not this gate's verdict.
     local token=''
-    token="$(gh auth token 2> /dev/null || true)"
+    token="$(gh auth token 2> /dev/null || true)" # gh installed but logged out must not kill the run
     if [[ -n "${token}" ]]; then
       printf '%s\n' "${token}"
     fi
@@ -93,7 +93,7 @@ function main() {
   # noise invariant 6 exists to keep out of a gate's output. The empty-list
   # guard immediately below is what turns any non-zero git status into a
   # verdict, so nothing is swallowed.
-  mapfile -t files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '' || true)
+  mapfile -t files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '' || true) # git grep: no match exits 1
 
   # An empty scan is never a clean pass -- the same guard the `typos` and
   # `shellcheck` steps in .ci/run-lint-checks carry. Here it would mean the file

@@ -97,7 +97,7 @@ function trap_installing_files() {
     cd "${REPO_DIR}" \
       && grep --files-with-matches --extended-regexp --binary-files=without-match \
         --regexp="${TRAP_INSTALL_RE}" -- "${tracked[@]}"
-  ) || true
+  ) || true # grep exits 1 on no match; the caller's empty-scan guard owns the verdict
 }
 
 # @description True when the named file's `ERR` trap is a fail-open handler --

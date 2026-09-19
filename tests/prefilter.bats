@@ -51,7 +51,7 @@ readonly TRIGGER_RE
     reduced=''
     for j in "${!tokens[@]}"; do
       [[ "${i}" == "${j}" ]] && continue
-      reduced="${reduced:+${reduced}|}${tokens[${j}]}"
+      reduced="${reduced:+${reduced}|}${tokens[j]}"
     done
     uncovered=0
     while IFS=$'\t' read -r cmd_json expected; do
@@ -60,9 +60,9 @@ readonly TRIGGER_RE
       command="$(jq --raw-output . <<< "${cmd_json}")"
       [[ "${command}" =~ ${reduced} ]] || uncovered=$((uncovered + 1))
     done < "${CASES}"
-    printf "without '%s': %s rows uncovered\n" "${tokens[${i}]}" "${uncovered}" >&3
+    printf "without '%s': %s rows uncovered\n" "${tokens[i]}" "${uncovered}" >&3
     [[ "${uncovered}" -gt 0 ]] || {
-      printf "token '%s' is redundant; drop it from the hook too\n" "${tokens[${i}]}" >&2
+      printf "token '%s' is redundant; drop it from the hook too\n" "${tokens[i]}" >&2
       return 1
     }
   done

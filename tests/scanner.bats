@@ -397,8 +397,7 @@ function orphan_probe() {
   local -r copy="${BATS_TEST_TMPDIR}/pgrep-pkill-guard.sh"
   cp "${HOOK}" "${copy}"
   chmod +x "${copy}"
-  printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full zzznoproc"}}' \
-    | "${copy}" 2> /dev/null
+  printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full zzznoproc"}}' | "${copy}" 2> /dev/null
 }
 
 @test "scanner: a missing sibling body announces the guard inactive" {

@@ -132,9 +132,7 @@ readonly MARKERS=(
 # @stdout the file's text as a single collapsed line
 function collapsed_text() {
   local -r file="$1"
-  sed -e 's/^[[:space:]]*//' -e 's/^#*[[:space:]]*//' -- "${file}" \
-    | tr '\n' ' ' \
-    | tr -s '[:space:]' ' '
+  sed -e 's/^[[:space:]]*//' -e 's/^#*[[:space:]]*//' -- "${file}" | tr '\n' ' ' | tr -s '[:space:]' ' '
 }
 
 # @description Report whether one marker phrase appears in one file.

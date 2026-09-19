@@ -3,6 +3,11 @@ function setup() {
   CHECK="${REPO_DIR}/.ci/check-devshell-provides"
 }
 
+# ABSENT_TOOL stands in for kcov -- a declared tool the fixture's PATH does not
+# provide. A name no PATH could plausibly carry, so a case can never pass by
+# accident on a machine that happens to have the real thing installed.
+readonly ABSENT_TOOL='pgpk-guard-no-such-tool'
+
 # @description Build a minimal, VALID fixture inventory: one package justified
 #              by a declared tool and one justified only by being a treefmt
 #              formatter, so each negative case can corrupt exactly one thing.
@@ -226,11 +231,6 @@ function use_fixture_path() {
 # never a skip: the platform comes from the fixture's optional `platform` file,
 # so a Linux runner exercises the Darwin path and vice versa. A case that
 # no-opped off Linux would leave that branch executed by nothing at all.
-#
-# ABSENT_TOOL stands in for kcov -- a declared tool the fixture's PATH does not
-# provide. A name no PATH could plausibly carry, so a case can never pass by
-# accident on a machine that happens to have the real thing installed.
-ABSENT_TOOL='pgpk-guard-no-such-tool'
 
 @test "devshell provides: a linux-only tool that is absent is skipped off Linux" {
   local -r root="${BATS_TEST_TMPDIR}/linux-only-darwin"

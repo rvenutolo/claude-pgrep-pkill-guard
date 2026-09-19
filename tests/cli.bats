@@ -110,7 +110,7 @@ function run_cli() {
   [[ "${CLI_STATUS}" -eq 0 ]]
   local manifest_version
   manifest_version="$(jq --raw-output '.version' "${PLUGIN_JSON}")"
-  [[ "$(cat "${CLI_STDOUT}")" == "pgrep-pkill-guard ${manifest_version}" ]]
+  [[ "$(< "${CLI_STDOUT}")" == "pgrep-pkill-guard ${manifest_version}" ]]
 }
 
 @test "cli: an unrecognized option exits 2 and names it on stderr" {

@@ -289,7 +289,7 @@ function fuzz_alphabet() {
 # @set FUZZ_CASE the generated case string
 function fuzz_case() {
   local -r count="${#FUZZ_FRAGMENTS[@]}"
-  local -r parts=$((RANDOM % 10 + 3))
+  local -r parts="$((RANDOM % 10 + 3))"
   local i
   FUZZ_CASE=''
   for ((i = 0; i < parts; i++)); do
@@ -305,7 +305,7 @@ function fuzz_case() {
   # A minority of cases get a run of random printable bytes appended. This is
   # the half that reaches shapes the catalogue's author did not think of.
   if ((RANDOM % 5 == 0)); then
-    local length=$((RANDOM % 24 + 1))
+    local length="$((RANDOM % 24 + 1))"
     for ((i = 0; i < length; i++)); do
       FUZZ_CASE+="${FUZZ_ALPHABET:RANDOM%${#FUZZ_ALPHABET}:1}"
     done
@@ -480,7 +480,7 @@ function fuzz_scan_pass() {
     # short form would abort the loop on the first case that does NOT end with
     # a newline -- silently turning this into a one-case test.
     if [[ "${mode}" == 'raw' && "${FUZZ_CORPUS[i]}" == *$'\n' ]]; then
-      expect=$((expect - 1))
+      expect="$((expect - 1))"
     fi
     status=0
     out="$("${scan}" "${FUZZ_CORPUS[i]}")" || status=$?
@@ -536,7 +536,7 @@ function fuzz_scan_pass() {
   for ((i = 0; i < FUZZ_N; i++)); do
     if [[ -z "${seen[${FUZZ_CORPUS[i]}]:-}" ]]; then
       seen["${FUZZ_CORPUS[i]}"]=1
-      distinct=$((distinct + 1))
+      distinct="$((distinct + 1))"
     fi
   done
   ((distinct * 100 >= FUZZ_N * 90)) \
@@ -553,7 +553,7 @@ function fuzz_scan_pass() {
   # is the one test that has to run the generator itself -- twice -- under
   # bats' DEBUG trap, where a full regeneration at `just fuzz`'s N would cost
   # more than every awk spawn in the file put together.
-  local -r sample=$((FUZZ_N < 64 ? FUZZ_N : 64))
+  local -r sample="$((FUZZ_N < 64 ? FUZZ_N : 64))"
   local -a first=("${FUZZ_CORPUS[@]:0:sample}")
   fuzz_corpus "${sample}"
   for ((i = 0; i < sample; i++)); do
@@ -561,7 +561,7 @@ function fuzz_scan_pass() {
       || fail "seed ${FUZZ_SEED} did not reproduce case ${i}"
   done
 
-  local -r other=$((FUZZ_SEED + 1))
+  local -r other="$((FUZZ_SEED + 1))"
   fuzz_corpus "${sample}" "${other}"
   local differs=0
   for ((i = 0; i < sample; i++)); do
@@ -654,14 +654,14 @@ function fuzz_scan_pass() {
   # twenty times the measured cost. It is deliberately loose: this is a hang
   # detector on shared CI hardware, not a performance assertion, and a red
   # budget on a slow runner would teach everyone to ignore it.
-  local -r budget=$((10 + FUZZ_N / 10))
+  local -r budget="$((10 + FUZZ_N / 10))"
   local mode total=0 elapsed
   for mode in 'terminated' 'raw'; do
     if [[ ! -f "${BATS_FILE_TMPDIR}/elapsed-${mode}" ]]; then
       fuzz_scan_pass "${mode}"
     fi
     elapsed="$(< "${BATS_FILE_TMPDIR}/elapsed-${mode}")"
-    total=$((total + elapsed))
+    total="$((total + elapsed))"
   done
   ((total <= budget)) \
     || fail "scanning ${FUZZ_N} cases twice took ${total}s, over the ${budget}s budget (seed ${FUZZ_SEED})"

@@ -279,7 +279,7 @@ function wrappers::shell_wrapper_payloads() {
       expect_delim=1
     fi
     if [[ "${token}" =~ ${heredoc_re} ]]; then
-      heredoc_seq=$((heredoc_seq + 1))
+      heredoc_seq="$((heredoc_seq + 1))"
       fd="${BASH_REMATCH[1]}"
       if [[ -z "${fd}" || "${fd}" == '0' ]]; then
         # Remembered for the pipeline carry whoever owns it: bash applies the
@@ -296,7 +296,7 @@ function wrappers::shell_wrapper_payloads() {
       continue
     fi
     if [[ "${token}" == '<HD:'*'>' ]]; then
-      body_seq=$((body_seq + 1))
+      body_seq="$((body_seq + 1))"
       if [[ "${wanted}" == *" ${body_seq} "* ]]; then
         len="${token#<HD:}"
         len="${len%>}"
@@ -370,7 +370,7 @@ function wrappers::shell_wrapper_payloads() {
           saw_s_operand=1
         fi
         if ((operands > 0)); then
-          operands=$((operands - 1))
+          operands="$((operands - 1))"
         elif ((saw_s == 0)); then
           in_wrapper=0
           saw_c=0

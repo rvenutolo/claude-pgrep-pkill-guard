@@ -286,7 +286,7 @@ function field() {
   : > "${big}"
   while [[ "${i}" -lt 2800 ]]; do
     printf '%s\n' "${line}" >> "${big}"
-    i=$((i + 1))
+    i="$((i + 1))"
   done
   [[ "$(wc -c < "${big}")" -gt 131072 ]]
 

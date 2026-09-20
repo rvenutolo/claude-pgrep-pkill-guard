@@ -10,7 +10,7 @@ function setup() {
     case "${expected}" in deny:*) ;; *) continue ;; esac
     command="$(jq --raw-output . <<< "${cmd_json}")"
     json="$(run_hook "${command}")"
-    count=$((count + 1))
+    count="$((count + 1))"
     case "${expected#deny:}" in
       kill) needle='--ignore-ancestors' ;;
       loop) needle='kill -0' ;;
@@ -19,14 +19,14 @@ function setup() {
         # Without this arm an unknown kind leaves needle empty, and
         # [[ "$reason" != *""* ]] can never fire — a silent pass.
         printf 'unknown deny kind: %s\n' "${expected}" >&2
-        failures=$((failures + 1))
+        failures="$((failures + 1))"
         continue
         ;;
     esac
     reason="$(reason_of "${json}")"
     if [[ "${reason}" != *"${needle}"* ]]; then
       printf "FAIL: '%s' (%s) reason lacks '%s'\n" "${command}" "${expected}" "${needle}" >&2
-      failures=$((failures + 1))
+      failures="$((failures + 1))"
     fi
   done < "${CASES}"
 

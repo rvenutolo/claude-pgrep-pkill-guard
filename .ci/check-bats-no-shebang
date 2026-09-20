@@ -20,7 +20,7 @@ readonly REPO_DIR
 function main() {
   local rc=0 count=0 file first_line
   while IFS= read -r file; do
-    count=$((count + 1))
+    count="$((count + 1))"
     IFS= read -r first_line < "${REPO_DIR}/${file}" || first_line=''
     if [[ "${first_line}" == '#!'* ]]; then
       printf 'FAIL: %s has a shebang (%s)\n' "${file}" "${first_line}" >&2

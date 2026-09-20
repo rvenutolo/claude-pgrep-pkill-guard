@@ -67,10 +67,10 @@ function assert_row() {
   local cmd_json command expected failures=0 count=0
   while IFS=$'\t' read -r cmd_json expected; do
     [[ -z "${cmd_json}" ]] && continue
-    count=$((count + 1))
+    count="$((count + 1))"
     command="$(jq --raw-output . <<< "${cmd_json}")"
     if ! assert_row "${command}" "${expected}"; then
-      failures=$((failures + 1))
+      failures="$((failures + 1))"
     fi
   done < "${CASES}"
 

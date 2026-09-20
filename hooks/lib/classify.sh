@@ -73,7 +73,7 @@ function classify::task_poll_detected() {
         return 0
       fi
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done <<< "${tokens}"
   return 1
 }

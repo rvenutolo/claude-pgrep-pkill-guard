@@ -197,7 +197,7 @@ function main() {
     phrase="${row%%::*}"
     IFS=' ' read -r -a files <<< "${row#*::}"
     for relative_path in "${files[@]}"; do
-      checked=$((checked + 1))
+      checked="$((checked + 1))"
       check_marker "${phrase}" "${relative_path}" || rc=1
     done
   done

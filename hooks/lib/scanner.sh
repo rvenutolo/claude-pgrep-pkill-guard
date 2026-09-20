@@ -79,7 +79,7 @@ function scanner::find_invocations() {
     else
       at_cmd=0
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done <<< "${tokens}"
 }
 
@@ -98,7 +98,7 @@ function scanner::invocation_args() {
       tokens::is_operator "${token}" && break
       printf '%s\t%s\n' "${offset}" "${token}"
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done <<< "${tokens}"
 }
 

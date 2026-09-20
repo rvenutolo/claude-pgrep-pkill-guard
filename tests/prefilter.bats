@@ -27,12 +27,12 @@ readonly TRIGGER_RE
   while IFS=$'\t' read -r cmd_json expected; do
     [[ -z "${cmd_json}" ]] && continue
     [[ "${expected}" == 'allow' ]] && continue
-    checked=$((checked + 1))
+    checked="$((checked + 1))"
     command="$(jq --raw-output . <<< "${cmd_json}")"
     if [[ ! "${command}" =~ ${TRIGGER_RE} ]]; then
       printf 'row would be dropped by the prefilter: %s\n' "${command}" >&2
       printf 'verdict: %s\n' "${expected}" >&2
-      missing=$((missing + 1))
+      missing="$((missing + 1))"
     fi
   done < "${CASES}"
 
@@ -58,7 +58,7 @@ readonly TRIGGER_RE
       [[ -z "${cmd_json}" ]] && continue
       [[ "${expected}" == 'allow' ]] && continue
       command="$(jq --raw-output . <<< "${cmd_json}")"
-      [[ "${command}" =~ ${reduced} ]] || uncovered=$((uncovered + 1))
+      [[ "${command}" =~ ${reduced} ]] || uncovered="$((uncovered + 1))"
     done < "${CASES}"
     printf "without '%s': %s rows uncovered\n" "${tokens[i]}" "${uncovered}" >&3
     [[ "${uncovered}" -gt 0 ]] || {

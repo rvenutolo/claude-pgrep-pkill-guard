@@ -112,7 +112,7 @@ function make_shebang_fixture() {
   # re-examines. If the file goes, the row has to go with it.
   local -r root="${BATS_TEST_TMPDIR}/exempt-gone"
   make_shebang_fixture "${root}"
-  rm -f "${root}/.ci/check-inactive-on-old-bash"
+  rm -f -- "${root}/.ci/check-inactive-on-old-bash"
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure

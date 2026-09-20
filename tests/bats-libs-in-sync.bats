@@ -19,8 +19,8 @@ function setup() {
 function make_fixture() {
   local -r root="$1"
   mkdir -p "${root}"
-  cp "${ACTION_YML}" "${root}/action.yml"
-  cp "${LOCK_JSON}" "${root}/flake.lock"
+  cp -- "${ACTION_YML}" "${root}/action.yml"
+  cp -- "${LOCK_JSON}" "${root}/flake.lock"
   FIXTURE_ACTION="${root}/action.yml"
   FIXTURE_LOCK="${root}/flake.lock"
 }
@@ -32,7 +32,7 @@ function make_fixture() {
 function plant_mismatch() {
   local -r var="$1"
   sed -i.bak "s/^\( *${var}: \).*/\1'0123456789abcdef0123456789abcdef01234567'/" "${FIXTURE_ACTION}"
-  rm -f "${FIXTURE_ACTION}.bak"
+  rm -f -- "${FIXTURE_ACTION}.bak"
 }
 
 @test "bats libs in sync: the real repo passes" {
@@ -75,7 +75,7 @@ function plant_mismatch() {
 @test "bats libs in sync: a malformed SHA is rejected as malformed" {
   make_fixture "${BATS_TEST_TMPDIR}/malformed"
   sed -i.bak "s/^\( *BATS_SUPPORT_SHA: \).*/\1'not-a-sha'/" "${FIXTURE_ACTION}"
-  rm -f "${FIXTURE_ACTION}.bak"
+  rm -f -- "${FIXTURE_ACTION}.bak"
   run "${CHECK}" "${FIXTURE_ACTION}" "${FIXTURE_LOCK}"
   assert_failure
   assert_output --partial 'not a 40-character SHA'
@@ -83,7 +83,7 @@ function plant_mismatch() {
 
 @test "bats libs in sync: a missing action file fails cleanly" {
   make_fixture "${BATS_TEST_TMPDIR}/missing"
-  rm -f "${FIXTURE_ACTION}"
+  rm -f -- "${FIXTURE_ACTION}"
   run "${CHECK}" "${FIXTURE_ACTION}" "${FIXTURE_LOCK}"
   assert_failure
   assert_output --partial 'does not exist'
@@ -93,7 +93,7 @@ function plant_mismatch() {
 @test "bats libs in sync: a flake.lock with the node removed is rejected" {
   make_fixture "${BATS_TEST_TMPDIR}/no-node"
   jq 'del(.nodes["bats-assert"])' "${FIXTURE_LOCK}" > "${FIXTURE_LOCK}.new"
-  mv -f "${FIXTURE_LOCK}.new" "${FIXTURE_LOCK}"
+  mv -f -- "${FIXTURE_LOCK}.new" "${FIXTURE_LOCK}"
   run "${CHECK}" "${FIXTURE_ACTION}" "${FIXTURE_LOCK}"
   assert_failure
   assert_output --partial 'bats-assert'

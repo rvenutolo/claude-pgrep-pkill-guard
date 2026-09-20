@@ -204,7 +204,7 @@ function fixture_jq() {
   local -r file="$1" filter="$2"
   local -r tmp="${file}.tmp"
   jq "${filter}" "${file}" > "${tmp}"
-  mv -f "${tmp}" "${file}"
+  mv -f -- "${tmp}" "${file}"
 }
 
 @test "invariants: the real repo satisfies every ported invariant" {

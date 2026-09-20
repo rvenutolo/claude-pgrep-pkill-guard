@@ -28,7 +28,7 @@ function setup() {
   # the tr.
   if [[ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ]] \
     || ! mktemp --directory --dry-run > /dev/null 2>&1 \
-    || ! rm --recursive --force "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null; then
+    || ! rm --recursive --force -- "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null; then
     skip 'not GNU coreutils; .ci/ scripts are graded inside the devShell'
   fi
 }

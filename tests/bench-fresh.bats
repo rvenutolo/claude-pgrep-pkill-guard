@@ -315,7 +315,7 @@ RESULTS
 @test "bench fresh: a missing report is rejected" {
   local -r root="${BATS_TEST_TMPDIR}/no-report"
   make_bench_fixture "${root}"
-  rm -f "${root}/bench/RESULTS.md"
+  rm -f -- "${root}/bench/RESULTS.md"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'is missing or unreadable'

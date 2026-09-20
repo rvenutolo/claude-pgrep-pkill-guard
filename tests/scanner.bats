@@ -355,15 +355,15 @@ function build_inactive_fixture() {
     target="$(command -v "${binary}" || printf '/nonexistent')" # a missing binary becomes a dangling stub, on purpose
     ln -s "${target}" "${stub_dir}/${binary}" || true           # a failed link leaves the stub PATH short, by design
   done
-  cp "${HOOK}" "${probe_dir}/hook.sh"
+  cp -- "${HOOK}" "${probe_dir}/hook.sh"
   chmod +x "${probe_dir}/hook.sh"
   # The body too, or the entry script stops at its own missing-sibling branch and
   # never reaches the awk and scanner checks these probes exist to exercise --
   # they would report `inactive` for the wrong reason and pass regardless (#55).
-  cp "${BODY}" "${probe_dir}/pgrep-pkill-guard-body.sh"
+  cp -- "${BODY}" "${probe_dir}/pgrep-pkill-guard-body.sh"
   # And the parts the body sources, for the same reason.
-  cp -R "${LIB_DIR}" "${probe_dir}/lib"
-  cp "${SCANNER}" "${probe_dir}/pgrep-scan.awk"
+  cp -R -- "${LIB_DIR}" "${probe_dir}/lib"
+  cp -- "${SCANNER}" "${probe_dir}/pgrep-scan.awk"
 }
 
 @test "scanner: a missing awk announces the guard inactive" {
@@ -396,7 +396,7 @@ function build_inactive_fixture() {
 # @stdout the hook's JSON verdict
 function orphan_probe() {
   local -r copy="${BATS_TEST_TMPDIR}/pgrep-pkill-guard.sh"
-  cp "${HOOK}" "${copy}"
+  cp -- "${HOOK}" "${copy}"
   chmod +x "${copy}"
   printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full zzznoproc"}}' | "${copy}" 2> /dev/null
 }
@@ -426,7 +426,7 @@ function orphan_probe() {
 # @noargs
 # @stdout the hook's JSON verdict
 function loader_probe() {
-  cp "${BODY}" "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
+  cp -- "${BODY}" "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   orphan_probe
 }
 
@@ -445,7 +445,7 @@ function loader_probe() {
 }
 
 @test "scanner: a part that fails to load announces the guard inactive, naming it" {
-  cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
+  cp -R -- "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
   printf 'function {{{\n' > "${BATS_TEST_TMPDIR}/lib/wrappers.sh"
   local out
   out="$(loader_probe)"
@@ -470,7 +470,7 @@ function loader_probe() {
   #
   # POSIX short flags and POSIX sed syntax on purpose: BSD `cp` and `sed` have
   # no long forms, and the ambient macOS compat legs run this suite against them.
-  cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
+  cp -R -- "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
   sed -e 's/classify.sh:classify::inspect_command/classify.sh:inspect_command_gone/' \
     "${BODY}" > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   # Prove the fixture really is what this case claims, so it cannot pass by
@@ -495,8 +495,8 @@ function loader_probe() {
   # `pkill --full zzznoproc` must get the ordinary deny, not INACTIVE. The
   # scanner rides along too: the other probes stop before they need it, and
   # without it this one would report a different INACTIVE for the wrong reason.
-  cp -R "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
-  cp "${SCANNER}" "${BATS_TEST_TMPDIR}/pgrep-scan.awk"
+  cp -R -- "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
+  cp -- "${SCANNER}" "${BATS_TEST_TMPDIR}/pgrep-scan.awk"
   printf '[[ 1 == 2 ]]\n' >> "${BATS_TEST_TMPDIR}/lib/wrappers.sh"
   local out
   out="$(loader_probe)"

@@ -81,7 +81,7 @@ BODY
 @test "guard parts: a row naming a file that does not exist is named" {
   local -r root="${BATS_TEST_TMPDIR}/gone"
   make_parts_fixture "${root}"
-  rm -f "${root}/hooks/lib/classify.sh"
+  rm -f -- "${root}/hooks/lib/classify.sh"
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure
@@ -258,7 +258,7 @@ BODY
 @test "guard parts: a loader the gate cannot read is a failure" {
   local -r root="${BATS_TEST_TMPDIR}/no-loader"
   make_parts_fixture "${root}"
-  rm -f "${root}/hooks/pgrep-pkill-guard-body.sh"
+  rm -f -- "${root}/hooks/pgrep-pkill-guard-body.sh"
   git -C "${root}" add --all
   run "${CHECK}" "${root}"
   assert_failure

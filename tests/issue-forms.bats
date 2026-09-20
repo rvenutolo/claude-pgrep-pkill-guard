@@ -193,7 +193,7 @@ function make_labels_fixture() {
   # with a space, which is what makes the --line-regexp --fixed-strings match
   # load-bearing rather than incidental.
   sed -i.bak 's/^labels: \[bug\]$/labels: [good first issue]/' "${root}/report.yml"
-  rm -f "${root}/report.yml.bak"
+  rm -f -- "${root}/report.yml.bak"
   make_labels_fixture "${BATS_TEST_TMPDIR}/labels-spaced.yml" 'good first issue'
   run "${CHECK}" "${root}" "${BATS_TEST_TMPDIR}/labels-spaced.yml"
   assert_success

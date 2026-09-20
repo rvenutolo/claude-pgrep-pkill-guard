@@ -55,7 +55,7 @@ function require_bwk_awk() {
   if ! probe="$(mktemp --directory 2> /dev/null)"; then
     skip 'mktemp has no --directory (BSD coreutils); --awk=bwk is graded by the hermetic gate leg'
   fi
-  rm -rf "${probe}"
+  rm -rf -- "${probe}"
 }
 
 # @description Skip a case that needs kcov to actually run. `--coverage` is

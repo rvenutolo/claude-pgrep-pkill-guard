@@ -144,7 +144,7 @@ BROKEN
 @test "invariant markers: a file the table names but the tree lacks is rejected" {
   local -r root="${BATS_TEST_TMPDIR}/no-file"
   make_marker_fixture "${root}"
-  rm -f "${root}/tests/manifest.bats"
+  rm -f -- "${root}/tests/manifest.bats"
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'tests/manifest.bats is missing or unreadable'

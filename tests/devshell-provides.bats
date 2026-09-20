@@ -210,7 +210,7 @@ function use_fixture_path() {
   # empty package list that the reverse pass would find nothing wrong with.
   local -r root="${BATS_TEST_TMPDIR}/no-inventory"
   make_devshell_fixture "${root}"
-  rm -f "${root}/packages.tsv"
+  rm -f -- "${root}/packages.tsv"
   use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure
@@ -221,7 +221,7 @@ function use_fixture_path() {
 @test "devshell provides: a missing tools file is rejected" {
   local -r root="${BATS_TEST_TMPDIR}/no-file"
   make_devshell_fixture "${root}"
-  rm -f "${root}/required-tools"
+  rm -f -- "${root}/required-tools"
   use_fixture_path "${root}"
   run "${CHECK}" "${root}"
   assert_failure

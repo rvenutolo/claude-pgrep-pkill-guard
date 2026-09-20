@@ -44,7 +44,7 @@ function loops::loop_context() {
             found='none'
             break
             ;;
-          *) i=$((i - 1)) ;;
+          *) i="$((i - 1))" ;;
         esac
       done
       printf '%s\n' "${found}"
@@ -106,7 +106,7 @@ function loops::loop_context() {
     else
       at_cmd=0
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done <<< "${tokens}"
   printf 'none\n'
 }
@@ -134,10 +134,10 @@ function loops::body_has_terminator() {
     ((idx == target)) && seen=1
     if ((at_cmd == 1 && ${#barrier[@]} == 0)); then
       case "${token}" in
-        'do') depth=$((depth + 1)) ;;
+        'do') depth="$((depth + 1))" ;;
         'done')
           ((seen == 1 && depth > 0)) && return 1
-          ((depth > 0)) && depth=$((depth - 1))
+          ((depth > 0)) && depth="$((depth - 1))"
           ;;
         'break' | 'exit' | 'return') ((depth > 0)) && return 0 ;;
       esac
@@ -176,7 +176,7 @@ function loops::body_has_terminator() {
     else
       at_cmd=0
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done <<< "${tokens}"
   return 1
 }
@@ -200,7 +200,7 @@ function loops::body_has_terminator() {
 function loops::loop_body_has_kill() {
   local -n toks="$1"
   local -r head_idx="$2"
-  local idx=$((head_idx + 1)) token found_do=0 body_depth=1 at_cmd=1
+  local idx="$((head_idx + 1))" token found_do=0 body_depth=1 at_cmd=1
   local -a pstack=()
 
   # Walk the condition/iterable list to the `do` that opens this loop's body,
@@ -222,10 +222,10 @@ function loops::loop_body_has_kill() {
     esac
     if ((${#pstack[@]} == 0)) && [[ "${token}" == 'do' ]]; then
       found_do=1
-      idx=$((idx + 1))
+      idx="$((idx + 1))"
       break
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done
   ((found_do == 1)) || return 1
 
@@ -233,9 +233,9 @@ function loops::loop_body_has_kill() {
     token="${toks[idx]}"
     if ((at_cmd == 1)); then
       case "${token}" in
-        'do') body_depth=$((body_depth + 1)) ;;
+        'do') body_depth="$((body_depth + 1))" ;;
         'done')
-          body_depth=$((body_depth - 1))
+          body_depth="$((body_depth - 1))"
           ((body_depth == 0)) && return 1
           ;;
         'kill') return 0 ;;
@@ -246,7 +246,7 @@ function loops::loop_body_has_kill() {
     else
       at_cmd=0
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done
   return 1
 }

@@ -109,7 +109,7 @@ function repeat::repeat_check() {
       # below) never happens once we bail here, so an oversized file is left
       # exactly as it was rather than processed at all -- it cannot prune or
       # heal itself past this point, but it also never wedges a real probe.
-      read_count=$((read_count + 1))
+      read_count="$((read_count + 1))"
       ((read_count > REPEAT_MAX_ENTRIES)) && return 0
       [[ "${epoch}" =~ ^[1-9][0-9]{0,11}$ && -n "${key}" ]] || continue
       ((epoch <= now && now - epoch <= REPEAT_WINDOW_SECONDS)) || continue
@@ -124,7 +124,7 @@ function repeat::repeat_check() {
     ages=''
     while IFS=$'\t' read -r epoch key; do
       [[ -z "${epoch}" || "${key}" != "${probe_key}" ]] && continue
-      count=$((count + 1))
+      count="$((count + 1))"
       ages+="$((now - epoch)) s ago, "
     done <<< "${kept}"
     if ((count >= REPEAT_THRESHOLD - 1)); then

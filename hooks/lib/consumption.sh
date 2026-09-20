@@ -133,7 +133,7 @@ function consumption::kill_in_command_position() {
   local index="$2"
   while ((index >= 0)); do
     if tokens::is_prefix_command "${toks[index]##*/}" || tokens::is_assignment_word "${toks[index]}"; then
-      index=$((index - 1))
+      index="$((index - 1))"
       continue
     fi
     if [[ "${toks[index]}" == '(' ]] && ((index > 0)) && [[ "${toks[index - 1]}" == *= ]]; then
@@ -166,7 +166,7 @@ function consumption::kill_in_command_position() {
 function consumption::feeds_a_kill_backward() {
   local -n toks="$1"
   local -r tokens_var="$1" target="$2"
-  local word k=$((target - 1))
+  local word k="$((target - 1))"
   while ((k >= 0)); do
     word="${toks[k]##*/}"
     case "${word}" in
@@ -194,7 +194,7 @@ function consumption::feeds_a_kill_backward() {
         fi
         ;;
     esac
-    k=$((k - 1))
+    k="$((k - 1))"
   done
   return 1
 }
@@ -298,13 +298,13 @@ function consumption::next_command_reads_status() {
     [[ -z "${token}" ]] && continue
     if ((idx > target)) && { [[ "${token}" == ';' ]] || [[ "${token}" == '<NL>' ]]; }; then
       if ((start < 0)); then
-        start=$((offset + 1))
+        start="$((offset + 1))"
       else
         end="${offset}"
         break
       fi
     fi
-    idx=$((idx + 1))
+    idx="$((idx + 1))"
   done <<< "${tokens}"
   ((start < 0)) && return 1
   ((end < 0)) && end="${#command}"
@@ -355,7 +355,7 @@ function consumption::result_is_consumed() {
   # `if sudo -u bob pgrep --full x`, `if timeout 5 pgrep --full x` and every
   # other prefix carrying an option or an operand (#132). The prefix-command test
   # stays ahead of the stop test because `time` is both a prefix and a keyword.
-  local k=$((target - 1)) word
+  local k="$((target - 1))" word
   while ((k >= 0)); do
     word="${toks[k]##*/}"
     case "${word}" in
@@ -367,7 +367,7 @@ function consumption::result_is_consumed() {
         fi
         ;;
     esac
-    k=$((k - 1))
+    k="$((k - 1))"
   done
 
   local idx prev="${toks[target]}" amp=0 pipe=0
@@ -383,11 +383,11 @@ function consumption::result_is_consumed() {
     fi
     case "${token}" in
       '&')
-        amp=$((amp + 1))
+        amp="$((amp + 1))"
         ((amp >= 2)) && return 0
         ;;
       '|')
-        pipe=$((pipe + 1))
+        pipe="$((pipe + 1))"
         ((pipe >= 2)) && return 0
         ;;
       'wc' | 'xargs') ((pipe >= 1)) && return 0 ;;

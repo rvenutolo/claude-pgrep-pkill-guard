@@ -193,7 +193,7 @@ function main() {
           --arg path "${path}" \
           --rawfile contents "${blob_file}" \
           '{kind: "addition", path: $path, contents: $contents}' >> "${changes_file}"
-        index=$((index + 1))
+        index="$((index + 1))"
         ;;
       D)
         jq --null-input --compact-output \

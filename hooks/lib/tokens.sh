@@ -247,7 +247,7 @@ function tokens::prefix_chain_step() {
     fi
   fi
   if ((operands_ref > 0)); then
-    operands_ref=$((operands_ref - 1))
+    operands_ref="$((operands_ref - 1))"
     return 0
   fi
   chain_ref=''

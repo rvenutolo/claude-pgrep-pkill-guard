@@ -400,7 +400,7 @@ function write_report() {
   printf '| repetitions | %s |\n' "${reps}"
   for cohort in "${COHORTS[@]}"; do
     IFS=$'\t' read -r n _ _ _ _ < <(cohort_stats "${samples_dir}/${cohort}")
-    total=$((total + n))
+    total="$((total + n))"
   done
   printf '| samples | %s |\n\n' "${total}"
 

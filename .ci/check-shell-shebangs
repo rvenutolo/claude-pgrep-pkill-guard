@@ -197,9 +197,9 @@ function main() {
     first_line=''
     IFS= read -r first_line < "${REPO_DIR}/${path}" || : # read returns 1 on an unterminated line yet stores it
     [[ "${first_line}" == '#!'* ]] || continue
-    checked=$((checked + 1))
+    checked="$((checked + 1))"
     if [[ -n "$(exempt_shebang_for "${path}")" ]]; then
-      exempt=$((exempt + 1))
+      exempt="$((exempt + 1))"
     fi
     check_shebang "${path}" "${first_line}" || rc=1
   done

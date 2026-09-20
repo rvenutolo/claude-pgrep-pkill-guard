@@ -222,7 +222,7 @@ function main() {
     listed=0
     for row in "${rows[@]}"; do
       if [[ "${row%%:*}" == "${part}" ]]; then
-        listed=$((listed + 1))
+        listed="$((listed + 1))"
       fi
     done
     if ((listed == 0)); then

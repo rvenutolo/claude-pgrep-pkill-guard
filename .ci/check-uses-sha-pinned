@@ -31,12 +31,12 @@ function main() {
   for file in "${files[@]}"; do
     lineno=0
     while IFS= read -r line; do
-      lineno=$((lineno + 1))
+      lineno="$((lineno + 1))"
       [[ "${line}" =~ ^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*(.*)$ ]] || continue
       ref="${BASH_REMATCH[1]}"
       # Local actions are this repo's own tree.
       [[ "${ref}" == './'* ]] && continue
-      count=$((count + 1))
+      count="$((count + 1))"
       if [[ ! "${ref}" =~ @[0-9a-f]{40}[[:space:]]*\#[[:space:]]*v?[0-9] ]]; then
         printf 'FAIL: %s:%s not SHA-pinned with a version comment: %s\n' \
           "${file}" "${lineno}" "${ref}" >&2

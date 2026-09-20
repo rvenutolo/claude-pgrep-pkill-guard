@@ -155,7 +155,7 @@ function main() {
 
   local inset_h='' solid=''
   inset_h="$(magick identify -format '%h' "${work}/crop.png")"
-  solid=$((inset_h - FADE))
+  solid="$((inset_h - FADE))"
 
   # An alpha mask that is opaque down to the last FADE rows and ramps to
   # transparent across them.

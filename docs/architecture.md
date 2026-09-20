@@ -583,7 +583,7 @@ the one the caveat used to name alone:
 - **A `case` arm whose pattern sits alone on its line.** xtrace records the arm's
   body, never its pattern, so `'(')` on its own line reads as uncovered while the
   line below it — the arm actually taken — reads as covered. An arm written on a
-  single line (`'do') depth=$((depth + 1)) ;;`) does not have the problem.
+  single line (`'do') depth="$((depth + 1))" ;;`) does not have the problem.
 
 Together these were **51 of the body file's 76 uncovered lines** at the tip that
 closed #132 — including all thirty of `messages::deny_message`'s, which is the function

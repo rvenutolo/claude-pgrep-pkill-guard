@@ -8,7 +8,7 @@ function setup() {
   local count=0 failures=0 json haystack ok
   while IFS=$'\t' read -r cmd_json field mode needle_json; do
     [[ -z "${cmd_json}" ]] && continue
-    count=$((count + 1))
+    count="$((count + 1))"
     command="$(jq --raw-output . <<< "${cmd_json}")"
     needle="$(jq --raw-output . <<< "${needle_json}")"
     json="$(run_hook "${command}")"
@@ -20,7 +20,7 @@ function setup() {
       decision) haystack="$(decision_of "${json}")" ;;
       *)
         printf 'unknown field: %s\n' "${field}" >&2
-        failures=$((failures + 1))
+        failures="$((failures + 1))"
         continue
         ;;
     esac
@@ -42,7 +42,7 @@ function setup() {
       printf 'message case failed: %s\n' "${command}" >&2
       printf '  field=%s mode=%s needle=%s\n' "${field}" "${mode}" "${needle}" >&2
       printf '  got: %s\n' "${haystack:0:200}" >&2
-      failures=$((failures + 1))
+      failures="$((failures + 1))"
     fi
   done < "${CASES}"
 

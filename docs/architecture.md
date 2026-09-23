@@ -32,25 +32,25 @@ ceiling that keeps it there.
 
 In execution order:
 
-1. `export LC_ALL=C`, before anything else. The scanner emits **byte** offsets
-   and the guard slices the raw command back out with
+1. `readonly HOOK_NAME`, which sits this high only because the version guard
+   below names it. Every other constant is past the prefilter: `HOOK_VERSION`
+   and `SCANNER` in the loader, the rest in the parts under `hooks/lib/`.
+2. The bash-version guard: bash older than 4.4 prints the INACTIVE
+   `systemMessage` and exits immediately. It runs before everything else
+   because it is the one guard that has to: the rest of the guard leans on
+   4.4+ behaviour, so nothing after this point is safe to run on an older
+   shell. It is also the only loud failure that fires ahead of the prefilter.
+3. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
+   on every Bash call, and exit 2 would block the tool outright. The trap is
+   installed once, here; the body is sourced into this same shell and inherits
+   it rather than setting one of its own (invariant 2).
+4. `export LC_ALL=C`, before anything reads the command. The scanner emits
+   **byte** offsets and the guard slices the raw command back out with
    `${command:offset:length}`. Bash string operations are locale-aware, so under
    a UTF-8 locale a single multibyte character earlier in the command shifts
    every later slice and silently voids the bracket mitigation. Exported rather
    than merely set, so it also covers the sourced body, its parts under
    `hooks/lib/`, and the awk they spawn.
-2. `readonly HOOK_NAME`, which sits this high only because the version guard
-   below names it. Every other constant is past the prefilter: `HOOK_VERSION`
-   and `SCANNER` in the loader, the rest in the parts under `hooks/lib/`.
-3. The bash-version guard: bash older than 4.4 prints the INACTIVE
-   `systemMessage` and exits immediately. It runs before everything else
-   because it is the one guard that has to: the rest of the guard leans on
-   4.4+ behaviour, so nothing after this point is safe to run on an older
-   shell. It is also the only loud failure that fires ahead of the prefilter.
-4. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
-   on every Bash call, and exit 2 would block the tool outright. The trap is
-   installed once, here; the body is sourced into this same shell and inherits
-   it rather than setting one of its own (invariant 2).
 5. The human-mode dispatch, `main`'s first act: `if (($# > 0)) || [[ -t 0 ]]`,
    which loads the body and hands the arguments to `human::human_mode` — `--help`,
    `--version` and the usage errors, none of which live here, because fifty
@@ -65,7 +65,7 @@ In execution order:
 
    The call is written `human::human_mode "$@" || exit "$?"`, not as a bare call
    followed by `return`. `human::human_mode` returns 2 on a usage error, and a bare
-   non-zero command is exactly what the `ERR` trap at step 4 catches: probed
+   non-zero command is exactly what the `ERR` trap at step 3 catches: probed
    with a reduced copy of this script, the bare form turned that 2 into
    `emit_allow; exit 0`, so the guard answered a mistyped flag with `{}` and a
    success. The `||` keeps `human::human_mode` off errexit's radar for its whole
@@ -73,7 +73,7 @@ In execution order:
    `repeat::repeat_check` call — and the `exit` is what carries the status out to the
    shell.
 
-   Sitting after the version guard at step 3 is deliberate, and it costs
+   Sitting after the version guard at step 2 is deliberate, and it costs
    `--help` on bash below 4.4; see **Known limitations** below.
 
 6. `main` reads the hook JSON from stdin into `input` with the `read` builtin —

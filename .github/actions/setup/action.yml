@@ -8,5 +8,42 @@ runs:
     - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa  # v23
     - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569  # v7
       with:
-        primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
-        restore-prefixes-first-match: nix-${{ runner.os }}-
+        # `-v2-` is a generation marker, not tidiness. Garbage collection (below)
+        # runs only when the save phase finds no cache under the primary key,
+        # and every existing cache was saved without it; with the old key
+        # layout the bloated caches would be restored and never replaced, so
+        # the GC setting would be dead config. Bump the marker whenever a
+        # change to this action must invalidate every cache it ever saved.
+        primary-key: nix-${{ runner.os }}-v2-${{ hashFiles('flake.lock') }}
+        restore-prefixes-first-match: nix-${{ runner.os }}-v2-
+        # Collect ALL garbage before saving. Without this the cache is the
+        # union of every store the runner ever restored: a flake.lock bump
+        # restores the previous lock's store through the prefix match, adds
+        # the new closures next to the old ones, and saves the lot. By #288
+        # five lock bumps had grown the macOS store to 12.1 GB nar for a
+        # devShell whose runtime closure is 3.2 GB, and the 2.9 GB tarball
+        # took `gtar` 8m51s to extract on every run of every PR -- two thirds
+        # of the leg.
+        #
+        # `0` rather than a byte ceiling: anything rooted survives GC
+        # regardless (see the step below), so a ceiling could only ever keep
+        # garbage, and the right amount of garbage is none.
+        gc-max-store-size: 0
+    - name: Root the devShell so garbage collection keeps it
+      # `nix develop` roots nothing: the shell's closure is garbage the moment
+      # the command exits, and the GC configured above would delete the very
+      # store paths the cache exists to carry. `--profile` writes a profile,
+      # and a profile is a garbage-collection root, so this is what makes the
+      # runtime closure -- and only the runtime closure -- survive to the
+      # save. The gate's later `nix develop` runs reuse the same derivation.
+      #
+      # RUNNER_TEMP rather than the workspace: the gate asserts the suite left
+      # the repo untouched, and a profile symlink under the checkout would be
+      # an untracked file the next `git status` sees.
+      #
+      # Flake inputs (the nixpkgs source tree among them) are NOT rooted and
+      # are collected. They are re-fetched from the cache.nixos.org tarball
+      # mirror on the next run at a cost of a few seconds, which is cheaper
+      # than carrying them in the tarball.
+      shell: bash
+      run: nix develop --profile "${RUNNER_TEMP}/devshell-profile" --command true

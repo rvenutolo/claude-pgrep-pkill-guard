@@ -790,9 +790,11 @@ is shaped like `messages::repeat_message`'s output.
 `hooks/pgrep-pkill-guard-body.sh` and each `hooks/lib/*.sh` it sources are
 sourced into the entry script's shell rather than run in one of their own, so on
 top of `inherit_errexit` they must never set `set -Eeuo pipefail`, `IFS`, or the
-`ERR` trap either. The entry script owns all four and they are already in force
-by the time the first `source` runs; a sourced file that sets them is not
-configuring itself, it is reconfiguring its caller. That is also why none of
+`ERR` trap either. The entry script sets those three, and they are already in
+force by the time the first `source` runs; a sourced file that sets them is not
+configuring itself, it is reconfiguring its caller. The fourth,
+`shopt -s inherit_errexit`, is set nowhere in `hooks/`, entry script included,
+for the reason above. That is also why none of
 them carries a shebang or an executable bit — they are not scripts that can be
 run.
 

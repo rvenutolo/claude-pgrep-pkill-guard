@@ -155,11 +155,11 @@ function scanner::pattern_operand() {
       fi
       continue
     fi
-    if [[ "${token}" == '--' ]]; then
-      past_terminator=1
-      continue
-    fi
     case "${token}" in
+      '--')
+        past_terminator=1
+        continue
+        ;;
       --*)
         for value_option in "${PGREP_VALUE_OPTIONS[@]}"; do
           [[ "${token}" == "${value_option}" ]] && skip=1 && break

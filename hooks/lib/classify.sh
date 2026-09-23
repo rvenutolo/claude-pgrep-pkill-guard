@@ -188,12 +188,12 @@ function classify::classify_wrapper_payloads() {
   while IFS= read -r -d '' payload; do
     [[ -z "${payload}" ]] && continue
     payload_verdict="$(classify::classify_command "${payload}" "$((depth + 1))")"
-    # An untrustworthy inner scan must not be reported as a clean allow.
-    if [[ "${payload_verdict}" == inactive* ]]; then
-      printf 'inactive\n'
-      return 0
-    fi
     case "${payload_verdict}" in
+      # An untrustworthy inner scan must not be reported as a clean allow.
+      inactive*)
+        printf 'inactive\n'
+        return 0
+        ;;
       deny:*)
         printf '%s\n' "${payload_verdict}"
         return 0

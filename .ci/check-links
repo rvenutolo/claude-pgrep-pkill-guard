@@ -109,8 +109,8 @@ function main() {
   local token=''
   token="$(github_token)"
   if [[ -z "${token}" ]]; then
-    log 'no GitHub token (GITHUB_TOKEN unset and gh auth token unavailable);'
-    log 'checking anonymously — GitHub rate limits may yield 429, which lychee.toml accepts'
+    printf 'WARN: no GitHub token (GITHUB_TOKEN unset and gh auth token unavailable);\n' >&2
+    printf '      checking anonymously — GitHub rate limits may yield 429, which lychee.toml accepts\n' >&2
   fi
 
   log "checking links in ${#files[@]} tracked file(s)"

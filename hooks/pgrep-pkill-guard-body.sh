@@ -102,7 +102,7 @@ for guard_part in "${GUARD_PARTS[@]}"; do
     if [[ -r "${HOOK_DIR}/lib/${guard_part%%:*}" ]]; then
       printf '{"systemMessage":"%s%s"}\n' \
         "${HOOK_NAME}: lib/${guard_part%%:*} did not define ${guard_part#*:}; it either failed to parse" \
-        " or its GUARD_PARTS row names the wrong function. The pgrep/pkill guard is INACTIVE for this command."
+        ' or its GUARD_PARTS row names the wrong function. The pgrep/pkill guard is INACTIVE for this command.'
     else
       printf '{"systemMessage":"%s%s"}\n' \
         "${HOOK_NAME}: lib/${guard_part%%:*} is missing or unreadable; " \

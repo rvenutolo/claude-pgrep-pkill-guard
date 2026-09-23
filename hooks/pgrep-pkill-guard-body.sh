@@ -19,9 +19,9 @@
 # set none of four things. The entry script sets three of them --
 # `set -Eeuo pipefail`, `IFS` and the ERR trap -- and re-setting them here would
 # change the caller's shell. The fourth, `shopt -s inherit_errexit`, is set
-# nowhere in hooks/ (invariant 2). Invariant 1 applies unchanged too -- POSIX
-# short flags, deliberately, wherever the BSD tool has no long form, here and in
-# every part under lib/.
+# nowhere in hooks/ (invariant 2). Invariant 1 applies unchanged too -- a
+# short flag only where macOS has no long form, deliberately, here and in every
+# part under lib/.
 
 # The version `--version` reports. A literal rather than a runtime read of
 # .claude-plugin/plugin.json: that would need path resolution up out of hooks/, a

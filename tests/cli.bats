@@ -8,7 +8,7 @@ function setup() {
 # sources the hook or calls human::human_mode/human::print_help directly, because the thing
 # worth pinning is what a person at a terminal actually sees.
 #
-# POSIX short flags only where the BSD tool has no long form -- see
+# A short flag only where macOS has no long form, on purpose -- see
 # make_manifest_fixture in tests/manifest.bats.
 
 # @description Run the guard as a subprocess and capture its two streams into

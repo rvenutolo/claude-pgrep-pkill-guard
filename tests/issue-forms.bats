@@ -6,9 +6,10 @@ function setup() {
 
 # @description Build a minimal, VALID fixture directory -- one config.yml and
 #              one form exercising every body type the checker knows -- so each
-#              negative case can corrupt exactly one thing. POSIX short flags on
-#              purpose: the compat CI legs run this suite against macOS BSD
-#              coreutils, whose mkdir has no --parents.
+#              negative case can corrupt exactly one thing. A short flag only
+#              where macOS has no long form, on purpose: the compat CI legs run
+#              this suite against macOS BSD coreutils, whose mkdir has no
+#              --parents.
 # @arg $1 root directory to populate
 function make_form_fixture() {
   local -r root="$1"
@@ -149,8 +150,9 @@ YAML
 
 # @description Write a labels file declaring exactly the names given, so a case
 #              can assert the mismatch rather than depending on the real
-#              .github/labels.yml. POSIX short flags on purpose -- see
-#              make_manifest_fixture in tests/manifest.bats.
+#              .github/labels.yml. A short flag only where macOS has no long
+#              form, on purpose -- see make_manifest_fixture in
+#              tests/manifest.bats.
 # @arg $1 path the labels file to write
 # @arg $@ rest label names to declare
 function make_labels_fixture() {

@@ -13,7 +13,7 @@ function setup() {
 # The single source of truth is the array: TRIGGER_RE is built by joining it,
 # so the list is stated exactly once in this file.
 #
-# POSIX short flags only where the BSD tool has no long form -- see
+# A short flag only where macOS has no long form, on purpose -- see
 # make_manifest_fixture in tests/manifest.bats.
 readonly -a TRIGGER_TOKENS=('pgrep' 'kill' '\.output')
 TRIGGER_RE="$(

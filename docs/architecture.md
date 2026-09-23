@@ -717,17 +717,17 @@ Everything else in the repo — `.ci/`, `run-all-checks`, `run-tests`,
 `.githooks/`, `.justfile`, the workflows — keeps long options, because those run
 only inside the hermetic Nix devShell where GNU coreutils is guaranteed.
 
-**Tracked comments:** three files carry the `POSIX short flags, deliberately`
-phrase, and `.ci/check-invariant-markers` lists exactly those three. The first
+**Tracked comments:** three files carry the `short flag only where macOS has no
+long form, deliberately` phrase, and `.ci/check-invariant-markers` lists exactly those three. The first
 is `hooks/lib/repeat.sh`, in `repeat::repeat_check`, which is the one rule in the guard
 that touches the filesystem — its write path a few lines below carries the same
 rationale in its own words, for the `rm` and `mv` calls there:
 
 ```text
-# POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
-# no long options at all (no `parents`, no `mode=`). hooks/ takes a long
-# option only where the BSD tool has one, and mkdir has none -- the guard has
-# to run on whatever userland ships.
+# A short flag only where macOS has no long form, deliberately: macOS ships
+# BSD coreutils, whose mkdir has no long options at all (no `parents`, no
+# `mode=`). hooks/ takes a long option only where the BSD tool has one, and
+# mkdir has none -- the guard has to run on whatever userland ships.
 ```
 
 The second is the header of `hooks/pgrep-pkill-guard-body.sh`, which extends the
@@ -737,10 +737,10 @@ command:
 
 ```text
 # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is not guaranteed
-# to be exported into the hook's environment. POSIX short flags, deliberately: macOS ships BSD
-# userland, whose `dirname` has no long options. The phrase is kept on one line on purpose --
-# docs/architecture.md tells a reader to grep for it, and .ci/check-invariant-markers checks it
-# is here (invariant 1).
+# to be exported into the hook's environment. BSD `dirname` has no long options, so the bare
+# `--` is all it takes: a short flag only where macOS has no long form, deliberately. The phrase
+# is kept on one line on purpose -- docs/architecture.md tells a reader to grep for it, and
+# .ci/check-invariant-markers checks it is here (invariant 1).
 ```
 
 **Same cause, different scope:** `tests/*.bats` and `tests/test_helper/` carry
@@ -751,8 +751,8 @@ the first two of those run the bats suite. A `--parents` in a `.bats` file
 passes locally in the devShell and reddens a macOS job. The rule is the same one:
 a short flag only where the BSD tool has no long form, so `grep --count` and
 `grep --quiet --fixed-strings` are fine there. The tracked counterpart
-is the `POSIX short flags on purpose` comment above `make_manifest_fixture` in
-`tests/manifest.bats`.
+is the `short flag only where macOS has no long form, on purpose` comment above
+`make_manifest_fixture` in `tests/manifest.bats`.
 
 `run-tests` itself mostly keeps long options, but **not because it is safe to**
 — the first two of those legs invoke `./run-tests` directly against ambient

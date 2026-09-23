@@ -20,7 +20,8 @@
 #              document kept describing it. That is the failure mode actually
 #              observed: #85 was filed because
 #              `grep 'POSIX short flags, deliberately'
-#              hooks/pgrep-pkill-guard.sh` returned nothing. The comment was
+#              hooks/pgrep-pkill-guard.sh` (the invariant-1 phrase before
+#              #273) returned nothing. The comment was
 #              there, but line-wrapped across `POSIX short flags,` and
 #              `# deliberately:`, so the phrase the docs tell a reader to search
 #              for found only the body file.
@@ -105,9 +106,9 @@ fi
 # deciding it is one: a phrase here is a promise that the comment stays, so
 # every row should correspond to a numbered invariant in docs/architecture.md.
 readonly MARKERS=(
-  'POSIX short flags, deliberately::hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh hooks/lib/repeat.sh docs/architecture.md'
+  'short flag only where macOS has no long form, deliberately::hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh hooks/lib/repeat.sh docs/architecture.md'
   'load-bearing beyond the obvious fallback::hooks/pgrep-pkill-guard.sh hooks/pgrep-pkill-guard-body.sh hooks/lib/classify.sh docs/architecture.md'
-  'POSIX short flags on purpose::tests/manifest.bats docs/architecture.md'
+  'short flag only where macOS has no long form, on purpose::tests/manifest.bats docs/architecture.md'
   '200 lines::.ci/check-fast-path-size docs/architecture.md'
 )
 

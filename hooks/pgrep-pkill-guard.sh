@@ -2,13 +2,6 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# The scanner emits BYTE offsets, and this script slices the raw command back out
-# with ${command:offset:length}. Bash string operations are locale-aware, so under
-# a UTF-8 locale a single multibyte character earlier in the command shifts every
-# later slice and silently voids the bracket mitigation. Force the C locale so the
-# two index bases agree.
-export LC_ALL=C
-
 # Defined above the version guard below, which needs it: everything else in this
 # script is set up after that guard has already run.
 readonly HOOK_NAME='pgrep-pkill-guard'
@@ -26,6 +19,13 @@ fi
 # Any unexpected failure must still allow the command. A hook that dies non-zero
 # surfaces an error on every Bash call; exit 2 would block the tool outright.
 trap 'emit_allow; exit 0' ERR
+
+# The scanner emits BYTE offsets, and this script slices the raw command back out
+# with ${command:offset:length}. Bash string operations are locale-aware, so under
+# a UTF-8 locale a single multibyte character earlier in the command shifts every
+# later slice and silently voids the bracket mitigation. Force the C locale so the
+# two index bases agree.
+export LC_ALL=C
 
 # Resolved lazily by resolve_hook_dir, via load_body: only the human-mode
 # dispatch or a payload that passed the prefilter pays for it. It locates both

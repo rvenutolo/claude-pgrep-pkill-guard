@@ -27,13 +27,13 @@ set -Eeuo pipefail
 shopt -s inherit_errexit
 IFS=$'\n\t'
 
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
 # EPOCHREALTIME renders its fractional part with the LOCALE's decimal
 # separator. Under a comma locale every delta below would fail to parse and the
 # whole report would be zeros. Forced here for the same reason the hook forces
 # it: the arithmetic and the string form have to agree.
 export LC_ALL=C
-
-trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
 REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR

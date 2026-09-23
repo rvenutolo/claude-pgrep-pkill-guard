@@ -10,9 +10,9 @@ function setup() {
 #              byte-identical to the tree under test. Copying rather than
 #              synthesising is deliberate: a hand-written fixture would pin the
 #              file SHAPE this checker reads, and the shape is exactly what a
-#              future edit to action.yml might change. POSIX short flags on
-#              purpose -- the compat CI legs run this suite against macOS BSD
-#              coreutils, whose mkdir has no --parents.
+#              future edit to action.yml might change. A short flag only where
+#              macOS has no long form, on purpose -- the compat CI legs run this
+#              suite against macOS BSD coreutils, whose mkdir has no --parents.
 # @arg $1 root directory to populate
 # @set FIXTURE_ACTION path to the fixture action.yml
 # @set FIXTURE_LOCK path to the fixture flake.lock

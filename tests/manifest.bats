@@ -142,9 +142,9 @@ function setup() {
 }
 
 # @description Build a minimal, VALID fixture tree so each negative case can
-#              corrupt exactly one thing. POSIX short flags on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
-#              mkdir has no --parents.
+#              corrupt exactly one thing. A short flag only where macOS has no
+#              long form, on purpose: the compat CI legs run this suite against
+#              macOS BSD coreutils, whose mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_manifest_fixture() {
   local -r root="$1"

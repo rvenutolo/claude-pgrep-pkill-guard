@@ -24,8 +24,8 @@ function setup() {
   # hid because `$(...)` strips one (#94). So probe each flag the script
   # actually uses, and probe base64 for the PROPERTY rather than for the
   # exit status: `printf 'x' | base64` is `eA==`, four bytes and no more.
-  # POSIX short flags in the probes on purpose -- `wc -c` pads on BSD, hence
-  # the tr.
+  # A short flag only where macOS has no long form, on purpose, in the probes
+  # -- `wc -c` pads on BSD, hence the tr.
   if [[ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ]] \
     || ! mktemp --directory --dry-run > /dev/null 2>&1 \
     || ! rm --recursive --force -- "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null; then
@@ -35,8 +35,9 @@ function setup() {
 
 # @description Build a throwaway git repo holding one seed commit with two
 #              files, so each case can stage exactly the change it is about.
-#              POSIX short flags on purpose: the compat CI legs run this suite
-#              against macOS BSD coreutils, whose mkdir has no --parents.
+#              A short flag only where macOS has no long form, on purpose: the
+#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              mkdir has no --parents.
 #
 #              Identity is passed with `-c` rather than written with
 #              `git config`, because test_helper/common points

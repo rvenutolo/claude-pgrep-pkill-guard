@@ -7,8 +7,8 @@ function setup() {
 #              these cases grade run-tests' ARGUMENT HANDLING rather than the
 #              real suite. Running the real suite from inside itself would be
 #              slow, recursive and would double every fixture-escape check.
-#              POSIX short flags on purpose -- see make_manifest_fixture in
-#              tests/manifest.bats.
+#              A short flag only where macOS has no long form, on purpose -- see
+#              make_manifest_fixture in tests/manifest.bats.
 # @arg $1 path the .bats file to write
 function make_trivial_suite() {
   local -r path="$1"

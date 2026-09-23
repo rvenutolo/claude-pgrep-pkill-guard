@@ -46,9 +46,10 @@ readonly HEALTHY_FILES
 #              kcov's empty kcov-merged/ excluded -- and, since #128, the
 #              INTEGRITY rule: every required hooks/ file present in files[]
 #              with a non-zero covered-line count. Both are pure
-#              JSON-and-filesystem shape and need no kcov at all. POSIX short
-#              flags on purpose: the compat CI legs run this suite against macOS
-#              BSD coreutils, whose mkdir has no --parents.
+#              JSON-and-filesystem shape and need no kcov at all. A short flag
+#              only where macOS has no long form, on purpose: the compat CI legs
+#              run this suite against macOS BSD coreutils, whose mkdir has no
+#              --parents.
 #
 #              The healthy fixture carries a files[] array because the
 #              INTEGRITY rule requires one. A fixture with no files[] describes

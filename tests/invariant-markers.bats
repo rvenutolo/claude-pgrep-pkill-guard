@@ -14,29 +14,30 @@ function setup() {
 #              to say so out loud, instead of the check silently agreeing with
 #              whatever it was just changed to.
 #
-#              POSIX short flags on purpose: the compat CI legs run this suite
-#              against macOS BSD coreutils, whose mkdir has no --parents.
+#              A short flag only where macOS has no long form, on purpose: the
+#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_marker_fixture() {
   local -r root="$1"
   mkdir -p "${root}/hooks/lib" "${root}/docs" "${root}/tests" "${root}/.ci"
   cat > "${root}/hooks/pgrep-pkill-guard.sh" << 'GUARD'
 #!/usr/bin/env bash
-# POSIX short flags, deliberately: BSD userland has no long options.
+# A short flag only where macOS has no long form, deliberately: BSD has none.
 # The `||` is load-bearing beyond the obvious fallback: it keeps errexit out.
 GUARD
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'
-# POSIX short flags, deliberately: the body ships to the same machines.
+# A short flag only where macOS has no long form, deliberately: same machines.
 # The `||` is load-bearing beyond the obvious fallback, as above.
 BODY
   cat > "${root}/hooks/lib/repeat.sh" << 'REPEAT'
-# POSIX short flags, deliberately: the parts ship to the same machines.
+# A short flag only where macOS has no long form, deliberately: same machines.
 REPEAT
   cat > "${root}/hooks/lib/classify.sh" << 'CLASSIFY'
 # The `||` is load-bearing beyond the obvious fallback, as above.
 CLASSIFY
   cat > "${root}/tests/manifest.bats" << 'MANIFEST'
-# POSIX short flags on purpose: the compat legs run against BSD coreutils.
+# A short flag only where macOS has no long form, on purpose: BSD coreutils.
 MANIFEST
   cat > "${root}/.ci/check-fast-path-size" << 'SIZE'
 # Assert the entry script stays under a hard ceiling of 200 lines.
@@ -45,9 +46,10 @@ SIZE
 ## Design invariants
 
 The doc has to carry every phrase too, since it is the place the rules are
-written up: POSIX short flags, deliberately; the `||` being load-bearing
-beyond the obvious fallback; POSIX short flags on purpose in the bats suite;
-and the entry script staying under 200 lines.
+written up: a short flag only where macOS has no long form, deliberately; the
+`||` being load-bearing beyond the obvious fallback; a short flag only where
+macOS has no long form, on purpose in the bats suite; and the entry script
+staying under 200 lines.
 ARCH
 }
 
@@ -90,7 +92,7 @@ DROPPED
   run "${CHECK}" "${root}"
   assert_failure
   assert_output --partial 'hooks/pgrep-pkill-guard.sh does not carry the invariant marker'
-  assert_output --partial 'POSIX short flags, deliberately'
+  assert_output --partial 'short flag only where macOS has no long form, deliberately'
   # hooks/lib/repeat.sh still has it, so it must not be dragged into the
   # verdict.
   refute_output --partial 'hooks/lib/repeat.sh does not carry'
@@ -99,22 +101,23 @@ DROPPED
 @test "invariant markers: a phrase wrapped across comment lines still counts" {
   # This is the #85 regression in miniature. The marker was present in
   # hooks/pgrep-pkill-guard.sh all along, wrapped across `POSIX short flags,`
-  # and `# deliberately:`, and the grep the docs tell a reader to run found
-  # only the body file. Collapsing line breaks and `#` continuations before the
-  # search is what makes the gate agree with a human reading the comment.
+  # and `# deliberately:` (the invariant-1 phrase before #273), and the grep
+  # the docs tell a reader to run found only the body file. Collapsing line
+  # breaks and `#` continuations before the search is what makes the gate agree
+  # with a human reading the comment.
   local -r root="${BATS_TEST_TMPDIR}/wrapped"
   make_marker_fixture "${root}"
   cat > "${root}/hooks/pgrep-pkill-guard.sh" << 'WRAPPED'
 #!/usr/bin/env bash
-  # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR. POSIX short flags,
-  # deliberately: macOS ships BSD userland, whose `dirname` has no long options.
+  # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR. A short flag only
+  # where macOS has no long form, deliberately: BSD `dirname` has no long options.
   # The `||` is load-bearing beyond
   # the obvious fallback: it keeps errexit out.
 WRAPPED
 
   # First prove the fixture really is wrapped -- otherwise this test could pass
   # against a matcher that does nothing at all.
-  run grep --count 'POSIX short flags, deliberately' "${root}/hooks/pgrep-pkill-guard.sh"
+  run grep --count 'short flag only where macOS has no long form, deliberately' "${root}/hooks/pgrep-pkill-guard.sh"
   assert_failure
   run grep --count 'load-bearing beyond the obvious fallback' "${root}/hooks/pgrep-pkill-guard.sh"
   assert_failure
@@ -132,13 +135,13 @@ WRAPPED
   make_marker_fixture "${root}"
   cat > "${root}/hooks/pgrep-pkill-guard.sh" << 'BROKEN'
 #!/usr/bin/env bash
-# POSIX short flags, delib
-# erately: BSD userland has no long options.
+# A short flag only where macOS has no long form, delib
+# erately: BSD has none.
 # The `||` is load-bearing beyond the obvious fallback: it keeps errexit out.
 BROKEN
   run "${CHECK}" "${root}"
   assert_failure
-  assert_output --partial 'POSIX short flags, deliberately'
+  assert_output --partial 'short flag only where macOS has no long form, deliberately'
 }
 
 @test "invariant markers: a file the table names but the tree lacks is rejected" {

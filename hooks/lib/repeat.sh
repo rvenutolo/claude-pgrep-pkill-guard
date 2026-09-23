@@ -45,10 +45,10 @@ function repeat::repeat_check() {
   local -r dir="${PGREP_PKILL_GUARD_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/pgrep-pkill-guard}"
   local -r file="${dir}/${session_id}"
   local now
-  # POSIX short flags, deliberately: macOS ships BSD coreutils, whose mkdir has
-  # no long options at all (no `parents`, no `mode=`). hooks/ takes a long
-  # option only where the BSD tool has one, and mkdir has none -- the guard has
-  # to run on whatever userland ships.
+  # A short flag only where macOS has no long form, deliberately: macOS ships
+  # BSD coreutils, whose mkdir has no long options at all (no `parents`, no
+  # `mode=`). hooks/ takes a long option only where the BSD tool has one, and
+  # mkdir has none -- the guard has to run on whatever userland ships.
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
   # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR /
   # TMPDIR, which the caller owns the mode of.
@@ -134,9 +134,10 @@ function repeat::repeat_check() {
     kept+="${now}"$'\t'"${probe_key}"$'\n'
   done <<< "${keys}"
 
-  # POSIX short flags in the `rm` and `mv` calls below, deliberately: macOS
-  # ships BSD coreutils, where `--force` does not exist. hooks/ takes a long
-  # option only where the BSD tool has one, and neither of these does.
+  # A short flag only where macOS has no long form, deliberately, in the `rm`
+  # and `mv` calls below: macOS ships BSD coreutils, where `--force` does not
+  # exist. hooks/ takes a long option only where the BSD tool has one, and
+  # neither of these does.
   if [[ -z "${kept}" ]]; then
     # `|| true` so a bare rm failure (e.g. the directory lost write
     # permission after the mkdir check above) can never trip errexit here --

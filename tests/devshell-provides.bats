@@ -11,8 +11,9 @@ readonly ABSENT_TOOL='pgpk-guard-no-such-tool'
 # @description Build a minimal, VALID fixture inventory: one package justified
 #              by a declared tool and one justified only by being a treefmt
 #              formatter, so each negative case can corrupt exactly one thing.
-#              POSIX short flags on purpose: the compat CI legs run this suite
-#              against macOS BSD coreutils, whose mkdir has no --parents.
+#              A short flag only where macOS has no long form, on purpose: the
+#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_devshell_fixture() {
   local -r root="$1"

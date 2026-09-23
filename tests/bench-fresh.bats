@@ -9,8 +9,9 @@ function setup() {
 #              `just bench` on a branch produces, and therefore the state the
 #              check must call fresh. Each case below then moves one thing.
 #
-#              POSIX short flags on purpose: the compat CI legs run this suite
-#              against macOS BSD coreutils, whose mkdir has no --parents.
+#              A short flag only where macOS has no long form, on purpose: the
+#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              mkdir has no --parents.
 #
 #              Identity is passed with `-c` rather than written with
 #              `git config`, because test_helper/common points

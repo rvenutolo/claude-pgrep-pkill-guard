@@ -338,12 +338,16 @@ fabricated input — five through optional fixture-path arguments,
 reason: a suite that only asserted "exits 0 on the real repo" would pass just as
 well against a script that unconditionally returned 0.
 
-One more, `tests/run-tests-cli.bats`, drives neither the guard nor a `.ci/`
-script: it grades `run-tests`' own leading-flag handling — `--awk=bwk`,
-`--report DIR` and `--coverage DIR`, in any order — against a trivial
-always-passing fixture suite rather than against the real one, so the cases
-measure argument parsing and not the suite's runtime. It is the only bats file
-that runs `bats` inside `bats`.
+Two more drive neither the guard nor a `.ci/` script.
+`tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
+`--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — against a
+trivial always-passing fixture suite rather than against the real one, so the
+cases measure argument parsing and not the suite's runtime. It is the only bats
+file that runs `bats` inside `bats`. `tests/run-all-checks.bats` grades
+`run-all-checks`' argument handling: anything but no arguments or exactly
+`--report DIR` exits 2 before any check runs. It runs a copy of the gate in a
+throwaway repo where every check is missing, because the real gate runs
+`run-tests`, which would run that same file again.
 
 ## Fail open, loudly
 

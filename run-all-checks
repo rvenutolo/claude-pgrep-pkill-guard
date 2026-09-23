@@ -15,11 +15,13 @@
 #              JUnit report rather than the second overwriting the first (#83).
 #              Nothing else in the gate emits a report; the flag exists so CI
 #              can upload the suite's results as an artifact when a leg fails.
-# @arg $1 --report optional literal `--report`; anything else is ignored and the
-#         gate runs with no report
+# @arg $1 --report optional literal `--report`; must be followed by exactly one
+#         non-empty directory, or the call is rejected
 # @arg $2 dir directory to write the two per-awk report subdirectories under
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
+# @exitcode 2 any arguments other than none or `--report DIR`
+# @stderr the usage line, on exit 2
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -57,15 +59,26 @@ function warn_untracked() {
 }
 
 function main() {
+  # Anything but no arguments or exactly `--report DIR` is a typo -- a bare
+  # --report, a misspelt flag, a stray third argument -- and silently running
+  # the gate with no report would hand a caller who asked for one a green run
+  # and nothing to upload. Exit 2 rather than 1: 1 is the gate's verdict, and
+  # "you called it wrong" must stay distinguishable from it (#216). The ERR trap
+  # is dropped first so a usage error reads as a usage error rather than as a
+  # crash (#43, invariant 6).
+  local report_dir=''
+  if (($# == 2)) && [[ "$1" == '--report' && -n "$2" ]]; then
+    report_dir="$2"
+  elif (($# != 0)); then
+    printf 'usage: %s [--report DIR]\n' "${0##*/}" >&2
+    trap - ERR
+    exit 2
+  fi
+
   # Each suite run gets its own subdirectory. run-all-checks runs the suite
   # TWICE -- once under gawk, once under one-true-awk -- and a shared output
   # directory means the second run overwrites the first. Losing the gawk report
   # when the bwk run also failed is exactly the case the artifact exists for.
-  local report_dir=''
-  if (($# >= 2)) && [[ "$1" == '--report' ]]; then
-    report_dir="$2"
-    shift 2
-  fi
   local -a gawk_report=() bwk_report=()
   if [[ -n "${report_dir}" ]]; then
     gawk_report=(--report "${report_dir}/gawk")

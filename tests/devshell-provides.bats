@@ -1,3 +1,8 @@
+# `run --separate-stderr` is a bats 1.5.0 flag, and the linux-only skip case
+# needs stdout and stderr apart: the SKIP line is a diagnostic, so it must land
+# on stderr, which a merged capture cannot tell apart from stdout.
+bats_require_minimum_version 1.5.0
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-devshell-provides"
@@ -242,19 +247,12 @@ function use_fixture_path() {
   printf '%s  # linux-only\n' "${ABSENT_TOOL}" >> "${root}/required-tools"
   printf 'Darwin\n' > "${root}/platform"
   use_fixture_path "${root}"
-  run "${CHECK}" "${root}"
+  run --separate-stderr "${CHECK}" "${root}"
   assert_success
   # The skip must be audible. A silent pass here is the failure mode the
-  # annotation could most easily hide.
-  assert_output --partial "SKIP: ${ABSENT_TOOL} is linux-only; not checked on Darwin"
-  # ...and it is a diagnostic, so it lands on stderr like every other one this
-  # gate prints. `run` merges the two streams, so the assertion above cannot
-  # tell them apart; run it again with stdout alone and require it empty.
-  # Not `run --separate-stderr`: that needs bats_require_minimum_version 1.5.0,
-  # and this suite has no devShell skip -- the two ambient compat legs run it
-  # against whatever bats the runner ships.
-  run bash -c '"$1" "$2" 2> /dev/null' _ "${CHECK}" "${root}"
-  assert_success
+  # annotation could most easily hide. It is a diagnostic, so it lands on
+  # stderr like every other one this gate prints, and stdout stays empty.
+  [[ "${stderr}" == *"SKIP: ${ABSENT_TOOL} is linux-only; not checked on Darwin"* ]]
   [[ -z "${output}" ]]
 }
 

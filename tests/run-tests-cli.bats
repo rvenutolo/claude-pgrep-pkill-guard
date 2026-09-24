@@ -51,11 +51,9 @@ function require_bwk_awk() {
     'awk version '*) ;;
     *) skip "nawk is not one-true-awk (${version}); --awk=bwk is graded by the hermetic gate leg" ;;
   esac
-  local probe=''
-  if ! probe="$(mktemp --directory 2> /dev/null)"; then
+  if ! mktemp --directory --dry-run > /dev/null 2>&1; then
     skip 'mktemp has no --directory (BSD coreutils); --awk=bwk is graded by the hermetic gate leg'
   fi
-  rm -rf -- "${probe}"
 }
 
 # @description Skip a case that needs kcov to actually run. `--coverage` is

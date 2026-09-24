@@ -21,7 +21,7 @@ function setup() {
 function make_bench_fixture() {
   local -r root="$1"
   mkdir -p "${root}/hooks" "${root}/bench"
-  git -c init.defaultBranch=main init -q "${root}"
+  git -c init.defaultBranch=main init --quiet "${root}"
   write_hook "${root}" '1.0.0'
   printf 'readme\n' > "${root}/README.md"
   git -C "${root}" add hooks/pgrep-pkill-guard.sh README.md
@@ -54,7 +54,7 @@ function commit_fixture() {
   local -r root="$1"
   local -r message="$2"
   git -C "${root}" -c user.email='tests@example.invalid' -c user.name='Tests' \
-    commit -q -m "${message}"
+    commit --quiet --message="${message}"
 }
 
 # @description Print the fixture repo's HEAD as a short sha.
@@ -222,7 +222,7 @@ HOOK
 ' > "${root}/hooks/pgrep-pkill-guard.sh"
   git -C "${root}" add hooks/pgrep-pkill-guard.sh
   commit_fixture "${root}" 'perf: try something'
-  git -C "${root}" checkout -q "${recorded_tree}" -- hooks/pgrep-pkill-guard.sh
+  git -C "${root}" checkout --quiet "${recorded_tree}" -- hooks/pgrep-pkill-guard.sh
   git -C "${root}" add hooks/pgrep-pkill-guard.sh
   commit_fixture "${root}" 'revert: back it out'
   run "${CHECK}" "${root}"
@@ -257,7 +257,7 @@ HOOK
   commit_fixture "${root}" 'perf: a commit that will be discarded'
   local discarded
   discarded="$(short_head "${root}")"
-  git -C "${root}" reset -q --hard HEAD~1
+  git -C "${root}" reset --quiet --hard HEAD~1
   record_commit "${root}" "${discarded}"
   BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
@@ -357,7 +357,7 @@ RESULTS
   commit_fixture "${root}" 'perf: a commit that will be discarded'
   local discarded
   discarded="$(short_head "${root}")"
-  git -C "${root}" reset -q --hard HEAD~1
+  git -C "${root}" reset --quiet --hard HEAD~1
   record_commit "${root}" "${discarded}"
   BENCH_FRESH_STRICT='' run "${CHECK}" "${root}"
   assert_success

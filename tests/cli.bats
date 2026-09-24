@@ -56,7 +56,7 @@ function run_cli() {
   [[ "${CLI_STATUS}" -eq 0 ]]
   run_cli short -h
   [[ "${CLI_STATUS}" -eq 0 ]]
-  cmp -s "${BATS_TEST_TMPDIR}/long.out" "${BATS_TEST_TMPDIR}/short.out"
+  cmp --silent "${BATS_TEST_TMPDIR}/long.out" "${BATS_TEST_TMPDIR}/short.out"
 }
 
 @test "cli: --help wins over an unknown argument in either position" {
@@ -69,12 +69,12 @@ function run_cli() {
   run_cli help_first --help --bogus
   [[ "${CLI_STATUS}" -eq 0 ]]
   [[ ! -s "${BATS_TEST_TMPDIR}/help_first.err" ]]
-  cmp -s "${BATS_TEST_TMPDIR}/baseline.out" "${BATS_TEST_TMPDIR}/help_first.out"
+  cmp --silent "${BATS_TEST_TMPDIR}/baseline.out" "${BATS_TEST_TMPDIR}/help_first.out"
 
   run_cli help_last --bogus --help
   [[ "${CLI_STATUS}" -eq 0 ]]
   [[ ! -s "${BATS_TEST_TMPDIR}/help_last.err" ]]
-  cmp -s "${BATS_TEST_TMPDIR}/baseline.out" "${BATS_TEST_TMPDIR}/help_last.out"
+  cmp --silent "${BATS_TEST_TMPDIR}/baseline.out" "${BATS_TEST_TMPDIR}/help_last.out"
 }
 
 @test "cli: help states the stdin contract, the state dir, and the probe recipe" {

@@ -88,12 +88,12 @@ else
   readonly REPO_DIR
 fi
 
-# Invariants 1 and 2 now live where the code they constrain lives: the entry
-# script and loader each still carry both phrases (the loader's own `source …
-# ||` is invariant 2's other half), while `repeat::repeat_check` moved to
-# hooks/lib/repeat.sh (invariant 1) and the `repeat::repeat_check` call site
-# moved to `classify::repeat_tier_reason` in hooks/lib/classify.sh
-# (invariant 2). Each row below lists exactly the files that phrase must
+# Invariants 1 and 2 live where the code they constrain lives: the entry script
+# and loader each carry both phrases (the loader's own `source … ||` is
+# invariant 2's other half), invariant 1 also lives in hooks/lib/repeat.sh
+# beside `repeat::repeat_check`, and invariant 2 also lives at the
+# `repeat::repeat_check` call site in `classify::repeat_tier_reason`, in
+# hooks/lib/classify.sh. Each row below lists exactly the files that phrase must
 # survive in.
 #
 # The table. Each row is `<phrase>::<space-separated files>`, and the separator

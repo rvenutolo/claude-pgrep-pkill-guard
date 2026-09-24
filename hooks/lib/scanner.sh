@@ -25,8 +25,8 @@ function scanner::resolve_scanner() {
   # prove the integrity check deactivates the guard loudly. Production never sets
   # it; the default is resolved relative to the entry script.
   SCANNER="${PGREP_GUARD_SCANNER_OVERRIDE:-${HOOK_DIR}/pgrep-scan.awk}"
-  # `readonly` inside a function still freezes the GLOBAL, which is what keeps
-  # the immutability this had when it was a top-level `readonly SCANNER=...`.
+  # `readonly` inside a function still freezes the GLOBAL, so SCANNER cannot be
+  # reassigned once resolved.
   readonly SCANNER
 }
 # @description Tokenize a command, masking quoted regions, and verify the

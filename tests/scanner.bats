@@ -555,8 +555,8 @@ function loader_probe() {
 }
 
 @test "scanner: the trailer counts every byte of a command with a blank line" {
-  # A blank line is what paragraph-mode awk splits a record on. The scanner no
-  # longer depends on RS at all, so the reassembled byte count must be exact on
+  # A blank line is what paragraph-mode awk splits a record on. The scanner does
+  # not depend on RS, so the reassembled byte count must be exact on
   # every awk, BWK included.
   local out
   out="$(scan $'echo a\n\necho b')"

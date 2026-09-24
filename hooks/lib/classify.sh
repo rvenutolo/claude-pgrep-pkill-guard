@@ -124,11 +124,10 @@ function classify::probe_keys() {
 
 # @description Classify one pgrep/pkill invocation the caller has already established carries
 #              `--full`: deny for a kill or a loop, warn for a consumed result. `--ignore-ancestors`
-#              used to exempt an invocation outright. It excludes ANCESTORS only: a sibling waiter
-#              whose command line carries the same literal is still matched, so two waiters for one
-#              event deadlock each other (Gap 1, 2026-08-26). It therefore still clears a kill -- the
-#              session shell is an ancestor -- and still fixes an inflated count, but it never clears
-#              a loop.
+#              excludes ANCESTORS only: a sibling waiter whose command line carries the same literal
+#              is still matched, so two waiters for one event deadlock each other (Gap 1,
+#              2026-08-26). It therefore clears a kill -- the session shell is an ancestor -- and fixes
+#              an inflated count, but it never clears a loop.
 # @arg $1 tokens_var name of the command's token array
 # @arg $2 command the raw command
 # @arg $3 tokens the scanner's token stream for the command

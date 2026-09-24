@@ -44,9 +44,9 @@
 # @arg $2 labels optional path to the labels file; defaults to the repo root
 #         plus .github/labels.yml. Defaulted to the REAL file rather than
 #         derived from $1 on purpose: the suite's form fixtures declare
-#         `labels: [bug]`, and `bug` is in the real file, so every pre-existing
-#         case keeps passing with one argument. A path derived from $1 would
-#         have made a labels fixture mandatory for all of them.
+#         `labels: [bug]`, and `bug` is in the real file, so a case needs no
+#         labels fixture unless it is testing labels. A path derived from $1
+#         would make a labels fixture mandatory for every case.
 # @exitcode 0 every form and config.yml satisfy the schema, and every label a
 #             form references is declared in the labels file
 # @exitcode 1 the directory is missing or holds no form, a file is unparsable,

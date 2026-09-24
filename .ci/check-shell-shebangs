@@ -87,10 +87,10 @@ readonly CANONICAL='#!/usr/bin/env bash'
 # the stock-bash-3.2 compat leg's entry point, so it must run on a shell that
 # predates everything the rest of this repo assumes. Its own header explains
 # that at :3-11, and docs/architecture.md records it in both its `--help` on
-# bash below 4.4 limitation and its invariant 6 exemption list -- but until this
-# row existed, run-lint-checks skipped it by MECHANISM (its first line is not
-# the canonical string) rather than by name, which is indistinguishable from
-# the bug this gate closes.
+# bash below 4.4 limitation and its invariant 6 exemption list. Without this
+# row, run-lint-checks would skip it by MECHANISM (its first line is not the
+# canonical string) rather than by name, which is indistinguishable from the bug
+# this gate closes.
 readonly SHEBANG_EXEMPT=(
   '.ci/check-inactive-on-old-bash::#!/bin/sh'
 )

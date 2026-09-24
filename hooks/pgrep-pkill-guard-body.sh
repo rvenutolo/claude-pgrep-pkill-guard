@@ -4,7 +4,7 @@
 # reaches. hooks/pgrep-pkill-guard.sh sources this file from load_body -- for
 # human mode, or AFTER the prefilter has decided the payload is worth looking
 # at -- and then calls classify::inspect_command or human::human_mode. This
-# file is now only the loader -- it declares the two globals the parts share
+# file is the loader -- it declares the two globals the parts share
 # and sources the parts themselves.
 #
 # The split exists for one reason: bash parses ~1.2 us per line before it runs

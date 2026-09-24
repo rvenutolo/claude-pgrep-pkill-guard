@@ -574,16 +574,15 @@ produces numbers here.
 
 **Read the percentage as a floor.** kcov's parser marks lines coverable that
 bash's xtrace can never report a hit on, so they sit in the uncovered column
-permanently and drag the figure down. Three shapes do it here, and the first is
-the one the caveat used to name alone:
+permanently and drag the figure down. Two shapes do it here:
 
-- **Heredoc bodies.** This guard's verdict messages are long heredocs of guidance
-  prose, and no body line can be "covered" independently of the line that opens
-  the heredoc.
 - **Continuation lines of a multi-line quoted assignment or array literal.** The
-  trace records the line the assignment starts on and nothing after it, so every
-  further line of `preamble='...'`, of a multi-line `jq` program, and of a
-  `readonly -a X=(` list is permanently uncovered.
+  trace records one line of the assignment and nothing else, so every other line
+  of `preamble='...'`, of a multi-line `jq` program, and of a `readonly -a X=(`
+  list is permanently uncovered. This guard's verdict messages are long
+  multi-line quoted strings of guidance prose, so this is the shape the job
+  summary's caveat names. Heredoc bodies are not in this list: kcov does not
+  count a heredoc's body lines at all, so they cannot drag the figure down.
 - **A `case` arm whose pattern sits alone on its line.** xtrace records the arm's
   body, never its pattern, so `'(')` on its own line reads as uncovered while the
   line below it — the arm actually taken — reads as covered. An arm written on a
@@ -595,7 +594,7 @@ this caveat exists to explain.
 
 **An apostrophe in a traced command eats the rest of the trace.** This is a
 second, unrelated kind of wrongness in the same report, and it is the more
-dangerous one because it is invisible: the heredoc caveat only makes the number
+dangerous one because it is invisible: the floor caveat only makes the number
 too small, while this one makes the report describe a codebase that was not
 measured (#128).
 

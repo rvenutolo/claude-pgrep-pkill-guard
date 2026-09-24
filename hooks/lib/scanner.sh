@@ -193,8 +193,10 @@ function scanner::pattern_operand() {
 # @exitcode 1 no bracket class, or the bare literal occurs elsewhere
 function scanner::bracket_mitigation_holds() {
   local -r command="$1" operand="$2"
-  [[ -z "${operand}" ]] && return 1
-  [[ "${operand}" != *\[?\]* ]] && return 1
+  case "${operand}" in
+    *\[?\]*) ;;
+    *) return 1 ;;
+  esac
   local bare="${operand}"
   local prefix rest
   while [[ "${bare}" == *\[?\]* ]]; do
@@ -204,8 +206,9 @@ function scanner::bracket_mitigation_holds() {
   done
   # A surviving `[` means an unresolved class opener whose literal text cannot be
   # reconstructed. A surviving `]` is just a literal character and is fine.
-  [[ "${bare}" == *\[* ]] && return 1
-  [[ -z "${bare}" ]] && return 1
+  case "${bare}" in
+    '' | *\[*) return 1 ;;
+  esac
   [[ "${command}" == *"${bare}"* ]] && return 1
   return 0
 }

@@ -119,6 +119,8 @@
 #              --print-output-on-failure, so stdout would be swallowed either
 #              way.
 # @noargs
+# @set FUZZ_SEED the file-wide RANDOM seed, exported to every test
+# @set FUZZ_N the corpus size, exported to every test
 # @stdout nothing; the seed banner goes to fd 3
 function setup_file() {
   export FUZZ_SEED="${FUZZ_SEED:-${RANDOM}}"

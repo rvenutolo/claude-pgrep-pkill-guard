@@ -21,7 +21,11 @@ function main() {
   local rc=0 count=0 file first_line
   while IFS= read -r file; do
     count="$((count + 1))"
-    IFS= read -r first_line < "${REPO_DIR}/${file}" || first_line=''
+    # Reset first, then `|| :` rather than `|| first_line=''`: a file whose
+    # only line lacks a trailing newline makes `read` set the variable AND
+    # return 1, and the assignment form would blank the shebang it just read.
+    first_line=''
+    IFS= read -r first_line < "${REPO_DIR}/${file}" || : # read returns 1 on an unterminated line yet stores it
     if [[ "${first_line}" == '#!'* ]]; then
       printf 'FAIL: %s has a shebang (%s)\n' "${file}" "${first_line}" >&2
       rc=1

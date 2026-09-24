@@ -31,7 +31,7 @@ function setup() {
 function make_fixture() {
   mkdir -p "${FIXTURE}" "${STUB_DIR}"
   git init --quiet "${FIXTURE}"
-  cp "${REPO_DIR}/run-all-checks" "${FIXTURE}/run-all-checks"
+  cp -- "${REPO_DIR}/run-all-checks" "${FIXTURE}/run-all-checks"
   printf '#!/bin/sh\ntouch "%s"\n' "${MARKER}" > "${STUB_DIR}/nix"
   chmod +x "${STUB_DIR}/nix"
 }

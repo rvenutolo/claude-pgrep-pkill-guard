@@ -93,8 +93,9 @@ function repo_state() {
 #              `awk version YYYYMMDD`, gawk `GNU Awk`, mawk `mawk`. A suite that
 #              silently ran under gawk would pass for the wrong reason.
 # @noargs
+# @set PATH the one-true-awk shim directory, prepended
 # @exitcode 0 `awk` now resolves to one-true-awk
-# @exitcode 1 nawk is not on PATH, or the shim did not take
+# @exitcode 1 nawk is not on PATH, or the shim did not take (via die)
 function use_bwk_awk() {
   local nawk shim version
   if ! nawk="$(command -v nawk)"; then

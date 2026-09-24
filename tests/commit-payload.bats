@@ -9,12 +9,12 @@ function setup() {
 
   # Every .ci/ script is devShell-only by contract -- run-all-checks, the
   # .justfile recipes and the workflows all reach them through .ci/in-devshell
-  # -- and this one needs GNU coreutils in three places: `base64 --wrap=0`,
-  # `mktemp --directory` and `rm --recursive --force`. The two ambient compat
-  # legs run this suite against whatever the runner ships. Skipping there is
-  # honest: the hermetic leg is the one that grades this script, and a test
-  # that quietly rewrote an invocation to something BSD accepts would be
-  # grading a command the script never runs.
+  # -- and this one needs GNU coreutils in four places: `base64 --wrap=0`,
+  # `mktemp --directory`, `rm --recursive --force` and `tr --delete`. The two
+  # ambient compat legs run this suite against whatever the runner ships.
+  # Skipping there is honest: the hermetic leg is the one that grades this
+  # script, and a test that quietly rewrote an invocation to something BSD
+  # accepts would be grading a command the script never runs.
   #
   # The guard used to be `printf '' | base64 --wrap=0`, on the belief that
   # macOS ships BSD base64 with no --wrap at all. That belief is wrong, and
@@ -28,16 +28,18 @@ function setup() {
   # -- `wc -c` pads on BSD, hence the tr.
   if [[ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ]] \
     || ! mktemp --directory --dry-run > /dev/null 2>&1 \
-    || ! rm --recursive --force -- "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null; then
+    || ! rm --recursive --force -- "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null \
+    || ! printf 'x' | tr --delete 'x' > /dev/null 2>&1; then
     skip 'not GNU coreutils; .ci/ scripts are graded inside the devShell'
   fi
 }
 
 # @description Build a throwaway git repo holding one seed commit with two
 #              files, so each case can stage exactly the change it is about.
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
-#              mkdir has no --parents.
+#              A short flag only where macOS has no long form, on purpose, like
+#              every tests/*.bats file -- see make_manifest_fixture in
+#              tests/manifest.bats. setup() skips this suite wherever GNU
+#              coreutils are absent, so the reason here is consistency.
 #
 #              Identity is passed with `-c` rather than written with
 #              `git config`, because test_helper/common points
@@ -70,8 +72,8 @@ function build_in() {
 # @description Encode stdin as unwrapped base64, portably. Asserting on the
 #              ENCODING of the expected bytes rather than decoding the emitted
 #              string is deliberate: GNU base64 decodes with --decode/-d and
-#              BSD base64 with -D, and this helper has to work on both compat
-#              legs. Encode-and-compare proves the same thing.
+#              BSD base64 with -D; encode-and-compare needs neither spelling,
+#              so the helper stays portable whichever base64 reaches it.
 # @noargs
 # @stdout one line of base64, no wrapping
 function b64() {
@@ -297,9 +299,10 @@ function field() {
 
   # The emitted base64 must decode back to exactly the staged bytes. Compared by
   # RE-ENCODING the expected bytes rather than decoding the emitted string:
-  # GNU base64 decodes with --decode and BSD with -D, and this suite runs on
-  # both compat legs. Compared with `[[ ]]` rather than assert_equal so a mismatch
-  # does not dump a quarter of a megabyte of base64 into the failure report.
+  # GNU base64 decodes with --decode and BSD with -D, and re-encoding needs
+  # neither spelling. Compared with `[[ ]]` rather than assert_equal so a
+  # mismatch does not dump a quarter of a megabyte of base64 into the failure
+  # report.
   local emitted expected
   emitted="$(field '.variables.input.fileChanges.additions[0].contents')"
   expected="$(b64 < "${big}")"

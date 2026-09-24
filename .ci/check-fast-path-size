@@ -21,8 +21,8 @@
 #              and nobody would notice.
 #
 #              The ceiling is the point, not an obstacle to it. If a new helper
-#              does not fit, put it in the body: raising the number spends the
-#              milliseconds again.
+#              does not fit, put it in the matching part under hooks/lib/:
+#              raising the number spends the milliseconds again.
 # @noargs
 # @exitcode 0 the entry script is within the ceiling
 # @exitcode 1 it is over the ceiling, or missing/unreadable

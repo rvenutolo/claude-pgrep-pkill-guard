@@ -185,9 +185,9 @@ function load_payloads() {
 #              the decimal point deleted: bash has no float arithmetic, and an
 #              awk spawn per sample would cost several times the thing being
 #              measured. Samples are bucketed by FILE rather than by a cohort
-#              column so the reducer needs no `-v`/`--assign`, which is the one
-#              awk option whose long form is not portable across gawk and
-#              one-true-awk.
+#              column so the reducer needs no `-v`/`--assign`: one-true-awk
+#              rejects GNU long options such as `--assign`, and the
+#              long-options rule forbids `-v`.
 # @arg $1 payload the hook JSON to feed on stdin
 # @arg $2 target the executable to run: the hook, or `cat` for the baseline
 # @arg $3 sample_file the file to append the microsecond sample to

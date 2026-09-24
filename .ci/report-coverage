@@ -29,7 +29,8 @@
 #              undercounting it. The percentage that survives is arithmetically
 #              correct over the files that remain and silently describes a
 #              different codebase, which is how #126 came to be filed against
-#              helpers the suite provably reaches. So both hooks/ files must
+#              helpers the suite provably reaches. So every hooks/ file -- the
+#              entry script, the loader and each part under hooks/lib/ -- must
 #              appear in `files[]` with a non-zero covered-line count before any
 #              number is printed. See #128 and docs/architecture.md,
 #              "Line coverage".
@@ -166,13 +167,14 @@ function main() {
       printf '### Hook line coverage\n\n'
       printf '**%s%%** of executable lines in hooks/ were reached by the BATS suite.\n\n' "${percent}"
       # The caveat travels with the number on purpose. Without it a reader takes
-      # the figure for branch reach, and it is not: kcov counts heredoc BODY
-      # lines as coverable, and this guard's verdict messages are long heredocs
-      # of guidance prose that can never be covered independently of the line
-      # opening them. See docs/architecture.md, "Line coverage".
+      # the figure for branch reach, and it is not: kcov counts the continuation
+      # lines of a multi-line quoted string as coverable and never records a hit
+      # on them, and this guard's verdict messages are long multi-line quoted
+      # strings of guidance prose. See docs/architecture.md, "Line coverage".
       cat << 'SUMMARY_MD'
-Read it as a floor, not a measurement: kcov counts heredoc body lines as
-coverable, and the guard's verdict messages are long prose heredocs. kcov also
+Read it as a floor, not a measurement: kcov counts the continuation lines of
+multi-line quoted strings as coverable and never hits them, and the guard's
+verdict messages are long prose strings of exactly that shape. kcov also
 stops recording after a traced command carrying an odd number of unescaped
 apostrophes, and resumes at the next one, so some windows of a run are missing
 however complete the report looks (#128). A zero in the per-line hit counts in

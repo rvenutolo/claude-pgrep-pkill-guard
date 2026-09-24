@@ -42,8 +42,9 @@ function run_cli() {
   # Help is not a diagnostic: it was asked for, so it belongs on stdout and
   # stderr must stay clean enough to pipe (`--help | less`) without noise.
   [[ ! -s "${CLI_STDERR}" ]]
-  # A usage line first, per the spec's ordering. Asserting the shape rather than
-  # the whole line keeps this from breaking on a wording tweak.
+  # A usage line first, the way a reader skimming --help expects to find it.
+  # Asserting the shape rather than the whole line keeps this from breaking on a
+  # wording tweak.
   IFS= read -r first_line < "${CLI_STDOUT}"
   [[ "${first_line}" == 'Usage: '* ]]
 }
@@ -115,8 +116,9 @@ function run_cli() {
 
 @test "cli: an unrecognized option exits 2 and names it on stderr" {
   run_cli bogus --bogus
-  # 2, not 1: the spec makes this the one deliberate non-fail-open path in the
-  # guard. hooks/hooks.json passes no arguments, so argv can only come from a
+  # 2, not 1: this is the one path in the repo that does not fail open (see
+  # docs/architecture.md, "There is exactly one exception, and it is on
+  # argv"). hooks/hooks.json passes no arguments, so argv can only come from a
   # person and the 2 lands in a terminal, never in Claude Code.
   [[ "${CLI_STATUS}" -eq 2 ]]
   # Diagnostics go to stderr, and stdout stays empty: a caller that pipes this

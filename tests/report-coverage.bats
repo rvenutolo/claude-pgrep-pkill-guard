@@ -144,7 +144,11 @@ function make_report() {
   run cat "${summary}"
   assert_output --partial '76.42%'
   # The caveat travels with the number or the number is misread as branch reach.
-  assert_output --partial 'heredoc'
+  # It names the shape kcov miscounts: the continuation lines of a multi-line
+  # quoted string are coverable and never hit. kcov does not count heredoc body
+  # lines at all, so a caveat blaming heredocs would explain nothing.
+  assert_output --partial 'multi-line quoted strings'
+  refute_output --partial 'heredoc'
 }
 
 @test "report-coverage: no job summary is written when the variable is unset" {
@@ -188,8 +192,8 @@ function make_report() {
 }
 
 @test "report-coverage: a report missing the entry script fails too" {
-  # The rule is symmetric and both halves are enforced by the same loop; grading
-  # only the body file would let a typo in the entry script's name sit unnoticed.
+  # The same loop grades every required file; grading only the body file would
+  # let a typo in the entry script's name sit unnoticed.
   make_report "${BATS_TEST_TMPDIR}/cov" '76.42' '[
     {"covered_lines": 387, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard-body.sh",
      "percent_covered": "75.29", "total_lines": 514}

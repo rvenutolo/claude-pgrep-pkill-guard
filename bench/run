@@ -360,6 +360,8 @@ function package_temp() {
 # @arg $1 samples_dir the directory holding one sample file per cohort
 # @arg $2 reps the repetition count the run used
 # @arg $3 smoke 1 when this was a --smoke run, 0 otherwise
+# @arg $4 load_at_start the load average read before the measurement loop
+# @arg $5 temp_at_start the package temperature read before the measurement loop
 # @stdout the full markdown report
 #
 # Single quotes throughout, and the backticks inside them are markdown code
@@ -367,7 +369,7 @@ function package_temp() {
 # would turn every one of them into one; hence the function-wide SC2016 disable.
 # shellcheck disable=SC2016 # function-wide: the backticks are markdown spans in the report
 function write_report() {
-  local -r samples_dir="$1" reps="$2" smoke="$3"
+  local -r samples_dir="$1" reps="$2" smoke="$3" load_at_start="$4" temp_at_start="$5"
   local cohort n min p50 p95 max total=0
 
   printf '# Hook benchmark results\n\n'
@@ -391,12 +393,12 @@ function write_report() {
   # Machine state, not toolchain. These four rows exist because a run whose
   # p50 doubles while its min holds is describing the machine, not the code,
   # and without them a later reader cannot tell those two cases apart -- which
-  # is exactly the question a regenerated report raised on 2026-09-03. LOAD and
-  # TEMP are read before the measurement loop, not here; see their capture site.
+  # is exactly the question a regenerated report raised on 2026-09-03. $4 and
+  # $5 are read before the measurement loop, in main, not here.
   printf '| governor | %s |\n' "$(cpu_governor)"
   printf '| power | %s |\n' "$(power_source)"
-  printf '| load at start | %s |\n' "${LOAD_AT_START}"
-  printf '| package temp at start | %s |\n' "${TEMP_AT_START}"
+  printf '| load at start | %s |\n' "${load_at_start}"
+  printf '| package temp at start | %s |\n' "${temp_at_start}"
   printf '| repetitions | %s |\n' "${reps}"
   for cohort in "${COHORTS[@]}"; do
     IFS=$'\t' read -r n _ _ _ _ < <(cohort_stats "${samples_dir}/${cohort}")
@@ -496,14 +498,14 @@ function main() {
   mkdir --parents "${samples_dir}"
   export PGREP_PKILL_GUARD_STATE_DIR="${state_dir}"
 
-  # Captured HERE, before a single payload is timed, and deliberately global so
-  # write_report can read them: the run spawns ~15k processes, so a load average
-  # sampled at report time measures the benchmark rather than the machine that
-  # hosted it. The package temperature has the same problem in reverse -- it is
-  # the pre-run thermal headroom that shapes the whole distribution.
-  LOAD_AT_START="$(load_average)"
-  TEMP_AT_START="$(package_temp)"
-  readonly LOAD_AT_START TEMP_AT_START
+  # Captured HERE, before a single payload is timed, and handed to write_report
+  # as arguments: the run spawns ~15k processes, so a load average sampled at
+  # report time measures the benchmark rather than the machine that hosted it.
+  # The package temperature has the same problem in reverse -- it is the
+  # pre-run thermal headroom that shapes the whole distribution.
+  local load_at_start temp_at_start
+  load_at_start="$(load_average)"
+  temp_at_start="$(package_temp)"
 
   # Index-aligned, in corpus order: row i is payload_of[i] in cohort
   # cohort_of[i]. Iterated by index below, so the order is the semantics.
@@ -584,10 +586,11 @@ function main() {
   done
 
   if [[ -n "${output}" ]]; then
-    write_report "${samples_dir}" "${reps}" "${smoke}" > "${output}"
+    write_report "${samples_dir}" "${reps}" "${smoke}" \
+      "${load_at_start}" "${temp_at_start}" > "${output}"
     log "wrote ${output}"
   else
-    write_report "${samples_dir}" "${reps}" "${smoke}"
+    write_report "${samples_dir}" "${reps}" "${smoke}" "${load_at_start}" "${temp_at_start}"
   fi
 }
 

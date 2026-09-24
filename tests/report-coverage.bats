@@ -144,7 +144,11 @@ function make_report() {
   run cat "${summary}"
   assert_output --partial '76.42%'
   # The caveat travels with the number or the number is misread as branch reach.
-  assert_output --partial 'heredoc'
+  # It names the shape kcov miscounts: the continuation lines of a multi-line
+  # quoted string are coverable and never hit. kcov does not count heredoc body
+  # lines at all, so a caveat blaming heredocs would explain nothing.
+  assert_output --partial 'multi-line quoted strings'
+  refute_output --partial 'heredoc'
 }
 
 @test "report-coverage: no job summary is written when the variable is unset" {

@@ -115,8 +115,8 @@ BODY
 }
 
 @test "guard parts: a part named by two rows is reported" {
-  # Sourcing one part twice is not a style question: every part declares
-  # readonly constants, and the second source would fail on them.
+  # Sourcing one part twice is not a style question: most parts declare
+  # readonly constants, and a second source fails on them.
   local -r root="${BATS_TEST_TMPDIR}/twice"
   make_parts_fixture "${root}"
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'

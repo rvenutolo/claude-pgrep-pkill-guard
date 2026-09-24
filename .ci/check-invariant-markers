@@ -124,11 +124,12 @@ readonly MARKERS=(
 #              space so the phrase in the table can be written the way a human
 #              would write it.
 #
-#              sed and tr rather than a bash read loop: the largest part is ~430
-#              lines and this runs on every gate invocation. Both invocations
-#              stay within POSIX syntax (`#*` rather than `#\{1,\}`, no GNU-only
-#              flags) because the bats suite drives this script on the ambient
-#              macOS compat legs, where sed and tr are BSD.
+#              sed and tr rather than a bash read loop: the files in the table
+#              run to ~1000 lines and this runs on every gate invocation. Both
+#              invocations stay within POSIX syntax (`#*` rather than
+#              `#\{1,\}`, no GNU-only flags) because the bats suite drives this
+#              script on the ambient macOS compat legs, where sed and tr are
+#              BSD.
 # @arg $1 file path to read
 # @stdout the file's text as a single collapsed line
 function collapsed_text() {

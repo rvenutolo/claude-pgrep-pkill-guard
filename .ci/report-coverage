@@ -29,7 +29,8 @@
 #              undercounting it. The percentage that survives is arithmetically
 #              correct over the files that remain and silently describes a
 #              different codebase, which is how #126 came to be filed against
-#              helpers the suite provably reaches. So both hooks/ files must
+#              helpers the suite provably reaches. So every hooks/ file -- the
+#              entry script, the loader and each part under hooks/lib/ -- must
 #              appear in `files[]` with a non-zero covered-line count before any
 #              number is printed. See #128 and docs/architecture.md,
 #              "Line coverage".

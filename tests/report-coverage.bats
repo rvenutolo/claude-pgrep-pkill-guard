@@ -188,8 +188,8 @@ function make_report() {
 }
 
 @test "report-coverage: a report missing the entry script fails too" {
-  # The rule is symmetric and both halves are enforced by the same loop; grading
-  # only the body file would let a typo in the entry script's name sit unnoticed.
+  # The same loop grades every required file; grading only the body file would
+  # let a typo in the entry script's name sit unnoticed.
   make_report "${BATS_TEST_TMPDIR}/cov" '76.42' '[
     {"covered_lines": 387, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard-body.sh",
      "percent_covered": "75.29", "total_lines": 514}

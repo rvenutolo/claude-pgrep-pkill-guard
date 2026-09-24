@@ -373,14 +373,15 @@ function classify::inspect_command() {
   # never going to act on. The first pgrep loop the user types still warns them.
   classify::inspect_preconditions || return 0
 
-  # One jq spawn instead of two, since it runs on every Bash call. The command
-  # can contain literal tabs and newlines, which @tsv escapes as `\t` / `\n`
-  # rather than emitting them raw -- raw newlines would split a single TSV
-  # record across lines, and a raw tab would be indistinguishable from the
-  # field separator. `printf '%b'` decodes exactly that escape set (`\\`,
-  # `\t`, `\n`, `\r`) as a single left-to-right pass, which is what makes it
-  # safe: every backslash jq emits is already paired, so there is no separate
-  # unescape step that could reinterpret a decoded literal backslash.
+  # One jq spawn instead of two: this runs on every payload that passes the
+  # prefilter. The command can contain literal tabs and newlines, which @tsv
+  # escapes as `\t` / `\n` rather than emitting them raw -- raw newlines would
+  # split a single TSV record across lines, and a raw tab would be
+  # indistinguishable from the field separator. `printf '%b'` decodes exactly
+  # that escape set (`\\`, `\t`, `\n`, `\r`) as a single left-to-right pass,
+  # which is what makes it safe: every backslash jq emits is already paired, so
+  # there is no separate unescape step that could reinterpret a decoded literal
+  # backslash.
   # session_id rides along in the same @tsv record.
   local tsv_line
   tsv_line="$(jq --raw-output \

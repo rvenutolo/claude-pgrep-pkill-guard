@@ -323,8 +323,8 @@ function tab() {
 #              prefix assignment is not enough, because a BASH_ENV inherited from
 #              the caller re-sources the user's profile, which rebuilds PATH and
 #              quietly restores the very binary the probe is trying to remove.
-#              Invoked directly, not as `bash <script>`, matching the hooks.json
-#              contract (spec amendment A12).
+#              Invoked directly, not as `bash <script>`, matching
+#              hooks/hooks.json, which names the script itself.
 # @arg $1 script path to the hook copy to run
 # @arg $2 path the PATH that copy should see
 # @stdout inactive or active
@@ -389,9 +389,10 @@ function build_inactive_fixture() {
 #              `pkill` or the prefilter short-circuits before the sibling is ever
 #              sourced; `zzznoproc` matches no process, so nothing can be killed
 #              if the guard fails to fire. Invoked directly, not as
-#              `bash <script>`, matching the hooks.json contract (spec amendment
-#              A12). stderr is discarded because a sibling that fails to parse
-#              makes bash print a syntax error, and only stdout is the contract.
+#              `bash <script>`, matching hooks/hooks.json, which names the
+#              script itself. stderr is discarded because a sibling that fails
+#              to parse makes bash print a syntax error, and only stdout is the
+#              contract.
 # @noargs
 # @stdout the hook's JSON verdict
 function orphan_probe() {
@@ -540,8 +541,9 @@ function loader_probe() {
   # bytes, the loop never runs, and the command is "". That is the only input
   # that reaches the empty branch of the trailing-newline strip, and it is
   # unreachable through the hook, which always newline-terminates what it sends
-  # the scanner. Override 3 permits driving pgrep-scan.awk directly, under
-  # LC_ALL=C, because it has a public interface of its own.
+  # the scanner. Invariant 3 in docs/architecture.md permits driving
+  # pgrep-scan.awk directly, under LC_ALL=C, because it has a public interface
+  # of its own.
   #
   # It is also the input the `gawk --lint=fatal --posix` step in
   # .ci/run-lint-checks feeds the scanner, so this test and that gate cover the

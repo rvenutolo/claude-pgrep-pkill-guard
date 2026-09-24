@@ -35,9 +35,10 @@ function setup() {
 
 # @description Build a throwaway git repo holding one seed commit with two
 #              files, so each case can stage exactly the change it is about.
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
-#              mkdir has no --parents.
+#              A short flag only where macOS has no long form, on purpose, like
+#              every tests/*.bats file -- see make_manifest_fixture in
+#              tests/manifest.bats. setup() skips this suite wherever GNU
+#              coreutils are absent, so the reason here is consistency.
 #
 #              Identity is passed with `-c` rather than written with
 #              `git config`, because test_helper/common points
@@ -70,8 +71,8 @@ function build_in() {
 # @description Encode stdin as unwrapped base64, portably. Asserting on the
 #              ENCODING of the expected bytes rather than decoding the emitted
 #              string is deliberate: GNU base64 decodes with --decode/-d and
-#              BSD base64 with -D, and this helper has to work on both compat
-#              legs. Encode-and-compare proves the same thing.
+#              BSD base64 with -D; encode-and-compare needs neither spelling,
+#              so the helper stays portable whichever base64 reaches it.
 # @noargs
 # @stdout one line of base64, no wrapping
 function b64() {
@@ -297,9 +298,10 @@ function field() {
 
   # The emitted base64 must decode back to exactly the staged bytes. Compared by
   # RE-ENCODING the expected bytes rather than decoding the emitted string:
-  # GNU base64 decodes with --decode and BSD with -D, and this suite runs on
-  # both compat legs. Compared with `[[ ]]` rather than assert_equal so a mismatch
-  # does not dump a quarter of a megabyte of base64 into the failure report.
+  # GNU base64 decodes with --decode and BSD with -D, and re-encoding needs
+  # neither spelling. Compared with `[[ ]]` rather than assert_equal so a
+  # mismatch does not dump a quarter of a megabyte of base64 into the failure
+  # report.
   local emitted expected
   emitted="$(field '.variables.input.fileChanges.additions[0].contents')"
   expected="$(b64 < "${big}")"

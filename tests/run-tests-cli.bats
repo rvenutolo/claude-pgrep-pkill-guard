@@ -12,7 +12,7 @@ function setup() {
 # @arg $1 path the .bats file to write
 function make_trivial_suite() {
   local -r path="$1"
-  mkdir -p "$(dirname "${path}")"
+  mkdir -p "${path%/*}"
   cat > "${path}" << 'BATS'
 @test "trivial fixture case" {
   [[ 1 -eq 1 ]]
@@ -193,7 +193,7 @@ function require_kcov() {
   # the case could not tell that apart from run-tests having exported it. Clear
   # it first and the assertion grades run-tests, which is the subject.
   local -r suite="${BATS_TEST_TMPDIR}/suite8/env.bats"
-  mkdir -p "$(dirname "${suite}")"
+  mkdir -p "${suite%/*}"
   cat > "${suite}" << 'BATS'
 @test "COVERAGE is unset" {
   [[ -z "${COVERAGE:-}" ]]

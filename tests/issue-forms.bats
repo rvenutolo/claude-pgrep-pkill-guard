@@ -158,7 +158,7 @@ YAML
 function make_labels_fixture() {
   local -r path="$1"
   shift
-  mkdir -p "$(dirname "${path}")"
+  mkdir -p "${path%/*}"
   : > "${path}"
   local name
   for name in "$@"; do

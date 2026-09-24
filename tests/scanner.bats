@@ -442,7 +442,7 @@ function loader_probe() {
   [[ "${out}" == *'is missing or unreadable'* ]]
   # Exactly one JSON line: the loader exits rather than returning, so the entry
   # script's own fail-open branch must not fire a second message.
-  [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
+  [[ "${out}" != *$'\n'* ]]
 }
 
 @test "scanner: a part that fails to load announces the guard inactive, naming it" {
@@ -457,7 +457,7 @@ function loader_probe() {
   # than call a present file missing.
   [[ "${out}" == *'did not define wrappers::shell_wrapper_payloads'* ]]
   [[ "${out}" != *'is missing or unreadable'* ]]
-  [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
+  [[ "${out}" != *$'\n'* ]]
 }
 
 @test "scanner: a GUARD_PARTS row naming a gone function says so, not 'missing'" {
@@ -485,7 +485,7 @@ function loader_probe() {
   [[ "${out}" == *'did not define inspect_command_gone'* ]]
   [[ "${out}" == *'GUARD_PARTS'* ]]
   [[ "${out}" != *'is missing or unreadable'* ]]
-  [[ "$(printf '%s\n' "${out}" | wc -l | tr -d ' ')" == '1' ]]
+  [[ "${out}" != *$'\n'* ]]
 }
 
 @test "scanner: a part whose last top-level command fails still loads" {

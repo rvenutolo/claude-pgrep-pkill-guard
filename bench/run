@@ -329,7 +329,9 @@ function power_source() {
 # @stdout one line
 function load_average() {
   if [[ -r /proc/loadavg ]]; then
-    cut --delimiter=' ' --fields=1-3 < /proc/loadavg
+    local one five fifteen
+    IFS=' ' read -r one five fifteen _ < /proc/loadavg
+    printf '%s %s %s\n' "${one}" "${five}" "${fifteen}"
   else
     printf 'unknown\n'
   fi

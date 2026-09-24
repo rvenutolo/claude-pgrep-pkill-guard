@@ -9,12 +9,12 @@ function setup() {
 
   # Every .ci/ script is devShell-only by contract -- run-all-checks, the
   # .justfile recipes and the workflows all reach them through .ci/in-devshell
-  # -- and this one needs GNU coreutils in three places: `base64 --wrap=0`,
-  # `mktemp --directory` and `rm --recursive --force`. The two ambient compat
-  # legs run this suite against whatever the runner ships. Skipping there is
-  # honest: the hermetic leg is the one that grades this script, and a test
-  # that quietly rewrote an invocation to something BSD accepts would be
-  # grading a command the script never runs.
+  # -- and this one needs GNU coreutils in four places: `base64 --wrap=0`,
+  # `mktemp --directory`, `rm --recursive --force` and `tr --delete`. The two
+  # ambient compat legs run this suite against whatever the runner ships.
+  # Skipping there is honest: the hermetic leg is the one that grades this
+  # script, and a test that quietly rewrote an invocation to something BSD
+  # accepts would be grading a command the script never runs.
   #
   # The guard used to be `printf '' | base64 --wrap=0`, on the belief that
   # macOS ships BSD base64 with no --wrap at all. That belief is wrong, and
@@ -28,7 +28,8 @@ function setup() {
   # -- `wc -c` pads on BSD, hence the tr.
   if [[ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ]] \
     || ! mktemp --directory --dry-run > /dev/null 2>&1 \
-    || ! rm --recursive --force -- "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null; then
+    || ! rm --recursive --force -- "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null \
+    || ! printf 'x' | tr --delete 'x' > /dev/null 2>&1; then
     skip 'not GNU coreutils; .ci/ scripts are graded inside the devShell'
   fi
 }

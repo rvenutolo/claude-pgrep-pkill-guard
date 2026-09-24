@@ -58,7 +58,9 @@ function make_package() {
 # @arg $2 name package name
 # @stdout the package's out path, no trailing newline
 function package_out() {
-  printf '%s/store/%s-out' "$1" "$2"
+  local -r root="$1"
+  local -r name="$2"
+  printf '%s/store/%s-out' "${root}" "${name}"
 }
 
 # @description Write packages.tsv, one row per named package, each with a single

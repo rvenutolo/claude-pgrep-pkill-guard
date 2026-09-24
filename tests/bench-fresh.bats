@@ -97,7 +97,9 @@ RESULTS
 # @arg $1 root the fixture repo
 # @arg $2 sha the commit to record
 function record_commit() {
-  write_results "$1" "$2"
+  local -r root="$1"
+  local -r sha="$2"
+  write_results "${root}" "${sha}"
 }
 
 # The first case points the script at the real repo; every other case drives

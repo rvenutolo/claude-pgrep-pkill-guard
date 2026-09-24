@@ -185,6 +185,7 @@ function main() {
     return 1
   fi
 
+  # Rows are `<file>:<function>`, as guard_part_rows prints them.
   local -a rows=()
   mapfile -t rows < <(guard_part_rows "${REPO_DIR}/${LOADER}")
 

@@ -319,7 +319,7 @@ deliberately not part of `just check`.
 
 Anything it finds becomes a hand-written case in `tests/scanner.bats` — not a row
 in `tests/cases/`, whose tables are hook-level and read by `tests/classify.bats`.
-The fuzzer's job is to find them; the suite's job is to keep them. Seven more are unrelated to the guard entirely, each
+The fuzzer's job is to find them; the suite's job is to keep them. Ten more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
@@ -327,16 +327,20 @@ templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-comm
 fabricated package inventory), `tests/invariant-markers.bats`
 (`.ci/check-invariant-markers`, against a fabricated source tree),
 `tests/bench-fresh.bats` (`.ci/check-bench-fresh`, against a purpose-built
-two-commit repository) and `tests/bats-libs-in-sync.bats`
+two-commit repository), `tests/bats-libs-in-sync.bats`
 (`.ci/check-bats-libs-in-sync`, against copied fixtures of
 `.github/actions/bats-ambient/action.yml` and `flake.lock` carrying planted SHA
-mismatches) and `tests/report-coverage.bats` (`.ci/report-coverage`, against a
-fabricated kcov output directory). Every one of them drives its script over a
-fabricated input — five through optional fixture-path arguments,
-`build-commit-payload` by being invoked inside a throwaway repo, and
-`report-coverage` by being pointed at a directory a case built — for the same
-reason: a suite that only asserted "exits 0 on the real repo" would pass just as
-well against a script that unconditionally returned 0.
+mismatches), `tests/report-coverage.bats` (`.ci/report-coverage`, against a
+fabricated kcov output directory), `tests/shell-shebangs.bats`
+(`.ci/check-shell-shebangs`, against a fabricated source tree),
+`tests/guard-parts.bats` (`.ci/check-guard-parts`, against a fabricated loader
+and parts) and `tests/bats-no-shebang.bats` (`.ci/check-bats-no-shebang`,
+against throwaway repos of fixture `.bats` files). Every one of them drives its
+script over a fabricated input — seven through optional fixture-path arguments,
+`build-commit-payload` and `check-bats-no-shebang` by being invoked inside a
+throwaway repo, and `report-coverage` by being pointed at a directory a case
+built — for the same reason: a suite that only asserted "exits 0 on the real
+repo" would pass just as well against a script that unconditionally returned 0.
 
 Two more drive neither the guard nor a `.ci/` script.
 `tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —

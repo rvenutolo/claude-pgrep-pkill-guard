@@ -407,6 +407,8 @@ function main() {
   # Two views of the same list, deliberately. forward_check needs the
   # annotations to honour `linux-only`; reverse_check's contract is bare names
   # and is unchanged by any of this.
+  # tools rows are bare names; annotated rows are `tool<TAB>annotation`
+  # (annotation may be empty).
   local -a tools=() annotated=()
   mapfile -t tools < <(declared_tools)
   mapfile -t annotated < <(declared_tools_annotated)

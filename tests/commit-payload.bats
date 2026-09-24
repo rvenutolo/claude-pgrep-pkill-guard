@@ -49,11 +49,11 @@ function setup() {
 function make_repo() {
   local -r root="$1"
   mkdir -p "${root}"
-  git -c init.defaultBranch=main init -q "${root}"
+  git -c init.defaultBranch=main init --quiet "${root}"
   printf 'alpha\n' > "${root}/alpha.txt"
   printf 'beta\n' > "${root}/beta.txt"
   git -C "${root}" add alpha.txt beta.txt
-  git -C "${root}" -c user.email='tests@example.invalid' -c user.name='Tests' commit -q -m 'seed'
+  git -C "${root}" -c user.email='tests@example.invalid' -c user.name='Tests' commit --quiet --message='seed'
 }
 
 # @description Run the payload builder with the fixture repo as the working
@@ -120,7 +120,7 @@ function field() {
 @test "commit payload: a deleted file becomes one deletions entry and no additions" {
   local -r root="${BATS_TEST_TMPDIR}/deleted"
   make_repo "${root}"
-  git -C "${root}" rm -q beta.txt
+  git -C "${root}" rm --quiet beta.txt
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -135,7 +135,7 @@ function field() {
   printf 'alpha changed\n' > "${root}/alpha.txt"
   printf 'brand new\n' > "${root}/gamma.txt"
   git -C "${root}" add alpha.txt gamma.txt
-  git -C "${root}" rm -q beta.txt
+  git -C "${root}" rm --quiet beta.txt
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success

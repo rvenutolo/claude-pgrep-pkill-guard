@@ -206,8 +206,7 @@ function main() {
   done
 
   # The reverse direction: a part nothing names is never sourced, so every
-  # function in it is undefined at runtime. Nothing reported that before this
-  # gate existed.
+  # function in it is undefined at runtime.
   local -a parts=()
   mapfile -t parts < <(git -C "${REPO_DIR}" ls-files "${LIB_DIR}/*.sh")
 

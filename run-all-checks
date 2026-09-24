@@ -125,8 +125,9 @@ function main() {
   # exactly, and drops any other bash spelling from BOTH linters with no
   # diagnostic -- its empty-scan guard fires only when the list is entirely
   # empty, never when it is one file short (#171). The one exemption,
-  # .ci/check-inactive-on-old-bash, was previously skipped by mechanism rather
-  # than by name, which is indistinguishable from that bug.
+  # .ci/check-inactive-on-old-bash, is named in the gate's table, so it is
+  # skipped by name rather than by mechanism -- the latter is indistinguishable
+  # from that bug.
   # check-bench-fresh compares the commit bench/RESULTS.md records in its
   # provenance table against the hooks/ history since. The README quotes that
   # report's figures as measured, and nothing tied the two together: when the

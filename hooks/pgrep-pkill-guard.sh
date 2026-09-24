@@ -87,8 +87,8 @@ function load_body() {
       "${HOOK_NAME}: pgrep-pkill-guard-body.sh failed to load; the pgrep/pkill guard is INACTIVE for this command."
     return 1
   }
-  # Explicit, because `source` yields the sourced file's last status and this
-  # function's own is now a decision, not a value nobody reads.
+  # Explicit, because `source` yields the sourced file's last status, and this
+  # function's status is a decision its callers act on.
   return 0
 }
 

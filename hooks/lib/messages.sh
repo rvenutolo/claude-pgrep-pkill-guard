@@ -29,8 +29,8 @@ SCANNER_INACTIVE_MESSAGE+='the pgrep/pkill guard is INACTIVE for this command.'
 readonly SCANNER_INACTIVE_MESSAGE
 
 # Every deny leads with the escape hatch for the one legitimate reason to put a
-# denied shape in a Bash command: writing prose that quotes it. It used to
-# trail the fixes, where it was read last or not at all.
+# denied shape in a Bash command: writing prose that quotes it. Trailing
+# the fixes, it would be read last or not at all.
 # shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
 readonly WRITE_TOOL_LEAD='If this command WRITES text that contains such an example (a heredoc, `echo`, or `printf` into
 a file) rather than running one, use the Write tool instead; this guard only inspects Bash commands.'

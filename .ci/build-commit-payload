@@ -18,13 +18,12 @@
 #              tests/commit-payload.bats grades it against throwaway repos, and
 #              the only thing left unproven is the HTTP call itself.
 #
-#              Nothing crosses into JSON through string interpolation, and that
-#              has not changed -- only the channel has. Every path still crosses
-#              through jq's --arg. Every base64 blob now crosses through
-#              --rawfile, which reads a file's bytes and hands them over as a
-#              JSON string WITHOUT parsing them, so it carries exactly the same
-#              guarantee --arg did: a path or a blob holding a double quote or a
-#              backslash cannot break the document, and a
+#              Nothing crosses into JSON through string interpolation. Paths
+#              cross through jq's --arg. Base64 blobs cross through --rawfile,
+#              which reads a file's bytes and hands them over as a JSON string
+#              WITHOUT parsing them, so it carries the same guarantee --arg
+#              does: a path or a blob holding a double quote or a backslash
+#              cannot break the document, and a
 #              `printf '{"path": "%s"' "${path}"` here would still hand an
 #              attacker who can name a file the whole mutation.
 #
@@ -66,10 +65,8 @@ readonly MUTATION='mutation ($input: CreateCommitOnBranchInput!) {
 }'
 
 # One jq program, fed the per-change objects through --slurpfile rather than
-# through $ARGS.positional. The three-strings-per-change flattening this
-# replaced existed only because jq offers exactly one positional array; with the
-# changes arriving as a stream of JSON values in a file, there is nothing left
-# to re-pair.
+# through $ARGS.positional: jq offers exactly one positional array, and a stream
+# of JSON values in a file needs no re-pairing.
 #
 # $changes and the other $-prefixed bindings are jq syntax, not shell
 # expansions; hence the SC2016 disable.
@@ -183,10 +180,7 @@ function main() {
         # `| tr --delete '\n'` is NOT redundant with --wrap=0. --rawfile hands the
         # file's bytes over verbatim, so a base64 that appends a trailing
         # newline puts that newline inside the JSON string and ships a corrupt
-        # blob. The argv channel could not expose that: `$(...)` strips trailing
-        # newlines, which is what silently guaranteed the property before. The
-        # guarantee is now explicit rather than inherited from a substitution --
-        # and it is not hypothetical: the macOS runner's base64 accepts
+        # blob -- and the macOS runner's base64 does exactly that: it accepts
         # --wrap=0 and emits the newline anyway (#94).
         git show ":0:${path}" | base64 --wrap=0 | tr --delete '\n' > "${blob_file}"
         jq --null-input --compact-output \

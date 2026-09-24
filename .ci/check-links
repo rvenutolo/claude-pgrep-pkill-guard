@@ -21,9 +21,8 @@
 #                 config; relying on cwd would be the same mistake in a second
 #                 form.
 #              3. A missing GitHub token WARNS rather than fails. The token
-#                 exists to lift anonymous GitHub rate limits now that the
-#                 own-repo exclude is gone -- it is not a credential the check
-#                 needs to function. A coworker with no `gh` login must still be
+#                 lifts anonymous GitHub rate limits on this repo's own links
+#                 -- it is not a credential the check needs to function. A coworker with no `gh` login must still be
 #                 able to run this; the worst case is a 429, which lychee.toml
 #                 already accepts.
 #

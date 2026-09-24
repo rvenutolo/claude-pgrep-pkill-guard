@@ -90,8 +90,7 @@ BODY
 }
 
 @test "guard parts: a part no row names is reported" {
-  # The reverse direction, which had no signal at all before this gate: the
-  # loader sources an explicit list, so an unlisted part is never sourced and
+  # The reverse direction: the loader sources an explicit list, so an unlisted part is never sourced and
   # every function in it is undefined at runtime.
   local -r root="${BATS_TEST_TMPDIR}/unlisted"
   make_parts_fixture "${root}"

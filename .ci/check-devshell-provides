@@ -138,11 +138,10 @@ builtins.concatStringsSep "\n" (map (name: toString formatters.${name}.command) 
 #
 #              Text after a `#` on a line that also names a tool is the
 #              ANNOTATION, not a comment, and it is handed on rather than
-#              discarded. That is the one behavioural difference from the
-#              parser this file shipped before `linux-only` existed, and it is
-#              why .ci/required-tools' own header had to change: a header
-#              promising "`#` comments ignored" describes a parser that would
-#              silently drop `linux-only` and quietly demand kcov on macOS.
+#              discarded. A header promising "`#` comments ignored" would
+#              describe a parser that silently drops `linux-only` and quietly
+#              demands kcov on macOS -- which is why .ci/required-tools' own
+#              header documents the annotation.
 # @noargs
 # @stdout tool<TAB>annotation per declared entry
 function declared_tools_annotated() {
@@ -166,7 +165,7 @@ function declared_tools_annotated() {
 # @description Print every tool declared in the tools file, one bare name per
 #              line, annotations dropped.
 #
-#              Kept as a separate function with its OLD contract rather than
+#              A separate function with a bare-names contract rather than
 #              folded into the annotated form: reverse_check consumes this and
 #              is entirely uninterested in annotations. Off Linux kcov is not
 #              in nativeBuildInputs at all, so there is no package to justify,
@@ -405,8 +404,7 @@ function main() {
   fi
 
   # Two views of the same list, deliberately. forward_check needs the
-  # annotations to honour `linux-only`; reverse_check's contract is bare names
-  # and is unchanged by any of this.
+  # annotations to honour `linux-only`; reverse_check takes bare names.
   # tools rows are bare names; annotated rows are `tool<TAB>annotation`
   # (annotation may be empty).
   local -a tools=() annotated=()

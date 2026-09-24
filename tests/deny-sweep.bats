@@ -7,7 +7,7 @@ function setup() {
   local cmd_json command expected needle json reason count=0 failures=0
   while IFS=$'\t' read -r cmd_json expected; do
     [[ -z "${cmd_json}" ]] && continue
-    case "${expected}" in deny:*) ;; *) continue ;; esac
+    [[ "${expected}" == deny:* ]] || continue
     command="$(jq --raw-output . <<< "${cmd_json}")"
     json="$(run_hook "${command}")"
     count="$((count + 1))"

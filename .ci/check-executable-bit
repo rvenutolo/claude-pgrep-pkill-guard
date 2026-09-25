@@ -34,9 +34,9 @@ readonly EXPECT_EXECUTABLE=(
   'assets/build-social-preview'
 )
 readonly EXPECT_NON_EXECUTABLE=(
-  # Sourced by the guard's entry script once a payload looks worth inspecting,
-  # never run on its own: no shebang, so no exec bit either. And the parts it
-  # sources.
+  # Sourced by the guard's entry script (human mode, or once a payload looks
+  # worth inspecting), never run on its own: no shebang, so no exec bit
+  # either. And the parts it sources.
   'hooks/pgrep-pkill-guard-body.sh'
   'hooks/lib/*.sh'
   'hooks/pgrep-scan.awk'

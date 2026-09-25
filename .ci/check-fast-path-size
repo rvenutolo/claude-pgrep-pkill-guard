@@ -15,10 +15,10 @@
 #              that runs the payload prefilter, and
 #              hooks/pgrep-pkill-guard-body.sh, a loader for the parts under
 #              hooks/lib/, none of it with a shebang or exec bit -- which
-#              the entry script sources only once a payload looks worth
-#              inspecting. That win is invisible to every other check in this
-#              repo, so without this gate it would regress one helper at a time
-#              and nobody would notice.
+#              the entry script sources only for human mode or once a payload
+#              looks worth inspecting. That win is invisible to every other
+#              check in this repo, so without this gate it would regress one
+#              helper at a time and nobody would notice.
 #
 #              The ceiling is the point, not an obstacle to it. If a new helper
 #              does not fit, put it in the matching part under hooks/lib/:

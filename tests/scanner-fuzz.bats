@@ -360,7 +360,7 @@ function fuzz_read_corpus() {
 #              helper in tests/scanner.bats.
 # @arg $1 command the command string to tokenize
 # @stdout the token stream
-# @exitcode whatever awk exited with -- the caller checks it, this helper does
+# @exitcode * awk's own status -- the caller checks it, this helper does
 #           not swallow it
 function scan_terminated() {
   printf '%s\n' "$1" | LC_ALL=C awk -f "${SCANNER}"
@@ -372,7 +372,7 @@ function scan_terminated() {
 #              second half of the byte-count rule.
 # @arg $1 command the command string to tokenize
 # @stdout the token stream
-# @exitcode whatever awk exited with
+# @exitcode * awk's own status
 function scan_raw() {
   printf '%s' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
@@ -398,7 +398,8 @@ function scan_raw() {
 # @arg $1 out    the scanner's stdout
 # @arg $2 expect the expected byte count
 # @set TRAILER_REASON why the trailer check failed; written only on failure
-# @exitcode 0 trailer present, well-formed, and carrying ${2}
+# @exitcode 0 trailer present, well-formed, and carrying the expected count
+#             (expect)
 # @exitcode 1 otherwise
 function trailer_check() {
   local -r out="$1"

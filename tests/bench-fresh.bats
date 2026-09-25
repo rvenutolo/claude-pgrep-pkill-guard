@@ -245,11 +245,11 @@ HOOK
 }
 
 @test "bench fresh: an unreachable recorded commit is a different failure" {
-  # The state the real repo was in when this gate was written: `4c189fb` is in
-  # the object store and on no branch, because it was superseded on its own
-  # branch before that branch merged. No comparison is possible, so the report
-  # must not claim one -- saying "hooks/ changed" here would send the reader to
-  # a diff that does not exist.
+  # The state the real repo was in when #84 was filed: `4c189fb` is in the
+  # object store and on no branch, because it was superseded on its own branch
+  # before that branch merged. No comparison is possible, so the report must not
+  # claim one -- saying "hooks/ changed" here would send the reader to a diff
+  # that does not exist.
   local -r root="${BATS_TEST_TMPDIR}/unreachable"
   make_bench_fixture "${root}"
   printf 'guard, superseded\n' > "${root}/hooks/pgrep-pkill-guard.sh"

@@ -17,13 +17,13 @@
 readonly TASK_OUTPUT_PATH_RE='claude-[0-9]+/[^[:space:]]*/tasks/[^[:space:]/]+\.output'
 
 # @description Find a loop -- while, until, or for -- whose termination test reads a harness
-#              task-output file (Gap 2, 2026-08-26). The harness re-invokes the model when a task
-#              finishes, so a shell loop on that file only wastes the wait, and never exits if the
-#              task was killed. The scanner masks quoted text, so every token is examined through
-#              its RAW slice of the command -- the same byte-offset contract scanner::pattern_operand
-#              relies on -- which is what makes a quoted path visible. A `NAME=<path>` assignment
-#              word binds NAME, and a later `$NAME` / `${NAME...}` counts as a reference to that
-#              path; a later reassignment of the same NAME to something else is not tracked, so
+#              task-output file. The harness re-invokes the model when a task finishes, so a shell
+#              loop on that file only wastes the wait, and never exits if the task was killed. The
+#              scanner masks quoted text, so every token is examined through its RAW slice of the
+#              command -- the same byte-offset contract scanner::pattern_operand relies on -- which
+#              is what makes a quoted path visible. A `NAME=<path>` assignment word binds NAME, and
+#              a later `$NAME` / `${NAME...}` counts as a reference to that path; a later
+#              reassignment of the same NAME to something else is not tracked, so
 #              `F=<task>; F=/other; until [ -s "$F" ]; do sleep 5; done` still reports the first
 #              path (accepted limit -- rebinding a poll target mid-script to dodge this is not a
 #              pattern worth chasing). Only cond position, or body position with a
@@ -126,9 +126,9 @@ function classify::probe_keys() {
 # @description Classify one pgrep/pkill invocation the caller has already established carries
 #              `--full`: deny for a kill or a loop, warn for a consumed result. `--ignore-ancestors`
 #              excludes ANCESTORS only: a sibling waiter whose command line carries the same literal
-#              is still matched, so two waiters for one event deadlock each other (Gap 1,
-#              2026-08-26). It therefore clears a kill -- the session shell is an ancestor -- and fixes
-#              an inflated count, but it never clears a loop.
+#              is still matched, so two waiters for one event deadlock each other. It therefore
+#              clears a kill -- the session shell is an ancestor -- and fixes an inflated count, but
+#              it never clears a loop.
 # @arg $1 tokens_var name of the command's token array
 # @arg $2 command the raw command
 # @arg $3 tokens the scanner's token stream for the command

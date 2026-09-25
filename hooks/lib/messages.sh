@@ -20,7 +20,7 @@ status is being used for anything.'
 # The tail of the INACTIVE notice for a scanner that tokenized the command
 # wrongly, emitted from two places in lib/classify.sh (the classify verdict and
 # the repeat-check rescan). One constant, because two copies of the same
-# 100-char sentence drift. Appended rather than written on one line: the
+# 127-char sentence drift. Appended rather than written on one line: the
 # sentence is over the 120-column maximum, and shfmt collapses a backslash
 # continuation between two quoted halves back onto a single long line.
 # shellcheck disable=SC2034 # read by lib/classify.sh

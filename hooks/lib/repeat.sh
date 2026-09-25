@@ -140,11 +140,9 @@ function repeat::repeat_check() {
   # exist. hooks/ takes a long option only where the BSD tool has one, and
   # neither of these does.
   if [[ -z "${kept}" ]]; then
-    # `|| true` so a bare rm failure (e.g. the directory lost write
-    # permission after the mkdir check above) can never trip errexit here --
-    # this line is not itself guarded by an enclosing if/||, unlike every
-    # other filesystem step in this function. `--` guards a session id that
-    # happens to start with `-`.
+    # `|| true` so a bare rm failure (e.g. the directory lost write permission
+    # after the mkdir check above) can never trip errexit here. `--` guards a
+    # session id that happens to start with `-`.
     rm -f -- "${file}" 2> /dev/null || true # unguarded rm: a failure must never trip errexit
     return 0
   fi

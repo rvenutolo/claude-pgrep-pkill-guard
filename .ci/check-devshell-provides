@@ -417,6 +417,8 @@ function main() {
     printf 'FAIL: no tools declared in %s\n' "${TOOLS_FILE}" >&2
     # Every later pass needs this list; with it empty they would each report a
     # second, derived failure. Stop here so the real cause is the only output.
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
     trap - ERR
     return 1
   fi

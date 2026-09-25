@@ -64,6 +64,8 @@ function die() {
 function main() {
   if (($# != 1)); then
     printf 'usage: %s <coverage-dir>\n' "${0##*/}" >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so the
+    # diagnostics above are the last thing the reader sees (#43, invariant 6).
     trap - ERR
     exit 1
   fi

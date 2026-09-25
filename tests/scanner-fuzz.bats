@@ -91,8 +91,9 @@
 # input put there would be interpreted as a command to classify. The fuzzer's job
 # is to find them; tests/scanner.bats' job is to keep them.
 #
-# Per the repo's testing rules the fix is a separate `fix:` commit naming the
-# surfacing test, never folded into the `test:` commit that surfaced it.
+# The fix lands as a separate `fix:` commit naming the surfacing test, never
+# folded into the `test:` commit, so `git log --grep='^fix:'` keeps the defect
+# history.
 #
 # --- shellcheck -------------------------------------------------------------
 #

@@ -279,7 +279,8 @@ remained. Splitting the file took an ordinary command from about 5.6 ms to about
 
 The split is the reason `hooks/` holds an entry script and a body at all.
 `hooks/pgrep-pkill-guard.sh` is the entry script — 152 lines when the split
-landed, 187 today — carrying only what an ordinary call actually executes: the
+landed, and held under 200 by `.ci/check-fast-path-size` — carrying only what an
+ordinary call actually executes: the
 locale, the bash-version guard, the `ERR` trap, `emit_allow`, the
 `--help`/`--version` dispatch, the builtin read of stdin, and the prefilter.
 Everything the prefilter short-circuits past lives in

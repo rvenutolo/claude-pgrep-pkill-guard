@@ -6,10 +6,16 @@
 #              shebang, and pgrep-scan.awk MUST NOT be, because it is only ever
 #              read by `awk -f`. A heuristic that keys on extension or shebang
 #              would get one of those two wrong.
-# @noargs
+# @arg $1 dir optional fixture directory, treated as the repo root: the tracked
+#         file list and modes are read from it rather than from the real
+#         checkout. It exists so the bats suite can drive the real matcher over
+#         a fabricated tree whose modes are wrong on purpose. Without it the
+#         only possible test would be "exits 0 on the real repo", which a
+#         script that unconditionally returned 0 would also pass.
 # @exitcode 0 every file has its expected mode
 # @exitcode 1 at least one file has the wrong mode, or no tracked files were
 #             found
+# @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -17,8 +23,28 @@ IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
-readonly REPO_DIR
+# Every positional below is optional, so a surplus argument is a typo, not
+# input: exit 2 so "you called it wrong" stays distinguishable from a verdict.
+# The ERR trap is dropped first so a usage error reads as a usage error rather
+# than as a crash (#43, invariant 6). A top-level guard ahead of the bindings,
+# the same file-layout exemption a version guard gets.
+if (($# > 1)); then
+  printf 'usage: %s [dir]\n' "${0##*/}" >&2
+  trap - ERR
+  exit 2
+fi
+
+readonly FIXTURE_DIR="${1:-}"
+
+# In fixture mode the directory IS the repo root, taken at face value: `git
+# rev-parse --show-toplevel` run from a bats temp directory would either fail or
+# resolve to some enclosing repo, and the suite would grade the wrong tree.
+if [[ -n "${FIXTURE_DIR}" ]]; then
+  readonly REPO_DIR="${FIXTURE_DIR}"
+else
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+  readonly REPO_DIR
+fi
 
 # Glob patterns, matched against tracked paths.
 readonly EXPECT_EXECUTABLE=(

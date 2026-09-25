@@ -20,20 +20,20 @@
 #              the entire deliverable, and CI would otherwise keep passing while
 #              the summary went blank.
 #
-#              Reporting an INCOMPLETE number is refused for the same reason, and
-#              this half is not hypothetical. kcov 43 desynchronises on a traced
-#              command containing both an apostrophe and a newline -- the shape
-#              `# don't do it\necho hi`, which two rows of tests/cases/verdicts.tsv
-#              legitimately carry -- and drops the whole of
-#              hooks/pgrep-pkill-guard-body.sh from the report rather than
-#              undercounting it. The percentage that survives is arithmetically
-#              correct over the files that remain and silently describes a
-#              different codebase, which is how #126 came to be filed against
-#              helpers the suite provably reaches. So every hooks/ file -- the
-#              entry script, the loader and each part under hooks/lib/ -- must
-#              appear in `files[]` with a non-zero covered-line count before any
-#              number is printed. See #128 and docs/architecture.md,
-#              "Line coverage".
+#              Reporting an INCOMPLETE number is refused for the same reason,
+#              and this half is not hypothetical. kcov 43 desynchronises on a
+#              traced command carrying an odd number of unescaped apostrophes --
+#              the shape `# don't do it`, which two rows of
+#              tests/cases/verdicts.tsv legitimately carry -- and drops the
+#              whole of hooks/pgrep-pkill-guard-body.sh from the report rather
+#              than undercounting it. The percentage that survives is
+#              arithmetically correct over the files that remain and silently
+#              describes a different codebase, which is how #126 came to be
+#              filed against helpers the suite provably reaches. So every hooks/
+#              file -- the entry script, the loader and each part under
+#              hooks/lib/ -- must appear in `files[]` with a non-zero
+#              covered-line count before any number is printed. See #128 and
+#              docs/architecture.md, "Line coverage".
 # @arg $1 dir the directory passed to `run-tests --coverage`
 # @stdout the percentage, e.g. `76.42`
 # @exitcode 0 exactly one complete report was found and its percentage printed

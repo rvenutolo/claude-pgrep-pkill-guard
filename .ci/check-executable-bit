@@ -8,7 +8,8 @@
 #              would get one of those two wrong.
 # @noargs
 # @exitcode 0 every file has its expected mode
-# @exitcode 1 at least one file is wrong, or an expected file is missing
+# @exitcode 1 at least one file has the wrong mode, or no tracked files were
+#             found
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

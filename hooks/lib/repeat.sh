@@ -99,9 +99,6 @@ function repeat::repeat_check() {
     # therefore `content`, which command substitution already stripped
     # trailing newlines from) had one, so every line -- including a
     # newline-less last line -- is delivered to `read` with a terminator.
-    # A leading-zero epoch (`08`) would otherwise pass this regex and then
-    # trip `(( ))`'s octal parser on the arithmetic test below, so the
-    # anchor excludes it: a valid epoch never starts with 0.
     local read_count=0
     while IFS=$'\t' read -r epoch key; do
       # REPEAT_MAX_ENTRIES caps the work this call can do: a file large
@@ -112,6 +109,9 @@ function repeat::repeat_check() {
       # heal itself past this point, but it also never wedges a real probe.
       read_count="$((read_count + 1))"
       ((read_count > REPEAT_MAX_ENTRIES)) && return 0
+      # A leading-zero epoch (`08`) would otherwise pass this regex and then
+      # trip `(( ))`'s octal parser on the arithmetic test below, so the
+      # anchor excludes it: a valid epoch never starts with 0.
       [[ "${epoch}" =~ ^[1-9][0-9]{0,11}$ && -n "${key}" ]] || continue
       ((epoch <= now && now - epoch <= REPEAT_WINDOW_SECONDS)) || continue
       kept+="${epoch}"$'\t'"${key}"$'\n'
@@ -140,11 +140,9 @@ function repeat::repeat_check() {
   # exist. hooks/ takes a long option only where the BSD tool has one, and
   # neither of these does.
   if [[ -z "${kept}" ]]; then
-    # `|| true` so a bare rm failure (e.g. the directory lost write
-    # permission after the mkdir check above) can never trip errexit here --
-    # this line is not itself guarded by an enclosing if/||, unlike every
-    # other filesystem step in this function. `--` guards a session id that
-    # happens to start with `-`.
+    # `|| true` so a bare rm failure (e.g. the directory lost write permission
+    # after the mkdir check above) can never trip errexit here. `--` guards a
+    # session id that happens to start with `-`.
     rm -f -- "${file}" 2> /dev/null || true # unguarded rm: a failure must never trip errexit
     return 0
   fi

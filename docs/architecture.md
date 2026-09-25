@@ -319,7 +319,7 @@ deliberately not part of `just check`.
 
 Anything it finds becomes a hand-written case in `tests/scanner.bats` — not a row
 in `tests/cases/`, whose tables are hook-level and read by `tests/classify.bats`.
-The fuzzer's job is to find them; the suite's job is to keep them. Ten more are unrelated to the guard entirely, each
+The fuzzer's job is to find them; the suite's job is to keep them. Eleven more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
@@ -333,10 +333,12 @@ two-commit repository), `tests/bats-libs-in-sync.bats`
 mismatches), `tests/report-coverage.bats` (`.ci/report-coverage`, against a
 fabricated kcov output directory), `tests/shell-shebangs.bats`
 (`.ci/check-shell-shebangs`, against a fabricated source tree),
-`tests/guard-parts.bats` (`.ci/check-guard-parts`, against a fabricated loader
-and parts) and `tests/bats-no-shebang.bats` (`.ci/check-bats-no-shebang`,
+`tests/executable-bit.bats` (`.ci/check-executable-bit`, against a
+fabricated tree of tracked modes), `tests/guard-parts.bats`
+(`.ci/check-guard-parts`, against a fabricated loader and parts) and
+`tests/bats-no-shebang.bats` (`.ci/check-bats-no-shebang`,
 against throwaway repos of fixture `.bats` files). Every one of them drives its
-script over a fabricated input — seven through optional fixture-path arguments,
+script over a fabricated input — eight through optional fixture-path arguments,
 `build-commit-payload` and `check-bats-no-shebang` by being invoked inside a
 throwaway repo, and `report-coverage` by being pointed at a directory a case
 built — for the same reason: a suite that only asserted "exits 0 on the real

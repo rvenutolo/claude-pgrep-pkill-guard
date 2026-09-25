@@ -395,8 +395,9 @@ function write_report() {
   # Machine state, not toolchain. These four rows exist because a run whose
   # p50 doubles while its min holds is describing the machine, not the code,
   # and without them a later reader cannot tell those two cases apart -- which
-  # is exactly the question a regenerated report raised on 2026-09-03. $4 and
-  # $5 are read before the measurement loop, in main, not here.
+  # is exactly the question a regenerated report raised on 2026-09-03.
+  # load_at_start and temp_at_start are read before the measurement loop, in
+  # main, not here.
   printf '| governor | %s |\n' "$(cpu_governor)"
   printf '| power | %s |\n' "$(power_source)"
   printf '| load at start | %s |\n' "${load_at_start}"

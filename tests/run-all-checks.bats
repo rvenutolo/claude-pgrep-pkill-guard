@@ -23,8 +23,9 @@ function setup() {
 #              `nix` stub, the first check it would reach, is the evidence
 #              that it ran at all.
 #
-#              `mkdir -p` because the compat CI legs run this suite against
-#              macOS BSD coreutils, whose mkdir has no long form.
+#              A short flag only where macOS has no long form, on purpose: the
+#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              mkdir has no --parents.
 #
 #              Builds at the FIXTURE, STUB_DIR and MARKER paths setup() chose.
 # @noargs

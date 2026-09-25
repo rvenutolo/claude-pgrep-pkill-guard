@@ -160,12 +160,12 @@ function make_report() {
 
 # --- Report integrity (#128) -------------------------------------------------
 #
-# kcov 43 desynchronises on a traced command carrying both an apostrophe and a
-# newline and drops the whole of hooks/pgrep-pkill-guard-body.sh from the report
-# rather than undercounting it. What survives is a well-formed JSON with an
-# arithmetically correct percentage over the files that remain, so nothing about
-# the report's SHAPE says it is wrong -- which is how #126 came to be filed
-# against helpers the suite provably reaches.
+# kcov 43 desynchronises on a traced command carrying an odd number of unescaped
+# apostrophes and drops the whole of hooks/pgrep-pkill-guard-body.sh from the
+# report rather than undercounting it. What survives is a well-formed JSON with
+# an arithmetically correct percentage over the files that remain, so nothing
+# about the report's SHAPE says it is wrong -- which is how #126 came to be
+# filed against helpers the suite provably reaches.
 #
 # These cases grade the reporter, not kcov. Reproducing the real loss would mean
 # a two-and-a-half-minute Linux-only kcov run to observe a bug in a third-party

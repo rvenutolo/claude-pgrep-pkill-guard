@@ -133,6 +133,35 @@ function make_exec_bit_fixture() {
   assert_success
 }
 
+@test "executable bit: a literal row whose file is no longer tracked is named" {
+  # A rename used to drop the file from the check without a word. The file is
+  # left on disk, untracked: only the tracked tree counts.
+  local -r root="${BATS_TEST_TMPDIR}/vanished-literal"
+  make_exec_bit_fixture "${root}"
+  git -C "${root}" update-index --force-remove -- 'bench/run'
+  run "${CHECK}" "${root}"
+  assert_failure 1
+  assert_output --partial "EXPECT_EXECUTABLE entry 'bench/run' matches no tracked file"
+}
+
+@test "executable bit: a stale EXPECT_NON_EXECUTABLE row is named too" {
+  local -r root="${BATS_TEST_TMPDIR}/vanished-non-exec"
+  make_exec_bit_fixture "${root}"
+  git -C "${root}" update-index --force-remove -- 'hooks/pgrep-scan.awk'
+  run "${CHECK}" "${root}"
+  assert_failure 1
+  assert_output --partial "EXPECT_NON_EXECUTABLE entry 'hooks/pgrep-scan.awk' matches no tracked file"
+}
+
+@test "executable bit: a glob row that matches no tracked file is named" {
+  local -r root="${BATS_TEST_TMPDIR}/vanished-glob"
+  make_exec_bit_fixture "${root}"
+  git -C "${root}" update-index --force-remove -- '.ci/build-thing'
+  run "${CHECK}" "${root}"
+  assert_failure 1
+  assert_output --partial "EXPECT_EXECUTABLE entry '.ci/build-*' matches no tracked file"
+}
+
 @test "executable bit: a repo with no tracked files fails" {
   # An empty scan would grade nothing and pass everything.
   local -r root="${BATS_TEST_TMPDIR}/empty"

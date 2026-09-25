@@ -1,13 +1,13 @@
 # shellcheck shell=bash
 #
-# The awk scanner interface: run it, walk its invocations, read their flags
-# and operands, sourced by hooks/pgrep-pkill-guard-body.sh once the entry
-# script's prefilter has let a payload through. Never executed: no shebang, no
-# exec bit, and it must not set `set -Eeuo pipefail`, `IFS`, or the ERR trap
-# -- the entry script owns all three, and a sourced file that sets them
-# reconfigures its caller. Never add `shopt -s inherit_errexit` (invariant 2).
-# Long options only where the BSD tool has them: this runs on BSD userland
-# too (invariant 1).
+# The awk scanner interface: run it, walk its invocations, read their flags and
+# operands, sourced by hooks/pgrep-pkill-guard-body.sh whenever the entry
+# script loads the body -- in human mode, or once the prefilter has let a
+# payload through. Never executed: no shebang, no exec bit, and it must not set
+# `set -Eeuo pipefail`, `IFS`, or the ERR trap -- the entry script owns all
+# three, and a sourced file that sets them reconfigures its caller. Never add
+# `shopt -s inherit_errexit` (invariant 2). Long options only where the BSD
+# tool has them: this runs on BSD userland too (invariant 1).
 
 # Long options that take a separate value, so that value is not the operand.
 readonly -a PGREP_VALUE_OPTIONS=(

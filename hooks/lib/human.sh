@@ -1,13 +1,13 @@
 # shellcheck shell=bash
 #
 # Human mode: --help and --version, sourced by hooks/pgrep-pkill-guard-body.sh
-# when the entry script's dispatch sees arguments or a terminal on stdin --
-# before, and instead of, the prefilter. Never executed:
-# no shebang, no exec bit, and it must not set `set -Eeuo pipefail`, `IFS`, or
-# the ERR trap -- the entry script owns all three, and a sourced file that
-# sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
-# (invariant 2). Long options only where the BSD tool has them: this runs on
-# BSD userland too (invariant 1).
+# with every other part, and called only from the entry script's dispatch when
+# it sees arguments or a terminal on stdin -- before, and instead of, the
+# prefilter. Never executed: no shebang, no exec bit, and it must not set
+# `set -Eeuo pipefail`, `IFS`, or the ERR trap -- the entry script owns all
+# three, and a sourced file that sets them reconfigures its caller. Never add
+# `shopt -s inherit_errexit` (invariant 2). Long options only where the BSD
+# tool has them: this runs on BSD userland too (invariant 1).
 
 # @description Print the human-facing help on stdout.
 # @noargs

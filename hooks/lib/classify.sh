@@ -338,7 +338,7 @@ function classify::repeat_tier_reason() {
   # into classify::probe_keys' arguments, a scanner failure would be swallowed by the
   # `|| keys=''` below and read as "this command carries no probe key".
   rt_tokens="$(scanner::scan_command "${command}")" || return 2
-  keys="$(classify::probe_keys "${command}" "${rt_tokens}")" || keys=''
+  keys="$(classify::probe_keys "${command}" "${rt_tokens}")" || keys='' # no probe key: the rule does not apply
   [[ -n "${keys}" ]] || return 1
   # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
   # whole command substitution off errexit's radar for its entire dynamic

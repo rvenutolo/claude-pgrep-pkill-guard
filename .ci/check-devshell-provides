@@ -203,11 +203,12 @@ function host_platform() {
     printf '%s\n' "${platform//[[:space:]]/}"
     return 0
   fi
-  # POSIX short flag, deliberately, in a file that otherwise uses GNU long
-  # options. This line is reachable from tests/devshell-provides.bats, which
-  # carries no devShell skip and therefore runs on the ambient `compat (macos,
-  # ...)` legs against BSD coreutils, where `uname --kernel-name` dies with
-  # "illegal option". Same trap as the `mkdir -p` in run-tests' --report path.
+  # A short flag only where macOS has no long form, deliberately, in a file
+  # that otherwise uses GNU long options. This line is reachable from
+  # tests/devshell-provides.bats, which carries no devShell skip and therefore
+  # runs on the ambient `compat (macos, ...)` legs against BSD coreutils, where
+  # `uname --kernel-name` dies with "illegal option". Same trap as the
+  # `mkdir -p` in run-tests' --report path.
   uname -s
 }
 

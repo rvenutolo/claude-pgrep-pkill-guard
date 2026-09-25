@@ -181,10 +181,10 @@ function main() {
     # create one. Creating it here is what makes `--report` safe to point at a
     # per-run path like ${RUNNER_TEMP}/bats-junit that nothing else made.
     #
-    # POSIX short flag, deliberately, like every other line on run-tests'
-    # ambient path (the --coverage mkdir and `uname -s` below). The rest of
-    # run-tests keeps GNU long options because every one of them sits on a
-    # devShell-only path -- `use_bwk_awk`'s
+    # A short flag only where macOS has no long form, deliberately, like every
+    # other line on run-tests' ambient path (the --coverage mkdir and
+    # `uname -s` below). The rest of run-tests keeps GNU long options because
+    # every one of them sits on a devShell-only path -- `use_bwk_awk`'s
     # `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable
     # only under `--awk=bwk`, which needs the devShell's nawk anyway. This line
     # is not: `compat (ubuntu, ambient)` and `compat (macos, homebrew bash)`
@@ -218,9 +218,9 @@ function main() {
     fi
     # kcov creates its output directory itself, so this is not load-bearing the
     # way --report's mkdir is; it is here so the two flags behave identically and
-    # a CI path is safe to name before the tool runs. POSIX short flag for the
-    # reason spelled out on --report's `mkdir -p` above -- this line is on the
-    # ambient-tool path too.
+    # a CI path is safe to name before the tool runs. A short flag only where
+    # macOS has no long form, for the reason spelled out on --report's
+    # `mkdir -p` above -- this line is on the ambient-tool path too.
     mkdir -p "${coverage_dir}"
     # The one caller of COVERAGE. tests/test_helper/common.bash unsets BASH_ENV
     # for fixture hygiene unless it sees this, and BASH_ENV is the channel kcov

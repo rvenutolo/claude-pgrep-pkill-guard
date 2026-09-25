@@ -13,8 +13,8 @@
 #         only possible test would be "exits 0 on the real repo", which a
 #         script that unconditionally returned 0 would also pass.
 # @exitcode 0 every file has its expected mode
-# @exitcode 1 at least one file has the wrong mode, or no tracked files were
-#             found
+# @exitcode 1 at least one file has the wrong mode, an expected-mode row matches
+#             no tracked file, or no tracked files were found
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail
@@ -78,19 +78,38 @@ readonly EXPECT_NON_EXECUTABLE=(
   '*.yml'
 )
 
+# @description Succeed if any of the given paths matches the glob pattern, with
+#              the same `[[ == ]]` match main grades modes by.
+# @arg $1 pattern glob pattern from one of the EXPECT_* lists
+# @arg $@ tracked paths to test, after the pattern
+# @exitcode 0 at least one path matches
+# @exitcode 1 no path matches
+function pattern_matches_any() {
+  local -r pattern="$1"
+  shift
+  local path
+  for path in "$@"; do
+    # shellcheck disable=SC2053 # intentional glob match, not a literal compare
+    if [[ "${path}" == ${pattern} ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 function main() {
-  local rc=0 meta mode path pattern matched
+  local rc=0 meta mode path pattern
+  local -a paths=()
   # `git ls-files --stage` prints `<mode> <object> <stage><TAB><path>`, the
   # mode being 100755 or 100644. Split on the tab alone: the script-wide IFS has
   # no space in it, so a `read -r mode _ _ path` would put the whole line before
   # the tab into `mode` and leave `path` empty for every file, grading nothing.
   while IFS=$'\t' read -r meta path; do
     mode="${meta%% *}"
-    matched=0
+    paths+=("${path}")
     for pattern in "${EXPECT_EXECUTABLE[@]}"; do
       # shellcheck disable=SC2053 # intentional glob match, not a literal compare
       if [[ "${path}" == ${pattern} ]]; then
-        matched=1
         if [[ "${mode}" != '100755' ]]; then
           printf 'FAIL: %s must be executable (tracked mode %s)\n' "${path}" "${mode}" >&2
           rc=1
@@ -100,21 +119,38 @@ function main() {
     for pattern in "${EXPECT_NON_EXECUTABLE[@]}"; do
       # shellcheck disable=SC2053 # intentional glob match, not a literal compare
       if [[ "${path}" == ${pattern} ]]; then
-        matched=1
         if [[ "${mode}" != '100644' ]]; then
           printf 'FAIL: %s must NOT be executable (tracked mode %s)\n' "${path}" "${mode}" >&2
           rc=1
         fi
       fi
     done
-    : "${matched}"
   done < <(git -C "${REPO_DIR}" ls-files --stage)
 
   # An empty scan is a failure, not a clean pass.
-  if [[ -z "$(git -C "${REPO_DIR}" ls-files)" ]]; then
+  if ((${#paths[@]} == 0)); then
     printf 'FAIL: no tracked files found\n' >&2
     rc=1
   fi
+
+  # A row that matches no tracked file has stopped guarding anything: renaming
+  # a literal path, or the last file under a glob, would otherwise drop it from
+  # the check without a word. check-shell-shebangs treats a stale exemption row
+  # the same way.
+  for pattern in "${EXPECT_EXECUTABLE[@]}"; do
+    if ! pattern_matches_any "${pattern}" "${paths[@]}"; then
+      printf "FAIL: EXPECT_EXECUTABLE entry '%s' matches no tracked file\n" "${pattern}" >&2
+      printf '      Drop the row, or restore the file it covers.\n' >&2
+      rc=1
+    fi
+  done
+  for pattern in "${EXPECT_NON_EXECUTABLE[@]}"; do
+    if ! pattern_matches_any "${pattern}" "${paths[@]}"; then
+      printf "FAIL: EXPECT_NON_EXECUTABLE entry '%s' matches no tracked file\n" "${pattern}" >&2
+      printf '      Drop the row, or restore the file it covers.\n' >&2
+      rc=1
+    fi
+  done
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (#43, invariant 6).
   trap - ERR

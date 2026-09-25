@@ -79,9 +79,13 @@ readonly EXPECT_NON_EXECUTABLE=(
 )
 
 function main() {
-  local rc=0 mode path pattern matched
-  # `git ls-files --stage` prints the tracked mode: 100755 or 100644.
-  while read -r mode _ _ path; do
+  local rc=0 meta mode path pattern matched
+  # `git ls-files --stage` prints `<mode> <object> <stage><TAB><path>`, the
+  # mode being 100755 or 100644. Split on the tab alone: the script-wide IFS has
+  # no space in it, so a `read -r mode _ _ path` would put the whole line before
+  # the tab into `mode` and leave `path` empty for every file, grading nothing.
+  while IFS=$'\t' read -r meta path; do
+    mode="${meta%% *}"
     matched=0
     for pattern in "${EXPECT_EXECUTABLE[@]}"; do
       # shellcheck disable=SC2053 # intentional glob match, not a literal compare

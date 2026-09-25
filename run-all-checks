@@ -110,14 +110,12 @@ function main() {
   # rewrapping a comment stays allowed and deleting one does not.
   # check-guard-parts holds the loader's GUARD_PARTS table to what is actually
   # under hooks/lib/. The loader pins nine function names as STRINGS and proves
-  # a part loaded by calling `declare -F` on the paired name (#147), so a
-  # rename that misses the table makes the guard print INACTIVE and allow the
-  # command through. The bats suite does catch that -- 18 tests redden, because
-  # every case reaching the body gets INACTIVE instead of a verdict -- but
-  # nothing said so at lint time, and the runtime message named the FILE, which
-  # had loaded perfectly well. It checks the reverse direction too, which had no
-  # signal at all: a part no row names is never sourced, so every function in it
-  # is undefined at runtime.
+  # a part loaded by calling `declare -F` on the paired name (#147), so a rename
+  # that misses the table makes the guard print INACTIVE and allow the command
+  # through. The bats suite catches that at test time -- every case reaching the
+  # body gets INACTIVE instead of a verdict -- and this gate catches it at lint
+  # time. It checks the reverse direction too: a part no row names is never
+  # sourced, so every function in it is undefined at runtime.
   # check-shell-shebangs asserts that every tracked file carrying a shebang
   # carries `#!/usr/bin/env bash`, or is one of the named exemptions with the
   # exact spelling it is allowed. run-lint-checks admits an extensionless file

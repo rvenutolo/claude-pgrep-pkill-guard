@@ -5,9 +5,9 @@
 #
 #              The report records the commit it was generated from in its
 #              provenance table, and the README's Performance section quotes its
-#              figures as fact. Nothing connected the two: at the time this gate
-#              was written the file said `4c189fb`, and hooks/ had moved twice
-#              since -- including `perf: split the guard`, the single change the
+#              figures as fact. Nothing connected the two until #84: the file
+#              then said `4c189fb`, and hooks/ had moved twice since --
+#              including `perf: split the guard`, the single change the
 #              benchmark exists to measure. A published number that no longer
 #              describes the code is worse than no number, because it reads as
 #              measured rather than as guessed.

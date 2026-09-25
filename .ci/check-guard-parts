@@ -8,18 +8,16 @@
 #              hooks/pgrep-pkill-guard-body.sh pins nine function names as
 #              STRINGS, and proves a part loaded by calling `declare -F` on the
 #              paired name (#147). That makes a rename that misses the table a
-#              runtime failure: the guard prints INACTIVE and allows the
-#              command through. The bats suite does catch it -- renaming one
-#              row's function reddens 18 tests, because every case that reaches
-#              the body gets INACTIVE instead of a verdict -- but nothing said
-#              so at LINT time, and the runtime message named the FILE, which
-#              had loaded perfectly well. This gate is the lint-time half, and
-#              it runs in milliseconds against the text of the table.
+#              runtime failure: the guard prints INACTIVE and allows the command
+#              through. The bats suite catches it -- every case that reaches the
+#              body gets INACTIVE instead of a verdict and reddens -- but only
+#              at test time. This gate is the lint-time half, and it runs in
+#              milliseconds against the text of the table.
 #
-#              The reverse direction matters just as much and had no signal at
-#              all: a part under hooks/lib/ that no row names is never sourced,
-#              so its functions simply do not exist at runtime. That is the
-#              same bug with the halves swapped, and it fails the same way.
+#              The reverse direction matters just as much: a part under
+#              hooks/lib/ that no row names is never sourced, so its functions
+#              simply do not exist at runtime. That is the same bug with the
+#              halves swapped, and it fails the same way.
 #
 #              Static, deliberately. A dynamic check would have to source the
 #              loader and `declare -F` the names for real, which is the shape

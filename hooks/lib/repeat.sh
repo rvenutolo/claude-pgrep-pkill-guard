@@ -9,9 +9,9 @@
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
 
-# The repeat rule (Gap 3, 2026-08-26): the first read of a target is always
-# legitimate, the second is defensible, the third inside the window is a poll
-# loop with the model as the sleep. Per session, per target.
+# The repeat rule: the first read of a target is always legitimate, the second
+# is defensible, the third inside the window is a poll loop with the model as
+# the sleep. Per session, per target.
 readonly REPEAT_THRESHOLD=3
 readonly REPEAT_WINDOW_SECONDS=300
 # The hook has a 5 s timeout budget; a state file large enough to read line by

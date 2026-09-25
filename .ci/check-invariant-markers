@@ -9,10 +9,9 @@
 #              it constrains; if one changes here, change the comment too". Two
 #              of the six invariants have a gate behind them
 #              (.ci/check-fast-path-size, .ci/check-err-trap-hygiene); the rest
-#              rested entirely on that promise, and a promise nothing checks is
-#              a comment about a comment. This gate makes the promise
-#              mechanical: for each marker phrase, every file in its row must
-#              contain it.
+#              rest on that promise alone, and a promise nothing checks is a
+#              comment about a comment. This gate makes the promise mechanical:
+#              for each marker phrase, every file in its row must contain it.
 #
 #              It is a PRESENCE check, not a semantic one. It cannot know
 #              whether the comment still says something true -- only that the

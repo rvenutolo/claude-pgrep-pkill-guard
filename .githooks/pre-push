@@ -4,7 +4,8 @@
 #              and aborts the push if it fails. One runner rather than a
 #              hand-maintained step list, so the hook, the docs and the justfile
 #              cannot drift apart. Bypass with `git push --no-verify`.
-# @arg $@ args git passes ref/sha pairs this hook does not use
+# @arg $@ args the remote name and URL git passes (the ref/sha pairs arrive on
+#         stdin); this hook uses neither
 # @exitcode 0 the gate passed
 # @exitcode 1 the gate failed; the push is aborted
 

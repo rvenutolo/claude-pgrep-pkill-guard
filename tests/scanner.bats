@@ -317,9 +317,9 @@ function tab() {
 # @description Run a copy of the hook end to end under a stripped environment and
 #              report whether it announced that the guard is inactive, rather
 #              than dying into the ERR trap's silent allow. The probe command
-#              must contain `pgrep` or `pkill`, or classify::classify_command
-#              short-circuits before the scanner is ever reached and a dead
-#              scanner looks healthy. The child runs under `env -i`: a plain PATH
+#              must contain `pgrep`, `pkill` or `.output`, or
+#              classify::classify_command short-circuits before the scanner is
+#              ever reached and a dead scanner looks healthy. The child runs under `env -i`: a plain PATH
 #              prefix assignment is not enough, because a BASH_ENV inherited from
 #              the caller re-sources the user's profile, which rebuilds PATH and
 #              quietly restores the very binary the probe is trying to remove.
@@ -385,8 +385,8 @@ function build_inactive_fixture() {
 #              there. `resolve_hook_dir` derives HOOK_DIR from ${BASH_SOURCE[0]},
 #              so the copy looks for `pgrep-pkill-guard-body.sh` beside ITSELF
 #              and finds whatever the caller did -- or did not -- drop in that
-#              directory first. The probe command must contain `pgrep` or
-#              `pkill` or the prefilter short-circuits before the sibling is ever
+#              directory first. The probe command must contain `pgrep`, `kill` or
+#              `.output` or the prefilter short-circuits before the sibling is ever
 #              sourced; `zzznoproc` matches no process, so nothing can be killed
 #              if the guard fails to fire. Invoked directly, not as
 #              `bash <script>`, matching hooks/hooks.json, which names the

@@ -49,9 +49,9 @@
 #              an ordinary hooks/ PR sees a WARN it can read and move past.
 #
 #              Verdict 3 is not a corner case invented for symmetry. `4c189fb`,
-#              the sha this gate was written against, is exactly it: the object
-#              is in the store, but it is on no branch, because it was
-#              superseded on its own branch by `6fa70a0` before that branch
+#              the sha RESULTS.md recorded when #84 was filed, is exactly it:
+#              the object is in the store, but it is on no branch, because it
+#              was superseded on its own branch by `6fa70a0` before that branch
 #              merged. `git merge-base --is-ancestor` says nothing about hooks/
 #              there, so neither does this script: telling the reader "hooks/
 #              changed" when no comparison happened would be a lie that sends

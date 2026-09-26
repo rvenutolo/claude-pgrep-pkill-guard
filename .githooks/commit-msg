@@ -5,8 +5,10 @@
 #              so the same commitlint runs locally and in CI.
 # @arg $1 msg_file path to the file holding the prospective commit message
 # @exitcode 0 the message is conventional
-# @exitcode 1 it is not, or the devShell wrapper failed; the commit is aborted
+# @exitcode 1 it is not, or the devShell wrapper could not start; the commit is
+#             aborted
 # @exitcode 2 the hook was invoked with anything other than one argument
+# @exitcode * otherwise the failing git or nix status; the commit is aborted
 
 set -Eeuo pipefail
 # No inherit_errexit: this runs under the host bash, 3.2 on stock macOS, where the option does not exist.

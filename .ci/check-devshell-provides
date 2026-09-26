@@ -62,7 +62,8 @@
 # @exitcode 0 every declared tool resolves and every package is justified
 # @exitcode 1 the tools file is missing, the list is empty, a declared tool is
 #             missing or carries an unknown annotation, the package inventory
-#             is unreadable or empty, or a package justifies nothing
+#             or formatter list is unreadable, the inventory is empty, or a
+#             package justifies nothing
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail

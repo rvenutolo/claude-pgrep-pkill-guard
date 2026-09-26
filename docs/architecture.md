@@ -947,7 +947,9 @@ which points back to this invariant.
 In every gate script that installs the `ERR` trap, a deliberate non-zero
 `return` from `main` must be preceded by `trap - ERR`.
 `.ci/check-err-trap-hygiene` enforces it, and `run-all-checks` runs that gate
-with the rest. #43 fixed **19 such returns across 12 files**; the gate prints
+with the rest. The rule concerns `return`: `exit` never fires the `ERR` trap,
+so a `trap - ERR` ahead of an `exit` is kept for symmetry only, and its absence
+is not a finding. #43 fixed **19 such returns across 12 files**; the gate prints
 the current count on every green run.
 
 **Why:** the trap is there to report _unexpected_ failure, and a gate

@@ -77,9 +77,9 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # default check and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
-# ERR trap is dropped first so a usage error reads as a usage error rather than
-# as a crash (#43, invariant 6). A top-level guard ahead of the bindings, the
-# same file-layout exemption a version guard gets.
+# ERR trap is dropped first only for symmetry with the verdict returns (#43,
+# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# bindings, the same file-layout exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [dir]\n' "${0##*/}" >&2
   trap - ERR

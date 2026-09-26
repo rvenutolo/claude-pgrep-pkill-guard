@@ -25,7 +25,7 @@
 #              raising the number spends the milliseconds again.
 # @noargs
 # @exitcode 0 the entry script is within the ceiling
-# @exitcode 1 it is over the ceiling, or missing/unreadable
+# @exitcode 1 it is over the ceiling, missing/unreadable, or reads as zero lines
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

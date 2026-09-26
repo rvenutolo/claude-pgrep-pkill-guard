@@ -81,7 +81,7 @@ readonly EXPECT_NON_EXECUTABLE=(
 # @description Succeed if any of the given paths matches the glob pattern, with
 #              the same `[[ == ]]` match main grades modes by.
 # @arg $1 pattern glob pattern from one of the EXPECT_* lists
-# @arg $@ tracked paths to test, after the pattern
+# @arg $@ paths tracked paths to test, after the pattern
 # @exitcode 0 at least one path matches
 # @exitcode 1 no path matches
 function pattern_matches_any() {

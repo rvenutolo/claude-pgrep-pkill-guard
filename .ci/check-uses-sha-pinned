@@ -5,8 +5,10 @@
 #              version comment. Local actions (`./.github/...`) are exempt: they
 #              are this repo's own tree, already pinned by the checkout.
 # @noargs
-# @exitcode 0 every uses: is SHA-pinned with a version comment
-# @exitcode 1 at least one is not
+# @exitcode 0 every uses: is SHA-pinned with a version comment, or no workflow
+#             file is tracked
+# @exitcode 1 at least one is not, or the workflows hold no external uses: (a
+#             broken scan)
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

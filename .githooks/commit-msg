@@ -5,7 +5,7 @@
 #              so the same commitlint runs locally and in CI.
 # @arg $1 msg_file path to the file holding the prospective commit message
 # @exitcode 0 the message is conventional
-# @exitcode 1 it is not; the commit is aborted
+# @exitcode 1 it is not, or the devShell wrapper failed; the commit is aborted
 # @exitcode 2 the hook was invoked with anything other than one argument
 
 set -Eeuo pipefail

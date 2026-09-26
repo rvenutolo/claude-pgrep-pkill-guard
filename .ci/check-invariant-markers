@@ -50,8 +50,8 @@
 #         Without it the only possible test would be "exits 0 on the real
 #         repo", which a script that unconditionally returned 0 would also pass.
 # @exitcode 0 every phrase appears in every file its row names
-# @exitcode 1 a phrase is missing, a listed file is unreadable, or the table is
-#             empty
+# @exitcode 1 a phrase is missing, a listed file is unreadable or reads as
+#             empty, or the table is empty
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail
@@ -141,7 +141,7 @@ function collapsed_text() {
 # @arg $2 relative_path the file to search, relative to the repo root
 # @stderr one FAIL line when the file is unreadable or the phrase is absent
 # @exitcode 0 the phrase is present
-# @exitcode 1 the file is unreadable, or the phrase is absent
+# @exitcode 1 the file is unreadable or reads as empty, or the phrase is absent
 function check_marker() {
   local -r phrase="$1"
   local -r relative_path="$2"

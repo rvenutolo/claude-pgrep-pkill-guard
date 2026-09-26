@@ -23,7 +23,8 @@
 #              and nothing should couple it to the plugin's release cadence.
 # @noargs
 # @exitcode 0 every version field agrees
-# @exitcode 1 a file is missing or unparsable, or the versions disagree
+# @exitcode 1 a file is missing or unparsable, a version field is absent,
+#             malformed or unannotated, or the versions disagree
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

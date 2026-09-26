@@ -52,7 +52,7 @@ function make_repo() {
   git -c init.defaultBranch=main init --quiet "${root}"
   printf 'alpha\n' > "${root}/alpha.txt"
   printf 'beta\n' > "${root}/beta.txt"
-  git -C "${root}" add alpha.txt beta.txt
+  git -C "${root}" add 'alpha.txt' 'beta.txt'
   git -C "${root}" -c user.email='tests@example.invalid' -c user.name='Tests' commit --quiet --message='seed'
 }
 
@@ -91,7 +91,7 @@ function field() {
   local -r root="${BATS_TEST_TMPDIR}/modified"
   make_repo "${root}"
   printf 'alpha changed\n' > "${root}/alpha.txt"
-  git -C "${root}" add alpha.txt
+  git -C "${root}" add 'alpha.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -106,7 +106,7 @@ function field() {
   local -r root="${BATS_TEST_TMPDIR}/added"
   make_repo "${root}"
   printf 'brand new\n' > "${root}/gamma.txt"
-  git -C "${root}" add gamma.txt
+  git -C "${root}" add 'gamma.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -120,7 +120,7 @@ function field() {
 @test "commit payload: a deleted file becomes one deletions entry and no additions" {
   local -r root="${BATS_TEST_TMPDIR}/deleted"
   make_repo "${root}"
-  git -C "${root}" rm --quiet beta.txt
+  git -C "${root}" rm --quiet 'beta.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -134,8 +134,8 @@ function field() {
   make_repo "${root}"
   printf 'alpha changed\n' > "${root}/alpha.txt"
   printf 'brand new\n' > "${root}/gamma.txt"
-  git -C "${root}" add alpha.txt gamma.txt
-  git -C "${root}" rm --quiet beta.txt
+  git -C "${root}" add 'alpha.txt' 'gamma.txt'
+  git -C "${root}" rm --quiet 'beta.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -152,7 +152,7 @@ function field() {
 @test "commit payload: a rename decomposes into a delete plus an add" {
   local -r root="${BATS_TEST_TMPDIR}/renamed"
   make_repo "${root}"
-  git -C "${root}" mv alpha.txt renamed.txt
+  git -C "${root}" mv 'alpha.txt' 'renamed.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -168,7 +168,7 @@ function field() {
   # No trailing newline, so a base64 that quietly picked up one from the
   # command substitution would show up here rather than pass by luck.
   printf 'héllo wörld — ünïcode' > "${root}/alpha.txt"
-  git -C "${root}" add alpha.txt
+  git -C "${root}" add 'alpha.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -192,7 +192,7 @@ function field() {
   local -r root="${BATS_TEST_TMPDIR}/head-oid"
   make_repo "${root}"
   printf 'alpha changed\n' > "${root}/alpha.txt"
-  git -C "${root}" add alpha.txt
+  git -C "${root}" add 'alpha.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -203,7 +203,7 @@ function field() {
   local -r root="${BATS_TEST_TMPDIR}/branch"
   make_repo "${root}"
   printf 'alpha changed\n' > "${root}/alpha.txt"
-  git -C "${root}" add alpha.txt
+  git -C "${root}" add 'alpha.txt'
 
   run build_in "${root}" 'rvenutolo/claude-pgrep-pkill-guard' 'release-please--branches--main' \
     'chore: reformat'
@@ -217,7 +217,7 @@ function field() {
   local -r root="${BATS_TEST_TMPDIR}/headline"
   make_repo "${root}"
   printf 'alpha changed\n' > "${root}/alpha.txt"
-  git -C "${root}" add alpha.txt
+  git -C "${root}" add 'alpha.txt'
 
   run build_in "${root}" 'owner/name' 'topic' \
     'chore: apply repo formatting to the release-please output'
@@ -253,7 +253,7 @@ function field() {
   local -r root="${BATS_TEST_TMPDIR}/shape"
   make_repo "${root}"
   printf 'alpha changed\n' > "${root}/alpha.txt"
-  git -C "${root}" add alpha.txt
+  git -C "${root}" add 'alpha.txt'
 
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
@@ -293,7 +293,7 @@ function field() {
   done
   [[ "$(wc -c < "${big}")" -gt 131072 ]]
 
-  git -C "${root}" add big.txt
+  git -C "${root}" add 'big.txt'
   run build_in "${root}" 'owner/name' 'topic' 'chore: reformat'
   assert_success
 
@@ -320,7 +320,7 @@ function field() {
   local -r tmp="${BATS_TEST_TMPDIR}/it's tmp"
   make_repo "${root}"
   printf 'alpha changed\n' > "${root}/alpha.txt"
-  git -C "${root}" add alpha.txt
+  git -C "${root}" add 'alpha.txt'
   mkdir -p "${tmp}"
   TMPDIR="${tmp}" run --separate-stderr build_in "${root}" 'owner/repo' 'main' 'headline'
   assert_success

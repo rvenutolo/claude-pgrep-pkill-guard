@@ -286,7 +286,7 @@ locale, the bash-version guard, the `ERR` trap, `emit_allow`, the
 Everything the prefilter short-circuits past lives in
 `hooks/pgrep-pkill-guard-body.sh`, which the entry script sources only after the
 prefilter has failed to decide, and which an ordinary command never reads. That
-file is itself a loader for nine parts under `hooks/lib/`, one per concern; none
+file is itself a loader for the parts under `hooks/lib/`, one per concern; none
 of them is parsed on the fast path either. Parse cost alone, measured with
 `bash -n` over 400 repetitions: an empty script costs 4.12 ms, the entry script
 4.25 ms (+0.13), the old single file 6.49 ms (+2.38). A smaller split was measured and

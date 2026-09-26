@@ -398,7 +398,7 @@ function scan_raw() {
 #              that is only ever read on failure.
 # @arg $1 out    the scanner's stdout
 # @arg $2 expect the expected byte count
-# @set TRAILER_REASON why the trailer check failed; written only on failure
+# @set TRAILER_REASON why the trailer check failed; cleared to empty on every call, set only on failure
 # @exitcode 0 trailer present, well-formed, and carrying the expected count
 #             (expect)
 # @exitcode 1 otherwise

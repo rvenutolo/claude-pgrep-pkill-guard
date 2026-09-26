@@ -41,9 +41,10 @@
 #         order, then bats arguments or test paths; omit paths to run all of
 #         tests/
 # @exitcode 0 all tests passed and the repo was left untouched
-# @exitcode 1 bats missing, nawk missing under --awk=bwk, kcov missing under
-#             --coverage, --report or --coverage given without a directory, a
-#             test failed, or the suite mutated the repo
+# @exitcode 1 bats missing, nawk missing or not one-true-awk under --awk=bwk,
+#             kcov missing under --coverage, --report or --coverage given
+#             without a directory, a test failed, the suite mutated the repo, or
+#             the host bash is older than 4.4
 
 set -Eeuo pipefail
 # `inherit_errexit` is a bash 4.4 builtin option: on stock macOS bash 3.2, and

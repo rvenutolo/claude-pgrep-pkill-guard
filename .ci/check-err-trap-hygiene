@@ -60,7 +60,8 @@
 #              `}` in column 0.
 # @noargs
 # @exitcode 0 every in-scope return is preceded by `trap - ERR`
-# @exitcode 1 at least one is not, or the scan came up empty
+# @exitcode 1 at least one is not, or the scan came up empty or emitted a
+#             record it cannot read
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

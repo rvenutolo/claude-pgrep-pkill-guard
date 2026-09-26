@@ -43,15 +43,15 @@
 #         the real repo", which a script that always returned 0 would also pass.
 # @arg $2 labels optional path to the labels file; defaults to the repo root
 #         plus .github/labels.yml. Defaulted to the REAL file rather than
-#         derived from $1 on purpose: the suite's form fixtures declare
+#         derived from dir on purpose: the suite's form fixtures declare
 #         `labels: [bug]`, and `bug` is in the real file, so a case needs no
-#         labels fixture unless it is testing labels. A path derived from $1
+#         labels fixture unless it is testing labels. A path derived from dir
 #         would make a labels fixture mandatory for every case.
 # @exitcode 0 every form and config.yml satisfy the schema, and every label a
 #             form references is declared in the labels file
-# @exitcode 1 the directory is missing or holds no form, a file is unparsable,
-#             the labels file is missing or declares nothing, or a rule is
-#             violated
+# @exitcode 1 the directory is missing or holds no form, a file is missing or
+#             unparsable, the labels file is missing or declares nothing, a rule
+#             program fails to run, or a rule is violated
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail

@@ -84,10 +84,13 @@
 #         fabricated: every verdict below still comes from real `git` queries
 #         against a real repository, so a fixture exercises the code the real
 #         run takes rather than a parallel branch.
-# @exitcode 0 the report is fresh, the recorded commit is unavailable (skip), or the
-#             report is stale and BENCH_FRESH_STRICT is unset (warn)
+# @exitcode 0 the report is fresh, hooks/ changed only in ways exempt_reason
+#             clears, the recorded commit is unavailable (skip), or the report is
+#             stale or its commit unreachable and BENCH_FRESH_STRICT is unset
+#             (warn)
 # @exitcode 1 the report is stale or its commit unreachable with BENCH_FRESH_STRICT
-#             set, or the report is missing or malformed
+#             set, the report is missing or malformed, or the hooks/ history could
+#             not be read
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail

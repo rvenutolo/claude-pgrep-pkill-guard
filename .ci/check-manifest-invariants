@@ -29,7 +29,8 @@
 #         only possible test would be "exits 0 on the real repo", which a script
 #         that always returned 0 would also pass.
 # @exitcode 0 every invariant holds
-# @exitcode 1 a file is missing or unparsable, or an invariant is violated
+# @exitcode 1 a file is missing or unparsable, the invariant program fails to
+#             run, or an invariant is violated
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail

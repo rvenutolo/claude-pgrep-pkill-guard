@@ -37,9 +37,10 @@
 # @arg $1 dir the directory passed to `run-tests --coverage`
 # @stdout the percentage, e.g. `76.42`
 # @exitcode 0 exactly one complete report was found and its percentage printed
-# @exitcode 1 no directory given, the directory is missing, the number of
-#             reports found was not exactly one, or the one report found is
-#             missing a hooks/ file or records zero covered lines for one
+# @exitcode 1 not exactly one argument given, the directory is missing, the
+#             number of reports found was not exactly one, or the one report
+#             found is missing a hooks/ file, records zero covered lines for
+#             one, or has no percent_covered field
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

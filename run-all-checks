@@ -64,8 +64,8 @@ function main() {
   # the gate with no report would hand a caller who asked for one a green run
   # and nothing to upload. Exit 2 rather than 1: 1 is the gate's verdict, and
   # "you called it wrong" must stay distinguishable from it (#216). The ERR trap
-  # is dropped first so a usage error reads as a usage error rather than as a
-  # crash (#43, invariant 6).
+  # is dropped first only for symmetry with the verdict returns (#43,
+  # invariant 6); exit itself never fires it.
   local report_dir=''
   if (($# == 2)) && [[ "$1" == '--report' && -n "$2" ]]; then
     report_dir="$2"

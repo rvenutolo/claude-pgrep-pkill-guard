@@ -55,8 +55,8 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # the default destination rather than the one the caller meant. Exit 2 rather
 # than 1: 1 means the card could not be built, and "you called it wrong" must
 # stay distinguishable from "the build failed". The ERR trap is dropped first
-# so a usage error reads as a usage error rather than as a crash (#43,
-# invariant 6). A top-level guard ahead of the bindings, the same file-layout
+# only for symmetry with the verdict returns (#43, invariant 6); exit itself
+# never fires it. A top-level guard ahead of the bindings, the same file-layout
 # exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [output]\n' "${0##*/}" >&2
@@ -117,8 +117,8 @@ function log() {
 # @exitcode 1 always
 function die() {
   printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
-  # A script reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostic above is the last thing the reader sees (#43, invariant 6).
+  # Cleared only for symmetry with the verdict returns (#43, invariant 6):
+  # exit itself never fires the ERR trap.
   trap - ERR
   exit 1
 }

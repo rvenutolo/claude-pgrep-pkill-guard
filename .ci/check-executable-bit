@@ -25,9 +25,9 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo, not
 # input: exit 2 so "you called it wrong" stays distinguishable from a verdict.
-# The ERR trap is dropped first so a usage error reads as a usage error rather
-# than as a crash (#43, invariant 6). A top-level guard ahead of the bindings,
-# the same file-layout exemption a version guard gets.
+# The ERR trap is dropped first only for symmetry with the verdict returns (#43,
+# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# bindings, the same file-layout exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [dir]\n' "${0##*/}" >&2
   trap - ERR

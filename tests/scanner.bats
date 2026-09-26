@@ -319,10 +319,11 @@ function tab() {
 #              than dying into the ERR trap's silent allow. The probe command
 #              must contain `pgrep`, `pkill` or `.output`, or
 #              classify::classify_command short-circuits before the scanner is
-#              ever reached and a dead scanner looks healthy. The child runs under `env -i`: a plain PATH
-#              prefix assignment is not enough, because a BASH_ENV inherited from
-#              the caller re-sources the user's profile, which rebuilds PATH and
-#              quietly restores the very binary the probe is trying to remove.
+#              ever reached and a dead scanner looks healthy. The child runs
+#              under `env -i`: a plain PATH prefix assignment is not enough,
+#              because a BASH_ENV inherited from the caller re-sources the
+#              user's profile, which rebuilds PATH and quietly restores the very
+#              binary the probe is trying to remove.
 #              Invoked directly, not as `bash <script>`, matching
 #              hooks/hooks.json, which names the script itself.
 # @arg $1 script path to the hook copy to run

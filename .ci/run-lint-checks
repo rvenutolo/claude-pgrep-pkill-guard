@@ -8,7 +8,7 @@
 #              fast, so one run surfaces every failing category.
 # @noargs
 # @exitcode 0 every linter passed
-# @exitcode 1 at least one linter failed
+# @exitcode 1 at least one linter failed, or a file list came up empty
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

@@ -39,8 +39,9 @@
 #         the real repo", which a script that unconditionally returned 0 would
 #         also pass.
 # @exitcode 0 the table and hooks/lib/ agree in both directions
-# @exitcode 1 a row is stale or malformed, a part is unlisted, or the table is
-#             empty
+# @exitcode 1 the loader is missing, a row is stale or malformed, a part is
+#             unlisted or listed twice, the table is empty, or no tracked part
+#             exists under hooks/lib/
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail

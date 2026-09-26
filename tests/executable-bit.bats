@@ -5,7 +5,7 @@ function setup() {
 
 # Tracked paths the fixture creates, one per EXPECT_EXECUTABLE row. A glob row
 # gets one representative file; a literal row gets exactly its path.
-FIXTURE_EXECUTABLE=(
+readonly -a FIXTURE_EXECUTABLE=(
   'hooks/pgrep-pkill-guard.sh'
   '.ci/in-devshell'
   '.ci/build-thing'
@@ -19,7 +19,7 @@ FIXTURE_EXECUTABLE=(
   'assets/build-social-preview'
 )
 # The same, one per EXPECT_NON_EXECUTABLE row.
-FIXTURE_NON_EXECUTABLE=(
+readonly -a FIXTURE_NON_EXECUTABLE=(
   'hooks/pgrep-pkill-guard-body.sh'
   'hooks/lib/part.sh'
   'hooks/pgrep-scan.awk'

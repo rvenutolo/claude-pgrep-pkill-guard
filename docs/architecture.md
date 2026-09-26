@@ -114,7 +114,7 @@ In execution order:
 ### `hooks/pgrep-pkill-guard-body.sh` and `hooks/lib/`
 
 The loader. It holds `HOOK_VERSION`, `SCANNER`, and an explicit ordered list of
-the nine parts under `hooks/lib/`, each paired with one function it must
+the parts under `hooks/lib/`, each paired with one function it must
 define. The loader sources each part and then checks for that function with
 `declare -F`, failing open (INACTIVE, naming the part) if it is absent. It says
 so in one of two ways, because the two causes send a reader to different places:
@@ -647,7 +647,7 @@ leave the loss exactly where it was; `--bash-handle-sh-invocation`,
 carries no kcov patch or overlay by decision.
 
 **So `.ci/report-coverage` refuses an incomplete report.** Every one of the
-hook's bash files — the entry script, the loader, and all nine parts under
+hook's bash files — the entry script, the loader, and every part under
 `hooks/lib/` — must appear in the report's `files[]` with a non-zero
 covered-line count, or the step dies naming the file. That catches the
 odd-count shape exactly, and the
@@ -711,7 +711,7 @@ no long form it uses the POSIX short flag — `mkdir -p -m 0700`, `rm -f`,
 `mv -f` — and where the BSD tool accepts the long form (`grep --quiet`,
 `sort --unique`) it takes the long form like everything else. The exemption
 covers every piece of the split guard: the entry script, the loader it sources,
-and the nine parts under `hooks/lib/` all ship to the same machines and run in
+and the parts under `hooks/lib/` all ship to the same machines and run in
 the same shell.
 
 **Why:** the hook runs on whatever userland the user's machine ships. macOS
@@ -844,7 +844,7 @@ exactly that.
 `hooks/pgrep-pkill-guard-body.sh` is not a loophole in this, and neither are the
 parts under `hooks/lib/`. They exist to be sourced, but that is the entry
 script's and the loader's business alone — no test may source any of them. The
-six tests that cover the split, in `tests/scanner.bats`, copy the entry script
+tests that cover the split, in `tests/scanner.bats`, copy the entry script
 into a temporary directory and run it there with no sibling beside it, then with
 a deliberately broken one, then with the loader present but `lib/` absent, then
 with one part overwritten by a syntax error, then with every part intact but the
@@ -947,8 +947,8 @@ which points back to this invariant.
 In every gate script that installs the `ERR` trap, a deliberate non-zero
 `return` from `main` must be preceded by `trap - ERR`.
 `.ci/check-err-trap-hygiene` enforces it, and `run-all-checks` runs that gate
-with the rest. #43 fixed **19 such returns across 12 files**; counting the
-gate's own two, it polices **21 returns across 13 files** today.
+with the rest. #43 fixed **19 such returns across 12 files**; the gate prints
+the current count on every green run.
 
 **Why:** the trap is there to report _unexpected_ failure, and a gate
 announcing its own verdict is the one thing it must not report as a crash.
@@ -993,8 +993,8 @@ the intent differs — whether the suppression is the thing you want. That is th
 contrast to hold on to before copying either line into the other place.
 
 **Scope.** The rule binds the gate family: `run-all-checks`, `run-tests` and the
-`.ci/check-*` and `.ci/run-*` scripts. Four scripts sit outside it, verified
-rather than assumed:
+`.ci/check-*` and `.ci/run-*` scripts. The scripts below sit outside it,
+verified rather than assumed:
 
 - `bench/run` — its `main` never returns non-zero. Bad input goes through
   `die`, and `exit` does not fire an `ERR` trap. It also swaps the `ERR` trap
@@ -1030,7 +1030,7 @@ stays the right answer if one is ever added. It keys off what the handler
 covered without editing the gate, and the gate says so on every green run:
 
 ```text
-OK: 15 scripts install a reporting ERR trap; 21 deliberate non-zero returns all clear it
+OK: <N> scripts install a reporting ERR trap; <M> deliberate non-zero returns all clear it
 OK: 1 fail-open ERR trap(s) not policed by this rule: hooks/pgrep-pkill-guard.sh
 ```
 

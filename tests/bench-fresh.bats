@@ -24,10 +24,10 @@ function make_bench_fixture() {
   git -c init.defaultBranch=main init --quiet "${root}"
   write_hook "${root}" '1.0.0'
   printf 'readme\n' > "${root}/README.md"
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh README.md
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh' 'README.md'
   commit_fixture "${root}" 'seed'
   write_results "${root}" "$(short_head "${root}")"
-  git -C "${root}" add bench/RESULTS.md
+  git -C "${root}" add 'bench/RESULTS.md'
   commit_fixture "${root}" 'chore: regenerate bench/RESULTS.md'
 }
 
@@ -141,7 +141,7 @@ function record_commit() {
   local -r root="${BATS_TEST_TMPDIR}/unrelated"
   make_bench_fixture "${root}"
   printf 'readme, revised\n' > "${root}/README.md"
-  git -C "${root}" add README.md
+  git -C "${root}" add 'README.md'
   commit_fixture "${root}" 'docs: revise the readme'
   run "${CHECK}" "${root}"
   assert_success
@@ -151,7 +151,7 @@ function record_commit() {
   local -r root="${BATS_TEST_TMPDIR}/stale"
   make_bench_fixture "${root}"
   printf 'guard, split\n' > "${root}/hooks/pgrep-pkill-guard.sh"
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'perf: split the guard'
   BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
@@ -169,7 +169,7 @@ function record_commit() {
   local -r root="${BATS_TEST_TMPDIR}/version-bump"
   make_bench_fixture "${root}"
   write_hook "${root}" '1.1.0'
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'chore(main): release 1.1.0'
   run "${CHECK}" "${root}"
   assert_success
@@ -186,7 +186,7 @@ function record_commit() {
 guard, split
 readonly HOOK_VERSION='1.1.0' # x-release-please-version
 HOOK
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'perf: split the guard, and release it'
   BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
@@ -203,7 +203,7 @@ HOOK
 guard
 readonly HOOK_VERSION='1.1.0'; sleep 1 # x-release-please-version
 HOOK
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'chore: sneak a command onto the version line'
   BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
@@ -220,10 +220,10 @@ HOOK
   recorded_tree="$(git -C "${root}" rev-parse HEAD)"
   printf 'guard, experimental
 ' > "${root}/hooks/pgrep-pkill-guard.sh"
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'perf: try something'
-  git -C "${root}" checkout --quiet "${recorded_tree}" -- hooks/pgrep-pkill-guard.sh
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" checkout --quiet "${recorded_tree}" -- 'hooks/pgrep-pkill-guard.sh'
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'revert: back it out'
   run "${CHECK}" "${root}"
   assert_success
@@ -237,7 +237,7 @@ HOOK
   make_bench_fixture "${root}"
   printf 'helper
 ' > "${root}/hooks/pgrep-pkill-guard-body.sh"
-  git -C "${root}" add hooks/pgrep-pkill-guard-body.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard-body.sh'
   commit_fixture "${root}" 'refactor: add a body file'
   BENCH_FRESH_STRICT=1 run "${CHECK}" "${root}"
   assert_failure
@@ -253,7 +253,7 @@ HOOK
   local -r root="${BATS_TEST_TMPDIR}/unreachable"
   make_bench_fixture "${root}"
   printf 'guard, superseded\n' > "${root}/hooks/pgrep-pkill-guard.sh"
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'perf: a commit that will be discarded'
   local discarded
   discarded="$(short_head "${root}")"
@@ -335,7 +335,7 @@ RESULTS
   local -r root="${BATS_TEST_TMPDIR}/advisory-stale"
   make_bench_fixture "${root}"
   printf 'guard, split\n' > "${root}/hooks/pgrep-pkill-guard.sh"
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'perf: split the guard'
   # Explicitly unset: a caller's environment must not leak a strict verdict in.
   BENCH_FRESH_STRICT='' run "${CHECK}" "${root}"
@@ -353,7 +353,7 @@ RESULTS
   local -r root="${BATS_TEST_TMPDIR}/advisory-unreachable"
   make_bench_fixture "${root}"
   printf 'guard, superseded\n' > "${root}/hooks/pgrep-pkill-guard.sh"
-  git -C "${root}" add hooks/pgrep-pkill-guard.sh
+  git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'perf: a commit that will be discarded'
   local discarded
   discarded="$(short_head "${root}")"

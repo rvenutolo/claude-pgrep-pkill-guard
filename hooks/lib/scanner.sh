@@ -190,7 +190,8 @@ function scanner::pattern_operand() {
 # @arg $1 command the raw command string
 # @arg $2 operand the pattern operand, quotes already stripped
 # @exitcode 0 the mitigation holds
-# @exitcode 1 no bracket class, or the bare literal occurs elsewhere
+# @exitcode 1 no bracket class, a class that cannot be reduced to a bare literal, or the
+#             bare literal occurs elsewhere
 function scanner::bracket_mitigation_holds() {
   local -r command="$1" operand="$2"
   case "${operand}" in

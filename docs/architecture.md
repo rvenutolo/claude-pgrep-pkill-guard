@@ -866,12 +866,12 @@ contains none of those three substrings. The proof is containment, not
 enumeration. `classify::classify_command` itself opens with an early `allow` unless the
 COMMAND contains `pgrep`, `pkill`, or `.output`, and every stateless `deny`,
 `warn`, or `inactive` verdict has to pass through that gate on its way out.
-`classify::inspect_command` separately restricts the stateful repeat tier to commands
+`classify::repeat_tier_reason` separately restricts the stateful repeat tier to commands
 containing `pgrep` or `.output`, so no verdict can arise from the per-session
 state file alone either. The guard, in other words, already prefilters on the parsed
 command before this prefilter ever runs. The new check applies the identical
-predicate to the raw payload, with `pkill` widened to `kill`. Since `pkill` is
-a substring of `kill`, and the command is itself a substring of the payload it
+predicate to the raw payload, with `pkill` widened to `kill`. Since `kill` is
+a substring of `pkill`, and the command is itself a substring of the payload it
 was extracted from, this prefilter is provably weaker than a gate the hook
 already applies — it cannot suppress a verdict the hook would otherwise
 reach.
@@ -880,8 +880,8 @@ reach.
 `tests/prefilter.bats` hardcodes the same three tokens. That duplication is the
 point: a test that extracted the list from the hook would agree with it by
 construction and assert nothing. Instead two independent assertions close the
-loop — `tests/prefilter.bats` pins corpus against specification, and the 311
-rows of `tests/classify.bats` pin the hook against the corpus. Neither reaches
+loop — `tests/prefilter.bats` pins corpus against specification, and the
+corpus rows `tests/classify.bats` drives pin the hook against the corpus. Neither reaches
 inside the hook, so invariant 3 still holds.
 
 **The assumptions it rests on.** The proof needs every token the scanner

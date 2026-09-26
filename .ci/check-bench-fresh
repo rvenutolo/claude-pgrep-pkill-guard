@@ -49,9 +49,9 @@
 #              an ordinary hooks/ PR sees a WARN it can read and move past.
 #
 #              Verdict 3 is not a corner case invented for symmetry. `4c189fb`,
-#              the sha this gate was written against, is exactly it: the object
-#              is in the store, but it is on no branch, because it was
-#              superseded on its own branch by `6fa70a0` before that branch
+#              the sha RESULTS.md recorded when #84 was filed, is exactly it:
+#              the object is in the store, but it is on no branch, because it
+#              was superseded on its own branch by `6fa70a0` before that branch
 #              merged. `git merge-base --is-ancestor` says nothing about hooks/
 #              there, so neither does this script: telling the reader "hooks/
 #              changed" when no comparison happened would be a lie that sends
@@ -84,10 +84,13 @@
 #         fabricated: every verdict below still comes from real `git` queries
 #         against a real repository, so a fixture exercises the code the real
 #         run takes rather than a parallel branch.
-# @exitcode 0 the report is fresh, the recorded commit is unavailable (skip), or the
-#             report is stale and BENCH_FRESH_STRICT is unset (warn)
+# @exitcode 0 the report is fresh, hooks/ changed only in ways exempt_reason
+#             clears, the recorded commit is unavailable (skip), or the report is
+#             stale or its commit unreachable and BENCH_FRESH_STRICT is unset
+#             (warn)
 # @exitcode 1 the report is stale or its commit unreachable with BENCH_FRESH_STRICT
-#             set, or the report is missing or malformed
+#             set, the report is missing or malformed, or the hooks/ history could
+#             not be read
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail

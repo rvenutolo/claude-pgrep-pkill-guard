@@ -40,8 +40,8 @@
 #         test would be "exits 0 on the real repo", which a script that
 #         unconditionally returned 0 would also pass.
 # @exitcode 0 every shebang is canonical or a matching exemption
-# @exitcode 1 a shebang is non-canonical, an exemption is stale, or nothing was
-#             scanned
+# @exitcode 1 a shebang is non-canonical or contradicts its exemption, an
+#             exemption is stale, or nothing was scanned
 # @exitcode 2 more arguments were given than the script accepts
 
 set -Eeuo pipefail

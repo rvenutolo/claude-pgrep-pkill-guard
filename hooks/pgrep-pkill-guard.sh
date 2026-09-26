@@ -141,7 +141,7 @@ function main() {
   #     contains `pgrep`, `pkill`, or `.output` -- every stateless deny/warn/
   #     inactive verdict has to pass through that gate on its way out.
   #   - the repeat tier below is separately restricted to commands containing
-  #     `pgrep` or `.output` (see the comment above the repeat::repeat_check call), so
+  #     `pgrep` or `.output` (see the guard at the top of classify::repeat_tier_reason), so
   #     no verdict can arise from the state file alone either.
   #
   # `pkill` contains `kill`, which is why `pkill` is not in the pattern below
@@ -153,7 +153,7 @@ function main() {
   # Testing the RAW PAYLOAD rather than the parsed command is the whole point.
   # A substring test does not care that `pkill` sits behind `sudo`, inside
   # `bash -c '...'`, or in a heredoc body -- the shapes that made Claude Code's
-  # own `if:` handler filter unusable here (#29: 39 of 180 deny rows missed).
+  # own `if:` handler filter unusable here (#29: 39 of 180 non-allow rows missed).
   #
   # The test is a superset, so it fails in the safe direction: a payload that
   # matches merely takes today's path at today's cost. A `cwd` or

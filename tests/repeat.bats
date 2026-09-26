@@ -95,7 +95,7 @@ function setup() {
   json="$(run_hook "cat ${TASK_PATH}" 's6')"
   [[ "$(decision_of "${json}")" == 'none' ]]
   run cat "${STATE_DIR}/s6"
-  assert_output --regexp "^[0-9]+	${key}$"
+  assert_output --regexp "^[0-9]+"$'\t'"${key}\$"
 }
 
 @test "repeat: a state file that is a directory allows every time" {

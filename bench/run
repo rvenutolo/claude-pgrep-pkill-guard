@@ -252,9 +252,9 @@ function cohort_stats() {
 # @stdout the CPU model, or `unknown`
 function cpu_model() {
   local model=''
-  if [[ -r /proc/cpuinfo ]]; then
+  if [[ -r '/proc/cpuinfo' ]]; then
     model="$(awk --field-separator=': ' '/^model name/ { print $2; exit }' \
-      /proc/cpuinfo || true)" # awk exits 1 only if the read fails; best effort
+      '/proc/cpuinfo' || true)" # awk exits 1 only if the read fails; best effort
   fi
   if [[ -z "${model}" ]] && command -v sysctl > /dev/null 2>&1; then
     model="$(sysctl -n machdep.cpu.brand_string 2> /dev/null || true)" # absent on Linux; the probe is best effort
@@ -328,7 +328,7 @@ function power_source() {
 # @noargs
 # @stdout one line
 function load_average() {
-  if [[ -r /proc/loadavg ]]; then
+  if [[ -r '/proc/loadavg' ]]; then
     local one five fifteen
     IFS=' ' read -r one five fifteen _ < /proc/loadavg
     printf '%s %s %s\n' "${one}" "${five}" "${fifteen}"

@@ -1,5 +1,15 @@
 extends:
   - '@commitlint/config-conventional'
+parserPreset:
+  parserOpts:
+    # The parser reads any `#N` followed by more text, on a body line after the
+    # first, as an issue reference that opens the footer, so a body that cites
+    # an issue mid-paragraph trips footer-leading-blank. A prefix no commit
+    # ever writes turns reference parsing off. An empty list would be simpler
+    # but also stops the rule catching a real `BREAKING CHANGE:` footer with no
+    # blank line above it; this form keeps that. release-please parses commits
+    # itself and never reads this file.
+    issuePrefixes: ['#ref-never-used-']
 rules:
   # Bodies routinely carry long paths, URLs and code fences that cannot be
   # wrapped at 100 chars. Subject-length checks remain in effect.

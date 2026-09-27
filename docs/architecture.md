@@ -1037,7 +1037,8 @@ OK: 1 fail-open ERR trap(s) not policed by this rule: hooks/pgrep-pkill-guard.sh
 ```
 
 **Tracked comments:** the `A gate reporting its own verdict is not a crash`
-comment at each of the 19 sites, worded to the diagnostics it follows:
+comment at each deliberate non-zero return (19 when #43 landed), worded to the
+diagnostics it follows:
 
 ```text
 # A gate reporting its own verdict is not a crash: drop the ERR trap so the

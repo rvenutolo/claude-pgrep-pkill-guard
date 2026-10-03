@@ -25,6 +25,7 @@ readonly -a FIXTURE_NON_EXECUTABLE=(
   'hooks/pgrep-scan.awk'
   'hooks/hooks.json'
   '.ci/required-tools'
+  '.ci/bash-style.jq'
   'tests/thing.bats'
   'tests/test_helper/thing.bash'
   'package.json'

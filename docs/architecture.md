@@ -319,7 +319,7 @@ deliberately not part of `just check`.
 
 Anything it finds becomes a hand-written case in `tests/scanner.bats` — not a row
 in `tests/cases/`, whose tables are hook-level and read by `tests/classify.bats`.
-The fuzzer's job is to find them; the suite's job is to keep them. Eleven more are unrelated to the guard entirely, each
+The fuzzer's job is to find them; the suite's job is to keep them. Twelve more are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
@@ -337,10 +337,11 @@ fabricated kcov output directory), `tests/shell-shebangs.bats`
 fabricated tree of tracked modes), `tests/guard-parts.bats`
 (`.ci/check-guard-parts`, against a fabricated loader and parts) and
 `tests/bats-no-shebang.bats` (`.ci/check-bats-no-shebang`,
-against throwaway repos of fixture `.bats` files). Every one of them drives its
+against throwaway repos of fixture `.bats` files) and `tests/bash-style.bats`
+(`.ci/check-bash-style`, against fixture scripts written per case). Every one of them drives its
 script over a fabricated input — eight through optional fixture-path arguments,
 `build-commit-payload` and `check-bats-no-shebang` by being invoked inside a
-throwaway repo, and `report-coverage` by being pointed at a directory a case
+throwaway repo, `check-bash-style` by being handed fixture paths, and `report-coverage` by being pointed at a directory a case
 built — for the same reason: a suite that only asserted "exits 0 on the real
 repo" would pass just as well against a script that unconditionally returned 0.
 
@@ -528,6 +529,31 @@ which looks like a workflow failure rather than a settings problem. Adding one
 means reading the current value and merging into it — never writing the list
 from memory or from a design document, which is how the other five entries would
 get dropped.
+
+### The bash style gate
+
+`.ci/check-bash-style` enforces the bash style rules a machine can decide.
+`.ci/run-lint-checks` hands it the same file list shellcheck and shfmt read. It
+parses each file with `shfmt --to-json` and runs the rules in
+`.ci/bash-style.jq` over the syntax tree, so a rule sees a command, a string, a
+comment and a heredoc body as different things. That module is the rule list:
+one function per rule, each with a stable kebab-case id.
+
+One site can be excused with a comment on the statement, or alone on the line
+above it:
+
+```text
+# bash-style allow=<rule-id>: <reason>
+```
+
+A marker that does not follow that form, has no reason, names an id no rule
+has, or has nothing to excuse is itself a violation, so an exception cannot outlive the code it excused. A
+pattern that recurs belongs in the rule, not in markers.
+
+The gate runs only in the devShell, because the tree's shape belongs to the
+`shfmt` the flake pins. Before it scans anything it feeds itself a snippet that
+must trip two rules; a `shfmt` that answers with a different tree fails there,
+loudly, not by passing every file.
 
 ### Line coverage
 

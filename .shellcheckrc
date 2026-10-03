@@ -1,0 +1,11 @@
+# Optional checks that match a rule in the bash style guide.
+# require-variable-braces asks for ${var} and leaves the single-character
+# specials and the positionals ($?, $#, $1) alone, which is what the rule asks
+# for. require-double-brackets asks for [[ ]] over [ ]. deprecate-which asks for
+# `command -v` over `which`.
+#
+# quote-safe-variables is absent on purpose: it misses assignments, case words
+# and [[ ]] operands, so .ci/check-bash-style carries that rule instead.
+enable=require-variable-braces
+enable=require-double-brackets
+enable=deprecate-which

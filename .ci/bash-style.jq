@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -79,7 +79,17 @@ def single_quote_literals:
   | select(.Pos.Line as $l | $test_lines | index($l) | not)
   | {line: .Pos.Line, rule: "single-quote-literals", message: ("single-quote the literal " + ($text | tojson))};
 
-def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals;
+# A bare word that is plainly a path, passed as a command argument. A redirect
+# target is shell syntax and lives in Redirs, so it never reaches this rule.
+def quote_literal_path:
+  nodes
+  | select(.Type == "CallExpr")
+  | args[1:][]
+  | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
+  | select(.Parts[0].Value | test("^(/|\\./|\\.\\./)"))
+  | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
+
+def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

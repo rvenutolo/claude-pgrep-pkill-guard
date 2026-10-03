@@ -273,3 +273,12 @@ function assert_passes() {
   assert_passes 'l.sh' 'name=x' 'echo "${name} ran"' "echo \"it's inert\"" 'printf "a\nb"'
   assert_passes 'l.bats' '@test "inert name" {' '  echo PAYLOAD_RAN' '}'
 }
+
+@test "bash style: quote-literal-path reports a bare path argument" {
+  assert_fires 'p.sh' 'quote-literal-path' 1 'some_command /etc/os-release'
+  assert_fires 'p.sh' 'quote-literal-path' 1 'some_command ./relative'
+}
+
+@test "bash style: quote-literal-path passes a quoted path and a bare redirect target" {
+  assert_passes 'p.sh' "some_command '/etc/os-release' 2> /dev/null < /proc/loadavg"
+}

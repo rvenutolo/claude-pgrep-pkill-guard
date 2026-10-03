@@ -291,3 +291,11 @@ function assert_passes() {
 @test "bash style: quote-subst-in-assign passes the quoted forms" {
   assert_passes 's.sh' 'count="$((1 + 1))"' 'now="$(some_command)"'
 }
+
+@test "bash style: unquoted-numeric-opt reports a quoted number as an option value" {
+  assert_fires 'n.sh' 'unquoted-numeric-opt' 1 "some_command --fields='1'"
+}
+
+@test "bash style: unquoted-numeric-opt passes a bare number and a quoted word" {
+  assert_passes 'n.sh' "some_command --fields=1 --delimiter=','"
+}

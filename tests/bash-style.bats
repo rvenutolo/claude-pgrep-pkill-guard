@@ -463,3 +463,9 @@ function assert_passes() {
     'dirs -v' \
     'times'
 }
+
+@test "bash style: long-options reads a negative number as an argument, except for head and tail" {
+  assert_passes 'o.sh' 'sleep -1' 'sleep -0.5'
+  assert_fires 'o.sh' 'long-options' 1 "head -5 'file'"
+  assert_fires 'o.sh' 'long-options' 1 "tail -20 'file'"
+}

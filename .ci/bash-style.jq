@@ -240,7 +240,8 @@ def macos_short: {
 
 # A short flag on a tool that has a long form. Flags after a -- are data, as
 # are flags given to a function the file defines or to a command held in a
-# variable.
+# variable, and a negative number is an argument, except to head and tail, where
+# -5 is a legacy spelling of --lines=5.
 def long_options($path):
   [nodes | select(.Type == "FuncDecl") | .Name.Value] as $functions
   | ($path | test("(^|/)(hooks|tests)/")) as $ambient
@@ -256,6 +257,7 @@ def long_options($path):
   | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
   | .Parts[0].Value as $flag
   | select($flag | test("^-[A-Za-z0-9]"))
+  | select(($flag | test("^-[0-9]+(\\.[0-9]+)?$") | not) or ($cmd | IN("head", "tail")))
   | select(($always + $scoped) | index($flag) | not)
   | {line: .Pos.Line, rule: "long-options", message: ("use the long form of " + $cmd + " " + $flag)};
 

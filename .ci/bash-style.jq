@@ -179,7 +179,7 @@ def quote_heredoc_terminator:
   | select([.Hdoc.Parts[]?.Value] | join("") | contains("\\") | not)
   | {line: .Pos.Line, rule: "quote-heredoc-terminator", message: ("quote the terminator: <<'" + .Word.Parts[0].Value + "'")};
 
-def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator;
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
@@ -215,7 +215,7 @@ def markers:
 def report($path; $src):
   if .Type != "File" then error("not a shfmt syntax tree") else . end
   | markers as $markers
-  | [hits($src)] as $hits
+  | [hits($path; $src)] as $hits
   | (
       $hits[]
       | . as $hit

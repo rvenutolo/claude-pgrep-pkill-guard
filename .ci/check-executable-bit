@@ -69,6 +69,9 @@ readonly EXPECT_NON_EXECUTABLE=(
   'hooks/pgrep-scan.awk'
   'hooks/hooks.json'
   '.ci/required-tools'
+  # The rule module .ci/check-bash-style loads with `jq --library-path`; data,
+  # never run.
+  '.ci/bash-style.jq'
   'tests/*.bats'
   'tests/**/*.bash'
   '*.json'

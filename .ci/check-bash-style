@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+# @description Enforce the mechanically decidable bash style rules on the files
+#              named as arguments. Each file is parsed by `shfmt --to-json` and
+#              the syntax tree is handed to the rules in .ci/bash-style.jq,
+#              which is where the rule list lives.
+#
+#              One site may be excused with a comment on the statement, or
+#              alone on the line above it:
+#
+#                # bash-style allow=<rule-id>: <reason>
+#
+#              A marker with no reason, an unknown rule id, or nothing to
+#              excuse is itself a violation.
+#
+#              Devshell only: the tree's shape belongs to the shfmt the flake
+#              pins. The canary in `main` fails the gate when a different
+#              shfmt answers.
+# @arg $@ paths the bash and bats files to check
+# @stderr one FAIL line per violation, then a verdict line
+# @exitcode 0 every file is clean
+# @exitcode 1 a violation, no files given, a file shfmt cannot parse, or a
+#             failed canary
+# @exitcode 2 a required tool is not on PATH
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
+# A snippet that breaks one tree rule and one text rule. If the pipeline stops
+# reporting both, the tree no longer has the shape the rules were written for.
+readonly CANARY=$'canary() {\n\t:\n}\n'
+readonly -a CANARY_RULES=('function-keyword' 'no-raw-tab')
+
+# @description Run every rule over one syntax tree.
+# @arg $1 display_path the path to print in FAIL lines
+# @arg $2 src_file a file holding the source text the tree was parsed from
+# @stdout one FAIL line per violation
+function run_rules() {
+  local -r display_path="$1"
+  local -r src_file="$2"
+  jq --raw-output --library-path "${SCRIPT_DIR}" \
+    --arg path "${display_path}" --rawfile src "${src_file}" \
+    'import "bash-style" as style; style::report($path; $src)'
+}
+
+# @description Prove the pipeline still reports a known violation of each kind.
+# @noargs
+# @stderr a FAIL line when the canary is not reported
+# @exitcode 0 the canary came back
+# @exitcode 1 it did not
+function check_canary() {
+  local out rule
+  if ! out="$(printf '%s' "${CANARY}" | shfmt --filename 'canary.sh' --to-json \
+    | run_rules 'canary' <(printf '%s' "${CANARY}"))"; then
+    printf 'FAIL: the canary could not be scanned\n' >&2
+    return 1
+  fi
+  for rule in "${CANARY_RULES[@]}"; do
+    if [[ "${out}" != *"[${rule}]"* ]]; then
+      printf 'FAIL: the canary did not trip %s\n' "${rule}" >&2
+      printf '      shfmt or jq is not the version the rules were written for.\n' >&2
+      return 1
+    fi
+  done
+}
+
+function main() {
+  local tool
+  for tool in 'shfmt' 'jq'; do
+    if ! command -v "${tool}" > /dev/null 2>&1; then
+      printf 'FAIL: %s is not on PATH; run this gate through .ci/in-devshell\n' "${tool}" >&2
+      # A gate reporting its own verdict is not a crash: drop the ERR trap so
+      # the diagnostics above are the last thing the reader sees.
+      trap - ERR
+      return 2
+    fi
+  done
+
+  if (($# == 0)); then
+    printf 'FAIL: no files given — this is a failure, not a clean pass\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
+    trap - ERR
+    return 1
+  fi
+
+  if ! check_canary; then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
+    trap - ERR
+    return 1
+  fi
+
+  local path out
+  local dirty=0
+  for path in "$@"; do
+    # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
+    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" | run_rules "${path}" "${path}")"; then
+      printf 'FAIL: %s could not be scanned\n' "${path}" >&2
+      dirty="$((dirty + 1))"
+      continue
+    fi
+    if [[ -n "${out}" ]]; then
+      printf '%s\n' "${out}" >&2
+      dirty="$((dirty + 1))"
+    fi
+  done
+
+  if ((dirty > 0)); then
+    printf 'FAIL: %s of %s files break the bash style rules\n' "${dirty}" "$#" >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
+    trap - ERR
+    return 1
+  fi
+  printf 'OK: %s files pass the bash style gate\n' "$#" >&2
+}
+
+main "$@"

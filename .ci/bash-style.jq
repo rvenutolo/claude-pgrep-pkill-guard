@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -66,7 +66,20 @@ def quote_expansions:
   | .[];
 
 
-def hits($src): function_keyword, no_raw_tab($src), quote_expansions;
+# A double-quoted string holding only literal text. One that contains an
+# apostrophe or a backslash is left alone: single quotes cannot hold the first
+# and change the meaning of the second. A bats test name is not an argument.
+def single_quote_literals:
+  [nodes | select(.Type == "TestDecl") | .Description.Pos.Line] as $test_lines
+  | nodes
+  | select(.Type == "DblQuoted")
+  | select((.Parts // []) | all(.Type == "Lit"))
+  | ([.Parts[]?.Value] | join("")) as $text
+  | select($text | test("['\\\\]") | not)
+  | select(.Pos.Line as $l | $test_lines | index($l) | not)
+  | {line: .Pos.Line, rule: "single-quote-literals", message: ("single-quote the literal " + ($text | tojson))};
+
+def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

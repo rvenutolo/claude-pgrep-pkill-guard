@@ -264,3 +264,12 @@ function assert_passes() {
     '# shellcheck disable=SC2053 # fixture: a glob on purpose' \
     '[[ "${re}" == ${re} ]] && echo PAYLOAD_RAN'
 }
+
+@test "bash style: single-quote-literals reports a double-quoted string with nothing to expand" {
+  assert_fires 'l.sh' 'single-quote-literals' 1 'echo "PAYLOAD_RAN"'
+}
+
+@test "bash style: single-quote-literals passes expansion, an apostrophe, a backslash and a test name" {
+  assert_passes 'l.sh' 'name=x' 'echo "${name} ran"' "echo \"it's inert\"" 'printf "a\nb"'
+  assert_passes 'l.bats' '@test "inert name" {' '  echo PAYLOAD_RAN' '}'
+}

@@ -163,14 +163,18 @@ def no_braces_in_arith:
     ]
   | .[];
 
-# <<EOF over a body that expands nothing: quote the terminator.
+# <<EOF over a body that expands nothing: quote the terminator. A terminator
+# already quoted with a backslash is left alone, as is a body holding a
+# backslash escape: quoting the terminator would change what the body prints.
 def quote_heredoc_terminator:
   nodes
   | select(has("Redirs"))
   | .Redirs[]
   | select(.Op == "<<" or .Op == "<<-")
   | select((.Word.Parts | length) == 1 and .Word.Parts[0].Type == "Lit")
+  | select(.Word.Parts[0].Value | contains("\\") | not)
   | select((.Hdoc.Parts // []) | all(.Type == "Lit"))
+  | select([.Hdoc.Parts[]?.Value] | join("") | contains("\\") | not)
   | {line: .Pos.Line, rule: "quote-heredoc-terminator", message: ("quote the terminator: <<'" + .Word.Parts[0].Value + "'")};
 
 def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator;

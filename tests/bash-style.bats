@@ -329,3 +329,12 @@ function assert_passes() {
 @test "bash style: no-braces-in-arith passes a braced name after a base prefix" {
   assert_passes 'a.sh' 'count=08' 'echo "$((10#${count} + 1))"'
 }
+
+@test "bash style: quote-heredoc-terminator passes a backslash-quoted terminator" {
+  assert_passes 'h.sh' 'cat <<\EOF' 'PAYLOAD_RAN' 'EOF'
+}
+
+@test "bash style: quote-heredoc-terminator passes a body whose backslash escapes quoting would change" {
+  assert_passes 'h.sh' 'cat <<EOF' 'cost \$5' 'EOF'
+  assert_passes 'h.sh' 'cat <<EOF' 'a\\b' 'EOF'
+}

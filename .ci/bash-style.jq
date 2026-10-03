@@ -68,7 +68,6 @@ def quote_expansions:
   ]
   | .[];
 
-
 # A double-quoted string holding only literal text. One that contains an
 # apostrophe or a backslash is left alone: single quotes cannot hold the first
 # and change the meaning of the second. A bats test name is not an argument.

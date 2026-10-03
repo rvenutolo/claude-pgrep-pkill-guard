@@ -346,3 +346,13 @@ function assert_passes() {
 @test "bash style: quote-expansions passes a quoted expansion inside a command substitution inside double quotes" {
   assert_passes 'q.sh' 'path=x' 'echo "$(some_command "${path}")"'
 }
+
+@test "bash style: quote-expansions passes a heredoc body that expands, a C-style for header and an associative subscript" {
+  assert_passes 'q.sh' 'name=x' 'cat <<EOF' '${name}' 'EOF'
+  assert_passes 'q.sh' 'items=(a b)' 'for ((i = 0; i < ${#items[@]}; i++)); do echo PAYLOAD_RAN; done'
+  assert_passes 'q.sh' 'key=x' 'declare -A seen=()' 'echo "${seen[${key}]}"'
+}
+
+@test "bash style: no-braces-in-arith reports a braced name in an indexed assignment subscript" {
+  assert_fires 'a.sh' 'no-braces-in-arith' 3 'i=0' 'items=(a b)' 'items[${i}]=1'
+}

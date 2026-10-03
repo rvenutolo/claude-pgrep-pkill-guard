@@ -409,3 +409,9 @@ function assert_passes() {
   assert_passes 'o.sh' "timeout -k 5 30 awk -f 'prog.awk'"
   assert_fires 'o.sh' 'long-options' 1 'env -u SOME_NAME grep -q x'
 }
+
+@test "bash style: double-dash-before-paths reports rm, mv and cp without --" {
+  assert_fires 'd.sh' 'double-dash-before-paths' 1 "rm --force 'file'"
+  assert_fires 'd.sh' 'double-dash-before-paths' 1 "mv 'a' 'b'"
+  assert_passes 'd.sh' "rm --force -- 'file'" "cp -- 'a' 'b'"
+}

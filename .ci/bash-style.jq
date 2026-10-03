@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -274,7 +274,24 @@ def xargs_flags:
   | select((($flags | index("--no-run-if-empty")) == null) or ($flags | any(test("^--max-args=")) | not))
   | {line: .Pos.Line, rule: "xargs-flags", message: "xargs needs --no-run-if-empty and --max-args=N"};
 
-def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags;
+# echo -e is never portable; printf does the job. Every leading option word
+# counts, so echo -n -e is caught as well as echo -ne.
+def no_echo_e:
+  nodes
+  | select(.Type == "CallExpr" and cmdname == "echo")
+  | select(
+      [
+        foreach (args[1:][] | .Parts[0].Value // "") as $word (
+          true;
+          . and ($word | test("^-[a-zA-Z]+$"));
+          if . then $word else empty end
+        )
+      ]
+      | any(test("e"))
+    )
+  | {line: .Pos.Line, rule: "no-echo-e", message: "use printf with a format string, not echo -e"};
+
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

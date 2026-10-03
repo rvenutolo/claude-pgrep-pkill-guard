@@ -421,3 +421,14 @@ function assert_passes() {
   assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs --no-run-if-empty other_command'
   assert_passes 'x.sh' 'some_command | xargs --no-run-if-empty --max-args=1 other_command'
 }
+
+@test "bash style: no-echo-e reports echo -e" {
+  assert_fires 'e.sh' 'no-echo-e' 1 "echo -e 'PAYLOAD_RAN'"
+  assert_passes 'e.sh' "echo 'PAYLOAD_RAN'" "printf '%s\n' 'PAYLOAD_RAN'"
+}
+
+@test "bash style: no-echo-e reports -e after another echo option" {
+  assert_fires 'e.sh' 'no-echo-e' 1 "echo -n -e 'PAYLOAD_RAN'"
+  assert_fires 'e.sh' 'no-echo-e' 1 "echo -ne 'PAYLOAD_RAN'"
+  assert_passes 'e.sh' "echo -n 'PAYLOAD_RAN'" "echo 'PAYLOAD_RAN' -e"
+}

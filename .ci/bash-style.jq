@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -108,7 +108,53 @@ def unquoted_numeric_opt:
   | select((.Parts[0].Value | test("^--[a-z-]+=$")) and (.Parts[1].Value | test("^[0-9]+$")))
   | {line: .Pos.Line, rule: "unquoted-numeric-opt", message: ("drop the quotes in " + .Parts[0].Value + "'" + .Parts[1].Value + "'")};
 
-def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt;
+# Names this file declares as associative arrays: their subscripts are strings.
+def assoc_names:
+  [
+    nodes
+    | select(.Type == "DeclClause")
+    | select(any(args[]; (.Value.Parts[0].Value? // "") | test("^-[a-zA-Z]*A")))
+    | args[]
+    | .Name.Value? // empty
+  ];
+
+# A plain ${name} with nothing but the name inside it.
+def plain_braced:
+  .Type == "ParamExp" and has("Rbrace")
+  and (has("Exp") or has("Repl") or has("Slice") or has("Index") or has("Length") or has("Excl") | not);
+
+# ${name} inside $(( )), (( )) or an indexed-array subscript, where the bare
+# name is enough. A command substitution in between resets to string context.
+def no_braces_in_arith:
+  assoc_names as $assoc
+  | [
+      paths(objects) as $p
+      | getpath($p) as $n
+      | select($n | plain_braced)
+      | [
+          range(0; $p | length) as $i
+          | getpath($p[:$i]) as $ancestor
+          | select($ancestor | type == "object")
+          | {type: ($ancestor.Type // ""), name: ($ancestor.Param.Value? // $ancestor.Name.Value? // ""), key: $p[$i]}
+        ] as $up
+      | ($up | map(.type) | rindex("CmdSubst") // -1) as $subst
+      | (
+          [
+            $up | to_entries[]
+            | select(
+                (.value.type | IN("ArithmExp", "ArithmCmd", "CStyleLoop"))
+                or (.value.key == "Index" and (.value.name as $name | $assoc | index($name) | not))
+              )
+            | .key
+          ]
+          | max // -1
+        ) as $arith
+      | select($arith > $subst)
+      | {line: $n.Pos.Line, rule: "no-braces-in-arith", message: ("write " + ($n.Param.Value // "?") + " without ${} in arithmetic")}
+    ]
+  | .[];
+
+def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

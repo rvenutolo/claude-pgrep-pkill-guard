@@ -299,3 +299,16 @@ function assert_passes() {
 @test "bash style: unquoted-numeric-opt passes a bare number and a quoted word" {
   assert_passes 'n.sh' "some_command --fields=1 --delimiter=','"
 }
+
+@test "bash style: no-braces-in-arith reports a braced name in arithmetic and in an indexed subscript" {
+  assert_fires 'a.sh' 'no-braces-in-arith' 2 'count=1' 'echo "$((${count} + 1))"'
+  assert_fires 'a.sh' 'no-braces-in-arith' 3 'i=0' 'items=(a b)' 'echo "${items[${i}]}"'
+}
+
+@test "bash style: no-braces-in-arith passes bare names, lengths, operators, nested substitutions and associative keys" {
+  assert_passes 'a.sh' 'count=1' 'items=(a b)' \
+    'echo "$((count + ${#items[@]}))"' \
+    'echo "$((10#${count/./} - 1))"' \
+    'echo "$(($(some_command "${count}") / 1000))"'
+  assert_passes 'a.sh' 'key=x' 'declare -A seen=()' 'seen["${key}"]=1' 'echo "${seen[${key}]}"'
+}

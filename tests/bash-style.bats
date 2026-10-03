@@ -444,3 +444,22 @@ function assert_passes() {
 @test "bash style: fetch-flags passes a lookup of curl or wget, which fetches nothing" {
   assert_passes 'f.sh' 'command -v curl' 'command -v wget > /dev/null'
 }
+
+@test "bash style: long-options passes every builtin, which has no long form" {
+  assert_passes 'o.sh' \
+    'readarray -t arr < <(some_command)' \
+    "compgen -W 'a b' -- 'x'" \
+    'jobs -p' \
+    'builtin cd -P' \
+    'fc -l' \
+    'help -s cd' \
+    'history -c' \
+    'disown -h' \
+    'complete -r' \
+    'compopt -o nospace' \
+    'bind -l' \
+    'enable -n test' \
+    'caller 0' \
+    'dirs -v' \
+    'times'
+}

@@ -180,7 +180,7 @@ def quote_heredoc_terminator:
   | {line: .Pos.Line, rule: "quote-heredoc-terminator", message: ("quote the terminator: <<'" + .Word.Parts[0].Value + "'")};
 
 # Commands that run another command: the flags after them belong to that one.
-def wrappers: ["run", "env", "command", "timeout", "nice", "sudo", "exec"];
+def wrappers: ["run", "env", "command", "builtin", "timeout", "nice", "sudo", "exec"];
 
 # Short flags of a wrapper that take the next word as their value (env -u NAME,
 # timeout -k DURATION, nice -n LEVEL, sudo -u USER).
@@ -216,7 +216,12 @@ def no_long_form: {
   "wait": "*", "echo": "*", "trap": "*", "return": "*", "exit": "*",
   "find": "*", "magick": "*", "test": "*", "[": "*", "hash": "*", "alias": "*",
   "unalias": "*", "getopts": "*", "let": "*", "source": "*", "eval": "*",
-  "umask": "*", "ulimit": "*", "pushd": "*", "popd": "*", "builtin": "*",
+  "umask": "*", "ulimit": "*", "pushd": "*", "popd": "*", "readarray": "*",
+  "compgen": "*", "complete": "*", "compopt": "*", "jobs": "*", "bind": "*",
+  "enable": "*", "disown": "*", "fg": "*", "bg": "*", "history": "*",
+  "caller": "*", "dirs": "*", "fc": "*", "help": "*", "logout": "*",
+  "suspend": "*", "times": "*", "typeset": "*", "shift": "*", "break": "*",
+  "continue": "*", "true": "*", "false": "*", ":": "*", ".": "*", "time": "*",
   "bash": ["-c"], "sh": ["-c"],
   "git": ["-C", "-c", "-I", "-z", "-e"],
   "awk": ["-f", "-v"],

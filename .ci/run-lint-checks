@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
 # @description Run the config/markup lint suite: shellcheck, shfmt and the bash
-#              style gate over every tracked shell script, gawk --lint over every tracked awk program,
-#              plus just --fmt, statix, deadnix, actionlint, zizmor, yamllint,
-#              renovate-config-validator, markdownlint, typos and
-#              editorconfig-checker. Aggregates exit codes rather than failing
-#              fast, so one run surfaces every failing category.
+#              style gate over every tracked shell script, gawk --lint over
+#              every tracked awk program, plus just --fmt, statix, deadnix,
+#              actionlint, zizmor, yamllint, renovate-config-validator,
+#              markdownlint, typos and editorconfig-checker. Aggregates exit
+#              codes rather than failing fast, so one run surfaces every
+#              failing category.
 # @noargs
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed, or a file list came up empty
@@ -99,7 +100,8 @@ function main() {
   # The same list shellcheck and shfmt just read, on purpose: a second copy of
   # shell_files would be a second place for a file to drop out unnoticed. The
   # gate itself fails on an empty list, so no length guard is needed here.
-  # Repo-relative paths: its path-scoped rules match on `hooks/` and `tests/`.
+  # The paths are repo-relative, like the shellcheck and shfmt calls above, so
+  # this script runs from the repo root.
   "${REPO_DIR}/.ci/check-bash-style" "${files[@]}" || rc=1
 
   log 'running gawk --lint over the awk programs'

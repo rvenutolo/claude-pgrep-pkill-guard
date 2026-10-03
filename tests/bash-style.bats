@@ -181,6 +181,33 @@ function assert_passes() {
   assert_output --partial "FAIL: ${FIXTURE}:1: [marker-unknown-rule] no rule is named \"no-such-rule\""
 }
 
+@test "bash style: a marker after the last statement of a file is reported when stale" {
+  write_fixture 'last.sh' \
+    'echo PAYLOAD_RAN' \
+    '# bash-style allow=function-keyword: fixture reason'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:2: [marker-unused]"
+}
+
+@test "bash style: a marker with no colon after the rule id is malformed" {
+  write_fixture 'nocolon.sh' \
+    'greet() { # bash-style allow=function-keyword fixture reason' \
+    '  echo PAYLOAD_RAN' \
+    '}'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [marker-malformed] write # bash-style allow=<rule-id>: <reason>"
+}
+
+@test "bash style: a bash-style comment that is not an allow marker is malformed" {
+  write_fixture 'other-form.sh' \
+    'echo PAYLOAD_RAN # bash-style something-else'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [marker-malformed]"
+}
+
 @test "bash style: a marker that excuses nothing is a violation" {
   write_fixture 'stale.sh' \
     'echo PAYLOAD_RAN # bash-style allow=function-keyword: fixture reason'

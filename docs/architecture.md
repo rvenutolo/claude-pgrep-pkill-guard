@@ -546,8 +546,8 @@ above it:
 # bash-style allow=<rule-id>: <reason>
 ```
 
-A marker with no reason, with an id no rule has, or with nothing to excuse is
-itself a violation, so an exception cannot outlive the code it excused. A
+A marker that does not follow that form, has no reason, names an id no rule
+has, or has nothing to excuse is itself a violation, so an exception cannot outlive the code it excused. A
 pattern that recurs belongs in the rule, not in markers.
 
 The gate runs only in the devShell, because the tree's shape belongs to the

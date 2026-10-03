@@ -10,8 +10,8 @@
 #
 #                # bash-style allow=<rule-id>: <reason>
 #
-#              A marker with no reason, an unknown rule id, or nothing to
-#              excuse is itself a violation.
+#              A marker that does not follow that form, or has no reason, an
+#              unknown rule id, or nothing to excuse is itself a violation.
 #
 #              Devshell only: the tree's shape belongs to the shfmt the flake
 #              pins. The canary in `main` fails the gate when a different

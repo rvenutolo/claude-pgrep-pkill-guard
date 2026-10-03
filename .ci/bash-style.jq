@@ -32,19 +32,35 @@ def no_raw_tab($src):
 
 def hits($src): function_keyword, no_raw_tab($src);
 
-# Every `# bash-style allow=<rule-id>: <reason>` comment, with the line span of
-# the statement shfmt attached it to. A marker alone on the line above a
-# statement is attached to that statement, so the span starts at the marker.
+# Every comment that starts with `bash-style`, as a marker. A marker well formed
+# as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
+# other `bash-style` comment has `malformed: true`. A comment shfmt attached to
+# a statement covers that statement's line span; a marker alone on the line
+# above a statement is attached to that statement, so the span starts at the
+# marker. A comment attached to nothing (after the last statement of a file or
+# of a block) covers only its own line.
 def markers:
-  [
+  ([
     .. | objects
-    | select(has("Comments") and has("Pos") and has("End"))
+    | select(has("Comments") and has("End"))
     | .End.Line as $to
     | .Comments[]
-    | select((.Text // "") | test("^ ?bash-style "))
-    | ((.Text | capture("^ ?bash-style allow=(?<rule>[a-z0-9-]*):? *(?<reason>.*)$"))
-        // {rule: "", reason: ""}) as $m
-    | {line: .Hash.Line, rule: $m.rule, reason: $m.reason, from: .Hash.Line, to: ([$to, .Hash.Line] | max)}
+    | {key: (.Hash.Line | tostring), value: $to}
+  ] | from_entries) as $spans
+  | [
+    .. | objects
+    | select(has("Hash") and has("Text"))
+    | select(.Text | test("^ ?bash-style\\b"))
+    | .Hash.Line as $line
+    | ((.Text | capture("^ ?bash-style allow=(?<rule>[a-z0-9-]+): *(?<reason>.*)$")) // null) as $m
+    | {
+        line: $line,
+        rule: ($m.rule // ""),
+        reason: ($m.reason // ""),
+        malformed: ($m == null),
+        from: $line,
+        to: ([($spans[$line | tostring] // $line), $line] | max)
+      }
   ];
 
 def report($path; $src):
@@ -62,7 +78,9 @@ def report($path; $src):
     (
       $markers[]
       | . as $marker
-      | if (.rule as $rule | rule_ids | index($rule)) == null then
+      | if .malformed then
+          {line, rule: "marker-malformed", message: "write # bash-style allow=<rule-id>: <reason>"}
+        elif (.rule as $rule | rule_ids | index($rule)) == null then
           {line, rule: "marker-unknown-rule", message: ("no rule is named \"" + .rule + "\"")}
         elif .reason == "" then
           {line, rule: "marker-no-reason", message: "an exception marker must say why"}

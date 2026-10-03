@@ -415,3 +415,9 @@ function assert_passes() {
   assert_fires 'd.sh' 'double-dash-before-paths' 1 "mv 'a' 'b'"
   assert_passes 'd.sh' "rm --force -- 'file'" "cp -- 'a' 'b'"
 }
+
+@test "bash style: xargs-flags reports xargs without both flags" {
+  assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs --max-args=1 other_command'
+  assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs --no-run-if-empty other_command'
+  assert_passes 'x.sh' 'some_command | xargs --no-run-if-empty --max-args=1 other_command'
+}

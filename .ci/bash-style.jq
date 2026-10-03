@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -264,7 +264,17 @@ def double_dash_before_paths:
   | select([$w[1:][] | .Parts[0].Value // ""] | index("--") | not)
   | {line: .Pos.Line, rule: "double-dash-before-paths", message: ("put -- before the paths given to " + $cmd)};
 
-def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths;
+# xargs always carries --no-run-if-empty and an explicit --max-args.
+def xargs_flags:
+  nodes
+  | select(.Type == "CallExpr")
+  | real_words as $w
+  | select(($w[0].Parts[0].Value // "") == "xargs")
+  | [$w[1:][] | .Parts[0].Value // ""] as $flags
+  | select((($flags | index("--no-run-if-empty")) == null) or ($flags | any(test("^--max-args=")) | not))
+  | {line: .Pos.Line, rule: "xargs-flags", message: "xargs needs --no-run-if-empty and --max-args=N"};
+
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

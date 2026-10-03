@@ -8,11 +8,18 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions"];
+
+def nodes: .. | objects;
+def args: (.Args // []);
+# The literal first word of a command, or "" when it is not a plain word.
+def cmdname: (args[0].Parts[0].Value // "");
+# Every line that carries a comment.
+def comment_lines: [nodes | select(has("Hash")) | .Hash.Line] | unique;
 
 # A function defined as `name() { ...; }`, without the `function` keyword.
 def function_keyword:
-  .. | objects
+  nodes
   | select(.Type == "FuncDecl" and .RsrvWord != true)
   | {
       line: .Pos.Line,
@@ -30,7 +37,36 @@ def no_raw_tab($src):
       message: "raw tab character; write $'\\t' or indent with spaces"
     };
 
-def hits($src): function_keyword, no_raw_tab($src);
+# An expansion outside double quotes. Arithmetic, a C-style for header
+# included, is exempt (the shell does no splitting there), as are the integer
+# specials, a subscript inside another expansion, a heredoc body, and the
+# right-hand side of =~, == and != in [[ ]], where quoting would turn a regex
+# or a glob into a literal.
+def quote_expansions:
+  [
+    paths(objects) as $p
+    | getpath($p) as $n
+    | select($n.Type == "ParamExp")
+    | select(($n.Param.Value // "") | test("^[?#$!]$") | not)
+    | [
+        range(0; $p | length) as $i
+        | getpath($p[:$i]) as $ancestor
+        | select($ancestor | type == "object")
+        | {type: ($ancestor.Type // ""), op: ($ancestor.Op // ""), key: $p[$i]}
+      ] as $up
+    | select($up | any(.type | IN("DblQuoted", "ArithmExp", "ArithmCmd", "CStyleLoop", "ParamExp")) | not)
+    | select($up | any(.key == "Hdoc") | not)
+    | select($up | any(.type == "BinaryTest" and .key == "Y" and (.op | IN("=~", "==", "!="))) | not)
+    | {
+        line: $n.Pos.Line,
+        rule: "quote-expansions",
+        message: ("quote the expansion of " + ($n.Param.Value // "?"))
+      }
+  ]
+  | .[];
+
+
+def hits($src): function_keyword, no_raw_tab($src), quote_expansions;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

@@ -1,3 +1,9 @@
+# The fixtures hold shell source text as single-quoted strings: `${name}` and
+# `$((...))` there are what the gate scans, never something to expand here.
+# Double-quoting them would expand them in the test. Too many sites for per-site
+# disables, so the directive is file-level, as in tests/scanner.bats.
+# shellcheck disable=SC2016 # file-level: the fixtures below are scanned source, not substitutions
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-bash-style"
@@ -236,4 +242,25 @@ function assert_passes() {
   PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial 'FAIL: the canary did not trip function-keyword'
+}
+
+@test "bash style: quote-expansions reports an unquoted expansion as an argument" {
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' 'echo ${name}'
+}
+
+@test "bash style: quote-expansions reports an unquoted expansion in an assignment, a case word and a test operand" {
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' 'other=${name}'
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' 'case ${name} in x) echo PAYLOAD_RAN ;; esac'
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' '[[ -n ${name} ]] && echo PAYLOAD_RAN'
+}
+
+@test "bash style: quote-expansions passes quoted expansions, arithmetic and the integer specials" {
+  assert_passes 'q.sh' 'name=x' 'echo "${name}" "$#" $? $$ $!' 'echo "$((name + 1))"' '((name > 0)) && echo PAYLOAD_RAN'
+}
+
+@test "bash style: quote-expansions leaves the right-hand side of =~, == and != alone" {
+  assert_passes 'q.sh' 're=x' \
+    '[[ "${re}" =~ ${re} ]] && echo PAYLOAD_RAN' \
+    '# shellcheck disable=SC2053 # fixture: a glob on purpose' \
+    '[[ "${re}" == ${re} ]] && echo PAYLOAD_RAN'
 }

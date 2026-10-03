@@ -182,9 +182,15 @@ def quote_heredoc_terminator:
 # Commands that run another command: the flags after them belong to that one.
 def wrappers: ["run", "env", "command", "builtin", "timeout", "nice", "sudo", "exec"];
 
-# Short flags of a wrapper that take the next word as their value (env -u NAME,
-# timeout -k DURATION, nice -n LEVEL, sudo -u USER).
-def wrapper_value_flags: ["-u", "-C", "-S", "-s", "-k", "-n", "-g"];
+# Short flags that take the next word as their value, per wrapper. A flag a
+# wrapper does not list takes none (sudo -n, command -p, bats run -N).
+def wrapper_value_flags: {
+  "nice": ["-n"],
+  "env": ["-u", "-C", "-S"],
+  "timeout": ["-k", "-s"],
+  "sudo": ["-u", "-g", "-C", "-D", "-h", "-p", "-R", "-T", "-U"],
+  "exec": ["-a"]
+};
 
 # A command's words with leading wrappers removed, along with the wrappers'
 # own options, the values those options take, VAR=value words and durations, so
@@ -192,19 +198,21 @@ def wrapper_value_flags: ["-u", "-C", "-S", "-s", "-k", "-n", "-g"];
 # not a plain literal (a variable holding a path) is kept and reads as "".
 def real_words:
   args as $w
-  | {i: 0}
+  | {i: 0, wrapper: "", done: false}
   | until(
-      (.i >= ($w | length))
-      or (
-        ($w[.i].Parts[0].Value // "") as $v
-        | (if .i > 0 then $w[.i - 1].Parts[0].Value // "" else "" end) as $prev
-        | ((wrapper_value_flags | index($prev)) == null)
-          and (
-            ($w[.i].Parts[0].Type != "Lit")
-            or (((wrappers | index($v)) == null) and ($v | test("^-|=|^[0-9]+[smhd]?$") | not))
-          )
-      );
-      .i += 1
+      .done or .i >= ($w | length);
+      .wrapper as $wrapper
+      | ($w[.i].Parts[0].Value // "") as $v
+      | (if .i > 0 then $w[.i - 1].Parts[0].Value // "" else "" end) as $prev
+      | (((wrapper_value_flags[$wrapper] // []) | index($prev)) != null) as $is_value
+      | (
+          $w[.i].Parts[0].Type == "Lit" and (wrappers | index($v)) != null
+        ) as $is_wrapper
+      | if $is_value or $is_wrapper
+          or ($w[.i].Parts[0].Type == "Lit" and ($v | test("^-|=|^[0-9]+[smhd]?$")))
+        then .i += 1 | (if $is_wrapper and ($is_value | not) then .wrapper = $v else . end)
+        else .done = true
+        end
     )
   | $w[.i:];
 

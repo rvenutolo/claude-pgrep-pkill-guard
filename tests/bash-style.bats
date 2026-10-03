@@ -469,3 +469,11 @@ function assert_passes() {
   assert_fires 'o.sh' 'long-options' 1 "head -5 'file'"
   assert_fires 'o.sh' 'long-options' 1 "tail -20 'file'"
 }
+
+@test "bash style: long-options gives each wrapper its own value-taking flags" {
+  assert_fires 'o.sh' 'long-options' 1 "sudo -n grep -q 'x' 'file'"
+  assert_passes 'o.sh' "nice -n 5 grep --quiet 'x' 'file'"
+  assert_fires 'o.sh' 'long-options' 1 "nice -n 5 grep -q 'x' 'file'"
+  assert_passes 'o.sh' "sudo -u root awk -f 'prog.awk'"
+  assert_passes 'o.sh' "timeout -k 5 30 awk -f 'prog.awk'"
+}

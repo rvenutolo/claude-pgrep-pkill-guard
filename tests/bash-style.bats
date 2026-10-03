@@ -325,3 +325,7 @@ function assert_passes() {
 @test "bash style: quote-literal-path passes a glob path, which quoting would break" {
   assert_passes 'p.sh' 'some_command ./*' 'some_command /tmp/*.log'
 }
+
+@test "bash style: no-braces-in-arith passes a braced name after a base prefix" {
+  assert_passes 'a.sh' 'count=08' 'echo "$((10#${count} + 1))"'
+}

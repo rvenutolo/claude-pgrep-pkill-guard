@@ -126,13 +126,20 @@ def plain_braced:
   and (has("Exp") or has("Repl") or has("Slice") or has("Index") or has("Length") or has("Excl") | not);
 
 # ${name} inside $(( )), (( )) or an indexed-array subscript, where the bare
-# name is enough. A command substitution in between resets to string context.
+# name is enough. A command substitution in between resets to string context. A
+# name right after a base prefix (10#${count}) keeps its braces: 10#count is not
+# the base-10 value of $count.
 def no_braces_in_arith:
   assoc_names as $assoc
   | [
       paths(objects) as $p
       | getpath($p) as $n
       | select($n | plain_braced)
+      | select(
+          ($p[-1] | type == "number" and . > 0)
+          and (getpath($p[:-1])[$p[-1] - 1].Value? // "" | endswith("#"))
+          | not
+        )
       | [
           range(0; $p | length) as $i
           | getpath($p[:$i]) as $ancestor

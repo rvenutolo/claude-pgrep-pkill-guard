@@ -338,3 +338,11 @@ function assert_passes() {
   assert_passes 'h.sh' 'cat <<EOF' 'cost \$5' 'EOF'
   assert_passes 'h.sh' 'cat <<EOF' 'a\\b' 'EOF'
 }
+
+@test "bash style: quote-expansions reports an unquoted expansion inside a command substitution inside double quotes" {
+  assert_fires 'q.sh' 'quote-expansions' 2 'path=x' 'echo "$(some_command ${path})"'
+}
+
+@test "bash style: quote-expansions passes a quoted expansion inside a command substitution inside double quotes" {
+  assert_passes 'q.sh' 'path=x' 'echo "$(some_command "${path}")"'
+}

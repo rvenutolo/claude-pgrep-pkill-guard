@@ -41,7 +41,8 @@ def no_raw_tab($src):
 # included, is exempt (the shell does no splitting there), as are the integer
 # specials, a subscript inside another expansion, a heredoc body, and the
 # right-hand side of =~, == and != in [[ ]], where quoting would turn a regex
-# or a glob into a literal.
+# or a glob into a literal. A command or process substitution starts a fresh
+# context: only the ancestors nearer than the nearest one count.
 def quote_expansions:
   [
     paths(objects) as $p
@@ -53,7 +54,9 @@ def quote_expansions:
         | getpath($p[:$i]) as $ancestor
         | select($ancestor | type == "object")
         | {type: ($ancestor.Type // ""), op: ($ancestor.Op // ""), key: $p[$i]}
-      ] as $up
+      ] as $all
+    | ($all | map(.type | IN("CmdSubst", "ProcSubst")) | rindex(true) // -1) as $reset
+    | $all[($reset + 1):] as $up
     | select($up | any(.type | IN("DblQuoted", "ArithmExp", "ArithmCmd", "CStyleLoop", "ParamExp")) | not)
     | select($up | any(.key == "Hdoc") | not)
     | select($up | any(.type == "BinaryTest" and .key == "Y" and (.op | IN("=~", "==", "!="))) | not)

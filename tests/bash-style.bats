@@ -312,3 +312,12 @@ function assert_passes() {
     'echo "$(($(some_command "${count}") / 1000))"'
   assert_passes 'a.sh' 'key=x' 'declare -A seen=()' 'seen["${key}"]=1' 'echo "${seen[${key}]}"'
 }
+
+@test "bash style: quote-heredoc-terminator reports a bare terminator over a body with nothing to expand" {
+  assert_fires 'h.sh' 'quote-heredoc-terminator' 1 'cat <<EOF' 'PAYLOAD_RAN' 'EOF'
+}
+
+@test "bash style: quote-heredoc-terminator passes a quoted terminator and a body that expands" {
+  assert_passes 'h.sh' "cat <<'EOF'" 'PAYLOAD_RAN' 'EOF'
+  assert_passes 'h.sh' 'name=x' 'cat <<EOF' '${name}' 'EOF'
+}

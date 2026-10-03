@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -154,7 +154,17 @@ def no_braces_in_arith:
     ]
   | .[];
 
-def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith;
+# <<EOF over a body that expands nothing: quote the terminator.
+def quote_heredoc_terminator:
+  nodes
+  | select(has("Redirs"))
+  | .Redirs[]
+  | select(.Op == "<<" or .Op == "<<-")
+  | select((.Word.Parts | length) == 1 and .Word.Parts[0].Type == "Lit")
+  | select((.Hdoc.Parts // []) | all(.Type == "Lit"))
+  | {line: .Pos.Line, rule: "quote-heredoc-terminator", message: ("quote the terminator: <<'" + .Word.Parts[0].Value + "'")};
+
+def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

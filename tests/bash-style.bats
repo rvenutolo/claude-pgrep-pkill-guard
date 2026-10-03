@@ -321,3 +321,7 @@ function assert_passes() {
   assert_passes 'h.sh' "cat <<'EOF'" 'PAYLOAD_RAN' 'EOF'
   assert_passes 'h.sh' 'name=x' 'cat <<EOF' '${name}' 'EOF'
 }
+
+@test "bash style: quote-literal-path passes a glob path, which quoting would break" {
+  assert_passes 'p.sh' 'some_command ./*' 'some_command /tmp/*.log'
+}

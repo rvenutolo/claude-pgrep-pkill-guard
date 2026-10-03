@@ -80,13 +80,15 @@ def single_quote_literals:
   | {line: .Pos.Line, rule: "single-quote-literals", message: ("single-quote the literal " + ($text | tojson))};
 
 # A bare word that is plainly a path, passed as a command argument. A redirect
-# target is shell syntax and lives in Redirs, so it never reaches this rule.
+# target is shell syntax and lives in Redirs, so it never reaches this rule. A
+# path holding a glob character is left alone: quoting it would break the glob.
 def quote_literal_path:
   nodes
   | select(.Type == "CallExpr")
   | args[1:][]
   | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
   | select(.Parts[0].Value | test("^(/|\\./|\\.\\./)"))
+  | select(.Parts[0].Value | test("[*?\\[]") | not)
   | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
 
 # name=$(...) or name=$((...)) with no quotes around the substitution.

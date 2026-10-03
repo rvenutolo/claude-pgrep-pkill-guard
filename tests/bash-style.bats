@@ -282,3 +282,12 @@ function assert_passes() {
 @test "bash style: quote-literal-path passes a quoted path and a bare redirect target" {
   assert_passes 'p.sh' "some_command '/etc/os-release' 2> /dev/null < /proc/loadavg"
 }
+
+@test "bash style: quote-subst-in-assign reports a bare command or arithmetic substitution" {
+  assert_fires 's.sh' 'quote-subst-in-assign' 1 'count=$((1 + 1))'
+  assert_fires 's.sh' 'quote-subst-in-assign' 1 'now=$(some_command)'
+}
+
+@test "bash style: quote-subst-in-assign passes the quoted forms" {
+  assert_passes 's.sh' 'count="$((1 + 1))"' 'now="$(some_command)"'
+}

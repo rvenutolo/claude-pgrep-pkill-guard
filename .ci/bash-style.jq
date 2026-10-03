@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -89,7 +89,17 @@ def quote_literal_path:
   | select(.Parts[0].Value | test("^(/|\\./|\\.\\./)"))
   | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
 
-def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path;
+# name=$(...) or name=$((...)) with no quotes around the substitution.
+def quote_subst_in_assign:
+  nodes
+  | select(.Type == "CallExpr" or .Type == "DeclClause")
+  | ((.Assigns // []) + (.Args // []))[]
+  | objects
+  | select(has("Name") and .Value != null)
+  | select((.Value.Parts | length) == 1 and (.Value.Parts[0].Type | IN("ArithmExp", "CmdSubst")))
+  | {line: .Pos.Line, rule: "quote-subst-in-assign", message: ("quote the substitution assigned to " + (.Name.Value // "?"))};
+
+def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

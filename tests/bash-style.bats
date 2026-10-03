@@ -432,3 +432,15 @@ function assert_passes() {
   assert_fires 'e.sh' 'no-echo-e' 1 "echo -ne 'PAYLOAD_RAN'"
   assert_passes 'e.sh' "echo -n 'PAYLOAD_RAN'" "echo 'PAYLOAD_RAN' -e"
 }
+
+@test "bash style: fetch-flags reports curl and wget that read the user's config" {
+  assert_fires 'f.sh' 'fetch-flags' 1 "curl --silent 'https://example.invalid/'"
+  assert_fires 'f.sh' 'fetch-flags' 1 "wget 'https://example.invalid/'"
+  assert_passes 'f.sh' \
+    "curl --disable --fail --silent --location --show-error 'https://example.invalid/'" \
+    "wget --no-config 'https://example.invalid/'"
+}
+
+@test "bash style: fetch-flags passes a lookup of curl or wget, which fetches nothing" {
+  assert_passes 'f.sh' 'command -v curl' 'command -v wget > /dev/null'
+}

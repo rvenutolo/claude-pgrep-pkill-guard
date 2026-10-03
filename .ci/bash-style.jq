@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -291,7 +291,26 @@ def no_echo_e:
     )
   | {line: .Pos.Line, rule: "no-echo-e", message: "use printf with a format string, not echo -e"};
 
-def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e;
+# Non-interactive curl and wget ignore the invoking user's config files. A
+# `command -v curl` lookup fetches nothing and is left alone.
+def fetch_flags:
+  nodes
+  | select(.Type == "CallExpr")
+  | select(([args[1:][] | .Parts[0].Value // ""] | any(IN("-v", "-V"))) and cmdname == "command" | not)
+  | real_words as $w
+  | ($w[0].Parts[0].Value // "") as $cmd
+  | [$w[1:][] | .Parts[0].Value // ""] as $flags
+  | (
+      if $cmd == "curl" then ["--disable", "--fail", "--silent", "--location", "--show-error"]
+      elif $cmd == "wget" then ["--no-config"]
+      else []
+      end
+    ) as $need
+  | ($need - $flags) as $missing
+  | select(($missing | length) > 0)
+  | {line: .Pos.Line, rule: "fetch-flags", message: ($cmd + " is missing " + ($missing | join(" ")))};
+
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

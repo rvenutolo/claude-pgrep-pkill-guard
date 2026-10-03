@@ -1,3 +1,9 @@
+# The fixtures hold shell source text as single-quoted strings: `${name}` and
+# `$((...))` there are what the gate scans, never something to expand here.
+# Double-quoting them would expand them in the test. Too many sites for per-site
+# disables, so the directive is file-level, as in tests/scanner.bats.
+# shellcheck disable=SC2016 # file-level: the fixtures below are scanned source, not substitutions
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-bash-style"
@@ -236,4 +242,117 @@ function assert_passes() {
   PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial 'FAIL: the canary did not trip function-keyword'
+}
+
+@test "bash style: quote-expansions reports an unquoted expansion as an argument" {
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' 'echo ${name}'
+}
+
+@test "bash style: quote-expansions reports an unquoted expansion in an assignment, a case word and a test operand" {
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' 'other=${name}'
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' 'case ${name} in x) echo PAYLOAD_RAN ;; esac'
+  assert_fires 'q.sh' 'quote-expansions' 2 'name=x' '[[ -n ${name} ]] && echo PAYLOAD_RAN'
+}
+
+@test "bash style: quote-expansions passes quoted expansions, arithmetic and the integer specials" {
+  assert_passes 'q.sh' 'name=x' 'echo "${name}" "$#" $? $$ $!' 'echo "$((name + 1))"' '((name > 0)) && echo PAYLOAD_RAN'
+}
+
+@test "bash style: quote-expansions leaves the right-hand side of =~, == and != alone" {
+  assert_passes 'q.sh' 're=x' \
+    '[[ "${re}" =~ ${re} ]] && echo PAYLOAD_RAN' \
+    '# shellcheck disable=SC2053 # fixture: a glob on purpose' \
+    '[[ "${re}" == ${re} ]] && echo PAYLOAD_RAN'
+}
+
+@test "bash style: single-quote-literals reports a double-quoted string with nothing to expand" {
+  assert_fires 'l.sh' 'single-quote-literals' 1 'echo "PAYLOAD_RAN"'
+}
+
+@test "bash style: single-quote-literals passes expansion, an apostrophe, a backslash and a test name" {
+  assert_passes 'l.sh' 'name=x' 'echo "${name} ran"' "echo \"it's inert\"" 'printf "a\nb"'
+  assert_passes 'l.bats' '@test "inert name" {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: quote-literal-path reports a bare path argument" {
+  assert_fires 'p.sh' 'quote-literal-path' 1 'some_command /etc/os-release'
+  assert_fires 'p.sh' 'quote-literal-path' 1 'some_command ./relative'
+}
+
+@test "bash style: quote-literal-path passes a quoted path and a bare redirect target" {
+  assert_passes 'p.sh' "some_command '/etc/os-release' 2> /dev/null < /proc/loadavg"
+}
+
+@test "bash style: quote-subst-in-assign reports a bare command or arithmetic substitution" {
+  assert_fires 's.sh' 'quote-subst-in-assign' 1 'count=$((1 + 1))'
+  assert_fires 's.sh' 'quote-subst-in-assign' 1 'now=$(some_command)'
+}
+
+@test "bash style: quote-subst-in-assign passes the quoted forms" {
+  assert_passes 's.sh' 'count="$((1 + 1))"' 'now="$(some_command)"'
+}
+
+@test "bash style: unquoted-numeric-opt reports a quoted number as an option value" {
+  assert_fires 'n.sh' 'unquoted-numeric-opt' 1 "some_command --fields='1'"
+}
+
+@test "bash style: unquoted-numeric-opt passes a bare number and a quoted word" {
+  assert_passes 'n.sh' "some_command --fields=1 --delimiter=','"
+}
+
+@test "bash style: no-braces-in-arith reports a braced name in arithmetic and in an indexed subscript" {
+  assert_fires 'a.sh' 'no-braces-in-arith' 2 'count=1' 'echo "$((${count} + 1))"'
+  assert_fires 'a.sh' 'no-braces-in-arith' 3 'i=0' 'items=(a b)' 'echo "${items[${i}]}"'
+}
+
+@test "bash style: no-braces-in-arith passes bare names, lengths, operators, nested substitutions and associative keys" {
+  assert_passes 'a.sh' 'count=1' 'items=(a b)' \
+    'echo "$((count + ${#items[@]}))"' \
+    'echo "$((10#${count/./} - 1))"' \
+    'echo "$(($(some_command "${count}") / 1000))"'
+  assert_passes 'a.sh' 'key=x' 'declare -A seen=()' 'seen["${key}"]=1' 'echo "${seen[${key}]}"'
+}
+
+@test "bash style: quote-heredoc-terminator reports a bare terminator over a body with nothing to expand" {
+  assert_fires 'h.sh' 'quote-heredoc-terminator' 1 'cat <<EOF' 'PAYLOAD_RAN' 'EOF'
+}
+
+@test "bash style: quote-heredoc-terminator passes a quoted terminator and a body that expands" {
+  assert_passes 'h.sh' "cat <<'EOF'" 'PAYLOAD_RAN' 'EOF'
+  assert_passes 'h.sh' 'name=x' 'cat <<EOF' '${name}' 'EOF'
+}
+
+@test "bash style: quote-literal-path passes a glob path, which quoting would break" {
+  assert_passes 'p.sh' 'some_command ./*' 'some_command /tmp/*.log'
+}
+
+@test "bash style: no-braces-in-arith passes a braced name after a base prefix" {
+  assert_passes 'a.sh' 'count=08' 'echo "$((10#${count} + 1))"'
+}
+
+@test "bash style: quote-heredoc-terminator passes a backslash-quoted terminator" {
+  assert_passes 'h.sh' 'cat <<\EOF' 'PAYLOAD_RAN' 'EOF'
+}
+
+@test "bash style: quote-heredoc-terminator passes a body whose backslash escapes quoting would change" {
+  assert_passes 'h.sh' 'cat <<EOF' 'cost \$5' 'EOF'
+  assert_passes 'h.sh' 'cat <<EOF' 'a\\b' 'EOF'
+}
+
+@test "bash style: quote-expansions reports an unquoted expansion inside a command substitution inside double quotes" {
+  assert_fires 'q.sh' 'quote-expansions' 2 'path=x' 'echo "$(some_command ${path})"'
+}
+
+@test "bash style: quote-expansions passes a quoted expansion inside a command substitution inside double quotes" {
+  assert_passes 'q.sh' 'path=x' 'echo "$(some_command "${path}")"'
+}
+
+@test "bash style: quote-expansions passes a heredoc body that expands, a C-style for header and an associative subscript" {
+  assert_passes 'q.sh' 'name=x' 'cat <<EOF' '${name}' 'EOF'
+  assert_passes 'q.sh' 'items=(a b)' 'for ((i = 0; i < ${#items[@]}; i++)); do echo PAYLOAD_RAN; done'
+  assert_passes 'q.sh' 'key=x' 'declare -A seen=()' 'echo "${seen[${key}]}"'
+}
+
+@test "bash style: no-braces-in-arith reports a braced name in an indexed assignment subscript" {
+  assert_fires 'a.sh' 'no-braces-in-arith' 3 'i=0' 'items=(a b)' 'items[${i}]=1'
 }

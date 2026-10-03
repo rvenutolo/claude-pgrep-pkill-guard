@@ -356,3 +356,56 @@ function assert_passes() {
 @test "bash style: no-braces-in-arith reports a braced name in an indexed assignment subscript" {
   assert_fires 'a.sh' 'no-braces-in-arith' 3 'i=0' 'items=(a b)' 'items[${i}]=1'
 }
+
+@test "bash style: long-options reports a short flag on a tool that has a long form" {
+  assert_fires 'o.sh' 'long-options' 1 "grep -q 'x' 'file'"
+  assert_fires 'o.sh' 'long-options' 1 "git commit -q -m 'x'"
+}
+
+@test "bash style: long-options sees through wrappers to the real command" {
+  assert_fires 'o.bats' 'long-options' 2 '@test "inert" {' "  run grep -q 'x' 'file'" '}'
+  assert_fires 'o.sh' 'long-options' 1 "env LC_ALL=C timeout 30m sort -u 'file'"
+}
+
+@test "bash style: long-options passes long forms, builtins and tools with no long form" {
+  assert_passes 'o.sh' \
+    "grep --quiet 'x' 'file'" \
+    'read -r line' \
+    'set -Eeuo pipefail' \
+    'command -v some_command' \
+    "git -C 'dir' status" \
+    "find 'dir' -name 'x' -print" \
+    "awk -f 'prog.awk' 'file'"
+}
+
+@test "bash style: long-options leaves flags that are data alone" {
+  # A flag handed to a function defined in the file, or to a command held in a
+  # variable, is input for the thing under test.
+  assert_passes 'o.sh' 'function run_cli() {' '  echo PAYLOAD_RAN' '}' 'run_cli -h'
+  assert_passes 'o.sh' 'tool=some_command' '"${tool}" -h'
+  assert_passes 'o.sh' 'some_command -- -x'
+  assert_passes 'o.sh' "echo 'rm -f inert-string'" "cat <<'EOF'" 'grep -q x' 'EOF'
+}
+
+@test "bash style: long-options allows the macOS short flags only under hooks/ and tests/" {
+  assert_passes 'hooks/o.sh' "mkdir -p 'dir'" "rm -f -- 'file'"
+  assert_passes 'tests/o.bats' '@test "inert" {' "  mkdir -p 'dir'" '}'
+  assert_fires 'o.sh' 'long-options' 1 "mkdir -p 'dir'"
+  assert_fires 'hooks/o.sh' 'long-options' 1 "grep -q 'x' 'file'"
+}
+
+@test "bash style: long-options passes the tools and builtins that have no long form" {
+  assert_passes 'o.sh' \
+    "test -f 'file'" \
+    "bash -c 'echo PAYLOAD_RAN'" \
+    'hash -r' \
+    'alias -p' \
+    "getopts 'ab' opt"
+}
+
+@test "bash style: long-options skips the value a wrapper's own short flag takes" {
+  assert_passes 'o.sh' "env -u SOME_NAME awk -f 'prog.awk'"
+  assert_passes 'o.sh' 'name=x' "env -u \"\${name}\" awk -f 'prog.awk'"
+  assert_passes 'o.sh' "timeout -k 5 30 awk -f 'prog.awk'"
+  assert_fires 'o.sh' 'long-options' 1 'env -u SOME_NAME grep -q x'
+}

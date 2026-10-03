@@ -133,6 +133,7 @@ readonly MARKERS=(
 # @stdout the file's text as a single collapsed line
 function collapsed_text() {
   local -r file="$1"
+  # bash-style allow=long-options: runs on the ambient macOS legs; BSD sed and tr has no long form
   sed -e 's/^[[:space:]]*//' -e 's/^#*[[:space:]]*//' -- "${file}" | tr '\n' ' ' | tr -s '[:space:]' ' '
 }
 

@@ -101,7 +101,8 @@ function main() {
   # shell_files would be a second place for a file to drop out unnoticed. The
   # gate itself fails on an empty list, so no length guard is needed here.
   # The paths are repo-relative, like the shellcheck and shfmt calls above, so
-  # this script runs from the repo root.
+  # this script runs from the repo root, and because the gate's path-scoped
+  # rules match on hooks/ and tests/.
   "${REPO_DIR}/.ci/check-bash-style" "${files[@]}" || rc=1
 
   log 'running gawk --lint over the awk programs'

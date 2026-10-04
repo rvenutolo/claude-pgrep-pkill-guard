@@ -358,8 +358,8 @@ function fixture_jq() {
 
 @test "invariants: a surplus argument is rejected, not ignored" {
   # Every positional is optional, so an extra argument can only be a typo -- a
-  # misplaced flag, a stray path. Swallowing it silently would run the default
-  # check and report success on something nobody asked for. Exit 2 rather than
+  # misplaced flag, a stray path. Swallowing it silently would run the check
+  # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
   run "${REPO_DIR}/.ci/check-manifest-invariants" "${REPO_DIR}" extra
   assert_failure 2

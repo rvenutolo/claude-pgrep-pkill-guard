@@ -173,9 +173,9 @@ function main() {
     fi
   done
 
-  # An empty scan is never a clean pass. Every gate in this repo says so, and
-  # here it would mean the trap pattern stopped matching the family rather than
-  # that the family stopped installing traps.
+  # An empty scan is never a clean pass: here it would mean the trap pattern
+  # stopped matching the family rather than that the family stopped installing
+  # traps.
   if ((${#scripts[@]} == 0)); then
     printf 'FAIL: no tracked file installs a reporting ERR trap — an empty scan is not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the

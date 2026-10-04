@@ -39,9 +39,9 @@ function gate_in() {
 }
 
 # Every case needs nothing but bash and git -- deliberately no coreutils long
-# options and no Nix -- so the ambient macOS compat legs run this suite for real
-# rather than skipping it. Hence no devShell skip here, the same as
-# tests/shell-shebangs.bats.
+# options and no Nix -- so the ambient `compat (macos, homebrew bash)` leg runs
+# this suite for real rather than skipping it. Hence no devShell skip here, the
+# same as tests/shell-shebangs.bats.
 #
 # The first case is the exception that keeps the rest honest: it runs the gate
 # in the real repo, so a fixture that has drifted away from the shape the

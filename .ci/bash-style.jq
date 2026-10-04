@@ -2,8 +2,11 @@
 # data: no shebang, no executable bit.
 #
 # Input is one `shfmt --to-json` tree. Each rule is a function that emits zero
-# or more {line, rule, message} objects. `report` runs every rule, drops the
-# hits an exception marker covers, and prints one line per remaining hit.
+# or more {line, rule, message} objects. Besides the tree, `report` and `hits`
+# receive the file's display path, its source text, and whether the file is
+# sourced or executed; a rule takes the ones it needs as parameters. `report`
+# runs every rule, drops the hits an exception marker covers, and prints one
+# line per remaining hit.
 #
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.

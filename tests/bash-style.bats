@@ -1302,3 +1302,27 @@ function assert_passes() {
 @test "bash style: comment-missing-path skips an elided path" {
   assert_passes 'c.sh' '# The parts under hooks/.../no-such.sh are elided here.' 'echo PAYLOAD_RAN'
 }
+
+@test "bash style: comment-missing-function reports a namespaced function nothing defines" {
+  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls nothing::defined_here first.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# Calls classify::classify_command first.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-function accepts a function the scanned file defines" {
+  # The prefix is a variable, so no `function <name>::<part>` line sits in this
+  # suite for the gate to find in the repository: only the scanned file defines it.
+  local -r ns='scanned'
+  assert_passes 'c.sh' \
+    "# @description Inert; ${ns}::helper is this function." '# @noargs' \
+    "function ${ns}::helper() {" '  echo PAYLOAD_RAN' '}'
+  assert_passes 'c.sh' \
+    "# Calls ${ns}::later, defined below." \
+    '# @description Inert.' '# @noargs' \
+    "function ${ns}::later() {" '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: comment-missing-function reports a name defined nowhere even beside a defined one" {
+  assert_fires 'c.sh' 'comment-missing-function' 1 \
+    '# @description Calls classify::classify_command, then nothing::defined_here.' '# @noargs' \
+    'function caller() {' '  echo PAYLOAD_RAN' '}'
+}

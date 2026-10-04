@@ -738,9 +738,16 @@ def declared_names:
     | args[] | .Name.Value? // empty
   ];
 
+# Names the shell owns and a function sets as part of a builtin protocol
+# (completion, getopts, read, prompts): a caller never reads them as the
+# function's output. PATH is not here: a caller reads the new value.
+def shell_owned_names:
+  ["IFS", "RANDOM", "SECONDS", "OPTIND", "OPTARG", "OPTERR", "COMPREPLY", "REPLY", "BASH_REMATCH", "PIPESTATUS",
+   "LINENO", "FUNCNAME", "EPOCHSECONDS", "PS1", "PS2", "PS3", "PS4", "PROMPT_COMMAND"];
+
 # A function that assigns an upper-case global documents it with @set. Names
 # the function, or a function around it, declares itself (local, declare) are
-# not globals. Bash specials are left to the function's description.
+# not globals. The names in shell_owned_names are skipped.
 def shdoc_set:
   . as $root
   | documented_functions
@@ -761,7 +768,7 @@ def shdoc_set:
         )
       | {name: (.Name.Value // ""), line: .Pos.Line}
       | select(.name | test("^[A-Z][A-Z0-9_]*$"))
-      | select(.name | IN("IFS", "RANDOM", "SECONDS", "OPTIND") | not)
+      | select(.name | IN(shell_owned_names[]) | not)
       | select(.name as $n | ($declared + $documented) | index($n) | not)
     ]
   | unique_by(.name)[]

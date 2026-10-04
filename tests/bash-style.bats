@@ -1218,3 +1218,11 @@ function assert_passes() {
     '# @description Inert.' '# @arg $1 name_ref the variable to fill' \
     'function fill() {' '  local -n out' '  out="$1"' '  out=1' '}'
 }
+
+@test "bash style: shdoc-set exempts names the shell owns, but not PATH" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function complete_it() {' "  COMPREPLY=('a')" '  REPLY=1' '  PS4=+' '}'
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function widens() {' '  PATH="/x:${PATH}"' '}'
+}

@@ -33,15 +33,15 @@ function loops::loop_context() {
       local i="$((${#stack[@]} - 1))" found='none'
       while ((i >= 0)); do
         case "${stack[i]}" in
-          cond)
+          'cond')
             found='cond'
             break
             ;;
-          body)
+          'body')
             found='body'
             break
             ;;
-          head)
+          'head')
             found='none'
             break
             ;;

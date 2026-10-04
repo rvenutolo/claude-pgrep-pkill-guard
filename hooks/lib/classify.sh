@@ -151,11 +151,11 @@ function classify::classify_invocation() {
   fi
   context="$(loops::loop_context "${tokens}" "${idx}")"
   case "${context}" in
-    cond)
+    'cond')
       printf 'deny:loop\t%s\n' "${name}"
       return 0
       ;;
-    body)
+    'body')
       if consumption::result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}" \
         && loops::body_has_terminator "${tokens}" "${idx}"; then
         printf 'deny:loop\t%s\n' "${name}"
@@ -198,7 +198,7 @@ function classify::classify_wrapper_payloads() {
         printf '%s\n' "${payload_verdict}"
         return 0
         ;;
-      warn) lifted=1 ;;
+      'warn') lifted=1 ;;
     esac
   done < <(wrappers::shell_wrapper_payloads "${command}" "${tokens}")
   if ((lifted == 1)); then
@@ -261,7 +261,7 @@ function classify::classify_command() {
           printf '%s\n' "${invocation_finding}"
           return 0
           ;;
-        warn) verdict='warn' ;;
+        'warn') verdict='warn' ;;
       esac
     fi
   done <<< "${invocations}"
@@ -279,7 +279,7 @@ function classify::classify_command() {
   local payload_finding
   if payload_finding="$(classify::classify_wrapper_payloads "${command}" "${tokens}" "${depth}")"; then
     case "${payload_finding}" in
-      warn) verdict='warn' ;;
+      'warn') verdict='warn' ;;
       *)
         printf '%s\n' "${payload_finding}"
         return 0
@@ -430,7 +430,7 @@ function classify::inspect_command() {
   fi
 
   case "${decision}" in
-    warn)
+    'warn')
       messages::emit_warn "${WARN_MESSAGE}"
       ;;
     *)

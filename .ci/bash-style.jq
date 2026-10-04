@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -529,7 +529,37 @@ def functions_grouped($sourced):
   | select(.Cmd.Type != "FuncDecl")
   | {line: .Pos.Line, rule: "functions-grouped", message: "move this statement above the first function or below the last"};
 
-def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced);
+# `set -Eeuo pipefail`, whole.
+def is_strict_pragma:
+  .Type == "CallExpr"
+  and cmdname == "set"
+  and ([args[1:][] | .Parts[0].Value // ""] == ["-Eeuo", "pipefail"]);
+
+# A command that only assigns IFS: `IFS=...`, or `readonly IFS=...` and the
+# like. `IFS=... read` sets it for one command and does not count.
+def is_ifs_assignment:
+  (.Type == "CallExpr" and (args | length) == 0 and any(.Assigns[]?; .Name.Value == "IFS"))
+  or (.Type == "DeclClause" and any(args[]; .Name.Value? == "IFS"));
+
+# An executed script sets strict mode and then the strict IFS, both before its
+# first function.
+def strict_prologue($sourced):
+  select($sourced | not)
+  | top as $stmts
+  | select(($stmts | length) > 0)
+  | ([$stmts | to_entries[] | select(.value.Cmd.Type == "FuncDecl") | .key] | first // ($stmts | length)) as $first_function
+  | [$stmts[:$first_function][] | .Cmd] as $head
+  | ([$head | to_entries[] | select(.value | is_strict_pragma) | .key] | first) as $set
+  | ([$head | to_entries[] | select(.value | is_ifs_assignment) | .key] | first) as $ifs
+  | if $set == null then
+      {line: 1, rule: "strict-prologue", message: "set -Eeuo pipefail before the first function"}
+    elif $ifs == null or $ifs < $set then
+      {line: $stmts[$set].Pos.Line, rule: "strict-prologue", message: "IFS=$'\\n\\t' after set -Eeuo pipefail, before the first function"}
+    else
+      empty
+    end;
+
+def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced);
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

@@ -835,3 +835,54 @@ function assert_passes() {
   run "${CHECK}" "${FIXTURE}"
   assert_success
 }
+
+@test "bash style: strict-prologue reports a missing pragma and a missing IFS" {
+  write_script 'p.sh' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] set -Eeuo pipefail"
+  write_script 'p.sh' 'set -Eeuo pipefail' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] IFS="
+}
+
+@test "bash style: strict-prologue allows shopt and a version guard between the pragma and IFS" {
+  write_script 'p.sh' \
+    'set -Eeuo pipefail' \
+    'if ((BASH_VERSINFO[0] < 4)); then' '  exit 1' 'fi' \
+    'shopt -s inherit_errexit' \
+    "IFS=\$'\\n\\t'" \
+    'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: strict-prologue wants -E, and reads the pragma after a version guard" {
+  write_script 'p.sh' 'set -euo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] set -Eeuo pipefail"
+  write_script 'p.sh' \
+    'if ((BASH_VERSINFO[0] < 4)); then' '  exit 1' 'fi' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: strict-prologue reports IFS set before the pragma and a one-command IFS" {
+  write_script 'p.sh' "IFS=\$'\\n\\t'" 'set -Eeuo pipefail' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:2: [strict-prologue] IFS="
+  write_script 'p.sh' 'set -Eeuo pipefail' "IFS=\$'\\n\\t' read -r line" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] IFS="
+}
+
+@test "bash style: strict-prologue accepts IFS assigned with readonly" {
+  write_script 'p.sh' 'set -Eeuo pipefail' "readonly IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}

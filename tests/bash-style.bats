@@ -707,3 +707,23 @@ function assert_passes() {
 @test "bash style: no-subst-or-exit passes an assignment with no substitution and a fallback that is not exit" {
   assert_passes 's.sh' 'value=5 || exit 1' 'value="$(some_command)" || other_command'
 }
+
+@test "bash style: eval-comment reports an eval with no comment beside it" {
+  assert_fires 's.sh' 'eval-comment' 1 "eval 'echo PAYLOAD_RAN'"
+  assert_passes 's.sh' '# fixture: the string is a literal built above' "eval 'echo PAYLOAD_RAN'"
+}
+
+@test "bash style: eval-comment takes a comment on the same line" {
+  assert_passes 's.sh' "eval 'echo PAYLOAD_RAN' # fixture: the string is a literal"
+}
+
+@test "bash style: eval-comment reports an eval behind a wrapper or inside a substitution" {
+  assert_fires 's.sh' 'eval-comment' 1 "builtin eval 'echo PAYLOAD_RAN'"
+  assert_fires 's.sh' 'eval-comment' 1 "command eval 'echo PAYLOAD_RAN'"
+  assert_fires 's.sh' 'eval-comment' 1 "value=\"\$(eval 'echo PAYLOAD_RAN')\""
+}
+
+@test "bash style: eval-comment does not accept a comment two lines up and passes a lookup" {
+  assert_fires 's.sh' 'eval-comment' 3 '# fixture: too far away' 'some_command' "eval 'echo PAYLOAD_RAN'"
+  assert_passes 's.sh' 'command -v eval > /dev/null'
+}

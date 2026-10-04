@@ -869,11 +869,21 @@ def comment_missing_function($functions):
   | {line: $line, rule: "comment-missing-function", message: ("no function is named " + $ref)};
 
 # Wording that only makes sense next to the commit that added it. An issue
-# reference on the same line anchors it and is allowed.
+# reference on the same line anchors it and is allowed. `before this
+# gate|change|commit` is ordinary present-tense ordering ("lint runs before
+# this gate") unless a past-tense verb follows in the same sentence, which
+# makes the commit the referent; the other phrases have no present-tense use.
 def comment_commit_relative:
   comments
   | select(.text | test("#[0-9]+") | not)
-  | (.text | match("\\b(until now|before this (gate|change|commit)|when this was written|the commit before this one|as of this commit)\\b"; "i") | .string) as $phrase
+  | (
+      .text
+      | match(
+          "\\b(until now|when this was written|the commit before this one|as of this commit)\\b|\\bbefore this (gate|change|commit)\\b[^.]*\\b(was|were|had|did|used to|could|would)\\b";
+          "i"
+        )
+      | .string
+    ) as $phrase
   | {line, rule: "comment-commit-relative", message: ("state it in the present tense, or anchor it to an issue: \"" + $phrase + "\"")};
 
 # Deferred work is marked TODO:, upper-case with a colon.

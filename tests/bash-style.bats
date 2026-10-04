@@ -1407,3 +1407,17 @@ function assert_passes() {
   assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::no_such_function first.' 'echo PAYLOAD_RAN'
   assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::classify_commands first.' 'echo PAYLOAD_RAN'
 }
+
+@test "bash style: comment-commit-relative passes present-tense ordering prose" {
+  assert_passes 'c.sh' \
+    '# Lint runs before this gate, so the tree is formatted.' \
+    '# Before this change takes effect the cache is empty.' \
+    '# Before this gate (#72) there was no check.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative reports before-this with a past-tense verb" {
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this gate there was no check.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this change it used to hang.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this commit nobody could tell.' 'echo PAYLOAD_RAN'
+}

@@ -61,17 +61,17 @@ readonly REPO_DIR="${SCRIPT_DIR}/.."
 # returned. Empty until `main` creates it.
 WORK_DIR=''
 
-# A snippet, parsed and never run, that breaks one rule for each shape of tree
-# the rules read: a function declaration, a declaration clause and its
-# variant, a parameter expansion with its default and its subscript, a
-# double-quoted literal, a redirect, a test operator, both sides of a `||`, an
-# assignment of a substitution, an arithmetic command, a loop header, a case
-# item's operator, a heredoc and a comment; and one text rule, the raw tab. A
-# rule whose tree key a different shfmt renames matches nothing and would pass
-# every file, so check_canary fails the gate when any rule in CANARY_RULES is
-# missing from the snippet's report. A key whose loss makes a rule report
-# more, not less (a heredoc's body, a redirect's descriptor number, the
-# `function` keyword flag), is not proved here: that fails on real files.
+# A snippet, parsed and never run, that breaks the rules in CANARY_RULES, and
+# one text rule, the raw tab. It proves the tree keys those rules read on
+# their way to a hit: a rule whose key a different shfmt renames matches
+# nothing and would pass every file, so check_canary fails the gate when a
+# demanded rule is missing from the snippet's report.
+#
+# It does not prove every key the rules read. A rename of any of these goes
+# unnoticed here: `Hdoc`, `Array`, `Elems`, `N`, `RsrvWord`, `InPos`,
+# `Negated`, `Background`, `Slice`, `Repl`, `Length`, `Excl`, the keys a
+# marker's reach is read from (`ThenPos`, `DoPos`, `Patterns`, `End`), and
+# `Description`, which only a bats file has.
 # shellcheck disable=SC2016 # the canary is scanned source, never expanded
 readonly -a CANARY=(
   '# FIXME'
@@ -84,7 +84,11 @@ readonly -a CANARY=(
   '  count="$(some_command)" || exit 1'
   '  export CANARY_GLOBAL=1'
   '  ((count))'
+  '  if some_command; then'
+  '    ((count))'
+  '  fi'
   '  for item; do'
+  '    ((count))'
   '    case x in'
   '      x) cat <<EOF ;&'
   'PAYLOAD_RAN'
@@ -99,6 +103,11 @@ readonly -a CANARY_RULES=(
   'quote-subst-in-assign' 'no-subst-or-exit' 'shdoc-set' 'bare-arith-stmt' 'explicit-for-in' 'no-fallthrough'
   'quote-heredoc-terminator' 'todo-form'
 )
+# The canary lines that must each trip bare-arith-stmt: the statement in the
+# function body, the one in the `if` body and the one in the loop body. The
+# rule finds each through a different key, and its id alone cannot say which
+# of the three came back.
+readonly -a CANARY_BARE_ARITH_LINES=(10 12 15)
 
 # The shape of a namespaced function definition, for grep.
 readonly NAMESPACED_FUNCTION='function [a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*'
@@ -252,14 +261,15 @@ function helper_functions() {
   printf '%s\n' "${matches}" | sed --expression='s/^.*function //'
 }
 
-# @description Prove the pipeline still reports every violation the canary
-#              holds, one per shape of tree the rules read.
+# @description Prove the pipeline still reports the violations the canary
+#              holds: every rule in CANARY_RULES, and bare-arith-stmt on each
+#              line in CANARY_BARE_ARITH_LINES.
 # @noargs
 # @stderr a FAIL line when the canary is not reported
 # @exitcode 0 the canary came back
 # @exitcode 1 it did not
 function check_canary() {
-  local out rule
+  local out rule line
   if ! out="$(printf '%s\n' "${CANARY[@]}" | shfmt --filename 'canary.sh' --to-json \
     | run_rules 'canary' <(printf '%s\n' "${CANARY[@]}") 'true' '' '' '')"; then
     printf 'FAIL: the canary could not be scanned\n' >&2
@@ -268,6 +278,13 @@ function check_canary() {
   for rule in "${CANARY_RULES[@]}"; do
     if [[ "${out}" != *"[${rule}]"* ]]; then
       printf 'FAIL: the canary did not trip %s\n' "${rule}" >&2
+      printf '      shfmt or jq is not the version the rules were written for.\n' >&2
+      return 1
+    fi
+  done
+  for line in "${CANARY_BARE_ARITH_LINES[@]}"; do
+    if [[ "${out}" != *"canary:${line}: [bare-arith-stmt]"* ]]; then
+      printf 'FAIL: the canary did not trip bare-arith-stmt at its line %s\n' "${line}" >&2
       printf '      shfmt or jq is not the version the rules were written for.\n' >&2
       return 1
     fi

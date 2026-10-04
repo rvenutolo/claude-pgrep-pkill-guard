@@ -594,11 +594,12 @@ a failed canary, and a git that cannot list or search the repository. A missing
 
 The gate runs only in the devShell, because the tree's shape belongs to the
 `shfmt` the flake pins. Before it scans anything it feeds itself a snippet that
-must trip one rule for each shape of tree the rules read, plus one rule that
-reads the source text. A rule whose tree key a different `shfmt` renames
-matches nothing, which would pass every file; the missing rule fails the gate
-there instead, loudly. A key whose loss makes a rule report more, not less, is
-not proved by the snippet: that failure shows up on real files.
+must trip a fixed list of rules, one of them a rule that reads the source text.
+A rule whose tree key a different `shfmt` renames matches nothing, which would
+pass every file; the missing rule fails the gate there instead, loudly. The
+snippet proves the keys those rules read on their way to a hit, not every key
+the rules read: the comment above `CANARY` in the gate names the ones a rename
+of which goes unnoticed (`Hdoc` and `Array` among them).
 
 ### Line coverage
 

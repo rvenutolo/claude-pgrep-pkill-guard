@@ -441,10 +441,10 @@ function assert_marker_stops_at_header() {
   assert_output --partial 'FAIL: the canary did not trip function-keyword'
 }
 
-@test "bash style: the canary catches a renamed key in each tree shape the rules read" {
+@test "bash style: the canary catches a rename of each tree key its rules read" {
   local key
   for key in 'Type' 'Stmts' 'Cmd' 'Args' 'Assigns' 'Parts' 'Value' 'Name' 'Param' 'Exp' 'Index' 'Op' 'X' 'Y' \
-    'Redirs' 'Word' 'Items' 'Loop' 'Body' 'Variant' 'Comments' 'Hash' 'Text' 'Pos' 'Line'; do
+    'Redirs' 'Word' 'Items' 'Loop' 'Then' 'Do' 'Rbrace' 'Body' 'Variant' 'Comments' 'Hash' 'Text' 'Pos' 'Line'; do
     assert_canary_catches_renamed_key "${key}"
   done
 }

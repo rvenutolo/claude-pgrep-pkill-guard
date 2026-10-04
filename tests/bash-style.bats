@@ -502,3 +502,16 @@ function assert_passes() {
   assert_fires 't.sh' 'no-lexical-compare' 1 '[[ 1 > 2 ]] && echo PAYLOAD_RAN'
   assert_passes 't.sh' '((1 < 2)) && echo PAYLOAD_RAN'
 }
+
+@test "bash style: no-one-line-case reports a case squeezed onto one line" {
+  assert_fires 't.sh' 'no-one-line-case' 1 'case x in x) echo PAYLOAD_RAN ;; esac'
+  assert_passes 't.sh' 'case x in' '  x) echo PAYLOAD_RAN ;;' 'esac'
+}
+
+@test "bash style: no-one-line-case reports a one-line case inside a one-line function" {
+  assert_fires 't.sh' 'no-one-line-case' 1 'function f() { case x in x) echo PAYLOAD_RAN ;; esac; }'
+}
+
+@test "bash style: no-one-line-case passes an expanded case inside a function" {
+  assert_passes 't.sh' 'function f() {' '  case x in' '    x) echo PAYLOAD_RAN ;;' '  esac' '}'
+}

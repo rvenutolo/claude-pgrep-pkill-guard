@@ -399,7 +399,7 @@ function assert_passes() {
     "test -f 'file'" \
     "bash -c 'echo PAYLOAD_RAN'" \
     'hash -r' \
-    'alias -p' \
+    'unalias -a' \
     "getopts 'ab' opt"
 }
 
@@ -476,4 +476,162 @@ function assert_passes() {
   assert_fires 'o.sh' 'long-options' 1 "nice -n 5 grep -q 'x' 'file'"
   assert_passes 'o.sh' "sudo -u root awk -f 'prog.awk'"
   assert_passes 'o.sh' "timeout -k 5 30 awk -f 'prog.awk'"
+}
+
+@test "bash style: test-double-equals reports = inside [[ ]]" {
+  assert_fires 't.sh' 'test-double-equals' 1 "[[ 'a' = 'b' ]] && echo PAYLOAD_RAN"
+  assert_passes 't.sh' "[[ 'a' == 'b' ]] && echo PAYLOAD_RAN"
+}
+
+@test "bash style: empty-string-test reports a comparison against the empty string" {
+  assert_fires 't.sh' 'empty-string-test' 2 'name=x' "[[ \"\${name}\" == '' ]] && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'empty-string-test' 2 'name=x' "[[ \"\${name}\" != \"\" ]] && echo PAYLOAD_RAN"
+  assert_passes 't.sh' 'name=x' '[[ -z "${name}" ]] && echo PAYLOAD_RAN'
+}
+
+@test "bash style: empty-string-test sees the empty string on the left" {
+  assert_fires 't.sh' 'empty-string-test' 2 'name=x' "[[ '' == \"\${name}\" ]] && echo PAYLOAD_RAN"
+}
+
+@test "bash style: empty-string-test passes a string that is not empty" {
+  assert_passes 't.sh' 'name=x' "[[ \"\${name}\" == ' ' ]] && echo PAYLOAD_RAN" '[[ "${name}" == "${name}" ]] && echo PAYLOAD_RAN'
+}
+
+@test "bash style: no-lexical-compare reports < and > inside [[ ]]" {
+  assert_fires 't.sh' 'no-lexical-compare' 1 '[[ 1 < 2 ]] && echo PAYLOAD_RAN'
+  assert_fires 't.sh' 'no-lexical-compare' 1 '[[ 1 > 2 ]] && echo PAYLOAD_RAN'
+  assert_passes 't.sh' '((1 < 2)) && echo PAYLOAD_RAN'
+}
+
+@test "bash style: no-one-line-case reports a case squeezed onto one line" {
+  assert_fires 't.sh' 'no-one-line-case' 1 'case x in x) echo PAYLOAD_RAN ;; esac'
+  assert_passes 't.sh' 'case x in' '  x) echo PAYLOAD_RAN ;;' 'esac'
+}
+
+@test "bash style: no-one-line-case reports a one-line case inside a one-line function" {
+  assert_fires 't.sh' 'no-one-line-case' 1 'function f() { case x in x) echo PAYLOAD_RAN ;; esac; }'
+}
+
+@test "bash style: no-one-line-case passes an expanded case inside a function" {
+  assert_passes 't.sh' 'function f() {' '  case x in' '    x) echo PAYLOAD_RAN ;;' '  esac' '}'
+}
+
+@test "bash style: no-fallthrough reports ;& and ;;&" {
+  assert_fires 't.sh' 'no-fallthrough' 2 'case x in' '  x) echo PAYLOAD_RAN ;&' '  y) echo PAYLOAD_RAN ;;' 'esac'
+  assert_fires 't.sh' 'no-fallthrough' 2 'case x in' '  x) echo PAYLOAD_RAN ;;&' '  y) echo PAYLOAD_RAN ;;' 'esac'
+}
+
+@test "bash style: no-fallthrough passes a case that ends every arm with ;;" {
+  assert_passes 't.sh' 'case x in' '  x) echo PAYLOAD_RAN ;;' '  y) echo PAYLOAD_RAN ;;' 'esac'
+}
+
+@test "bash style: no-fallthrough passes a last arm with no terminator" {
+  assert_passes 't.sh' 'case x in' '  x) echo PAYLOAD_RAN ;;' '  y) echo PAYLOAD_RAN' 'esac'
+}
+
+@test "bash style: explicit-for-in reports the implicit positional loop" {
+  assert_fires 't.sh' 'explicit-for-in' 1 'for arg; do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'for arg in "$@"; do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: explicit-for-in reports the implicit loop inside a function" {
+  assert_fires 't.sh' 'explicit-for-in' 2 'function f() {' '  for arg; do' '    echo PAYLOAD_RAN' '  done' '}'
+}
+
+@test "bash style: no-for-in-subst reports a loop over a command substitution" {
+  assert_fires 't.sh' 'no-for-in-subst' 1 'for line in $(some_command); do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: no-for-in-subst reports a substitution mixed with other words" {
+  assert_fires 't.sh' 'no-for-in-subst' 1 "for line in 'first' \$(some_command); do" '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-for-in-subst' 1 'for line in $(some_command)-suffix; do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: no-for-in-subst passes a quoted substitution and a plain list" {
+  assert_passes 't.sh' 'for line in "$(some_command)"; do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' "for line in 'first' 'second'; do" '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: no-pipe-while reports a pipe into while" {
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'while read -r line; do' '  echo PAYLOAD_RAN' 'done < <(some_command)'
+}
+
+@test "bash style: no-pipe-while reports |& and until and a longer pipeline" {
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command |& while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | until read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | other_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: no-pipe-while reports a loop wrapped in a block or subshell" {
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | { while read -r line; do echo PAYLOAD_RAN; done; }'
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | (while read -r line; do echo PAYLOAD_RAN; done)'
+}
+
+@test "bash style: no-pipe-while passes a loop wrapped in a block that is not piped into" {
+  assert_passes 't.sh' '{ while read -r line; do echo PAYLOAD_RAN; done; } < <(some_command)'
+}
+
+@test "bash style: no-pipe-while passes a loop whose output is piped on" {
+  assert_passes 't.sh' 'while read -r line; do' '  echo PAYLOAD_RAN' 'done < <(some_command) | other_command'
+}
+
+@test "bash style: source-not-dot reports the dot command" {
+  assert_fires 't.sh' 'source-not-dot' 1 ". 'lib.sh'"
+  assert_passes 't.sh' "source 'lib.sh'"
+}
+
+@test "bash style: source-not-dot reports the dot command behind a wrapper" {
+  assert_fires 't.sh' 'source-not-dot' 1 "builtin . 'lib.sh'"
+  assert_fires 't.sh' 'source-not-dot' 1 "command . 'lib.sh'"
+}
+
+@test "bash style: no-let-expr reports let and expr" {
+  assert_fires 't.sh' 'no-let-expr' 1 'let count=1'
+  assert_fires 't.sh' 'no-let-expr' 1 'count="$(expr 1 + 1)"'
+}
+
+@test "bash style: no-let-expr reports expr behind a wrapper" {
+  assert_fires 't.sh' 'no-let-expr' 1 'count="$(command expr 1 + 1)"'
+}
+
+@test "bash style: no-let-expr passes a lookup of let or expr" {
+  assert_passes 't.sh' 'command -v expr > /dev/null' 'command -v let > /dev/null'
+}
+
+@test "bash style: no-alias reports an alias" {
+  assert_fires 't.sh' 'no-alias' 1 "alias greet='echo PAYLOAD_RAN'"
+  assert_fires 't.sh' 'no-alias' 1 "builtin alias greet='echo PAYLOAD_RAN'"
+}
+
+@test "bash style: no-alias passes a lookup of alias" {
+  assert_passes 't.sh' 'command -v alias > /dev/null'
+}
+
+@test "bash style: bare-arith-stmt reports (( )) as a whole statement" {
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'count=0' '((count += 1))'
+  assert_passes 't.sh' 'count=0' \
+    '((count += 1)) || true # fixture: zero is fine' \
+    'if ((count > 0)); then' '  echo PAYLOAD_RAN' 'fi' \
+    'count="$((count + 1))"'
+}
+
+@test "bash style: bare-arith-stmt reports (( )) in every kind of body" {
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'if true; then' '  ((count++))' 'fi'
+  assert_fires 't.sh' 'bare-arith-stmt' 4 'if false; then' '  echo PAYLOAD_RAN' 'else' '  ((count++))' 'fi'
+  assert_fires 't.sh' 'bare-arith-stmt' 4 'if false; then' '  echo PAYLOAD_RAN' 'elif true; then' '  ((count++))' 'fi'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'while true; do' '  ((count++))' 'done'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'until false; do' '  ((count++))' 'done'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'for i in 1 2; do' '  ((count++))' 'done'
+  assert_fires 't.sh' 'bare-arith-stmt' 3 'case x in' '  x)' '    ((count++))' '    ;;' 'esac'
+  assert_fires 't.sh' 'bare-arith-stmt' 1 '( ((count++)) )'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'function f() {' '  ((count++))' '}'
+}
+
+@test "bash style: bare-arith-stmt passes (( )) used as a condition or with a reason" {
+  assert_passes 't.sh' 'while ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'until ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'if ((count > 0)); then' '  echo PAYLOAD_RAN' 'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
+  assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
+  assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
 }

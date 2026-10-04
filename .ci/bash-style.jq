@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -325,7 +325,117 @@ def fetch_flags:
   | select(($missing | length) > 0)
   | {line: .Pos.Line, rule: "fetch-flags", message: ($cmd + " is missing " + ($missing | join(" ")))};
 
-def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags;
+# [[ a = b ]]: write ==.
+def test_double_equals:
+  nodes
+  | select(.Type == "BinaryTest" and .Op == "=")
+  | {line: .Pos.Line, rule: "test-double-equals", message: "use == for equality inside [[ ]]"};
+
+# A word that is exactly '' or "".
+def is_empty_word:
+  (.Parts // []) as $parts
+  | ($parts | length) == 1
+    and ($parts[0].Type | IN("SglQuoted", "DblQuoted"))
+    and (($parts[0].Value // "") == "")
+    and (($parts[0].Parts // []) | length) == 0;
+
+# [[ "${x}" == '' ]], on either side: write -z or -n.
+def empty_string_test:
+  nodes
+  | select(.Type == "BinaryTest" and (.Op | IN("==", "!=", "=")))
+  | select((.X | is_empty_word) or (.Y | is_empty_word))
+  | {line: .Pos.Line, rule: "empty-string-test", message: "test emptiness with -z or -n"};
+
+# < and > inside [[ ]] compare strings, not numbers.
+def no_lexical_compare:
+  nodes
+  | select(.Type == "BinaryTest" and (.Op == "<" or .Op == ">"))
+  | {line: .Pos.Line, rule: "no-lexical-compare", message: ("use (( )) for a numeric comparison, not " + .Op + " in [[ ]]")};
+
+# case ... esac squeezed onto one line.
+def no_one_line_case:
+  nodes
+  | select(.Type == "CaseClause" and .Pos.Line == .End.Line)
+  | {line: .Pos.Line, rule: "no-one-line-case", message: "expand the case, or write the single test as [[ ]]"};
+
+# ;& and ;;& fall through.
+def no_fallthrough:
+  nodes
+  | select(.Type == "CaseClause")
+  | (.Items // [])[]
+  | select(.Op != ";;")
+  | {line: .Pos.Line, rule: "no-fallthrough", message: ("write explicit cases, not " + .Op)};
+
+# for x; do: say what is iterated.
+def explicit_for_in:
+  nodes
+  | select(.Type == "ForClause")
+  | .Loop
+  | select(.Type == "WordIter" and (has("InPos") | not))
+  | {line: .Pos.Line, rule: "explicit-for-in", message: "write for x in \"$@\""};
+
+# for x in $(cmd), alone or among other words: the output is word-split. Read
+# it into an array with mapfile. A quoted "$(cmd)" is one word and is left
+# alone.
+def no_for_in_subst:
+  nodes
+  | select(.Type == "ForClause")
+  | .Loop
+  | select(.Type == "WordIter")
+  | (.Items // [])[]
+  | select((.Parts // []) | any(.Type == "CmdSubst"))
+  | {line: .Pos.Line, rule: "no-for-in-subst", message: "iterate command output with mapfile -t, not for x in $(...)"};
+
+# cmd | while ...: the loop runs in a subshell and loses its assignments. A
+# loop wrapped in { } or ( ) on the right of the pipe is the same loop.
+def no_pipe_while:
+  nodes
+  | select(.Type == "BinaryCmd" and (.Op == "|" or .Op == "|&"))
+  | select(
+      .Y.Cmd.Type == "WhileClause"
+      or (.Y.Cmd.Type | IN("Block", "Subshell")) and any(.Y.Cmd.Stmts[]?; .Cmd.Type == "WhileClause")
+    )
+  | {line: .Y.Pos.Line, rule: "no-pipe-while", message: "feed the loop with < <(cmd), not a pipe"};
+
+# The literal first word of a command once leading wrappers are removed, or ""
+# when it is not a plain word or the command only looks the name up
+# (`command -v name` runs nothing).
+def real_cmdname:
+  if cmdname == "command" and ([args[1:][] | .Parts[0].Value // ""] | any(IN("-v", "-V")))
+  then ""
+  else (real_words[0].Parts[0].Value // "")
+  end;
+
+# `. file`: write source.
+def source_not_dot:
+  nodes
+  | select(.Type == "CallExpr" and real_cmdname == ".")
+  | {line: .Pos.Line, rule: "source-not-dot", message: "use source, not ."};
+
+# let and expr: write (( )).
+def no_let_expr:
+  nodes
+  | select(.Type == "LetClause" or (.Type == "CallExpr" and (real_cmdname | IN("let", "expr"))))
+  | {line: .Pos.Line, rule: "no-let-expr", message: "use (( )) for arithmetic"};
+
+# alias: write a function.
+def no_alias:
+  nodes
+  | select(.Type == "CallExpr" and real_cmdname == "alias")
+  | {line: .Pos.Line, rule: "no-alias", message: "define a function, not an alias"};
+
+# (( expr )) as a whole statement, in any body: exit status 1 when the value is
+# zero. A condition (if, elif, while, until) is left alone, and so is the left
+# side of && and ||: neither trips errexit.
+def bare_arith_stmt:
+  nodes
+  | [.Stmts?, .Then?, .Do?][]
+  | arrays
+  | .[]
+  | select(.Cmd.Type == "ArithmCmd")
+  | {line: .Pos.Line, rule: "bare-arith-stmt", message: "a bare (( )) fails under set -e when it evaluates to zero"};
+
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

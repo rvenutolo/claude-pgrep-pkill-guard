@@ -994,3 +994,30 @@ function assert_passes() {
   run "${CHECK}" 't.sh'
   assert_success
 }
+
+@test "bash style: main-last reports exec main and an exit after main" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'exec main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] the last statement is main"
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'main "$@"' 'exit'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:7: [main-last] the last statement is main"
+}
+
+@test "bash style: the layout rules pass entry code between the last function and main" {
+  write_script 'e.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'if (($# == 0)); then' '  exit 1' 'fi' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}

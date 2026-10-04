@@ -345,7 +345,7 @@ function classify::repeat_tier_reason() {
   # whole command substitution off errexit's radar for its entire dynamic
   # extent, so nothing inside repeat::repeat_check can trip the top-level ERR trap. Do
   # not turn this into a plain assignment.
-  reason="$(repeat::repeat_check "${session_id}" "${keys}")" || reason=''
+  reason="$(repeat::repeat_check "${session_id}" "${keys}")" || reason='' # a failed check is no repeat; see above
   [[ -n "${reason}" ]] || return 1
   printf '%s\n' "${reason}"
   return 0

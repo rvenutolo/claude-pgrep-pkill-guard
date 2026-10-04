@@ -21,7 +21,11 @@
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
 # @exitcode 2 any arguments other than none or `--report DIR`
-# @stderr the usage line, on exit 2
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
+# @stderr a `[<script>] <message>` banner before each step, a warning naming
+#         each untracked file, `one or more checks failed` on exit 1, and the
+#         usage line on exit 2
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

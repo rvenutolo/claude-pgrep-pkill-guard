@@ -9,7 +9,10 @@
 #              failing category.
 # @noargs
 # @exitcode 0 every linter passed
-# @exitcode 1 at least one linter failed, or a file list came up empty
+# @exitcode 1 at least one linter failed, a file list came up empty, or the
+#             .github directory is missing
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

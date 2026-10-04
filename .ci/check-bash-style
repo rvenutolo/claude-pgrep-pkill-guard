@@ -6,9 +6,11 @@
 #              the repository's tracked paths, its namespaced function names
 #              and the functions its test helpers define, is handed to the
 #              rules in .ci/bash-style.jq, which is where the rule list lives.
-#              The three lists come from the repository that holds this
-#              script, whatever files are named, so a comment or a helper call
-#              in any file is checked against the same repository.
+#              The lists come from the repository that holds this script,
+#              whatever files are named, so a comment or a helper call in any
+#              file is checked against the same repository. The function names
+#              also include the ones the named files define, so a fixture's own
+#              function counts.
 #
 #              The files are scanned concurrently, as many at a time as the
 #              machine has processors. Each scan writes to its own log in a
@@ -352,6 +354,8 @@ function main() {
     return 1
   fi
   if ! functions="$(namespaced_functions "$@")" || ! helpers="$(helper_functions)"; then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
     trap - ERR
     return 1
   fi

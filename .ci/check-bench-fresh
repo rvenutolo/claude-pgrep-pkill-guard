@@ -33,13 +33,15 @@
 #                   (FAIL when BENCH_FRESH_STRICT is set, else WARN and exit 0)
 #                4. absent from the object store               -> SKIP
 #                5. reachable, hooks/ changed since, but the NET difference is
-#                   only the release-please version line       -> pass
+#                   empty, or only the release-please version line -> pass
 #
 #              Verdict 5 exists because release-please owns a line inside
 #              hooks/. Without it every release PR is red on a gate whose only
 #              remedy is an hour of wall-clock benchmarking, and the release
 #              cannot merge until someone pays it -- for a string the hook
-#              prints and never branches on. See exempt_reason.
+#              prints and never branches on. A change that was reverted before
+#              HEAD passes the same way: the two trees are byte-identical. See
+#              exempt_reason.
 #
 #              Strict only on a release. Every verdict is computed the same
 #              way in both modes; what BENCH_FRESH_STRICT changes is whether
@@ -92,6 +94,8 @@
 #             set, the report is missing or malformed, or the hooks/ history could
 #             not be read
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when no fixture directory is
+#             given and the repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

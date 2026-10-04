@@ -31,6 +31,7 @@
 # @exitcode 1 ImageMagick is missing, the source capture is not readable, or
 #             the host bash is older than 4.4
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing status of git, mktemp or an ImageMagick step
 
 set -Eeuo pipefail
 # This script runs under the HOST bash -- ImageMagick is deliberately outside

@@ -1266,3 +1266,39 @@ function assert_passes() {
     '# A .claude directory is the author-local one.' \
     'echo PAYLOAD_RAN'
 }
+
+@test "bash style: comment-missing-path reports a repo path no tracked file has" {
+  assert_fires 'c.sh' 'comment-missing-path' 1 '# Parts live in hooks/lib/no-such-part.sh.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path reports a path hyphenated across two comment lines" {
+  assert_fires 'c.sh' 'comment-missing-path' 1 \
+    '# Same trade .ci/run-plugin-' \
+    '# validate makes for the CLI.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path passes real files, real directories, globs and placeholders" {
+  assert_passes 'c.sh' \
+    '# hooks/lib/classify.sh sits under hooks/lib, with hooks/lib/*.sh,' \
+    '# .ci/check-<name> and tests/${suite}.bats beside it.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path ignores punctuation around a real path" {
+  assert_passes 'c.sh' \
+    '# See hooks/lib/classify.sh, `.ci/check-bash-style`, (docs/architecture.md),' \
+    '# tests/cases/ and .github/workflows/ci.yml.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path ignores a path inside a URL or another repository" {
+  assert_passes 'c.sh' \
+    '# See https://example.com/docs/no-such-page and' \
+    '# anthropics/claude-code/.github/workflows/no-such.yml for the upstream.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path skips an elided path" {
+  assert_passes 'c.sh' '# The parts under hooks/.../no-such.sh are elided here.' 'echo PAYLOAD_RAN'
+}

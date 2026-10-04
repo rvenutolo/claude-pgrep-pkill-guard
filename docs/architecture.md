@@ -544,6 +544,14 @@ sourced; otherwise the tracked mode decides (`100644` sourced, `100755`
 executed), the same fact `.ci/check-executable-bit` enforces. A file outside a
 git tree, or one git does not track, falls back to its on-disk executable bit.
 
+The comment-reference rules also get the repository's tracked paths and every
+namespaced function name defined in it, so a comment that cites a path or a
+function is checked against what a clone contains. Both lists come from the
+repository that holds the gate, whatever files it is asked to scan, and the
+function list also covers the scanned files themselves. A comment that cites a
+path under an untracked directory (`.claude/`, `docs/superpowers/`) is a
+violation, because a clone cannot follow it.
+
 One site can be excused with a comment on the statement, or alone on the line
 above it:
 

@@ -598,3 +598,31 @@ function assert_passes() {
 @test "bash style: no-alias passes a lookup of alias" {
   assert_passes 't.sh' 'command -v alias > /dev/null'
 }
+
+@test "bash style: bare-arith-stmt reports (( )) as a whole statement" {
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'count=0' '((count += 1))'
+  assert_passes 't.sh' 'count=0' \
+    '((count += 1)) || true # fixture: zero is fine' \
+    'if ((count > 0)); then' '  echo PAYLOAD_RAN' 'fi' \
+    'count="$((count + 1))"'
+}
+
+@test "bash style: bare-arith-stmt reports (( )) in every kind of body" {
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'if true; then' '  ((count++))' 'fi'
+  assert_fires 't.sh' 'bare-arith-stmt' 4 'if false; then' '  echo PAYLOAD_RAN' 'else' '  ((count++))' 'fi'
+  assert_fires 't.sh' 'bare-arith-stmt' 4 'if false; then' '  echo PAYLOAD_RAN' 'elif true; then' '  ((count++))' 'fi'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'while true; do' '  ((count++))' 'done'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'until false; do' '  ((count++))' 'done'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'for i in 1 2; do' '  ((count++))' 'done'
+  assert_fires 't.sh' 'bare-arith-stmt' 3 'case x in' '  x)' '    ((count++))' '    ;;' 'esac'
+  assert_fires 't.sh' 'bare-arith-stmt' 1 '( ((count++)) )'
+  assert_fires 't.sh' 'bare-arith-stmt' 2 'function f() {' '  ((count++))' '}'
+}
+
+@test "bash style: bare-arith-stmt passes (( )) used as a condition or with a reason" {
+  assert_passes 't.sh' 'while ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'until ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'if ((count > 0)); then' '  echo PAYLOAD_RAN' 'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
+  assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
+  assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
+}

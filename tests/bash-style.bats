@@ -496,3 +496,9 @@ function assert_passes() {
 @test "bash style: empty-string-test passes a string that is not empty" {
   assert_passes 't.sh' 'name=x' "[[ \"\${name}\" == ' ' ]] && echo PAYLOAD_RAN" '[[ "${name}" == "${name}" ]] && echo PAYLOAD_RAN'
 }
+
+@test "bash style: no-lexical-compare reports < and > inside [[ ]]" {
+  assert_fires 't.sh' 'no-lexical-compare' 1 '[[ 1 < 2 ]] && echo PAYLOAD_RAN'
+  assert_fires 't.sh' 'no-lexical-compare' 1 '[[ 1 > 2 ]] && echo PAYLOAD_RAN'
+  assert_passes 't.sh' '((1 < 2)) && echo PAYLOAD_RAN'
+}

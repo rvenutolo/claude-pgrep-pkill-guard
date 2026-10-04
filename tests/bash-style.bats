@@ -84,7 +84,7 @@ function assert_passes() {
 }
 
 @test "bash style: function-keyword passes a function defined with the keyword" {
-  assert_passes 'kw.sh' 'function greet() {' '  echo PAYLOAD_RAN' '}'
+  assert_passes 'kw.sh' '# @description Inert.' '# @noargs' 'function greet() {' '  echo PAYLOAD_RAN' '}'
 }
 
 @test "bash style: no-raw-tab reports a tab inside a heredoc body" {
@@ -102,7 +102,7 @@ function assert_passes() {
 
 @test "bash style: a clean file passes" {
   write_fixture 'clean.sh' \
-    'function greet() {' \
+    '# @description Inert.' '# @noargs' 'function greet() {' \
     '  echo PAYLOAD_RAN' \
     '}'
   run "${CHECK}" "${FIXTURE}"
@@ -147,6 +147,7 @@ function assert_passes() {
 
 @test "bash style: a marker on the same line excuses the violation" {
   write_fixture 'marked.sh' \
+    '# @description Inert.' '# @noargs' \
     'greet() { # bash-style allow=function-keyword: fixture reason' \
     '  echo PAYLOAD_RAN' \
     '}'
@@ -156,6 +157,7 @@ function assert_passes() {
 
 @test "bash style: a marker on the line above excuses the violation" {
   write_fixture 'above.sh' \
+    '# @description Inert.' '# @noargs' \
     '# bash-style allow=function-keyword: fixture reason' \
     'greet() {' \
     '  echo PAYLOAD_RAN' \
@@ -408,7 +410,7 @@ function assert_passes() {
 @test "bash style: long-options leaves flags that are data alone" {
   # A flag handed to a function defined in the file, or to a command held in a
   # variable, is input for the thing under test.
-  assert_passes 'o.sh' 'function run_cli() {' '  echo PAYLOAD_RAN' '}' 'run_cli -h'
+  assert_passes 'o.sh' '# @description Inert.' '# @noargs' 'function run_cli() {' '  echo PAYLOAD_RAN' '}' 'run_cli -h'
   assert_passes 'o.sh' 'tool=some_command' '"${tool}" -h'
   assert_passes 'o.sh' 'some_command -- -x'
   assert_passes 'o.sh' "echo 'rm -f inert-string'" "cat <<'EOF'" 'grep -q x' 'EOF'
@@ -538,11 +540,13 @@ function assert_passes() {
 }
 
 @test "bash style: no-one-line-case reports a one-line case inside a one-line function" {
-  assert_fires 't.sh' 'no-one-line-case' 1 'function f() { case x in x) echo PAYLOAD_RAN ;; esac; }'
+  assert_fires 't.sh' 'no-one-line-case' 3 \
+    '# @description Inert.' '# @noargs' 'function f() { case x in x) echo PAYLOAD_RAN ;; esac; }'
 }
 
 @test "bash style: no-one-line-case passes an expanded case inside a function" {
-  assert_passes 't.sh' 'function f() {' '  case x in' '    x) echo PAYLOAD_RAN ;;' '  esac' '}'
+  assert_passes 't.sh' \
+    '# @description Inert.' '# @noargs' 'function f() {' '  case x in' '    x) echo PAYLOAD_RAN ;;' '  esac' '}'
 }
 
 @test "bash style: no-fallthrough reports ;& and ;;&" {
@@ -564,7 +568,8 @@ function assert_passes() {
 }
 
 @test "bash style: explicit-for-in reports the implicit loop inside a function" {
-  assert_fires 't.sh' 'explicit-for-in' 2 'function f() {' '  for arg; do' '    echo PAYLOAD_RAN' '  done' '}'
+  assert_fires 't.sh' 'explicit-for-in' 4 \
+    '# @description Inert.' '# @noargs' 'function f() {' '  for arg; do' '    echo PAYLOAD_RAN' '  done' '}'
 }
 
 @test "bash style: no-for-in-subst reports a loop over a command substitution" {
@@ -655,7 +660,7 @@ function assert_passes() {
   assert_fires 't.sh' 'bare-arith-stmt' 2 'for i in 1 2; do' '  ((count++))' 'done'
   assert_fires 't.sh' 'bare-arith-stmt' 3 'case x in' '  x)' '    ((count++))' '    ;;' 'esac'
   assert_fires 't.sh' 'bare-arith-stmt' 1 '( ((count++)) )'
-  assert_fires 't.sh' 'bare-arith-stmt' 2 'function f() {' '  ((count++))' '}'
+  assert_fires 't.sh' 'bare-arith-stmt' 4 '# @description Inert.' '# @noargs' 'function f() {' '  ((count++))' '}'
 }
 
 @test "bash style: bare-arith-stmt passes (( )) used as a condition or with a reason" {
@@ -664,7 +669,8 @@ function assert_passes() {
   assert_passes 't.sh' \
     'if ((count > 0)); then' '  echo PAYLOAD_RAN' \
     'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
-  assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
+  assert_passes 't.sh' \
+    '# @description Inert.' '# @noargs' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
   assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
 }
 
@@ -779,11 +785,11 @@ function assert_passes() {
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
     'function main() {' '  echo PAYLOAD_RAN' '}' \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'main "$@"'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] main is the last function defined"
+  assert_output --partial "FAIL: ${FIXTURE}:8: [main-last] main is the last function defined"
 }
 
 @test "bash style: main-last reports an executed script that does not end in main" {
@@ -799,11 +805,11 @@ function assert_passes() {
 @test "bash style: main-last reports a lone helper and a main call that drops the arguments" {
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'helper'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:3: [main-last] main is the last function defined"
+  assert_output --partial "FAIL: ${FIXTURE}:5: [main-last] main is the last function defined"
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
     'function main() {' '  echo PAYLOAD_RAN' '}' \
@@ -816,7 +822,7 @@ function assert_passes() {
 @test "bash style: the layout rules pass a well-formed executed script, one with no functions, and any sourced file" {
   write_script 'ok.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'function main() {' '  helper' '}' \
     'main "$@"' '# a trailing comment'
   run "${CHECK}" "${FIXTURE}"
@@ -824,35 +830,38 @@ function assert_passes() {
   write_script 'flat.sh' 'set -Eeuo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
   run "${CHECK}" "${FIXTURE}"
   assert_success
-  assert_passes 'lib.sh' 'function helper() {' '  echo PAYLOAD_RAN' '}' 'echo PAYLOAD_RAN'
-  assert_passes 'suite.bats' 'function helper() {' '  echo PAYLOAD_RAN' '}' '@test "inert" {' '  helper' '}'
+  assert_passes 'lib.sh' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' 'echo PAYLOAD_RAN'
+  assert_passes 'suite.bats' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '@test "inert" {' '  helper' '}'
 }
 
 @test "bash style: functions-grouped reports a statement between two functions" {
   write_script 'g.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'echo PAYLOAD_RAN' \
     'function main() {' '  helper' '}' \
     'main "$@"'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+  assert_output --partial "FAIL: ${FIXTURE}:8: [functions-grouped]"
 }
 
 @test "bash style: functions-grouped reports a readonly between functions and allows a comment there" {
   write_script 'g.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'readonly LATE=1' \
     'function main() {' '  helper' '}' \
     'main "$@"'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+  assert_output --partial "FAIL: ${FIXTURE}:8: [functions-grouped]"
   write_script 'g.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     '# a comment between functions' \
     'function main() {' '  helper' '}' \
     'main "$@"'

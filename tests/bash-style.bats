@@ -1140,3 +1140,34 @@ function assert_passes() {
     '  function inner() {' '    COUNT=1' '  }' \
     '  inner' '  echo "${COUNT}"' '}'
 }
+
+@test "bash style: shdoc-stderr reports a body that writes to fd 2 without @stderr" {
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN >&2' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' '# @stderr the marker' 'function warns() {' '  echo PAYLOAD_RAN >&2' '}'
+}
+
+@test "bash style: shdoc-stderr reports 1>&2, a heredoc to fd 2 and /dev/stderr" {
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN 1>&2' '}'
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' "  cat <<'EOF' >&2" '  PAYLOAD_RAN' 'EOF' '}'
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN > /dev/stderr' '}'
+}
+
+@test "bash style: shdoc-stderr passes a function that only calls a logger or merges 2 into 1" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function calls() {' '  log PAYLOAD_RAN' '  some_command 2>&1' '  some_command 2> /dev/null' '}'
+}
+
+@test "bash style: shdoc-stderr leaves a nested function's stderr to that function" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function outer() {' \
+    '  # @description Inert.' '  # @noargs' '  # @stderr the marker' \
+    '  function inner() {' '    echo PAYLOAD_RAN >&2' '  }' \
+    '  inner' '}'
+}

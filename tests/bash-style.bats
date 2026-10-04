@@ -1253,3 +1253,16 @@ function assert_passes() {
     '# @exitcode 1 a violation' \
     'echo PAYLOAD_RAN'
 }
+
+@test "bash style: comment-untracked-ref reports a file under an untracked directory" {
+  assert_fires 'c.sh' 'comment-untracked-ref' 1 '# The plan is docs/superpowers/plans/thing.md.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-untracked-ref' 1 '# See .claude/CLAUDE.md.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# docs/superpowers/ is untracked, so it is skipped.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-untracked-ref passes a sentence that only names the directory" {
+  assert_passes 'c.sh' \
+    '# The gate never reads `.claude/`; it is untracked, like (docs/superpowers/).' \
+    '# A .claude directory is the author-local one.' \
+    'echo PAYLOAD_RAN'
+}

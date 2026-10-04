@@ -87,18 +87,6 @@ def single_quote_literals:
   | select(.Pos.Line as $l | $test_lines | index($l) | not)
   | {line: .Pos.Line, rule: "single-quote-literals", message: ("single-quote the literal " + ($text | tojson))};
 
-# A bare word that is plainly a path, passed as a command argument. A redirect
-# target is shell syntax and lives in Redirs, so it never reaches this rule. A
-# path holding a glob character is left alone: quoting it would break the glob.
-def quote_literal_path:
-  nodes
-  | select(.Type == "CallExpr")
-  | args[1:][]
-  | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
-  | select(.Parts[0].Value | test("^(/|\\./|\\.\\./)"))
-  | select(.Parts[0].Value | test("[*?\\[]") | not)
-  | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
-
 # name=$(...) or name=$((...)) with no quotes around the substitution.
 def quote_subst_in_assign:
   nodes
@@ -221,6 +209,22 @@ def real_words:
         end
     )
   | $w[.i:];
+
+# A bare word that is plainly a path, passed as a command argument. A redirect
+# target is shell syntax and lives in Redirs, so it never reaches this rule. A
+# path holding a glob character is left alone: quoting it would break the glob.
+# The command word is not an argument, wherever it sits: in `run timeout 5
+# ./tool`, the path is the command the wrappers run.
+def quote_literal_path:
+  nodes
+  | select(.Type == "CallExpr")
+  | real_words[0] as $command
+  | args[1:][]
+  | select(. != $command)
+  | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
+  | select(.Parts[0].Value | test("^(/|\\./|\\.\\./)"))
+  | select(.Parts[0].Value | test("[*?\\[]") | not)
+  | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
 
 # Short flags with no long form on any platform. "*" allows every flag: shell
 # builtins, and tools whose whole option syntax is single-dash.

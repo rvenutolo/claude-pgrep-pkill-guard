@@ -482,6 +482,12 @@ function assert_marker_stops_at_header() {
   assert_fires 'p.sh' 'quote-literal-path' 1 'some_command ./relative'
 }
 
+@test "bash style: quote-literal-path leaves the command word alone, behind wrappers too" {
+  assert_passes 'p.sh' './tool --flag' 'run ./tool --flag' 'run timeout 5 ./tool --flag'
+  assert_fires 'p.sh' 'quote-literal-path' 1 'run ./tool ./relative'
+  assert_fires 'p.sh' 'quote-literal-path' 1 'env --chdir=x timeout 5 ./tool /etc/os-release'
+}
+
 @test "bash style: quote-literal-path passes a quoted path and a bare redirect target" {
   assert_passes 'p.sh' "some_command '/etc/os-release' 2> /dev/null < /proc/loadavg"
 }

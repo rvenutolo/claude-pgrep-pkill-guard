@@ -96,7 +96,7 @@ function run_rules() {
 #              define, so a comment may name a function from a file the run is
 #              not scanning, and a fixture's own function counts.
 # @arg $@ paths the files named on the command line
-# @stdout one function name per line, `name::part`, duplicates included
+# @stdout one function name per line, written `<namespace>::<name>`, duplicates included
 function namespaced_functions() {
   {
     # `git grep` has no long form for its pattern option `-e`, and no long

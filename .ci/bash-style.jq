@@ -886,11 +886,17 @@ def comment_commit_relative:
     ) as $phrase
   | {line, rule: "comment-commit-relative", message: ("state it in the present tense, or anchor it to an issue: \"" + $phrase + "\"")};
 
-# Deferred work is marked TODO:, upper-case with a colon.
+# Deferred work is marked TODO:, upper-case with a colon. Only a marker shape
+# is a finding: an upper-case TODO, FIXME or XXX word not followed directly by
+# a colon (FIXME: and XXX: included, since the form is TODO:), or a lower or
+# mixed case todo: or fixme:. Prose such as "a todo item" or "xxx" as filler
+# is not a marker.
 def todo_form:
   comments
-  | select(.text | test("\\b(todo|fixme|xxx)\\b"; "i"))
-  | select(.text | test("\\bTODO:") | not)
+  | select(
+      (.text | test("\\bTODO\\b(?!:)|\\b(FIXME|XXX)\\b"))
+      or ([.text | match("\\b(todo|fixme):"; "gi") | .string] | any(. != "TODO:"))
+    )
   | {line, rule: "todo-form", message: "mark deferred work as TODO:"};
 
 # An executed script that calls mktemp arms an EXIT trap somewhere, so the

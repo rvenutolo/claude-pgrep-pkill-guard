@@ -1421,3 +1421,23 @@ function assert_passes() {
   assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this change it used to hang.' 'echo PAYLOAD_RAN'
   assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this commit nobody could tell.' 'echo PAYLOAD_RAN'
 }
+
+@test "bash style: todo-form passes prose that is not a marker" {
+  assert_passes 'c.sh' \
+    '# Add a todo item to the list; xxx stands in for a name here.' \
+    '# The mastodon client; TODO: tidy this' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form reports an upper-case marker not followed directly by a colon" {
+  assert_fires 'c.sh' 'todo-form' 1 '# TODO tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# TODO - tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# FIXME: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# XXX: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# XXX tidy this' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form reports a lower or mixed case marker with a colon" {
+  assert_fires 'c.sh' 'todo-form' 1 '# Todo: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# fixme: tidy this' 'echo PAYLOAD_RAN'
+}

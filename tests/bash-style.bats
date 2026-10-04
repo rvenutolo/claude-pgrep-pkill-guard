@@ -1074,3 +1074,27 @@ function assert_passes() {
     '  function inner() {' '    echo "$1"' '  }' \
     '  inner PAYLOAD_RAN' '}'
 }
+
+@test "bash style: shdoc-arg-name reports a local named differently from its @arg" {
+  assert_fires 'd.sh' 'shdoc-arg-name' 4 \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function renamed() {' '  local -r other="$1"' '  echo "${other}"' '}'
+}
+
+@test "bash style: shdoc-arg-name reports a renamed bind through a default or a plain assignment" {
+  assert_fires 'd.sh' 'shdoc-arg-name' 4 \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function renamed() {' '  local -r other="${1:-}"' '  echo "${other}"' '}'
+  assert_fires 'd.sh' 'shdoc-arg-name' 5 \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function renamed() {' '  local other' '  other="$1"' '  echo "${other}"' '}'
+}
+
+@test "bash style: shdoc-arg-name passes a matching bind and lets a nameref differ" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function bound() {' '  local -r name="$1"' '  echo "${name}"' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 out_name the variable to fill' \
+    'function fill() {' '  local -n out="$1"' '  out=1' '}'
+}

@@ -551,3 +551,18 @@ function assert_passes() {
   assert_passes 't.sh' 'for line in "$(some_command)"; do' '  echo PAYLOAD_RAN' 'done'
   assert_passes 't.sh' "for line in 'first' 'second'; do" '  echo PAYLOAD_RAN' 'done'
 }
+
+@test "bash style: no-pipe-while reports a pipe into while" {
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'while read -r line; do' '  echo PAYLOAD_RAN' 'done < <(some_command)'
+}
+
+@test "bash style: no-pipe-while reports |& and until and a longer pipeline" {
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command |& while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | until read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | other_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: no-pipe-while passes a loop whose output is piped on" {
+  assert_passes 't.sh' 'while read -r line; do' '  echo PAYLOAD_RAN' 'done < <(some_command) | other_command'
+}

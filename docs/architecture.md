@@ -571,10 +571,11 @@ One comment may hold several markers, each introduced by its own
 excused from more than one rule. Each is judged alone.
 
 A marker reaches every line of a simple command or pipeline. Above a compound
-statement (a function, a `case`, an `if`, a loop, a block, a subshell) it
-reaches the header only: the opening line, through the `case` word or the
-`then` or `do`, so a flag in the condition is covered and the body is not. One
-marker therefore never excuses a whole function.
+statement (a function, a bats test, a `case` or one of its arms, an `if`, a
+loop, a block, a subshell) it reaches the header only: the opening line,
+through the `case` word, the arm's pattern, or the `then` or `do`, so a flag in
+the condition is covered and the body is not. One marker therefore never
+excuses a whole function.
 
 A marker that does not follow that form, has no reason, names an id no rule
 has, or has nothing to excuse is itself a violation, so an exception cannot
@@ -588,7 +589,8 @@ the logs in argument order once every scan has ended, so the output is the same
 whichever scan finishes first. A scan that dies without a verdict is reported
 as a file that could not be scanned, never as a pass. A file that fails is a
 `FAIL:` line and exit 1; so is an empty file list, a path that cannot be read,
-and a git that cannot list the repository. A missing `shfmt` or `jq` is exit 2.
+a failed canary, and a git that cannot list or search the repository. A missing
+`shfmt` or `jq` is exit 2.
 
 The gate runs only in the devShell, because the tree's shape belongs to the
 `shfmt` the flake pins. Before it scans anything it feeds itself a snippet that

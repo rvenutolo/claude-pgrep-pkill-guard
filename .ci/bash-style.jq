@@ -6,8 +6,8 @@
 # receive the file's display path, its source text, whether the file is
 # sourced or executed, the repository's tracked paths, the namespaced function
 # names defined anywhere and the function names the test helpers define; a rule
-# takes the ones it needs as parameters. `report` runs every rule, drops the hits an exception marker
-# covers, and prints one line per remaining hit.
+# takes the ones it needs as parameters. `report` runs every rule, drops the
+# hits an exception marker covers, and prints one line per remaining hit.
 #
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.

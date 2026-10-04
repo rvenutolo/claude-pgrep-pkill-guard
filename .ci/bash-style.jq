@@ -426,13 +426,14 @@ def no_alias:
 
 # (( expr )) as a whole statement, in any body: exit status 1 when the value is
 # zero. A condition (if, elif, while, until) is left alone, and so is the left
-# side of && and ||: neither trips errexit, and neither does a negated one.
+# side of && and ||: neither trips errexit, and neither does a negated or a
+# background statement.
 def bare_arith_stmt:
   nodes
   | [.Stmts?, .Then?, .Do?][]
   | arrays
   | .[]
-  | select(.Cmd.Type == "ArithmCmd" and ((.Negated // false) | not))
+  | select(.Cmd.Type == "ArithmCmd" and ((.Negated // false) | not) and ((.Background // false) | not))
   | {line: .Pos.Line, rule: "bare-arith-stmt", message: "a bare (( )) fails under set -e when it evaluates to zero"};
 
 # || true, || :, || var=, || var='' and || printf '' swallow a failure without

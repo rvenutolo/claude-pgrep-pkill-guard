@@ -640,6 +640,10 @@ function assert_passes() {
   assert_passes 't.sh' '! ((count))'
 }
 
+@test "bash style: bare-arith-stmt passes a background statement" {
+  assert_passes 't.sh' '((count)) &'
+}
+
 @test "bash style: blank-fallback-comment reports a blank fallback with no reason on its line" {
   assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || true'
   assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || :'

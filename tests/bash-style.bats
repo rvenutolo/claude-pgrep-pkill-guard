@@ -477,3 +477,8 @@ function assert_passes() {
   assert_passes 'o.sh' "sudo -u root awk -f 'prog.awk'"
   assert_passes 'o.sh' "timeout -k 5 30 awk -f 'prog.awk'"
 }
+
+@test "bash style: test-double-equals reports = inside [[ ]]" {
+  assert_fires 't.sh' 'test-double-equals' 1 "[[ 'a' = 'b' ]] && echo PAYLOAD_RAN"
+  assert_passes 't.sh' "[[ 'a' == 'b' ]] && echo PAYLOAD_RAN"
+}

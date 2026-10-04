@@ -436,6 +436,12 @@ def bare_arith_stmt:
   | select(.Cmd.Type == "ArithmCmd" and ((.Negated // false) | not) and ((.Background // false) | not))
   | {line: .Pos.Line, rule: "bare-arith-stmt", message: "a bare (( )) fails under set -e when it evaluates to zero"};
 
+# An assignment of nothing: `name=`, `name=''`, `name=""` or `name=()`.
+def is_empty_assign:
+  if has("Array") then ((.Array.Elems // []) | length) == 0
+  else (.Value // {}) | (has("Parts") | not) or is_empty_word
+  end;
+
 # || true, || :, || var=, || var='' and || printf '' swallow a failure without
 # naming it: they need a reason on the same line. A fallback that substitutes a
 # named sentinel is its own explanation.
@@ -449,7 +455,7 @@ def blank_fallback_comment:
   | ($w[0].Parts[0].Value // "") as $cmd
   | select(
       ($cmd | IN("true", ":"))
-      or ($cmd == "" and ($w | length) == 0 and ($assigns | length) == 1 and (($assigns[0].Value // {}) | (has("Parts") | not) or is_empty_word))
+      or ($cmd == "" and ($w | length) == 0 and ($assigns | length) == 1 and ($assigns[0] | is_empty_assign))
       or ($cmd == "printf" and ($w[1] | is_empty_word))
     )
   | select(.Y.Pos.Line as $l | $commented | index($l) | not)

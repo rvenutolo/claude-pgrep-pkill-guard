@@ -650,6 +650,11 @@ function assert_passes() {
   assert_fires 's.sh' 'blank-fallback-comment' 1 "value=\"\$(some_command)\" || value=''"
 }
 
+@test "bash style: blank-fallback-comment reads only an empty assignment as blank" {
+  assert_passes 's.sh' "value=\"\$(some_command)\" || items=('a')"
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || items=()'
+}
+
 @test "bash style: blank-fallback-comment reports every spelling of a blank fallback" {
   assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || value='
   assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || value=""'

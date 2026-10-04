@@ -9,15 +9,15 @@ function setup() {
   while IFS=$'\t' read -r cmd_json field mode needle_json; do
     [[ -z "${cmd_json}" ]] && continue
     count="$((count + 1))"
-    command="$(jq --raw-output . <<< "${cmd_json}")"
-    needle="$(jq --raw-output . <<< "${needle_json}")"
+    command="$(jq --raw-output '.' <<< "${cmd_json}")"
+    needle="$(jq --raw-output '.' <<< "${needle_json}")"
     json="$(run_hook "${command}")"
 
     # field selects which part of the response the assertion is about.
     case "${field}" in
-      reason) haystack="$(reason_of "${json}")" ;;
-      context) haystack="$(context_of "${json}")" ;;
-      decision) haystack="$(decision_of "${json}")" ;;
+      'reason') haystack="$(reason_of "${json}")" ;;
+      'context') haystack="$(context_of "${json}")" ;;
+      'decision') haystack="$(decision_of "${json}")" ;;
       *)
         printf 'unknown field: %s\n' "${field}" >&2
         failures="$((failures + 1))"
@@ -29,9 +29,9 @@ function setup() {
     # backwards would silently invert 5 of the 27 rows.
     ok=1
     case "${mode}" in
-      contains) [[ "${haystack}" == *"${needle}"* ]] || ok=0 ;;
-      lacks) [[ "${haystack}" != *"${needle}"* ]] || ok=0 ;;
-      equals) [[ "${haystack}" == "${needle}" ]] || ok=0 ;;
+      'contains') [[ "${haystack}" == *"${needle}"* ]] || ok=0 ;;
+      'lacks') [[ "${haystack}" != *"${needle}"* ]] || ok=0 ;;
+      'equals') [[ "${haystack}" == "${needle}" ]] || ok=0 ;;
       *)
         printf 'unknown mode: %s\n' "${mode}" >&2
         ok=0

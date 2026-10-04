@@ -1193,6 +1193,17 @@ function assert_marker_stops_at_header() {
   assert_success
 }
 
+@test "bash style: the tracked mode is read from the file's own repository, wherever the gate is run from" {
+  make_tracked_script '+x' '-x'
+  cd "${BATS_TEST_TMPDIR}"
+  run "${CHECK}" "${REPO_ROOT}/t.sh"
+  assert_failure 1
+  assert_output --partial 't.sh:1: [strict-prologue]'
+  make_tracked_script '-x' '+x'
+  run "${CHECK}" "${REPO_ROOT}/t.sh"
+  assert_success
+}
+
 @test "bash style: main-last reports exec main and an exit after main" {
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \

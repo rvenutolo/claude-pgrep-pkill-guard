@@ -541,8 +541,10 @@ one function per rule, each with a stable kebab-case id.
 
 Each rule is also told whether the file is sourced or executed. A bats file is
 sourced; otherwise the tracked mode decides (`100644` sourced, `100755`
-executed), the same fact `.ci/check-executable-bit` enforces. A file outside a
-git tree, or one git does not track, falls back to its on-disk executable bit.
+executed), the same fact `.ci/check-executable-bit` enforces. The mode is read
+from the repository the file is in, so it does not depend on the directory the
+gate is run from. A file outside a git tree, or one git does not track, falls
+back to its on-disk executable bit.
 
 The comment-reference rules also get the repository's tracked paths and every
 namespaced function name defined in it, so a comment that cites a path or a

@@ -98,8 +98,11 @@ readonly HELPER_DIR='tests/test_helper'
 # @description Say whether a file is sourced or executed. A bats file is
 #              sourced. Otherwise the tracked mode decides, which keeps
 #              .ci/check-executable-bit the one place that says which files
-#              are which; a file outside a git tree, or one git does not track,
-#              falls back to its on-disk executable bit.
+#              are which. The repository asked is the one the file is in, not
+#              the one the working directory is in, so the answer does not
+#              depend on where the gate is run from. A file outside a git
+#              tree, or one git does not track, falls back to its on-disk
+#              executable bit.
 # @arg $1 path the file to classify
 # @stdout `true` when the file is sourced, `false` when it is executed
 function is_sourced() {
@@ -109,7 +112,8 @@ function is_sourced() {
     printf 'true\n'
     return
   fi
-  staged="$(git ls-files --stage -- "${path}" 2> /dev/null)" || staged='NOT-TRACKED'
+  staged="$(git -C "$(dirname -- "${path}")" ls-files --stage -- "$(basename -- "${path}")" 2> /dev/null)" \
+    || staged='NOT-TRACKED'
   case "${staged}" in
     100644*) printf 'true\n' ;;
     100755*) printf 'false\n' ;;

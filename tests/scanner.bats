@@ -335,7 +335,7 @@ function inactive_probe() {
   local output
   output="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}' \
     | env -i "PATH=${path}" "${script}" 2> /dev/null || true)" # the probe asserts on the JSON, not the exit status
-  if [[ "${output}" == *INACTIVE* ]]; then
+  if [[ "${output}" == *'INACTIVE'* ]]; then
     printf 'inactive\n'
   else
     printf 'active\n'
@@ -352,7 +352,7 @@ function build_inactive_fixture() {
   probe_dir="${BATS_TEST_TMPDIR}/probe"
   stub_dir="${probe_dir}/bin"
   mkdir -p "${stub_dir}"
-  for binary in bash jq dirname cat; do
+  for binary in 'bash' 'jq' 'dirname' 'cat'; do
     target="$(command -v "${binary}" || printf '/nonexistent')" # a missing binary becomes a dangling stub, on purpose
     ln -s "${target}" "${stub_dir}/${binary}" || true           # a failed link leaves the stub PATH short, by design
   done

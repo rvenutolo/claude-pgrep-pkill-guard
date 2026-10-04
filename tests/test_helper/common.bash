@@ -22,8 +22,8 @@ export REPO_DIR HOOK BODY LIB_DIR SCANNER
 # they set BATS_LIB_PATH themselves before invoking bats; either way a bats that
 # cannot find the libraries fails loudly here rather than silently missing
 # assertions.
-bats_load_library bats-support
-bats_load_library bats-assert
+bats_load_library 'bats-support'
+bats_load_library 'bats-assert'
 
 # --- Fixture-escape hardening: every test is hermetic w.r.t. the real repo ---
 

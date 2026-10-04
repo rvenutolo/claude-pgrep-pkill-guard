@@ -504,7 +504,9 @@ function assert_passes() {
 }
 
 @test "bash style: empty-string-test passes a string that is not empty" {
-  assert_passes 't.sh' 'name=x' "[[ \"\${name}\" == ' ' ]] && echo PAYLOAD_RAN" '[[ "${name}" == "${name}" ]] && echo PAYLOAD_RAN'
+  assert_passes 't.sh' 'name=x' \
+    "[[ \"\${name}\" == ' ' ]] && echo PAYLOAD_RAN" \
+    '[[ "${name}" == "${name}" ]] && echo PAYLOAD_RAN'
 }
 
 @test "bash style: no-lexical-compare reports < and > inside [[ ]]" {
@@ -570,7 +572,8 @@ function assert_passes() {
 @test "bash style: no-pipe-while reports |& and until and a longer pipeline" {
   assert_fires 't.sh' 'no-pipe-while' 1 'some_command |& while read -r line; do' '  echo PAYLOAD_RAN' 'done'
   assert_fires 't.sh' 'no-pipe-while' 1 'some_command | until read -r line; do' '  echo PAYLOAD_RAN' 'done'
-  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | other_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-pipe-while' 1 \
+    'some_command | other_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
 }
 
 @test "bash style: no-pipe-while reports a loop wrapped in a block or subshell" {
@@ -641,7 +644,9 @@ function assert_passes() {
 @test "bash style: bare-arith-stmt passes (( )) used as a condition or with a reason" {
   assert_passes 't.sh' 'while ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
   assert_passes 't.sh' 'until ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
-  assert_passes 't.sh' 'if ((count > 0)); then' '  echo PAYLOAD_RAN' 'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
+  assert_passes 't.sh' \
+    'if ((count > 0)); then' '  echo PAYLOAD_RAN' \
+    'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
   assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
   assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
 }
@@ -684,7 +689,8 @@ function assert_passes() {
 @test "bash style: blank-fallback-comment takes the reason from the line the fallback is on" {
   assert_passes 's.sh' $'some_command \\' '  || true # fixture: failure is expected'
   assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true'
-  assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true' '# fixture: a reason on a later line does not count'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 \
+    $'some_command \\' '  || true' '# fixture: a reason on a later line does not count'
 }
 
 @test "bash style: blank-fallback-comment does not accept a reason on the line above" {
@@ -692,7 +698,8 @@ function assert_passes() {
 }
 
 @test "bash style: blank-fallback-comment passes a fallback that runs something" {
-  assert_passes 's.sh' 'some_command || other_command' 'some_command || return 1' "value=\"\$(some_command)\" || value='x'"
+  assert_passes 's.sh' 'some_command || other_command' 'some_command || return 1' \
+    "value=\"\$(some_command)\" || value='x'"
 }
 
 @test "bash style: shellcheck-disable-justified reports a directive with no reason" {

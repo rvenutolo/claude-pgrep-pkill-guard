@@ -109,8 +109,8 @@ function main() {
   # a table of phrases, collapsing line breaks and `#` continuations first, so
   # rewrapping a comment stays allowed and deleting one does not.
   # check-guard-parts holds the loader's GUARD_PARTS table to what is actually
-  # under hooks/lib/. The loader pins nine function names as STRINGS and proves
-  # a part loaded by calling `declare -F` on the paired name (#147), so a rename
+  # under hooks/lib/. The loader pins one function name per part as a STRING and
+  # proves a part loaded by calling `declare -F` on the paired name (#147), so a rename
   # that misses the table makes the guard print INACTIVE and allow the command
   # through. The bats suite catches that at test time -- every case reaching the
   # body gets INACTIVE instead of a verdict -- and this gate catches it at lint

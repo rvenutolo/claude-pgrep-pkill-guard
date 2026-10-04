@@ -20,7 +20,7 @@
 #              Nearly all of the checking happens inside one jq program rather
 #              than in bash. I8 is the exception: it needs a filesystem check to
 #              confirm `<source>/.claude-plugin/plugin.json` exists, and jq
-#              cannot stat. Two of the jq rules -- the character-class checks --
+#              cannot stat. The character-class checks among the jq rules
 #              cannot be done portably in shell either: `grep -P` is not
 #              guaranteed on macOS, where the gate also runs.
 # @arg $1 root optional tree to check; defaults to the git repo root. It exists

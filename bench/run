@@ -6,13 +6,13 @@
 #
 #              The hook is a PreToolUse hook on the Bash tool, so it runs on
 #              EVERY Bash call and its cost is paid by every command the model
-#              runs. `main` in the hook takes three materially different paths,
-#              and this script reports them separately rather than averaging
-#              over unlike things -- an aggregate number would describe none of
-#              them. It also reports a `typical` cohort of ordinary commands,
-#              because the corpus below is adversarial and its medians are not
-#              what a real session pays. See bench/RESULTS.md for the published
-#              run.
+#              runs. The hook takes materially different paths depending on
+#              the command, and this script reports each as its own cohort
+#              rather than averaging over unlike things -- an aggregate number
+#              would describe none of them. It also reports a `typical` cohort
+#              of ordinary commands, because the corpus below is adversarial and
+#              its medians are not what a real session pays. See
+#              bench/RESULTS.md for the published run.
 #
 #              Corpus is tests/cases/verdicts.tsv, the same rows the bats
 #              suite asserts on, so the benchmark cannot drift from the tests
@@ -152,15 +152,16 @@ function die() {
 #              escaped every control character, so the payload can contain
 #              neither a tab nor a newline.
 #
-#              The split mirrors the hook's prefilter rather than a
-#              quiet/inspect branch. `inspect` is a command containing `pgrep`
-#              or `.output`, which also runs the stateful tier. `quiet` is a
-#              command containing `kill` but neither of those -- for example
-#              `pkill --ignore-ancestors --full java` -- which passes the
-#              prefilter and reaches the scanner but never the stateful tier.
-#              `skipped` is everything else: it matches none of `pgrep`,
-#              `kill`, `.output` and short-circuits in `main` before `jq` or
-#              the scanner ever run.
+#              A row whose verdict starts `deny:` is cohort `deny`, whatever its
+#              command contains. The split of the remaining rows mirrors the
+#              hook's prefilter rather than a quiet/inspect branch. `inspect`
+#              is a command containing `pgrep` or `.output`, which also runs the
+#              stateful tier. `quiet` is a command containing `kill` but neither
+#              of those -- for example `pkill --ignore-ancestors --full java` --
+#              which passes the prefilter and reaches the scanner but never the
+#              stateful tier. `skipped` is everything else: it matches none of
+#              `pgrep`, `kill`, `.output` and short-circuits in `main` before
+#              `jq` or the scanner ever run.
 # @arg $1 session_id the session id embedded in every payload
 # @stdout one `<cohort>\t<compact JSON>` line per corpus row
 function load_payloads() {
@@ -301,7 +302,7 @@ function cpu_governor() {
 #              That helper lives in powermgmt-base, which this repo's devShell
 #              does not ship, and the devShell runs --ignore-environment -- so a
 #              command-based probe would report `unknown` on exactly the runs
-#              this file is generated from. sysfs needs no tool at all.
+#              bench/RESULTS.md is generated from. sysfs needs no tool at all.
 # @noargs
 # @stdout one line
 function power_source() {
@@ -322,7 +323,7 @@ function power_source() {
 
 # @description Print the 1/5/15-minute load average, best effort. Captured
 #              BEFORE the measurement loop by its caller, never at report time:
-#              the run itself spawns ~15k processes, so a load figure read at
+#              the run itself spawns thousands of processes, so a load figure read at
 #              the end describes the benchmark rather than the machine it ran
 #              on, which is the opposite of what a reader needs.
 # @noargs
@@ -340,8 +341,9 @@ function load_average() {
 # @description Print the CPU package temperature in degrees Celsius, best
 #              effort. Recorded because a hot package is the one machine
 #              condition that moves p50 while leaving min alone: a lucky sample
-#              still lands at full clock, but a sustained 15k-spawn run cannot
-#              hold it. Without this row that signature is unattributable.
+#              still lands at full clock, but a sustained run of thousands of
+#              spawns cannot hold it. Without this row that signature is
+#              unattributable.
 # @noargs
 # @stdout one line
 function package_temp() {
@@ -502,7 +504,7 @@ function main() {
   export PGREP_PKILL_GUARD_STATE_DIR="${state_dir}"
 
   # Captured HERE, before a single payload is timed, and handed to write_report
-  # as arguments: the run spawns ~15k processes, so a load average sampled at
+  # as arguments: the run spawns thousands of processes, so a load average sampled at
   # report time measures the benchmark rather than the machine that hosted it.
   # The package temperature has the same problem in reverse -- it is the
   # pre-run thermal headroom that shapes the whole distribution.

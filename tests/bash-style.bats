@@ -54,6 +54,22 @@ function make_tracked_script() {
   chmod "${disk_mode}" "${REPO_ROOT}/t.sh"
 }
 
+# @description Build a directory holding only the named tools, as links to the
+#              ones on PATH, so a test can run the gate with one tool missing.
+# @arg $1 name directory name, created under BATS_TEST_TMPDIR
+# @arg $@ tools the tools to link
+# @set TOOL_DIR the directory holding the links
+function make_tool_dir() {
+  local -r name="$1"
+  shift
+  local tool
+  TOOL_DIR="${BATS_TEST_TMPDIR}/${name}"
+  mkdir -p "${TOOL_DIR}"
+  for tool in "$@"; do
+    ln -s "$(command -v "${tool}")" "${TOOL_DIR}/${tool}"
+  done
+}
+
 # @description Assert the gate reports one rule at one line of a fixture.
 # @arg $1 name fixture file name; its directory part scopes path-based rules
 # @arg $2 rule the rule id expected in the FAIL line
@@ -342,6 +358,47 @@ function assert_marker_stops_at_header() {
   PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial 'FAIL: the canary did not trip function-keyword'
+}
+
+@test "bash style: a jq that stops reporting the text rule fails the canary" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_jq
+  real_jq="$(command -v jq)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    "${real_jq} \"\$@\" | grep --invert-match 'no-raw-tab'" \
+    'exit 0' > "${shim_dir}/jq"
+  chmod +x "${shim_dir}/jq"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: the canary did not trip no-raw-tab'
+  refute_output --partial 'ERROR: line'
+}
+
+@test "bash style: a shfmt that fails on the canary is a verdict, not a crash" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "${shim_dir}/shfmt"
+  chmod +x "${shim_dir}/shfmt"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: the canary could not be scanned'
+  refute_output --partial 'ERROR: line'
+}
+
+@test "bash style: a missing shfmt or jq is exit 2, before anything is scanned" {
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  # bash and dirname are what the gate needs to reach its tool check.
+  make_tool_dir 'no-shfmt' 'bash' 'dirname' 'jq'
+  run env PATH="${TOOL_DIR}" "${CHECK}" "${FIXTURE}"
+  assert_failure 2
+  assert_output 'FAIL: shfmt is not on PATH; run this gate through .ci/in-devshell'
+  make_tool_dir 'no-jq' 'bash' 'dirname' 'shfmt'
+  run env PATH="${TOOL_DIR}" "${CHECK}" "${FIXTURE}"
+  assert_failure 2
+  assert_output 'FAIL: jq is not on PATH; run this gate through .ci/in-devshell'
 }
 
 @test "bash style: quote-expansions reports an unquoted expansion as an argument" {

@@ -386,11 +386,15 @@ def no_for_in_subst:
   | select((.Parts // []) | any(.Type == "CmdSubst"))
   | {line: .Pos.Line, rule: "no-for-in-subst", message: "iterate command output with mapfile -t, not for x in $(...)"};
 
-# cmd | while ...: the loop runs in a subshell and loses its assignments.
+# cmd | while ...: the loop runs in a subshell and loses its assignments. A
+# loop wrapped in { } or ( ) on the right of the pipe is the same loop.
 def no_pipe_while:
   nodes
   | select(.Type == "BinaryCmd" and (.Op == "|" or .Op == "|&"))
-  | select(.Y.Cmd.Type == "WhileClause")
+  | select(
+      .Y.Cmd.Type == "WhileClause"
+      or (.Y.Cmd.Type | IN("Block", "Subshell")) and any(.Y.Cmd.Stmts[]?; .Cmd.Type == "WhileClause")
+    )
   | {line: .Y.Pos.Line, rule: "no-pipe-while", message: "feed the loop with < <(cmd), not a pipe"};
 
 # The literal first word of a command once leading wrappers are removed, or ""

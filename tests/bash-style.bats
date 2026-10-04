@@ -349,6 +349,23 @@ function assert_marker_stops_at_header() {
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial "FAIL: ${FIXTURE}:1: [marker-malformed]"
+  assert_fires 'bare.sh' 'marker-malformed' 1 'echo PAYLOAD_RAN # bash-style'
+}
+
+@test "bash style: two markers in one comment excuse two rules" {
+  local -r first='# bash-style allow=single-quote-literals: fixture reason'
+  local -r second='# bash-style allow=quote-literal-path: another reason'
+  assert_passes 'two.sh' "echo \"PAYLOAD_RAN\" /etc/os-release ${first} ${second}"
+}
+
+@test "bash style: each marker in one comment is judged alone" {
+  local -r first='# bash-style allow=single-quote-literals: fixture reason'
+  assert_fires 'two.sh' 'marker-malformed' 1 "echo \"PAYLOAD_RAN\" ${first} # bash-style allow=no-colon"
+  refute_output --partial '[single-quote-literals]'
+  assert_fires 'two.sh' 'marker-no-reason' 1 "echo \"PAYLOAD_RAN\" ${first} # bash-style allow=no-raw-tab:"
+  assert_fires 'two.sh' 'marker-unused' 1 "echo \"PAYLOAD_RAN\" ${first} # bash-style allow=no-raw-tab: unused"
+  assert_output --partial 'nothing here violates no-raw-tab'
+  refute_output --partial '[single-quote-literals]'
 }
 
 @test "bash style: a marker that excuses nothing is a violation" {

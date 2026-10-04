@@ -950,13 +950,15 @@ def marker_reach:
     .End.Line
   end;
 
-# Every comment that starts with `bash-style`, as a marker. A marker well formed
-# as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
-# other `bash-style` comment has `malformed: true`. A comment shfmt attached to
-# a statement covers that statement's lines as far as marker_reach says; a
-# marker alone on the line above a statement is attached to that statement, so
-# the span starts at the marker. A comment attached to nothing (after the last
-# statement of a file or of a block) covers only its own line.
+# Every marker in every comment that starts with `bash-style`. One comment may
+# hold several, each introduced by its own `# bash-style` and each with its own
+# reason, so one statement can be excused from more than one rule. A marker
+# well formed as `# bash-style allow=<rule-id>: <reason>` carries its rule and
+# reason; any other `bash-style` text has `malformed: true`. A comment shfmt
+# attached to a statement covers that statement's lines as far as marker_reach
+# says; a marker alone on the line above a statement is attached to that
+# statement, so the span starts at the marker. A comment attached to nothing
+# (after the last statement of a file or of a block) covers only its own line.
 def markers:
   ([
     .. | objects
@@ -970,7 +972,8 @@ def markers:
     | select(has("Hash") and has("Text"))
     | select(.Text | test("^ ?bash-style\\b"))
     | .Hash.Line as $line
-    | ((.Text | capture("^ ?bash-style allow=(?<rule>[a-z0-9-]+): *(?<reason>.*)$")) // null) as $m
+    | (.Text | sub("^ ?bash-style"; "") | split(" # bash-style") | if length == 0 then [""] else . end | .[])
+    | ((capture("^ allow=(?<rule>[a-z0-9-]+): *(?<reason>.*)$")) // null) as $m
     | {
         line: $line,
         rule: ($m.rule // ""),

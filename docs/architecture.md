@@ -564,6 +564,10 @@ above it:
 # bash-style allow=<rule-id>: <reason>
 ```
 
+One comment may hold several markers, each introduced by its own
+`# bash-style allow=` and each with its own reason, so one statement can be
+excused from more than one rule. Each is judged alone.
+
 A marker reaches every line of a simple command or pipeline. Above a compound
 statement (a function, a `case`, an `if`, a loop, a block, a subshell) it
 reaches the header only: the opening line, through the `case` word or the

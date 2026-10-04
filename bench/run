@@ -444,7 +444,7 @@ function write_report() {
   printf 'median that drifts away from it means the run could not hold that clock.\n'
   printf 'That is what the governor, power, load and package-temperature rows are\n'
   printf 'for — a report generated at 96 C on battery is not comparable with one\n'
-  printf 'taken cold on AC, and before those rows existed there was no way to tell.\n'
+  printf 'taken cold on AC.\n'
   printf 'Only distances measured WITHIN one report describe the guard itself.\n'
 }
 

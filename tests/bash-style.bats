@@ -803,3 +803,35 @@ function assert_passes() {
   assert_passes 'lib.sh' 'function helper() {' '  echo PAYLOAD_RAN' '}' 'echo PAYLOAD_RAN'
   assert_passes 'suite.bats' 'function helper() {' '  echo PAYLOAD_RAN' '}' '@test "inert" {' '  helper' '}'
 }
+
+@test "bash style: functions-grouped reports a statement between two functions" {
+  write_script 'g.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'echo PAYLOAD_RAN' \
+    'function main() {' '  helper' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+}
+
+@test "bash style: functions-grouped reports a readonly between functions and allows a comment there" {
+  write_script 'g.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'readonly LATE=1' \
+    'function main() {' '  helper' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+  write_script 'g.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# a comment between functions' \
+    'function main() {' '  helper' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}

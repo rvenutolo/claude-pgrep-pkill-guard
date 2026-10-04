@@ -623,16 +623,24 @@ def shdoc_present:
 # plus "@" when it has `@arg $@`.
 def doc_positions: [.doc[] | capture("^ *@arg \\$(?<n>[0-9]+|@)") | .n] | unique;
 
-# Every object under a node, leaving out the bodies of nested functions: their
-# positionals are their own.
-def own_nodes:
+# Every object under a node, without descending into a node whose Type is in
+# $skip.
+def scoped_nodes($skip):
   if type == "object" then
-    ., (if .Type == "FuncDecl" then empty else .[] | own_nodes end)
+    ., (if (.Type // "") | IN($skip[]) then empty else .[] | scoped_nodes($skip) end)
   elif type == "array" then
-    .[] | own_nodes
+    .[] | scoped_nodes($skip)
   else
     empty
   end;
+
+# Every object under a node, leaving out the bodies of nested functions: their
+# positionals are their own.
+def own_nodes: scoped_nodes(["FuncDecl"]);
+
+# Like own_nodes, and also leaving out subshells and substitutions: they run in
+# a child process, so what they assign never reaches the caller's globals.
+def global_nodes: scoped_nodes(["FuncDecl", "Subshell", "CmdSubst", "ProcSubst"]);
 
 # The positionals a body reads, as strings: the numbers, "@" for $@ and $*, and
 # "#" for $#.
@@ -738,7 +746,7 @@ def shdoc_set:
     ) as $declared
   | [.doc[] | capture("^ *@set +(?<name>[A-Za-z_][A-Za-z0-9_]*)") | .name] as $documented
   | [
-      $fn.body | own_nodes
+      $fn.body | global_nodes
       | (
           select(.Type == "CallExpr" and (args | length) == 0) | (.Assigns // [])[]
         ),

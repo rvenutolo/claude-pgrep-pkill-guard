@@ -1186,3 +1186,15 @@ function assert_passes() {
   assert_fires 'd.sh' 'shdoc-arg-positions' 3 \
     '# @description Inert.' '# @arg $@ args the words given' 'function ignores() {' '  echo PAYLOAD_RAN' '}'
 }
+
+@test "bash style: shdoc-set ignores an assignment inside a subshell or a command substitution" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  ( PATH="/x:${PATH}"; export LC_ALL=C; some_command )' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  local value' '  value="$(FOO_BAR=1; some_command)"' '  echo "${value}"' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' "  diff <(FOO_BAR=1; some_command) '/dev/null'" '}'
+}

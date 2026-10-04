@@ -1326,3 +1326,22 @@ function assert_passes() {
     '# @description Calls classify::classify_command, then nothing::defined_here.' '# @noargs' \
     'function caller() {' '  echo PAYLOAD_RAN' '}'
 }
+
+@test "bash style: comment-commit-relative reports commit-relative wording with no issue anchor" {
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Until now this was unguarded.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# Before this change (#72) it was unguarded; a retry used to hide it.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative reports each listed phrase" {
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this gate it was unchecked.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Correct when this was written.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# The commit before this one broke it.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# As of this commit it is checked.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative passes past-tense accounts of a trap and a word that contains a phrase" {
+  assert_passes 'c.sh' \
+    '# The old message said "x"; a retry used to hide the failure.' \
+    '# Nothing here waits until nowhere is reachable.' \
+    'echo PAYLOAD_RAN'
+}

@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -435,7 +435,26 @@ def bare_arith_stmt:
   | select(.Cmd.Type == "ArithmCmd")
   | {line: .Pos.Line, rule: "bare-arith-stmt", message: "a bare (( )) fails under set -e when it evaluates to zero"};
 
-def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt;
+# || true, || :, || var=, || var='' and || printf '' swallow a failure without
+# naming it: they need a reason on the same line. A fallback that substitutes a
+# named sentinel is its own explanation.
+def blank_fallback_comment:
+  comment_lines as $commented
+  | nodes
+  | select(.Type == "BinaryCmd" and .Op == "||")
+  | select(.Y.Cmd.Type == "CallExpr")
+  | (.Y.Cmd | real_words) as $w
+  | (.Y.Cmd.Assigns // []) as $assigns
+  | ($w[0].Parts[0].Value // "") as $cmd
+  | select(
+      ($cmd | IN("true", ":"))
+      or ($cmd == "" and ($w | length) == 0 and ($assigns | length) == 1 and (($assigns[0].Value // {}) | (has("Parts") | not) or is_empty_word))
+      or ($cmd == "printf" and ($w[1] | is_empty_word))
+    )
+  | select(.Y.Pos.Line as $l | $commented | index($l) | not)
+  | {line: .Y.Pos.Line, rule: "blank-fallback-comment", message: "say on this line why the failure is ignored"};
+
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

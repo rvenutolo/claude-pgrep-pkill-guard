@@ -635,3 +635,39 @@ function assert_passes() {
   assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
   assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
 }
+
+@test "bash style: blank-fallback-comment reports a blank fallback with no reason on its line" {
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || true'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || :'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 "value=\"\$(some_command)\" || value=''"
+}
+
+@test "bash style: blank-fallback-comment reports every spelling of a blank fallback" {
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || value='
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || value=""'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 "some_command || printf ''"
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || builtin :'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || command true'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 'if some_command ||' '  true; then' '  echo PAYLOAD_RAN' 'fi'
+}
+
+@test "bash style: blank-fallback-comment passes a same-line reason and a named sentinel" {
+  assert_passes 's.sh' \
+    'some_command || true # fixture: failure is expected' \
+    "value=\"\$(some_command)\" || value='NO-VALUE'" \
+    "some_command || printf 'NO-HEAD'"
+}
+
+@test "bash style: blank-fallback-comment takes the reason from the line the fallback is on" {
+  assert_passes 's.sh' $'some_command \\' '  || true # fixture: failure is expected'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true' '# fixture: a reason on a later line does not count'
+}
+
+@test "bash style: blank-fallback-comment does not accept a reason on the line above" {
+  assert_fires 's.sh' 'blank-fallback-comment' 2 '# fixture: failure is expected' 'some_command || true'
+}
+
+@test "bash style: blank-fallback-comment passes a fallback that runs something" {
+  assert_passes 's.sh' 'some_command || other_command' 'some_command || return 1' "value=\"\$(some_command)\" || value='x'"
+}

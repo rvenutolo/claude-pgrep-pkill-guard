@@ -576,3 +576,16 @@ function assert_passes() {
   assert_fires 't.sh' 'source-not-dot' 1 "builtin . 'lib.sh'"
   assert_fires 't.sh' 'source-not-dot' 1 "command . 'lib.sh'"
 }
+
+@test "bash style: no-let-expr reports let and expr" {
+  assert_fires 't.sh' 'no-let-expr' 1 'let count=1'
+  assert_fires 't.sh' 'no-let-expr' 1 'count="$(expr 1 + 1)"'
+}
+
+@test "bash style: no-let-expr reports expr behind a wrapper" {
+  assert_fires 't.sh' 'no-let-expr' 1 'count="$(command expr 1 + 1)"'
+}
+
+@test "bash style: no-let-expr passes a lookup of let or expr" {
+  assert_passes 't.sh' 'command -v expr > /dev/null' 'command -v let > /dev/null'
+}

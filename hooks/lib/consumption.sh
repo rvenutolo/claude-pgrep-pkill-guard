@@ -205,7 +205,7 @@ function consumption::feeds_a_kill_backward() {
 #              The two scans are independent; see consumption::feeds_a_kill_forward and
 #              consumption::feeds_a_kill_backward.
 # @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
-#              invocation in the same command reuses it rather than re-parsing the token stream)
+#         invocation in the same command reuses it rather than re-parsing the token stream)
 # @arg $2 target index of the invocation token
 # @exitcode 0 output feeds a kill
 # @exitcode 1 it does not

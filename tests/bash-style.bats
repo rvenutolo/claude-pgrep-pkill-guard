@@ -1098,3 +1098,45 @@ function assert_passes() {
     '# @description Inert.' '# @arg $1 out_name the variable to fill' \
     'function fill() {' '  local -n out="$1"' '  out=1' '}'
 }
+
+@test "bash style: shdoc-set reports an upper-case global assigned without @set" {
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  GLOBAL_THING=1' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' '# @set GLOBAL_THING the thing' \
+    'function writes() {' '  GLOBAL_THING=1' '}'
+}
+
+@test "bash style: shdoc-set reports a global written by declare -g, readonly or export" {
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  declare -g GLOBAL_THING=1' '}'
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  readonly GLOBAL_THING=1' '}'
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  export GLOBAL_THING=1' '}'
+}
+
+@test "bash style: shdoc-set ignores locals, command-prefix assignments and shell specials" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  local UPPER_LOCAL=1' '  UPPER_LOCAL=2' '  IFS=, read -r first' '  SECONDS=0' \
+    '  echo "${UPPER_LOCAL}" "${first}"' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  declare UPPER_LOCAL=1' '  echo "${UPPER_LOCAL}"' '}'
+}
+
+@test "bash style: shdoc-set reads a documented name across wrapped tags" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' '# @set GLOBAL_THING the thing,' '#      wrapped' \
+    'function writes() {' '  GLOBAL_THING=1' '}'
+}
+
+@test "bash style: shdoc-set lets a nested function write a name its enclosing function declared local" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function outer() {' '  local COUNT=0' \
+    '  # @description Inert.' '  # @noargs' \
+    '  function inner() {' '    COUNT=1' '  }' \
+    '  inner' '  echo "${COUNT}"' '}'
+}

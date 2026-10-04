@@ -11,7 +11,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -704,7 +704,53 @@ def shdoc_arg_name:
       message: ($fn.name + " binds $" + $n + " to " + $bind.Name.Value + " but documents it as " + $names[$n])
     };
 
-def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name;
+# A DeclClause that sets a global: readonly, export, or declare/typeset -g.
+def declares_global:
+  .Variant.Value as $variant
+  | ($variant | IN("readonly", "export"))
+    or (
+      ($variant | IN("declare", "typeset"))
+      and any(args[]; (.Value.Parts[0].Value? // "") | test("^-[a-zA-Z]*g"))
+    );
+
+# The names a function's own body declares with local or declare/typeset.
+def declared_names:
+  [
+    own_nodes
+    | select(.Type == "DeclClause" and (declares_global | not))
+    | args[] | .Name.Value? // empty
+  ];
+
+# A function that assigns an upper-case global documents it with @set. Names
+# the function, or a function around it, declares itself (local, declare) are
+# not globals. Bash specials are left to the function's description.
+def shdoc_set:
+  . as $root
+  | documented_functions
+  | . as $fn
+  | (
+      [.body | declared_names]
+      + [$root | nodes | select(.Type == "FuncDecl" and .Pos.Line < $fn.line and .End.Line >= $fn.line) | .Body | declared_names]
+      | add
+    ) as $declared
+  | [.doc[] | capture("^ *@set +(?<name>[A-Za-z_][A-Za-z0-9_]*)") | .name] as $documented
+  | [
+      $fn.body | own_nodes
+      | (
+          select(.Type == "CallExpr" and (args | length) == 0) | (.Assigns // [])[]
+        ),
+        (
+          select(.Type == "DeclClause" and declares_global) | args[] | select(has("Name") and .Value != null)
+        )
+      | {name: (.Name.Value // ""), line: .Pos.Line}
+      | select(.name | test("^[A-Z][A-Z0-9_]*$"))
+      | select(.name | IN("IFS", "RANDOM", "SECONDS", "OPTIND") | not)
+      | select(.name as $n | ($declared + $documented) | index($n) | not)
+    ]
+  | unique_by(.name)[]
+  | {line, rule: "shdoc-set", message: ($fn.name + " assigns " + .name + " without an @set line")};
+
+def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

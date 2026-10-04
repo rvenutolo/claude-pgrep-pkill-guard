@@ -175,9 +175,9 @@ in [`docs/architecture.md`](docs/architecture.md#design-invariants). Read that
 section before you tidy either one.
 
 `.ci/check-bash-style` enforces the style rules a machine can decide, as part
-of `just lint`. Each `FAIL:` line names the file, the line and the rule id. One
-site can be excused with `# bash-style allow=<rule-id>: <reason>` on the
-statement or alone on the line above it; "The bash style gate" in
+of `just lint`. Each violation's `FAIL:` line names the file, the line and the
+rule id. One site can be excused with `# bash-style allow=<rule-id>: <reason>`
+on the statement or alone on the line above it; "The bash style gate" in
 [`docs/architecture.md`](docs/architecture.md#the-bash-style-gate) explains how
 the gate reads a file and what a marker reaches.
 

@@ -762,7 +762,9 @@ def shdoc_set:
   | {line, rule: "shdoc-set", message: ($fn.name + " assigns " + .name + " without an @set line")};
 
 # A function whose own body writes to fd 2 (>&2, 1>&2, > /dev/stderr) says so
-# with @stderr. Calling a logger that writes there is not the function's own
+# with @stderr. Only a redirect whose source is fd 1 writes there: 3>&2 copies
+# the descriptor and writes nothing, and a bare `exec` only rearranges
+# descriptors. Calling a logger that writes to fd 2 is not the function's own
 # write, and neither is the body of a nested function.
 def shdoc_stderr:
   documented_functions
@@ -770,9 +772,16 @@ def shdoc_stderr:
   | . as $fn
   | select(
       any(
-        .body | own_nodes | select(has("Redirs")) | .Redirs[];
-        (.Op == ">&" and ((.Word.Parts[0].Value // "") == "2"))
-        or (.Op == ">" and ((.Word.Parts[0].Value // "") == "/dev/stderr"))
+        .body | own_nodes | select(has("Redirs"))
+        | (((.Cmd.Args // []) | length == 1 and (.[0].Parts[0].Value // "") == "exec") | not) as $writes
+        | .Redirs[]
+        | $writes
+          and ((.N.Value // "1") == "1")
+          and (
+            (.Op == ">&" and ((.Word.Parts[0].Value // "") == "2"))
+            or (.Op == ">" and ((.Word.Parts[0].Value // "") == "/dev/stderr"))
+          );
+        .
       )
     )
   | {line: $fn.line, rule: "shdoc-stderr", message: ($fn.name + " writes to stderr without an @stderr line")};

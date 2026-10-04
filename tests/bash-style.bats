@@ -1198,3 +1198,17 @@ function assert_passes() {
     '# @description Inert.' '# @noargs' \
     'function scoped() {' "  diff <(FOO_BAR=1; some_command) '/dev/null'" '}'
 }
+
+@test "bash style: shdoc-stderr passes a descriptor duplication and reports a write from fd 1" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function dups() {' '  exec 3>&2' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function dups() {' '  some_command 3>&2' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function dups() {' '  exec >&2' '}'
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN 1>&2' '}'
+}

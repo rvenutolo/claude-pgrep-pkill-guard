@@ -886,3 +886,16 @@ function assert_passes() {
   run "${CHECK}" "${FIXTURE}"
   assert_success
 }
+
+@test "bash style: no-default-wellknown-env reports a default on HOME" {
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${HOME:-/nowhere}"'
+  assert_passes 'e.sh' 'echo "${HOME}" "${OPTIONAL_THING:-}"'
+}
+
+@test "bash style: no-default-wellknown-env reports every spelling of a default and every well-known name" {
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${HOME:-}"'
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${HOME-/nowhere}"'
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${USER:=nobody}"'
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${SDKMAN_DIR:-/nowhere}"'
+  assert_passes 'e.sh' 'echo "${HOME:+set}" "${TMPDIR:-/tmp}"'
+}

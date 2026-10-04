@@ -3,10 +3,11 @@
 #
 # Input is one `shfmt --to-json` tree. Each rule is a function that emits zero
 # or more {line, rule, message} objects. Besides the tree, `report` and `hits`
-# receive the file's display path, its source text, and whether the file is
-# sourced or executed; a rule takes the ones it needs as parameters. `report`
-# runs every rule, drops the hits an exception marker covers, and prints one
-# line per remaining hit.
+# receive the file's display path, its source text, whether the file is
+# sourced or executed, the repository's tracked paths and the namespaced
+# function names defined anywhere; a rule takes the ones it needs as
+# parameters. `report` runs every rule, drops the hits an exception marker
+# covers, and prints one line per remaining hit.
 #
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
@@ -818,7 +819,7 @@ def shdoc_stderr:
     )
   | {line: $fn.line, rule: "shdoc-stderr", message: ($fn.name + " writes to stderr without an @stderr line")};
 
-def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr;
+def hits($path; $src; $sourced; $tracked; $functions): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
@@ -851,10 +852,10 @@ def markers:
       }
   ];
 
-def report($path; $src; $sourced):
+def report($path; $src; $sourced; $tracked; $functions):
   if .Type != "File" then error("not a shfmt syntax tree") else . end
   | markers as $markers
-  | [hits($path; $src; $sourced)] as $hits
+  | [hits($path; $src; $sourced; $tracked; $functions)] as $hits
   | (
       $hits[]
       | . as $hit

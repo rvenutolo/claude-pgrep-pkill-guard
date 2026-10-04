@@ -3,8 +3,11 @@
 # @description Enforce the mechanically decidable bash style rules on the files
 #              named as arguments. Each file is parsed by `shfmt --to-json` and
 #              the syntax tree, with whether the file is sourced or executed,
-#              is handed to the rules in .ci/bash-style.jq, which is where the
-#              rule list lives.
+#              the repository's tracked paths and its namespaced function
+#              names, is handed to the rules in .ci/bash-style.jq, which is
+#              where the rule list lives. The two lists come from the
+#              repository that holds this script, whatever files are named, so
+#              a comment in any file is checked against the same repository.
 #
 #              One site may be excused with a comment on the statement, or
 #              alone on the line above it:
@@ -38,6 +41,9 @@ readonly SCRIPT_DIR
 readonly CANARY=$'canary() {\n\t:\n}\n'
 readonly -a CANARY_RULES=('function-keyword' 'no-raw-tab')
 
+# The shape of a namespaced function definition, for grep.
+readonly NAMESPACED_FUNCTION='function [a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*'
+
 # @description Say whether a file is sourced or executed. A bats file is
 #              sourced. Otherwise the tracked mode decides, which keeps
 #              .ci/check-executable-bit the one place that says which files
@@ -70,14 +76,36 @@ function is_sourced() {
 # @arg $1 display_path the path to print in FAIL lines
 # @arg $2 src_file a file holding the source text the tree was parsed from
 # @arg $3 sourced true when the file is sourced, false when it is executed
+# @arg $4 tracked the repository's tracked paths, one per line
+# @arg $5 functions the namespaced function names defined anywhere, one per line
 # @stdout one FAIL line per violation
 function run_rules() {
   local -r display_path="$1"
   local -r src_file="$2"
   local -r sourced="$3"
+  local -r tracked="$4"
+  local -r functions="$5"
   jq --raw-output --library-path "${SCRIPT_DIR}" \
     --arg path "${display_path}" --rawfile src "${src_file}" --argjson sourced "${sourced}" \
-    'import "bash-style" as style; style::report($path; $src; $sourced)'
+    --arg tracked "${tracked}" --arg functions "${functions}" \
+    'import "bash-style" as style;
+     style::report($path; $src; $sourced; $tracked | split("\n"); $functions | split("\n"))'
+}
+
+# @description List the namespaced functions the repository or the named files
+#              define, so a comment may name a function from a file the run is
+#              not scanning, and a fixture's own function counts.
+# @arg $@ paths the files named on the command line
+# @stdout one function name per line, `name::part`, duplicates included
+function namespaced_functions() {
+  {
+    # `git grep` has no long form for its pattern option `-e`, and no long
+    # form for dropping the file name, so the sed below strips it.
+    git -C "${SCRIPT_DIR}/.." grep --only-matching --extended-regexp \
+      -e "${NAMESPACED_FUNCTION}" || true # no namespaced function in the repo is a valid answer
+    grep --no-filename --only-matching --extended-regexp \
+      --regexp="${NAMESPACED_FUNCTION}" -- "$@" || true # nor is a file list with none
+  } | sed --expression='s/^.*function //'
 }
 
 # @description Prove the pipeline still reports a known violation of each kind.
@@ -88,7 +116,7 @@ function run_rules() {
 function check_canary() {
   local out rule
   if ! out="$(printf '%s' "${CANARY}" | shfmt --filename 'canary.sh' --to-json \
-    | run_rules 'canary' <(printf '%s' "${CANARY}") 'true')"; then
+    | run_rules 'canary' <(printf '%s' "${CANARY}") 'true' '' '')"; then
     printf 'FAIL: the canary could not be scanned\n' >&2
     return 1
   fi
@@ -128,12 +156,14 @@ function main() {
     return 1
   fi
 
-  local path out sourced
+  local path out sourced tracked functions
   local dirty=0
+  tracked="$(git -C "${SCRIPT_DIR}/.." ls-files)"
+  functions="$(namespaced_functions "$@")"
   for path in "$@"; do
     sourced="$(is_sourced "${path}")"
     # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
-    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" | run_rules "${path}" "${path}" "${sourced}")"; then
+    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" | run_rules "${path}" "${path}" "${sourced}" "${tracked}" "${functions}")"; then
       printf 'FAIL: %s could not be scanned\n' "${path}" >&2
       dirty="$((dirty + 1))"
       continue

@@ -1240,3 +1240,16 @@ function assert_passes() {
     '# @description Inert.' '# @arg $1 thing a header line that is not an argument of first' '' \
     '# @description Inert.' '# @noargs' 'function first() {' '  echo PAYLOAD_RAN' '}'
 }
+
+@test "bash style: comment-line-ref reports a file:line citation" {
+  assert_fires 'c.sh' 'comment-line-ref' 1 '# See hooks/lib/classify.sh:120 for the caller.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# See classify::classify_command in hooks/lib/classify.sh.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-line-ref passes a port, a time, a placeholder and an shdoc exit code" {
+  assert_passes 'c.sh' \
+    '# The server answers on http://localhost:8080 at 12:30; retries: 123.' \
+    '# Write the citation as file.sh:NN, never with a number.' \
+    '# @exitcode 1 a violation' \
+    'echo PAYLOAD_RAN'
+}

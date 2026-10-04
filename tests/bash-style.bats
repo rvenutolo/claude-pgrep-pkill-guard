@@ -692,3 +692,18 @@ function assert_passes() {
 @test "bash style: shellcheck-disable-justified leaves other directives alone" {
   assert_passes 's.sh' '# shellcheck source=/dev/null' "source 'lib.sh'" '# shellcheck shell=bash'
 }
+
+@test "bash style: no-subst-or-exit reports || exit on a substitution assignment" {
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="$(some_command)" || exit 1'
+  assert_passes 's.sh' 'value="$(some_command)"' 'some_command || exit 1'
+}
+
+@test "bash style: no-subst-or-exit reports a substitution inside a longer value and exit behind a wrapper" {
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="prefix-$(some_command)" || exit 1'
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="$(some_command)" || exit'
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="$(some_command)" || builtin exit 1'
+}
+
+@test "bash style: no-subst-or-exit passes an assignment with no substitution and a fallback that is not exit" {
+  assert_passes 's.sh' 'value=5 || exit 1' 'value="$(some_command)" || other_command'
+}

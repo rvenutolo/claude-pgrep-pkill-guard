@@ -109,9 +109,8 @@ function log() {
 }
 
 # @description Print one fatal diagnostic to stderr and exit 1. Drops the ERR
-#              trap on the way out, so a script reporting its own verdict ends
-#              on that diagnostic rather than on a trap line about this
-#              function.
+#              trap on the way out only for symmetry with the verdict returns:
+#              `exit` itself never fires it.
 # @arg $1 message the diagnostic text
 # @stderr the `[<script>] FATAL: <message>` line
 # @exitcode 1 always

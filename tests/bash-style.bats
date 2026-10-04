@@ -1226,3 +1226,17 @@ function assert_passes() {
   assert_fires 'd.sh' 'shdoc-set' 4 \
     '# @description Inert.' '# @noargs' 'function widens() {' '  PATH="/x:${PATH}"' '}'
 }
+
+@test "bash style: a blank line detaches the comment block above a function from its shdoc" {
+  assert_fires 'd.sh' 'shdoc-present' 4 \
+    '# @description Inert.' '# @noargs' '' 'function detached() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: a file header above a blank line is not the first function's shdoc" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '' \
+    '# @description Inert.' '# @noargs' 'function first() {' '  echo PAYLOAD_RAN' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 thing a header line that is not an argument of first' '' \
+    '# @description Inert.' '# @noargs' 'function first() {' '  echo PAYLOAD_RAN' '}'
+}

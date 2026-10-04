@@ -593,17 +593,36 @@ def max_line_length($src):
 # per-test globals, so they carry no shdoc block.
 def bats_hooks: ["setup", "teardown", "setup_file", "teardown_file"];
 
-# Every function with the comment block shfmt attached above it:
+# The comment lines that end on the line directly above $line, each directly
+# above the next. shfmt attaches every comment since the previous statement to
+# the next one, so a file header separated from a function by a blank line
+# arrives in the same list and must not count as that function's shdoc.
+def contiguous_comments($line):
+  [
+    foreach (reverse | .[]) as $comment (
+      {want: ($line - 1), keep: true};
+      if .keep and $comment.Hash.Line == .want then
+        {want: (.want - 1), keep: true, comment: $comment}
+      else
+        {keep: false}
+      end;
+      select(.keep) | .comment
+    )
+  ]
+  | reverse;
+
+# Every function with the comment block directly above it:
 # {name, line, doc: [comment texts], body}. main and the bats hooks are left
 # out: a script's contract is its file header, not a block above main.
 def documented_functions:
   nodes
   | select(has("Cmd") and .Cmd.Type == "FuncDecl")
   | select(.Cmd.Name.Value as $name | (["main"] + bats_hooks) | index($name) | not)
+  | .Cmd.Pos.Line as $line
   | {
       name: .Cmd.Name.Value,
-      line: .Cmd.Pos.Line,
-      doc: [(.Comments // [])[] | .Text // ""],
+      line: $line,
+      doc: [((.Comments // []) | contiguous_comments($line))[] | .Text // ""],
       body: .Cmd.Body
     };
 

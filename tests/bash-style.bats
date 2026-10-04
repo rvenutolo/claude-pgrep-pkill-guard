@@ -37,6 +37,23 @@ function write_script() {
   chmod +x "${FIXTURE}"
 }
 
+# @description Track a one-line script in a throwaway git repository, with the
+#              tracked mode and the on-disk executable bit set independently.
+# @arg $1 tracked_mode `+x` or `-x`: the mode git records
+# @arg $2 disk_mode `+x` or `-x`: the bit left on the file
+# @set REPO_ROOT the repository holding the file
+function make_tracked_script() {
+  local -r tracked_mode="$1"
+  local -r disk_mode="$2"
+  REPO_ROOT="${BATS_TEST_TMPDIR}/tracked"
+  mkdir -p "${REPO_ROOT}"
+  git -C "${REPO_ROOT}" init --quiet
+  printf '%s\n' 'echo PAYLOAD_RAN' > "${REPO_ROOT}/t.sh"
+  git -C "${REPO_ROOT}" add -- 't.sh'
+  git -C "${REPO_ROOT}" update-index "--chmod=${tracked_mode}" -- 't.sh'
+  chmod "${disk_mode}" "${REPO_ROOT}/t.sh"
+}
+
 # @description Assert the gate reports one rule at one line of a fixture.
 # @arg $1 name fixture file name; its directory part scopes path-based rules
 # @arg $2 rule the rule id expected in the FAIL line
@@ -961,4 +978,19 @@ function assert_passes() {
   assert_passes 'l.sh' "readonly PROG=\"\${HOME} ${text}\""
   assert_passes 'l.sh' "some_command --regex='${text}'"
   assert_fires 'l.sh' 'max-line-length' 1 "some_command --first='${text}' --second='${text}'"
+}
+
+@test "bash style: a file tracked 100755 is executed even when its on-disk bit is clear" {
+  make_tracked_script '+x' '-x'
+  cd "${REPO_ROOT}"
+  run "${CHECK}" 't.sh'
+  assert_failure 1
+  assert_output --partial 't.sh:1: [strict-prologue]'
+}
+
+@test "bash style: a file tracked 100644 is sourced even when its on-disk bit is set" {
+  make_tracked_script '-x' '+x'
+  cd "${REPO_ROOT}"
+  run "${CHECK}" 't.sh'
+  assert_success
 }

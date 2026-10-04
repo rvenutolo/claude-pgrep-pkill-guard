@@ -689,12 +689,18 @@ def bound_positional:
   | select(test("^[1-9][0-9]*$"));
 
 # A local is named for the `@arg $N name` line that documents its position. A
-# nameref (`local -n`) may differ.
+# nameref (`local -n`) may differ, wherever the function assigns it.
 def shdoc_arg_name:
   documented_functions
   | . as $fn
   | ([.doc[] | capture("^ *@arg \\$(?<n>[0-9]+) +(?<name>[A-Za-z_][A-Za-z0-9_]*)")] | map({(.n): .name}) | add // {}) as $names
-  | .body | own_nodes
+  | .body as $body
+  | [
+      $body | own_nodes
+      | select(.Type == "DeclClause" and any(args[]; (.Value.Parts[0].Value? // "") | test("^-[a-zA-Z]*n")))
+      | args[] | .Name.Value? // empty
+    ] as $namerefs
+  | $body | own_nodes
   | (
       select(.Type == "DeclClause")
       | select(any(args[]; (.Value.Parts[0].Value? // "") | test("^-[a-zA-Z]*n")) | not)
@@ -708,7 +714,7 @@ def shdoc_arg_name:
     )
   | . as $bind
   | (.Value | bound_positional) as $n
-  | select($names[$n] != null and $names[$n] != $bind.Name.Value)
+  | select($names[$n] != null and $names[$n] != $bind.Name.Value and ($namerefs | index($bind.Name.Value) | not))
   | {
       line: $bind.Pos.Line,
       rule: "shdoc-arg-name",

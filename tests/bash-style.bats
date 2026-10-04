@@ -1212,3 +1212,9 @@ function assert_passes() {
   assert_fires 'd.sh' 'shdoc-stderr' 3 \
     '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN 1>&2' '}'
 }
+
+@test "bash style: shdoc-arg-name lets a nameref declared and assigned on separate lines differ" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 name_ref the variable to fill' \
+    'function fill() {' '  local -n out' '  out="$1"' '  out=1' '}'
+}

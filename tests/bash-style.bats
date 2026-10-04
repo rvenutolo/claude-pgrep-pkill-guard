@@ -635,3 +635,95 @@ function assert_passes() {
   assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
   assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
 }
+
+@test "bash style: blank-fallback-comment reports a blank fallback with no reason on its line" {
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || true'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || :'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 "value=\"\$(some_command)\" || value=''"
+}
+
+@test "bash style: blank-fallback-comment reports every spelling of a blank fallback" {
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || value='
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || value=""'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 "some_command || printf ''"
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || builtin :'
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || command true'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 'if some_command ||' '  true; then' '  echo PAYLOAD_RAN' 'fi'
+}
+
+@test "bash style: blank-fallback-comment passes a same-line reason and a named sentinel" {
+  assert_passes 's.sh' \
+    'some_command || true # fixture: failure is expected' \
+    "value=\"\$(some_command)\" || value='NO-VALUE'" \
+    "some_command || printf 'NO-HEAD'"
+}
+
+@test "bash style: blank-fallback-comment takes the reason from the line the fallback is on" {
+  assert_passes 's.sh' $'some_command \\' '  || true # fixture: failure is expected'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true' '# fixture: a reason on a later line does not count'
+}
+
+@test "bash style: blank-fallback-comment does not accept a reason on the line above" {
+  assert_fires 's.sh' 'blank-fallback-comment' 2 '# fixture: failure is expected' 'some_command || true'
+}
+
+@test "bash style: blank-fallback-comment passes a fallback that runs something" {
+  assert_passes 's.sh' 'some_command || other_command' 'some_command || return 1' "value=\"\$(some_command)\" || value='x'"
+}
+
+@test "bash style: shellcheck-disable-justified reports a directive with no reason" {
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck disable=SC2034' 'unused=1'
+  assert_passes 's.sh' '# shellcheck disable=SC2034 # fixture: read by a caller' 'unused=1'
+}
+
+@test "bash style: shellcheck-disable-justified reports a trailing directive and an empty reason" {
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 'unused=1 # shellcheck disable=SC2034'
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck disable=SC2034 #' 'unused=1'
+}
+
+@test "bash style: shellcheck-disable-justified reads several codes and combined directives" {
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck disable=SC2034,SC2154' 'unused=1'
+  assert_passes 's.sh' '# shellcheck disable=SC2034,SC2154 # fixture: read by a caller' 'unused=1'
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck source=/dev/null disable=SC1091' "source 'lib.sh'"
+  assert_passes 's.sh' '# shellcheck source=/dev/null disable=SC1091 # fixture: not a real file' "source 'lib.sh'"
+}
+
+@test "bash style: shellcheck-disable-justified leaves other directives alone" {
+  assert_passes 's.sh' '# shellcheck source=/dev/null' "source 'lib.sh'" '# shellcheck shell=bash'
+}
+
+@test "bash style: no-subst-or-exit reports || exit on a substitution assignment" {
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="$(some_command)" || exit 1'
+  assert_passes 's.sh' 'value="$(some_command)"' 'some_command || exit 1'
+}
+
+@test "bash style: no-subst-or-exit reports a substitution inside a longer value and exit behind a wrapper" {
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="prefix-$(some_command)" || exit 1'
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="$(some_command)" || exit'
+  assert_fires 's.sh' 'no-subst-or-exit' 1 'value="$(some_command)" || builtin exit 1'
+}
+
+@test "bash style: no-subst-or-exit passes an assignment with no substitution and a fallback that is not exit" {
+  assert_passes 's.sh' 'value=5 || exit 1' 'value="$(some_command)" || other_command'
+}
+
+@test "bash style: eval-comment reports an eval with no comment beside it" {
+  assert_fires 's.sh' 'eval-comment' 1 "eval 'echo PAYLOAD_RAN'"
+  assert_passes 's.sh' '# fixture: the string is a literal built above' "eval 'echo PAYLOAD_RAN'"
+}
+
+@test "bash style: eval-comment takes a comment on the same line" {
+  assert_passes 's.sh' "eval 'echo PAYLOAD_RAN' # fixture: the string is a literal"
+}
+
+@test "bash style: eval-comment reports an eval behind a wrapper or inside a substitution" {
+  assert_fires 's.sh' 'eval-comment' 1 "builtin eval 'echo PAYLOAD_RAN'"
+  assert_fires 's.sh' 'eval-comment' 1 "command eval 'echo PAYLOAD_RAN'"
+  assert_fires 's.sh' 'eval-comment' 1 "value=\"\$(eval 'echo PAYLOAD_RAN')\""
+}
+
+@test "bash style: eval-comment does not accept a comment two lines up and passes a lookup" {
+  assert_fires 's.sh' 'eval-comment' 3 '# fixture: too far away' 'some_command' "eval 'echo PAYLOAD_RAN'"
+  assert_passes 's.sh' 'command -v eval > /dev/null'
+}

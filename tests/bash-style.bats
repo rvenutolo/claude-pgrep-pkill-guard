@@ -27,6 +27,33 @@ function write_fixture() {
   printf '%s\n' "$@" > "${FIXTURE}"
 }
 
+# @description Write a fixture and set its executable bit, so the gate treats
+#              it as an executed script. Nothing ever runs it.
+# @arg $1 name file name, created under BATS_TEST_TMPDIR
+# @arg $@ lines the file's lines, in order
+# @set FIXTURE the absolute path of the file written
+function write_script() {
+  write_fixture "$@"
+  chmod +x "${FIXTURE}"
+}
+
+# @description Track a one-line script in a throwaway git repository, with the
+#              tracked mode and the on-disk executable bit set independently.
+# @arg $1 tracked_mode `+x` or `-x`: the mode git records
+# @arg $2 disk_mode `+x` or `-x`: the bit left on the file
+# @set REPO_ROOT the repository holding the file
+function make_tracked_script() {
+  local -r tracked_mode="$1"
+  local -r disk_mode="$2"
+  REPO_ROOT="${BATS_TEST_TMPDIR}/tracked"
+  mkdir -p "${REPO_ROOT}"
+  git -C "${REPO_ROOT}" init --quiet
+  printf '%s\n' 'echo PAYLOAD_RAN' > "${REPO_ROOT}/t.sh"
+  git -C "${REPO_ROOT}" add -- 't.sh'
+  git -C "${REPO_ROOT}" update-index "--chmod=${tracked_mode}" -- 't.sh'
+  chmod "${disk_mode}" "${REPO_ROOT}/t.sh"
+}
+
 # @description Assert the gate reports one rule at one line of a fixture.
 # @arg $1 name fixture file name; its directory part scopes path-based rules
 # @arg $2 rule the rule id expected in the FAIL line
@@ -494,7 +521,9 @@ function assert_passes() {
 }
 
 @test "bash style: empty-string-test passes a string that is not empty" {
-  assert_passes 't.sh' 'name=x' "[[ \"\${name}\" == ' ' ]] && echo PAYLOAD_RAN" '[[ "${name}" == "${name}" ]] && echo PAYLOAD_RAN'
+  assert_passes 't.sh' 'name=x' \
+    "[[ \"\${name}\" == ' ' ]] && echo PAYLOAD_RAN" \
+    '[[ "${name}" == "${name}" ]] && echo PAYLOAD_RAN'
 }
 
 @test "bash style: no-lexical-compare reports < and > inside [[ ]]" {
@@ -560,7 +589,8 @@ function assert_passes() {
 @test "bash style: no-pipe-while reports |& and until and a longer pipeline" {
   assert_fires 't.sh' 'no-pipe-while' 1 'some_command |& while read -r line; do' '  echo PAYLOAD_RAN' 'done'
   assert_fires 't.sh' 'no-pipe-while' 1 'some_command | until read -r line; do' '  echo PAYLOAD_RAN' 'done'
-  assert_fires 't.sh' 'no-pipe-while' 1 'some_command | other_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-pipe-while' 1 \
+    'some_command | other_command | while read -r line; do' '  echo PAYLOAD_RAN' 'done'
 }
 
 @test "bash style: no-pipe-while reports a loop wrapped in a block or subshell" {
@@ -631,15 +661,30 @@ function assert_passes() {
 @test "bash style: bare-arith-stmt passes (( )) used as a condition or with a reason" {
   assert_passes 't.sh' 'while ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
   assert_passes 't.sh' 'until ((count > 0)); do' '  echo PAYLOAD_RAN' 'done'
-  assert_passes 't.sh' 'if ((count > 0)); then' '  echo PAYLOAD_RAN' 'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
+  assert_passes 't.sh' \
+    'if ((count > 0)); then' '  echo PAYLOAD_RAN' \
+    'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
   assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
   assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
+}
+
+@test "bash style: bare-arith-stmt passes a negated statement" {
+  assert_passes 't.sh' '! ((count))'
+}
+
+@test "bash style: bare-arith-stmt passes a background statement" {
+  assert_passes 't.sh' '((count)) &'
 }
 
 @test "bash style: blank-fallback-comment reports a blank fallback with no reason on its line" {
   assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || true'
   assert_fires 's.sh' 'blank-fallback-comment' 1 'some_command || :'
   assert_fires 's.sh' 'blank-fallback-comment' 1 "value=\"\$(some_command)\" || value=''"
+}
+
+@test "bash style: blank-fallback-comment reads only an empty assignment as blank" {
+  assert_passes 's.sh' "value=\"\$(some_command)\" || items=('a')"
+  assert_fires 's.sh' 'blank-fallback-comment' 1 'value="$(some_command)" || items=()'
 }
 
 @test "bash style: blank-fallback-comment reports every spelling of a blank fallback" {
@@ -661,7 +706,8 @@ function assert_passes() {
 @test "bash style: blank-fallback-comment takes the reason from the line the fallback is on" {
   assert_passes 's.sh' $'some_command \\' '  || true # fixture: failure is expected'
   assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true'
-  assert_fires 's.sh' 'blank-fallback-comment' 2 $'some_command \\' '  || true' '# fixture: a reason on a later line does not count'
+  assert_fires 's.sh' 'blank-fallback-comment' 2 \
+    $'some_command \\' '  || true' '# fixture: a reason on a later line does not count'
 }
 
 @test "bash style: blank-fallback-comment does not accept a reason on the line above" {
@@ -669,7 +715,8 @@ function assert_passes() {
 }
 
 @test "bash style: blank-fallback-comment passes a fallback that runs something" {
-  assert_passes 's.sh' 'some_command || other_command' 'some_command || return 1' "value=\"\$(some_command)\" || value='x'"
+  assert_passes 's.sh' 'some_command || other_command' 'some_command || return 1' \
+    "value=\"\$(some_command)\" || value='x'"
 }
 
 @test "bash style: shellcheck-disable-justified reports a directive with no reason" {
@@ -726,4 +773,251 @@ function assert_passes() {
 @test "bash style: eval-comment does not accept a comment two lines up and passes a lookup" {
   assert_fires 's.sh' 'eval-comment' 3 '# fixture: too far away' 'some_command' "eval 'echo PAYLOAD_RAN'"
   assert_passes 's.sh' 'command -v eval > /dev/null'
+}
+
+@test "bash style: main-last reports an executed script whose last function is not main" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] main is the last function defined"
+}
+
+@test "bash style: main-last reports an executed script that does not end in main" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'main "$@"' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:7: [main-last] the last statement is main"
+}
+
+@test "bash style: main-last reports a lone helper and a main call that drops the arguments" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'helper'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [main-last] main is the last function defined"
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'main'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] the last statement is main"
+}
+
+@test "bash style: the layout rules pass a well-formed executed script, one with no functions, and any sourced file" {
+  write_script 'ok.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'function main() {' '  helper' '}' \
+    'main "$@"' '# a trailing comment'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  write_script 'flat.sh' 'set -Eeuo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  assert_passes 'lib.sh' 'function helper() {' '  echo PAYLOAD_RAN' '}' 'echo PAYLOAD_RAN'
+  assert_passes 'suite.bats' 'function helper() {' '  echo PAYLOAD_RAN' '}' '@test "inert" {' '  helper' '}'
+}
+
+@test "bash style: functions-grouped reports a statement between two functions" {
+  write_script 'g.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'echo PAYLOAD_RAN' \
+    'function main() {' '  helper' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+}
+
+@test "bash style: functions-grouped reports a readonly between functions and allows a comment there" {
+  write_script 'g.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'readonly LATE=1' \
+    'function main() {' '  helper' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+  write_script 'g.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# a comment between functions' \
+    'function main() {' '  helper' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: strict-prologue reports a missing pragma and a missing IFS" {
+  write_script 'p.sh' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] set -Eeuo pipefail"
+  write_script 'p.sh' 'set -Eeuo pipefail' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] IFS="
+}
+
+@test "bash style: strict-prologue allows shopt and a version guard between the pragma and IFS" {
+  write_script 'p.sh' \
+    'set -Eeuo pipefail' \
+    'if ((BASH_VERSINFO[0] < 4)); then' '  exit 1' 'fi' \
+    'shopt -s inherit_errexit' \
+    "IFS=\$'\\n\\t'" \
+    'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: strict-prologue wants -E, and reads the pragma after a version guard" {
+  write_script 'p.sh' 'set -euo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] set -Eeuo pipefail"
+  write_script 'p.sh' \
+    'if ((BASH_VERSINFO[0] < 4)); then' '  exit 1' 'fi' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: strict-prologue reports IFS set before the pragma and a one-command IFS" {
+  write_script 'p.sh' "IFS=\$'\\n\\t'" 'set -Eeuo pipefail' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:2: [strict-prologue] IFS="
+  write_script 'p.sh' 'set -Eeuo pipefail' "IFS=\$'\\n\\t' read -r line" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:1: [strict-prologue] IFS="
+}
+
+@test "bash style: strict-prologue accepts IFS assigned with readonly" {
+  write_script 'p.sh' 'set -Eeuo pipefail' "readonly IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: no-default-wellknown-env reports a default on HOME" {
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${HOME:-/nowhere}"'
+  assert_passes 'e.sh' 'echo "${HOME}" "${OPTIONAL_THING:-}"'
+}
+
+@test "bash style: no-default-wellknown-env reports every spelling of a default and every well-known name" {
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${HOME:-}"'
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${HOME-/nowhere}"'
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${USER:=nobody}"'
+  assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${SDKMAN_DIR:-/nowhere}"'
+  assert_passes 'e.sh' 'echo "${HOME:+set}" "${TMPDIR:-/tmp}"'
+}
+
+@test "bash style: max-line-length reports a long multi-word line and a long comment" {
+  local word
+  word="$(printf 'a%.0s' {1..70})"
+  assert_fires 'l.sh' 'max-line-length' 1 "echo ${word} ${word}"
+  assert_fires 'l.sh' 'max-line-length' 1 "# ${word} ${word}"
+}
+
+@test "bash style: max-line-length excuses one unbreakable literal, and counts characters, not bytes" {
+  local literal dashes
+  literal="$(printf 'a%.0s' {1..130})"
+  assert_passes 'l.sh' "echo '${literal}'"
+  # 110 em dashes are 110 characters and 330 bytes.
+  dashes="$(printf '—%.0s' {1..110})"
+  assert_passes 'l.sh' "# ${dashes}"
+}
+
+@test "bash style: max-line-length does not count marker text" {
+  local word
+  word="$(printf 'a%.0s' {1..100})"
+  assert_fires 'hooks/l.sh' 'marker-unused' 1 "echo ${word} # bash-style allow=function-keyword: fixture reason"
+  refute_output --partial '[max-line-length]'
+}
+
+@test "bash style: max-line-length excuses a comment with one unbroken word, not one of ordinary words" {
+  local url prose
+  url="https://example.invalid/$(printf 'a%.0s' {1..90})"
+  prose="$(printf 'word %.0s' {1..30})"
+  assert_passes 'l.sh' "# see ${url} for the details of this"
+  assert_fires 'l.sh' 'max-line-length' 1 "# ${prose}"
+  assert_fires 'l.sh' 'max-line-length' 1 "# ${url} ${url}"
+}
+
+@test "bash style: max-line-length reports a long line inside a heredoc" {
+  local literal
+  literal="$(printf 'a%.0s' {1..130})"
+  assert_fires 'l.sh' 'max-line-length' 2 "cat <<'EOF'" "echo ${literal} ${literal}" 'EOF'
+  assert_passes 'l.sh' "printf '%s\\n' '${literal}'"
+}
+
+@test "bash style: max-line-length reports a line of exactly 121 characters and passes one of 120" {
+  local long short
+  long="$(printf 'a%.0s' {1..58})"
+  short="$(printf 'a%.0s' {1..57})"
+  assert_fires 'l.sh' 'max-line-length' 1 "echo ${long} ${short}"
+  assert_passes 'l.sh' "echo ${short} ${short}"
+}
+
+@test "bash style: max-line-length excuses a long quoted string after an assignment or an option" {
+  local text
+  text="$(printf 'word %.0s' {1..30})"
+  assert_passes 'l.sh' "PROG='${text}'"
+  assert_passes 'l.sh' "readonly PROG=\"\${HOME} ${text}\""
+  assert_passes 'l.sh' "some_command --regex='${text}'"
+  assert_fires 'l.sh' 'max-line-length' 1 "some_command --first='${text}' --second='${text}'"
+}
+
+@test "bash style: a file tracked 100755 is executed even when its on-disk bit is clear" {
+  make_tracked_script '+x' '-x'
+  cd "${REPO_ROOT}"
+  run "${CHECK}" 't.sh'
+  assert_failure 1
+  assert_output --partial 't.sh:1: [strict-prologue]'
+}
+
+@test "bash style: a file tracked 100644 is sourced even when its on-disk bit is set" {
+  make_tracked_script '-x' '+x'
+  cd "${REPO_ROOT}"
+  run "${CHECK}" 't.sh'
+  assert_success
+}
+
+@test "bash style: main-last reports exec main and an exit after main" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'exec main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] the last statement is main"
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'main "$@"' 'exit'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:7: [main-last] the last statement is main"
+}
+
+@test "bash style: the layout rules pass entry code between the last function and main" {
+  write_script 'e.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'if (($# == 0)); then' '  exit 1' 'fi' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
 }

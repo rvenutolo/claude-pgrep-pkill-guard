@@ -2,13 +2,16 @@
 # data: no shebang, no executable bit.
 #
 # Input is one `shfmt --to-json` tree. Each rule is a function that emits zero
-# or more {line, rule, message} objects. `report` runs every rule, drops the
-# hits an exception marker covers, and prints one line per remaining hit.
+# or more {line, rule, message} objects. Besides the tree, `report` and `hits`
+# receive the file's display path, its source text, and whether the file is
+# sourced or executed; a rule takes the ones it needs as parameters. `report`
+# runs every rule, drops the hits an exception marker covers, and prints one
+# line per remaining hit.
 #
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -426,14 +429,21 @@ def no_alias:
 
 # (( expr )) as a whole statement, in any body: exit status 1 when the value is
 # zero. A condition (if, elif, while, until) is left alone, and so is the left
-# side of && and ||: neither trips errexit.
+# side of && and ||: neither trips errexit, and neither does a negated or a
+# background statement.
 def bare_arith_stmt:
   nodes
   | [.Stmts?, .Then?, .Do?][]
   | arrays
   | .[]
-  | select(.Cmd.Type == "ArithmCmd")
+  | select(.Cmd.Type == "ArithmCmd" and ((.Negated // false) | not) and ((.Background // false) | not))
   | {line: .Pos.Line, rule: "bare-arith-stmt", message: "a bare (( )) fails under set -e when it evaluates to zero"};
+
+# An assignment of nothing: `name=`, `name=''`, `name=""` or `name=()`.
+def is_empty_assign:
+  if has("Array") then ((.Array.Elems // []) | length) == 0
+  else (.Value // {}) | (has("Parts") | not) or is_empty_word
+  end;
 
 # || true, || :, || var=, || var='' and || printf '' swallow a failure without
 # naming it: they need a reason on the same line. A fallback that substitutes a
@@ -448,7 +458,7 @@ def blank_fallback_comment:
   | ($w[0].Parts[0].Value // "") as $cmd
   | select(
       ($cmd | IN("true", ":"))
-      or ($cmd == "" and ($w | length) == 0 and ($assigns | length) == 1 and (($assigns[0].Value // {}) | (has("Parts") | not) or is_empty_word))
+      or ($cmd == "" and ($w | length) == 0 and ($assigns | length) == 1 and ($assigns[0] | is_empty_assign))
       or ($cmd == "printf" and ($w[1] | is_empty_word))
     )
   | select(.Y.Pos.Line as $l | $commented | index($l) | not)
@@ -484,7 +494,102 @@ def eval_comment:
   | select((($commented | index($l)) == null) and (($commented | index($l - 1)) == null))
   | {line: $l, rule: "eval-comment", message: "justify the eval in a comment"};
 
-def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment;
+# The top-level statements of the file, in order.
+def top: (.Stmts // []);
+
+# A statement that is exactly `main "$@"`.
+def is_main_call:
+  .Cmd.Type == "CallExpr"
+  and (.Cmd | cmdname) == "main"
+  and ((.Cmd | args) | length) == 2
+  and (.Cmd.Args[1].Parts | length) == 1
+  and .Cmd.Args[1].Parts[0].Type == "DblQuoted"
+  and ([.Cmd.Args[1].Parts[0].Parts[]? | .Param.Value?] == ["@"]);
+
+# An executed script with helper functions: main is the last function, and
+# `main "$@"` is the last statement.
+def main_last($sourced):
+  select($sourced | not)
+  | [top[] | select(.Cmd.Type == "FuncDecl")] as $functions
+  | select(($functions | length) > 0)
+  | (top | last) as $last
+  | (
+      select($functions | last | .Cmd.Name.Value != "main")
+      | {line: ($functions | last | .Pos.Line), rule: "main-last", message: "main is the last function defined"}
+    ),
+    (
+      select($last | is_main_call | not)
+      | {line: $last.Pos.Line, rule: "main-last", message: "the last statement is main \"$@\""}
+    );
+
+# Between the first function and the last, an executed script holds nothing
+# but function definitions.
+def functions_grouped($sourced):
+  select($sourced | not)
+  | [top | to_entries[] | select(.value.Cmd.Type == "FuncDecl") | .key] as $at
+  | select(($at | length) > 1)
+  | top[($at | first):($at | last)][]
+  | select(.Cmd.Type != "FuncDecl")
+  | {line: .Pos.Line, rule: "functions-grouped", message: "move this statement above the first function or below the last"};
+
+# `set -Eeuo pipefail`, whole.
+def is_strict_pragma:
+  .Type == "CallExpr"
+  and cmdname == "set"
+  and ([args[1:][] | .Parts[0].Value // ""] == ["-Eeuo", "pipefail"]);
+
+# A command that only assigns IFS: `IFS=...`, or `readonly IFS=...` and the
+# like. `IFS=... read` sets it for one command and does not count.
+def is_ifs_assignment:
+  (.Type == "CallExpr" and (args | length) == 0 and any(.Assigns[]?; .Name.Value == "IFS"))
+  or (.Type == "DeclClause" and any(args[]; .Name.Value? == "IFS"));
+
+# An executed script sets strict mode and then the strict IFS, both before its
+# first function.
+def strict_prologue($sourced):
+  select($sourced | not)
+  | top as $stmts
+  | select(($stmts | length) > 0)
+  | ([$stmts | to_entries[] | select(.value.Cmd.Type == "FuncDecl") | .key] | first // ($stmts | length)) as $first_function
+  | [$stmts[:$first_function][] | .Cmd] as $head
+  | ([$head | to_entries[] | select(.value | is_strict_pragma) | .key] | first) as $set
+  | ([$head | to_entries[] | select(.value | is_ifs_assignment) | .key] | first) as $ifs
+  | if $set == null then
+      {line: 1, rule: "strict-prologue", message: "set -Eeuo pipefail before the first function"}
+    elif $ifs == null or $ifs < $set then
+      {line: $stmts[$set].Pos.Line, rule: "strict-prologue", message: "IFS=$'\\n\\t' after set -Eeuo pipefail, before the first function"}
+    else
+      empty
+    end;
+
+# ${HOME:-...}: a well-known environment variable gets no default, however the
+# default is spelled.
+def no_default_wellknown_env:
+  nodes
+  | select(.Type == "ParamExp" and ((.Exp.Op // "") | IN(":-", "-", ":=", "=")))
+  | select((.Param.Value // "") | IN("HOME", "USER", "PATH", "SHELL", "PWD", "SDKMAN_DIR"))
+  | {line: .Pos.Line, rule: "no-default-wellknown-env", message: ("no default for " + .Param.Value + "; let set -u catch it")};
+
+# A line over 120 characters. A line is excused when exactly one quoted string
+# or unbroken word on it is 100 characters or more: that literal would overflow
+# even alone on a continuation line, so wrapping cannot help. A quoted string
+# counts wherever it starts in a word, so name='...' and --opt='...' are one
+# literal. Two such literals can each take a line, so those lines are reported.
+# A comment line has no quoted strings, only words: one URL it cannot wrap
+# excuses it, a long comment of ordinary words does not. Marker text does not
+# count.
+def max_line_length($src):
+  $src | split("\n") | to_entries[]
+  | (.value | sub(" ?# bash-style allow=.*$"; "")) as $text
+  | ($text | length) as $len
+  | select($len > 120)
+  | ($text | test("^\\s*#")) as $comment
+  | (if $comment then "[^ ]+" else "(?:'[^']*'|\"[^\"]*\"|[^ '\"]|['\"])+" end) as $token
+  | ([$text | match($token; "g") | .string | length | select(. >= 100)] | length) as $literals
+  | select($literals != 1)
+  | {line: (.key + 1), rule: "max-line-length", message: ("\($len) characters; the limit is 120")};
+
+def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src);
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
@@ -517,10 +622,10 @@ def markers:
       }
   ];
 
-def report($path; $src):
+def report($path; $src; $sourced):
   if .Type != "File" then error("not a shfmt syntax tree") else . end
   | markers as $markers
-  | [hits($path; $src)] as $hits
+  | [hits($path; $src; $sourced)] as $hits
   | (
       $hits[]
       | . as $hit

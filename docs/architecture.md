@@ -539,6 +539,11 @@ parses each file with `shfmt --to-json` and runs the rules in
 comment and a heredoc body as different things. That module is the rule list:
 one function per rule, each with a stable kebab-case id.
 
+Each rule is also told whether the file is sourced or executed. A bats file is
+sourced; otherwise the tracked mode decides (`100644` sourced, `100755`
+executed), the same fact `.ci/check-executable-bit` enforces. A file outside a
+git tree, or one git does not track, falls back to its on-disk executable bit.
+
 One site can be excused with a comment on the statement, or alone on the line
 above it:
 

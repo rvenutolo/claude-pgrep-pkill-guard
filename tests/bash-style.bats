@@ -27,6 +27,16 @@ function write_fixture() {
   printf '%s\n' "$@" > "${FIXTURE}"
 }
 
+# @description Write a fixture and set its executable bit, so the gate treats
+#              it as an executed script. Nothing ever runs it.
+# @arg $1 name file name, created under BATS_TEST_TMPDIR
+# @arg $@ lines the file's lines, in order
+# @set FIXTURE the absolute path of the file written
+function write_script() {
+  write_fixture "$@"
+  chmod +x "${FIXTURE}"
+}
+
 # @description Assert the gate reports one rule at one line of a fixture.
 # @arg $1 name fixture file name; its directory part scopes path-based rules
 # @arg $2 rule the rule id expected in the FAIL line
@@ -739,4 +749,57 @@ function assert_passes() {
 @test "bash style: eval-comment does not accept a comment two lines up and passes a lookup" {
   assert_fires 's.sh' 'eval-comment' 3 '# fixture: too far away' 'some_command' "eval 'echo PAYLOAD_RAN'"
   assert_passes 's.sh' 'command -v eval > /dev/null'
+}
+
+@test "bash style: main-last reports an executed script whose last function is not main" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] main is the last function defined"
+}
+
+@test "bash style: main-last reports an executed script that does not end in main" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'main "$@"' 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:7: [main-last] the last statement is main"
+}
+
+@test "bash style: main-last reports a lone helper and a main call that drops the arguments" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'helper'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [main-last] main is the last function defined"
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'main'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] the last statement is main"
+}
+
+@test "bash style: the layout rules pass a well-formed executed script, one with no functions, and any sourced file" {
+  write_script 'ok.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    'function main() {' '  helper' '}' \
+    'main "$@"' '# a trailing comment'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  write_script 'flat.sh' 'set -Eeuo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  assert_passes 'lib.sh' 'function helper() {' '  echo PAYLOAD_RAN' '}' 'echo PAYLOAD_RAN'
+  assert_passes 'suite.bats' 'function helper() {' '  echo PAYLOAD_RAN' '}' '@test "inert" {' '  helper' '}'
 }

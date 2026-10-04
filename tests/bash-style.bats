@@ -671,3 +671,24 @@ function assert_passes() {
 @test "bash style: blank-fallback-comment passes a fallback that runs something" {
   assert_passes 's.sh' 'some_command || other_command' 'some_command || return 1' "value=\"\$(some_command)\" || value='x'"
 }
+
+@test "bash style: shellcheck-disable-justified reports a directive with no reason" {
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck disable=SC2034' 'unused=1'
+  assert_passes 's.sh' '# shellcheck disable=SC2034 # fixture: read by a caller' 'unused=1'
+}
+
+@test "bash style: shellcheck-disable-justified reports a trailing directive and an empty reason" {
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 'unused=1 # shellcheck disable=SC2034'
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck disable=SC2034 #' 'unused=1'
+}
+
+@test "bash style: shellcheck-disable-justified reads several codes and combined directives" {
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck disable=SC2034,SC2154' 'unused=1'
+  assert_passes 's.sh' '# shellcheck disable=SC2034,SC2154 # fixture: read by a caller' 'unused=1'
+  assert_fires 's.sh' 'shellcheck-disable-justified' 1 '# shellcheck source=/dev/null disable=SC1091' "source 'lib.sh'"
+  assert_passes 's.sh' '# shellcheck source=/dev/null disable=SC1091 # fixture: not a real file' "source 'lib.sh'"
+}
+
+@test "bash style: shellcheck-disable-justified leaves other directives alone" {
+  assert_passes 's.sh' '# shellcheck source=/dev/null' "source 'lib.sh'" '# shellcheck shell=bash'
+}

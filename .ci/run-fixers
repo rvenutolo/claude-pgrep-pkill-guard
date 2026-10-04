@@ -55,6 +55,8 @@
 # @exitcode 0 every fixer ran and had nothing left it could not fix
 # @exitcode 1 a fixer failed, left an unfixable finding, or a file list came
 #             up empty
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

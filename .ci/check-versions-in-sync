@@ -25,6 +25,8 @@
 # @exitcode 0 every version field agrees
 # @exitcode 1 a file is missing or unparsable, a version field is absent,
 #             malformed or unannotated, or the versions disagree
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

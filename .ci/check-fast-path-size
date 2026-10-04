@@ -26,6 +26,8 @@
 # @noargs
 # @exitcode 0 the entry script is within the ceiling
 # @exitcode 1 it is over the ceiling, missing or unreadable, or reads as zero lines
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

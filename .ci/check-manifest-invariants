@@ -32,6 +32,8 @@
 # @exitcode 1 a file is missing or unparsable, the invariant program fails to
 #             run, or an invariant is violated
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when no tree is given and the
+#             repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

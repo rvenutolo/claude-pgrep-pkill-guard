@@ -53,6 +53,8 @@
 # @exitcode 1 a phrase is missing, a listed file is unreadable or reads as
 #             empty, or the table is empty
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when no fixture directory is
+#             given and the repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

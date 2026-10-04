@@ -62,6 +62,8 @@
 # @exitcode 0 every in-scope return is preceded by `trap - ERR`
 # @exitcode 1 at least one is not, or the scan came up empty or emitted a
 #             record it cannot read
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

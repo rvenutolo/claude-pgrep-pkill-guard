@@ -11,7 +11,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -589,7 +589,236 @@ def max_line_length($src):
   | select($literals != 1)
   | {line: (.key + 1), rule: "max-line-length", message: ("\($len) characters; the limit is 120")};
 
-def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src);
+# The functions bats itself calls. They take no arguments and exist to set
+# per-test globals, so they carry no shdoc block.
+def bats_hooks: ["setup", "teardown", "setup_file", "teardown_file"];
+
+# The comment lines that end on the line directly above $line, each directly
+# above the next. shfmt attaches every comment since the previous statement to
+# the next one, so a file header separated from a function by a blank line
+# arrives in the same list and must not count as that function's shdoc.
+def contiguous_comments($line):
+  [
+    foreach (reverse | .[]) as $comment (
+      {want: ($line - 1), keep: true};
+      if .keep and $comment.Hash.Line == .want then
+        {want: (.want - 1), keep: true, comment: $comment}
+      else
+        {keep: false}
+      end;
+      select(.keep) | .comment
+    )
+  ]
+  | reverse;
+
+# Every function with the comment block directly above it:
+# {name, line, doc: [comment texts], body}. main and the bats hooks are left
+# out: a script's contract is its file header, not a block above main.
+def documented_functions:
+  nodes
+  | select(has("Cmd") and .Cmd.Type == "FuncDecl")
+  | select(.Cmd.Name.Value as $name | (["main"] + bats_hooks) | index($name) | not)
+  | .Cmd.Pos.Line as $line
+  | {
+      name: .Cmd.Name.Value,
+      line: $line,
+      doc: [((.Comments // []) | contiguous_comments($line))[] | .Text // ""],
+      body: .Cmd.Body
+    };
+
+# A function other than main carries @description, and @arg or @noargs.
+def shdoc_present:
+  documented_functions
+  | (.doc | any(test("^ *@description\\b"))) as $described
+  | (.doc | any(test("^ *@(arg|noargs)\\b"))) as $argued
+  | select(($described and $argued) | not)
+  | {
+      line,
+      rule: "shdoc-present",
+      message: (.name + " needs " + (if $described then "@arg or @noargs" else "@description" end))
+    };
+
+# The positional numbers a doc block documents with `@arg $N`, as strings,
+# plus "@" when it has `@arg $@`.
+def doc_positions: [.doc[] | capture("^ *@arg \\$(?<n>[0-9]+|@)") | .n] | unique;
+
+# Every object under a node, without descending into a node whose Type is in
+# $skip.
+def scoped_nodes($skip):
+  if type == "object" then
+    ., (if (.Type // "") | IN($skip[]) then empty else .[] | scoped_nodes($skip) end)
+  elif type == "array" then
+    .[] | scoped_nodes($skip)
+  else
+    empty
+  end;
+
+# Every object under a node, leaving out the bodies of nested functions: their
+# positionals are their own.
+def own_nodes: scoped_nodes(["FuncDecl"]);
+
+# Like own_nodes, and also leaving out subshells and substitutions: they run in
+# a child process, so what they assign never reaches the caller's globals.
+def global_nodes: scoped_nodes(["FuncDecl", "Subshell", "CmdSubst", "ProcSubst"]);
+
+# The positionals a body reads, as strings: the numbers, "@" for $@ and $*, and
+# "#" for $#.
+def body_positions:
+  [
+    .body | own_nodes
+    | select(.Type == "ParamExp")
+    | (.Param.Value // "")
+    | select(test("^([1-9][0-9]*|[@*#])$"))
+    | if . == "*" then "@" else . end
+  ]
+  | unique;
+
+# The @arg lines name exactly the positionals the body reads. `$@` documents a
+# variadic function, which walks its arguments with `$1` and `shift` or only
+# counts them with `$#`; such a block is wrong only when the body reads no
+# positional at all. `$#` alone never names a numbered `@arg`.
+def shdoc_arg_positions:
+  documented_functions
+  | select(.doc | any(test("^ *@(arg|noargs)\\b")))
+  | doc_positions as $doc
+  | body_positions as $read
+  | ($read - ["#"]) as $body
+  | select(
+      if ($doc | index("@")) != null then
+        ($read | length) == 0
+      else
+        $doc != $body
+      end
+    )
+  | {
+      line,
+      rule: "shdoc-arg-positions",
+      message: (.name + " documents [" + ($doc | join(" ")) + "] and reads [" + ($body | join(" ")) + "]")
+    };
+
+# The number N when a word is exactly "$N", "${N}" or "${N:-default}": a
+# positional bound whole, not transformed.
+def bound_positional:
+  ((.Parts // []) | select(length == 1) | .[0]) as $part
+  | ($part | if .Type == "DblQuoted" then ((.Parts // []) | select(length == 1) | .[0]) else . end) as $value
+  | select($value.Type == "ParamExp")
+  | select(($value | has("Index") or has("Slice") or has("Repl") or has("Length") or has("Excl")) | not)
+  | select(($value.Exp.Op // ":-") | IN(":-", "-"))
+  | ($value.Param.Value // "")
+  | select(test("^[1-9][0-9]*$"));
+
+# A local is named for the `@arg $N name` line that documents its position. A
+# nameref (`local -n`) may differ, wherever the function assigns it.
+def shdoc_arg_name:
+  documented_functions
+  | . as $fn
+  | ([.doc[] | capture("^ *@arg \\$(?<n>[0-9]+) +(?<name>[A-Za-z_][A-Za-z0-9_]*)")] | map({(.n): .name}) | add // {}) as $names
+  | .body as $body
+  | [
+      $body | own_nodes
+      | select(.Type == "DeclClause" and any(args[]; (.Value.Parts[0].Value? // "") | test("^-[a-zA-Z]*n")))
+      | args[] | .Name.Value? // empty
+    ] as $namerefs
+  | $body | own_nodes
+  | (
+      select(.Type == "DeclClause")
+      | select(any(args[]; (.Value.Parts[0].Value? // "") | test("^-[a-zA-Z]*n")) | not)
+      | args[]
+      | select(has("Name") and .Value != null)
+    ),
+    (
+      select(.Type == "CallExpr" and (args | length) == 0)
+      | (.Assigns // [])[]
+      | select(has("Name") and .Value != null)
+    )
+  | . as $bind
+  | (.Value | bound_positional) as $n
+  | select($names[$n] != null and $names[$n] != $bind.Name.Value and ($namerefs | index($bind.Name.Value) | not))
+  | {
+      line: $bind.Pos.Line,
+      rule: "shdoc-arg-name",
+      message: ($fn.name + " binds $" + $n + " to " + $bind.Name.Value + " but documents it as " + $names[$n])
+    };
+
+# A DeclClause that sets a global: readonly, export, or declare/typeset -g.
+def declares_global:
+  .Variant.Value as $variant
+  | ($variant | IN("readonly", "export"))
+    or (
+      ($variant | IN("declare", "typeset"))
+      and any(args[]; (.Value.Parts[0].Value? // "") | test("^-[a-zA-Z]*g"))
+    );
+
+# The names a function's own body declares with local or declare/typeset.
+def declared_names:
+  [
+    own_nodes
+    | select(.Type == "DeclClause" and (declares_global | not))
+    | args[] | .Name.Value? // empty
+  ];
+
+# Names the shell owns and a function sets as part of a builtin protocol
+# (completion, getopts, read, prompts): a caller never reads them as the
+# function's output. PATH is not here: a caller reads the new value.
+def shell_owned_names:
+  ["IFS", "RANDOM", "SECONDS", "OPTIND", "OPTARG", "OPTERR", "COMPREPLY", "REPLY", "BASH_REMATCH", "PIPESTATUS",
+   "LINENO", "FUNCNAME", "EPOCHSECONDS", "PS1", "PS2", "PS3", "PS4", "PROMPT_COMMAND"];
+
+# A function that assigns an upper-case global documents it with @set. Names
+# the function, or a function around it, declares itself (local, declare) are
+# not globals. The names in shell_owned_names are skipped.
+def shdoc_set:
+  . as $root
+  | documented_functions
+  | . as $fn
+  | (
+      [.body | declared_names]
+      + [$root | nodes | select(.Type == "FuncDecl" and .Pos.Line < $fn.line and .End.Line >= $fn.line) | .Body | declared_names]
+      | add
+    ) as $declared
+  | [.doc[] | capture("^ *@set +(?<name>[A-Za-z_][A-Za-z0-9_]*)") | .name] as $documented
+  | [
+      $fn.body | global_nodes
+      | (
+          select(.Type == "CallExpr" and (args | length) == 0) | (.Assigns // [])[]
+        ),
+        (
+          select(.Type == "DeclClause" and declares_global) | args[] | select(has("Name") and .Value != null)
+        )
+      | {name: (.Name.Value // ""), line: .Pos.Line}
+      | select(.name | test("^[A-Z][A-Z0-9_]*$"))
+      | select(.name | IN(shell_owned_names[]) | not)
+      | select(.name as $n | ($declared + $documented) | index($n) | not)
+    ]
+  | unique_by(.name)[]
+  | {line, rule: "shdoc-set", message: ($fn.name + " assigns " + .name + " without an @set line")};
+
+# A function whose own body writes to fd 2 (>&2, 1>&2, > /dev/stderr) says so
+# with @stderr. Only a redirect whose source is fd 1 writes there: 3>&2 copies
+# the descriptor and writes nothing, and a bare `exec` only rearranges
+# descriptors. Calling a logger that writes to fd 2 is not the function's own
+# write, and neither is the body of a nested function.
+def shdoc_stderr:
+  documented_functions
+  | select(.doc | any(test("^ *@stderr\\b")) | not)
+  | . as $fn
+  | select(
+      any(
+        .body | own_nodes | select(has("Redirs"))
+        | (((.Cmd.Args // []) | length == 1 and (.[0].Parts[0].Value // "") == "exec") | not) as $writes
+        | .Redirs[]
+        | $writes
+          and ((.N.Value // "1") == "1")
+          and (
+            (.Op == ">&" and ((.Word.Parts[0].Value // "") == "2"))
+            or (.Op == ">" and ((.Word.Parts[0].Value // "") == "/dev/stderr"))
+          );
+        .
+      )
+    )
+  | {line: $fn.line, rule: "shdoc-stderr", message: ($fn.name + " writes to stderr without an @stderr line")};
+
+def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

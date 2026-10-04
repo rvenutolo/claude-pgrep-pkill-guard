@@ -84,7 +84,7 @@ function assert_passes() {
 }
 
 @test "bash style: function-keyword passes a function defined with the keyword" {
-  assert_passes 'kw.sh' 'function greet() {' '  echo PAYLOAD_RAN' '}'
+  assert_passes 'kw.sh' '# @description Inert.' '# @noargs' 'function greet() {' '  echo PAYLOAD_RAN' '}'
 }
 
 @test "bash style: no-raw-tab reports a tab inside a heredoc body" {
@@ -102,7 +102,7 @@ function assert_passes() {
 
 @test "bash style: a clean file passes" {
   write_fixture 'clean.sh' \
-    'function greet() {' \
+    '# @description Inert.' '# @noargs' 'function greet() {' \
     '  echo PAYLOAD_RAN' \
     '}'
   run "${CHECK}" "${FIXTURE}"
@@ -147,6 +147,7 @@ function assert_passes() {
 
 @test "bash style: a marker on the same line excuses the violation" {
   write_fixture 'marked.sh' \
+    '# @description Inert.' '# @noargs' \
     'greet() { # bash-style allow=function-keyword: fixture reason' \
     '  echo PAYLOAD_RAN' \
     '}'
@@ -156,6 +157,7 @@ function assert_passes() {
 
 @test "bash style: a marker on the line above excuses the violation" {
   write_fixture 'above.sh' \
+    '# @description Inert.' '# @noargs' \
     '# bash-style allow=function-keyword: fixture reason' \
     'greet() {' \
     '  echo PAYLOAD_RAN' \
@@ -408,7 +410,7 @@ function assert_passes() {
 @test "bash style: long-options leaves flags that are data alone" {
   # A flag handed to a function defined in the file, or to a command held in a
   # variable, is input for the thing under test.
-  assert_passes 'o.sh' 'function run_cli() {' '  echo PAYLOAD_RAN' '}' 'run_cli -h'
+  assert_passes 'o.sh' '# @description Inert.' '# @noargs' 'function run_cli() {' '  echo PAYLOAD_RAN' '}' 'run_cli -h'
   assert_passes 'o.sh' 'tool=some_command' '"${tool}" -h'
   assert_passes 'o.sh' 'some_command -- -x'
   assert_passes 'o.sh' "echo 'rm -f inert-string'" "cat <<'EOF'" 'grep -q x' 'EOF'
@@ -538,11 +540,13 @@ function assert_passes() {
 }
 
 @test "bash style: no-one-line-case reports a one-line case inside a one-line function" {
-  assert_fires 't.sh' 'no-one-line-case' 1 'function f() { case x in x) echo PAYLOAD_RAN ;; esac; }'
+  assert_fires 't.sh' 'no-one-line-case' 3 \
+    '# @description Inert.' '# @noargs' 'function f() { case x in x) echo PAYLOAD_RAN ;; esac; }'
 }
 
 @test "bash style: no-one-line-case passes an expanded case inside a function" {
-  assert_passes 't.sh' 'function f() {' '  case x in' '    x) echo PAYLOAD_RAN ;;' '  esac' '}'
+  assert_passes 't.sh' \
+    '# @description Inert.' '# @noargs' 'function f() {' '  case x in' '    x) echo PAYLOAD_RAN ;;' '  esac' '}'
 }
 
 @test "bash style: no-fallthrough reports ;& and ;;&" {
@@ -564,7 +568,8 @@ function assert_passes() {
 }
 
 @test "bash style: explicit-for-in reports the implicit loop inside a function" {
-  assert_fires 't.sh' 'explicit-for-in' 2 'function f() {' '  for arg; do' '    echo PAYLOAD_RAN' '  done' '}'
+  assert_fires 't.sh' 'explicit-for-in' 4 \
+    '# @description Inert.' '# @noargs' 'function f() {' '  for arg; do' '    echo PAYLOAD_RAN' '  done' '}'
 }
 
 @test "bash style: no-for-in-subst reports a loop over a command substitution" {
@@ -655,7 +660,7 @@ function assert_passes() {
   assert_fires 't.sh' 'bare-arith-stmt' 2 'for i in 1 2; do' '  ((count++))' 'done'
   assert_fires 't.sh' 'bare-arith-stmt' 3 'case x in' '  x)' '    ((count++))' '    ;;' 'esac'
   assert_fires 't.sh' 'bare-arith-stmt' 1 '( ((count++)) )'
-  assert_fires 't.sh' 'bare-arith-stmt' 2 'function f() {' '  ((count++))' '}'
+  assert_fires 't.sh' 'bare-arith-stmt' 4 '# @description Inert.' '# @noargs' 'function f() {' '  ((count++))' '}'
 }
 
 @test "bash style: bare-arith-stmt passes (( )) used as a condition or with a reason" {
@@ -664,7 +669,8 @@ function assert_passes() {
   assert_passes 't.sh' \
     'if ((count > 0)); then' '  echo PAYLOAD_RAN' \
     'elif ((count < 0)); then' '  echo PAYLOAD_RAN' 'fi'
-  assert_passes 't.sh' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
+  assert_passes 't.sh' \
+    '# @description Inert.' '# @noargs' 'function f() {' '  ((count++)) || true # fixture: zero is fine' '}'
   assert_passes 't.sh' '((count > 0)) && echo PAYLOAD_RAN'
 }
 
@@ -779,11 +785,11 @@ function assert_passes() {
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
     'function main() {' '  echo PAYLOAD_RAN' '}' \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'main "$@"'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] main is the last function defined"
+  assert_output --partial "FAIL: ${FIXTURE}:8: [main-last] main is the last function defined"
 }
 
 @test "bash style: main-last reports an executed script that does not end in main" {
@@ -799,11 +805,11 @@ function assert_passes() {
 @test "bash style: main-last reports a lone helper and a main call that drops the arguments" {
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'helper'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:3: [main-last] main is the last function defined"
+  assert_output --partial "FAIL: ${FIXTURE}:5: [main-last] main is the last function defined"
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
     'function main() {' '  echo PAYLOAD_RAN' '}' \
@@ -816,7 +822,7 @@ function assert_passes() {
 @test "bash style: the layout rules pass a well-formed executed script, one with no functions, and any sourced file" {
   write_script 'ok.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'function main() {' '  helper' '}' \
     'main "$@"' '# a trailing comment'
   run "${CHECK}" "${FIXTURE}"
@@ -824,35 +830,38 @@ function assert_passes() {
   write_script 'flat.sh' 'set -Eeuo pipefail' "IFS=\$'\\n\\t'" 'echo PAYLOAD_RAN'
   run "${CHECK}" "${FIXTURE}"
   assert_success
-  assert_passes 'lib.sh' 'function helper() {' '  echo PAYLOAD_RAN' '}' 'echo PAYLOAD_RAN'
-  assert_passes 'suite.bats' 'function helper() {' '  echo PAYLOAD_RAN' '}' '@test "inert" {' '  helper' '}'
+  assert_passes 'lib.sh' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' 'echo PAYLOAD_RAN'
+  assert_passes 'suite.bats' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '@test "inert" {' '  helper' '}'
 }
 
 @test "bash style: functions-grouped reports a statement between two functions" {
   write_script 'g.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'echo PAYLOAD_RAN' \
     'function main() {' '  helper' '}' \
     'main "$@"'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+  assert_output --partial "FAIL: ${FIXTURE}:8: [functions-grouped]"
 }
 
 @test "bash style: functions-grouped reports a readonly between functions and allows a comment there" {
   write_script 'g.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     'readonly LATE=1' \
     'function main() {' '  helper' '}' \
     'main "$@"'
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
-  assert_output --partial "FAIL: ${FIXTURE}:6: [functions-grouped]"
+  assert_output --partial "FAIL: ${FIXTURE}:8: [functions-grouped]"
   write_script 'g.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
-    'function helper() {' '  echo PAYLOAD_RAN' '}' \
+    '# @description Inert.' '# @noargs' 'function helper() {' '  echo PAYLOAD_RAN' '}' \
     '# a comment between functions' \
     'function main() {' '  helper' '}' \
     'main "$@"'
@@ -1020,4 +1029,214 @@ function assert_passes() {
     'main "$@"'
   run "${CHECK}" "${FIXTURE}"
   assert_success
+}
+
+@test "bash style: shdoc-present reports a function with no doc block, and one with no @arg or @noargs" {
+  assert_fires 'd.sh' 'shdoc-present' 1 'function bare() {' '  echo PAYLOAD_RAN' '}'
+  assert_fires 'd.sh' 'shdoc-present' 2 '# @description Inert.' 'function half() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-present leaves main and the bats hook functions alone" {
+  assert_passes 'd.sh' 'function main() {' '  echo PAYLOAD_RAN' '}'
+  assert_passes 'd.bats' 'function setup() {' '  echo PAYLOAD_RAN' '}' '@test "inert" {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-present accepts a description that starts on the next line" {
+  assert_passes 'd.sh' \
+    '# @description' '#   Inert.' '# @noargs' \
+    'function multi() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-arg-positions reports a body that reads a positional the block does not document" {
+  assert_fires 'd.sh' 'shdoc-arg-positions' 3 \
+    '# @description Inert.' '# @noargs' 'function reads() {' '  echo "$2"' '}'
+  assert_fires 'd.sh' 'shdoc-arg-positions' 3 \
+    '# @description Inert.' '# @arg $1 name a thing' 'function unread() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-arg-positions passes matching positions, varargs, and \$0" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 name a thing' '# @arg $@ rest more things' \
+    'function matched() {' '  local -r name="$1"' '  shift' '  echo "${name}" "${0##*/}" "$@"' '}'
+}
+
+@test "bash style: shdoc-arg-positions lets a documented \$@ cover a peek at \$1" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $@ args the words given' \
+    'function peeks() {' '  echo "${1:-}" "$@"' '}'
+}
+
+@test "bash style: shdoc-arg-positions leaves a nested function's positionals to that function" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function outer() {' \
+    '  # @description Inert.' '  # @arg $1 word a word' \
+    '  function inner() {' '    echo "$1"' '  }' \
+    '  inner PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-arg-name reports a local named differently from its @arg" {
+  assert_fires 'd.sh' 'shdoc-arg-name' 4 \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function renamed() {' '  local -r other="$1"' '  echo "${other}"' '}'
+}
+
+@test "bash style: shdoc-arg-name reports a renamed bind through a default or a plain assignment" {
+  assert_fires 'd.sh' 'shdoc-arg-name' 4 \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function renamed() {' '  local -r other="${1:-}"' '  echo "${other}"' '}'
+  assert_fires 'd.sh' 'shdoc-arg-name' 5 \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function renamed() {' '  local other' '  other="$1"' '  echo "${other}"' '}'
+}
+
+@test "bash style: shdoc-arg-name passes a matching bind and lets a nameref differ" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 name a thing' \
+    'function bound() {' '  local -r name="$1"' '  echo "${name}"' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 out_name the variable to fill' \
+    'function fill() {' '  local -n out="$1"' '  out=1' '}'
+}
+
+@test "bash style: shdoc-set reports an upper-case global assigned without @set" {
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  GLOBAL_THING=1' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' '# @set GLOBAL_THING the thing' \
+    'function writes() {' '  GLOBAL_THING=1' '}'
+}
+
+@test "bash style: shdoc-set reports a global written by declare -g, readonly or export" {
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  declare -g GLOBAL_THING=1' '}'
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  readonly GLOBAL_THING=1' '}'
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function writes() {' '  export GLOBAL_THING=1' '}'
+}
+
+@test "bash style: shdoc-set ignores locals, command-prefix assignments and shell specials" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  local UPPER_LOCAL=1' '  UPPER_LOCAL=2' '  IFS=, read -r first' '  SECONDS=0' \
+    '  echo "${UPPER_LOCAL}" "${first}"' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  declare UPPER_LOCAL=1' '  echo "${UPPER_LOCAL}"' '}'
+}
+
+@test "bash style: shdoc-set reads a documented name across wrapped tags" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' '# @set GLOBAL_THING the thing,' '#      wrapped' \
+    'function writes() {' '  GLOBAL_THING=1' '}'
+}
+
+@test "bash style: shdoc-set lets a nested function write a name its enclosing function declared local" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function outer() {' '  local COUNT=0' \
+    '  # @description Inert.' '  # @noargs' \
+    '  function inner() {' '    COUNT=1' '  }' \
+    '  inner' '  echo "${COUNT}"' '}'
+}
+
+@test "bash style: shdoc-stderr reports a body that writes to fd 2 without @stderr" {
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN >&2' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' '# @stderr the marker' 'function warns() {' '  echo PAYLOAD_RAN >&2' '}'
+}
+
+@test "bash style: shdoc-stderr reports 1>&2, a heredoc to fd 2 and /dev/stderr" {
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN 1>&2' '}'
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' "  cat <<'EOF' >&2" '  PAYLOAD_RAN' 'EOF' '}'
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN > /dev/stderr' '}'
+}
+
+@test "bash style: shdoc-stderr passes a function that only calls a logger or merges 2 into 1" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function calls() {' '  log PAYLOAD_RAN' '  some_command 2>&1' '  some_command 2> /dev/null' '}'
+}
+
+@test "bash style: shdoc-stderr leaves a nested function's stderr to that function" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function outer() {' \
+    '  # @description Inert.' '  # @noargs' '  # @stderr the marker' \
+    '  function inner() {' '    echo PAYLOAD_RAN >&2' '  }' \
+    '  inner' '}'
+}
+
+@test "bash style: shdoc-arg-positions passes a variadic function that loops over or counts its arguments" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $@ args the words given' \
+    'function loops() {' '  while (($# > 0)); do' '    case "$1" in' '      x) echo PAYLOAD_RAN ;;' '    esac' \
+    '    shift' '  done' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $@ args the words given' \
+    'function counts() {' '  echo "$#"' '}'
+}
+
+@test "bash style: shdoc-arg-positions reports a documented \$@ over a body that reads no positional" {
+  assert_fires 'd.sh' 'shdoc-arg-positions' 3 \
+    '# @description Inert.' '# @arg $@ args the words given' 'function ignores() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-set ignores an assignment inside a subshell or a command substitution" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  ( PATH="/x:${PATH}"; export LC_ALL=C; some_command )' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' '  local value' '  value="$(FOO_BAR=1; some_command)"' '  echo "${value}"' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function scoped() {' "  diff <(FOO_BAR=1; some_command) '/dev/null'" '}'
+}
+
+@test "bash style: shdoc-stderr passes a descriptor duplication and reports a write from fd 1" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function dups() {' '  exec 3>&2' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function dups() {' '  some_command 3>&2' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function dups() {' '  exec >&2' '}'
+  assert_fires 'd.sh' 'shdoc-stderr' 3 \
+    '# @description Inert.' '# @noargs' 'function warns() {' '  echo PAYLOAD_RAN 1>&2' '}'
+}
+
+@test "bash style: shdoc-arg-name lets a nameref declared and assigned on separate lines differ" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 name_ref the variable to fill' \
+    'function fill() {' '  local -n out' '  out="$1"' '  out=1' '}'
+}
+
+@test "bash style: shdoc-set exempts names the shell owns, but not PATH" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function complete_it() {' "  COMPREPLY=('a')" '  REPLY=1' '  PS4=+' '}'
+  assert_fires 'd.sh' 'shdoc-set' 4 \
+    '# @description Inert.' '# @noargs' 'function widens() {' '  PATH="/x:${PATH}"' '}'
+}
+
+@test "bash style: a blank line detaches the comment block above a function from its shdoc" {
+  assert_fires 'd.sh' 'shdoc-present' 4 \
+    '# @description Inert.' '# @noargs' '' 'function detached() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: a file header above a blank line is not the first function's shdoc" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '' \
+    '# @description Inert.' '# @noargs' 'function first() {' '  echo PAYLOAD_RAN' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 thing a header line that is not an argument of first' '' \
+    '# @description Inert.' '# @noargs' 'function first() {' '  echo PAYLOAD_RAN' '}'
 }

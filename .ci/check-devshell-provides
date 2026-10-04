@@ -211,6 +211,7 @@ function host_platform() {
   # runs on the ambient `compat (macos, ...)` legs against BSD coreutils, where
   # `uname --kernel-name` dies with "illegal option". Same trap as the
   # `mkdir -p` in run-tests' --report path.
+  # bash-style allow=long-options: runs on the ambient macOS legs; BSD uname has no long form
   uname -s
 }
 

@@ -356,3 +356,124 @@ function assert_passes() {
 @test "bash style: no-braces-in-arith reports a braced name in an indexed assignment subscript" {
   assert_fires 'a.sh' 'no-braces-in-arith' 3 'i=0' 'items=(a b)' 'items[${i}]=1'
 }
+
+@test "bash style: long-options reports a short flag on a tool that has a long form" {
+  assert_fires 'o.sh' 'long-options' 1 "grep -q 'x' 'file'"
+  assert_fires 'o.sh' 'long-options' 1 "git commit -q -m 'x'"
+}
+
+@test "bash style: long-options sees through wrappers to the real command" {
+  assert_fires 'o.bats' 'long-options' 2 '@test "inert" {' "  run grep -q 'x' 'file'" '}'
+  assert_fires 'o.sh' 'long-options' 1 "env LC_ALL=C timeout 30m sort -u 'file'"
+}
+
+@test "bash style: long-options passes long forms, builtins and tools with no long form" {
+  assert_passes 'o.sh' \
+    "grep --quiet 'x' 'file'" \
+    'read -r line' \
+    'set -Eeuo pipefail' \
+    'command -v some_command' \
+    "git -C 'dir' status" \
+    "find 'dir' -name 'x' -print" \
+    "awk -f 'prog.awk' 'file'"
+}
+
+@test "bash style: long-options leaves flags that are data alone" {
+  # A flag handed to a function defined in the file, or to a command held in a
+  # variable, is input for the thing under test.
+  assert_passes 'o.sh' 'function run_cli() {' '  echo PAYLOAD_RAN' '}' 'run_cli -h'
+  assert_passes 'o.sh' 'tool=some_command' '"${tool}" -h'
+  assert_passes 'o.sh' 'some_command -- -x'
+  assert_passes 'o.sh' "echo 'rm -f inert-string'" "cat <<'EOF'" 'grep -q x' 'EOF'
+}
+
+@test "bash style: long-options allows the macOS short flags only under hooks/ and tests/" {
+  assert_passes 'hooks/o.sh' "mkdir -p 'dir'" "rm -f -- 'file'"
+  assert_passes 'tests/o.bats' '@test "inert" {' "  mkdir -p 'dir'" '}'
+  assert_fires 'o.sh' 'long-options' 1 "mkdir -p 'dir'"
+  assert_fires 'hooks/o.sh' 'long-options' 1 "grep -q 'x' 'file'"
+}
+
+@test "bash style: long-options passes the tools and builtins that have no long form" {
+  assert_passes 'o.sh' \
+    "test -f 'file'" \
+    "bash -c 'echo PAYLOAD_RAN'" \
+    'hash -r' \
+    'alias -p' \
+    "getopts 'ab' opt"
+}
+
+@test "bash style: long-options skips the value a wrapper's own short flag takes" {
+  assert_passes 'o.sh' "env -u SOME_NAME awk -f 'prog.awk'"
+  assert_passes 'o.sh' 'name=x' "env -u \"\${name}\" awk -f 'prog.awk'"
+  assert_passes 'o.sh' "timeout -k 5 30 awk -f 'prog.awk'"
+  assert_fires 'o.sh' 'long-options' 1 'env -u SOME_NAME grep -q x'
+}
+
+@test "bash style: double-dash-before-paths reports rm, mv and cp without --" {
+  assert_fires 'd.sh' 'double-dash-before-paths' 1 "rm --force 'file'"
+  assert_fires 'd.sh' 'double-dash-before-paths' 1 "mv 'a' 'b'"
+  assert_passes 'd.sh' "rm --force -- 'file'" "cp -- 'a' 'b'"
+}
+
+@test "bash style: xargs-flags reports xargs without both flags" {
+  assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs --max-args=1 other_command'
+  assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs --no-run-if-empty other_command'
+  assert_passes 'x.sh' 'some_command | xargs --no-run-if-empty --max-args=1 other_command'
+}
+
+@test "bash style: no-echo-e reports echo -e" {
+  assert_fires 'e.sh' 'no-echo-e' 1 "echo -e 'PAYLOAD_RAN'"
+  assert_passes 'e.sh' "echo 'PAYLOAD_RAN'" "printf '%s\n' 'PAYLOAD_RAN'"
+}
+
+@test "bash style: no-echo-e reports -e after another echo option" {
+  assert_fires 'e.sh' 'no-echo-e' 1 "echo -n -e 'PAYLOAD_RAN'"
+  assert_fires 'e.sh' 'no-echo-e' 1 "echo -ne 'PAYLOAD_RAN'"
+  assert_passes 'e.sh' "echo -n 'PAYLOAD_RAN'" "echo 'PAYLOAD_RAN' -e"
+}
+
+@test "bash style: fetch-flags reports curl and wget that read the user's config" {
+  assert_fires 'f.sh' 'fetch-flags' 1 "curl --silent 'https://example.invalid/'"
+  assert_fires 'f.sh' 'fetch-flags' 1 "wget 'https://example.invalid/'"
+  assert_passes 'f.sh' \
+    "curl --disable --fail --silent --location --show-error 'https://example.invalid/'" \
+    "wget --no-config 'https://example.invalid/'"
+}
+
+@test "bash style: fetch-flags passes a lookup of curl or wget, which fetches nothing" {
+  assert_passes 'f.sh' 'command -v curl' 'command -v wget > /dev/null'
+}
+
+@test "bash style: long-options passes every builtin, which has no long form" {
+  assert_passes 'o.sh' \
+    'readarray -t arr < <(some_command)' \
+    "compgen -W 'a b' -- 'x'" \
+    'jobs -p' \
+    'builtin cd -P' \
+    'fc -l' \
+    'help -s cd' \
+    'history -c' \
+    'disown -h' \
+    'complete -r' \
+    'compopt -o nospace' \
+    'bind -l' \
+    'enable -n test' \
+    'caller 0' \
+    'dirs -v' \
+    'times'
+}
+
+@test "bash style: long-options reads a negative number as an argument, except for head and tail" {
+  assert_passes 'o.sh' 'sleep -1' 'sleep -0.5'
+  assert_fires 'o.sh' 'long-options' 1 "head -5 'file'"
+  assert_fires 'o.sh' 'long-options' 1 "tail -20 'file'"
+}
+
+@test "bash style: long-options gives each wrapper its own value-taking flags" {
+  assert_fires 'o.sh' 'long-options' 1 "sudo -n grep -q 'x' 'file'"
+  assert_passes 'o.sh' "nice -n 5 grep --quiet 'x' 'file'"
+  assert_fires 'o.sh' 'long-options' 1 "nice -n 5 grep -q 'x' 'file'"
+  assert_passes 'o.sh' "sudo -u root awk -f 'prog.awk'"
+  assert_passes 'o.sh' "timeout -k 5 30 awk -f 'prog.awk'"
+}

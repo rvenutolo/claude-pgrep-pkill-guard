@@ -57,6 +57,7 @@ function main() {
   fi
 
   local rc=0 lines
+  # bash-style allow=long-options: runs on the ambient macOS legs; BSD wc has no long form
   lines="$(wc -l < "${file}")"
   # BSD wc pads its count with leading blanks; GNU does not.
   lines="${lines//[[:space:]]/}"

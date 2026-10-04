@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -179,7 +179,153 @@ def quote_heredoc_terminator:
   | select([.Hdoc.Parts[]?.Value] | join("") | contains("\\") | not)
   | {line: .Pos.Line, rule: "quote-heredoc-terminator", message: ("quote the terminator: <<'" + .Word.Parts[0].Value + "'")};
 
-def hits($src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator;
+# Commands that run another command: the flags after them belong to that one.
+def wrappers: ["run", "env", "command", "builtin", "timeout", "nice", "sudo", "exec"];
+
+# Short flags that take the next word as their value, per wrapper. A flag a
+# wrapper does not list takes none (sudo -n, command -p, bats run -N).
+def wrapper_value_flags: {
+  "nice": ["-n"],
+  "env": ["-u", "-C", "-S"],
+  "timeout": ["-k", "-s"],
+  "sudo": ["-u", "-g", "-C", "-D", "-h", "-p", "-R", "-T", "-U"],
+  "exec": ["-a"]
+};
+
+# A command's words with leading wrappers removed, along with the wrappers'
+# own options, the values those options take, VAR=value words and durations, so
+# the first word left is the tool that reads the flags. A first word that is
+# not a plain literal (a variable holding a path) is kept and reads as "".
+def real_words:
+  args as $w
+  | {i: 0, wrapper: "", done: false}
+  | until(
+      .done or .i >= ($w | length);
+      .wrapper as $wrapper
+      | ($w[.i].Parts[0].Value // "") as $v
+      | (if .i > 0 then $w[.i - 1].Parts[0].Value // "" else "" end) as $prev
+      | (((wrapper_value_flags[$wrapper] // []) | index($prev)) != null) as $is_value
+      | (
+          $w[.i].Parts[0].Type == "Lit" and (wrappers | index($v)) != null
+        ) as $is_wrapper
+      | if $is_value or $is_wrapper
+          or ($w[.i].Parts[0].Type == "Lit" and ($v | test("^-|=|^[0-9]+[smhd]?$")))
+        then .i += 1 | (if $is_wrapper and ($is_value | not) then .wrapper = $v else . end)
+        else .done = true
+        end
+    )
+  | $w[.i:];
+
+# Short flags with no long form on any platform. "*" allows every flag: shell
+# builtins, and tools whose whole option syntax is single-dash.
+def no_long_form: {
+  "set": "*", "shopt": "*", "read": "*", "mapfile": "*", "printf": "*",
+  "unset": "*", "type": "*", "export": "*", "cd": "*", "pwd": "*", "kill": "*",
+  "wait": "*", "echo": "*", "trap": "*", "return": "*", "exit": "*",
+  "find": "*", "magick": "*", "test": "*", "[": "*", "hash": "*", "alias": "*",
+  "unalias": "*", "getopts": "*", "let": "*", "source": "*", "eval": "*",
+  "umask": "*", "ulimit": "*", "pushd": "*", "popd": "*", "readarray": "*",
+  "compgen": "*", "complete": "*", "compopt": "*", "jobs": "*", "bind": "*",
+  "enable": "*", "disown": "*", "fg": "*", "bg": "*", "history": "*",
+  "caller": "*", "dirs": "*", "fc": "*", "help": "*", "logout": "*",
+  "suspend": "*", "times": "*", "typeset": "*", "shift": "*", "break": "*",
+  "continue": "*", "true": "*", "false": "*", ":": "*", ".": "*", "time": "*",
+  "bash": ["-c"], "sh": ["-c"],
+  "git": ["-C", "-c", "-I", "-z", "-e"],
+  "awk": ["-f", "-v"],
+  "sysctl": ["-n"],
+  "chmod": ["-x", "-w", "-r"],
+  "sed": ["-i.bak"]
+};
+
+# Short flags the macOS (BSD) tool has no long form for. Allowed only in
+# hooks/ and tests/, which run against ambient tools.
+def macos_short: {
+  "mkdir": ["-p", "-m"], "rm": ["-f"], "mv": ["-f"], "cp": ["-R"],
+  "ln": ["-s"], "wc": ["-l", "-c"], "tr": ["-d", "-s"], "uname": ["-s"],
+  "sed": ["-e"], "head": ["-n"]
+};
+
+# A short flag on a tool that has a long form. Flags after a -- are data, as
+# are flags given to a function the file defines or to a command held in a
+# variable, and a negative number is an argument, except to head and tail, where
+# -5 is a legacy spelling of --lines=5.
+def long_options($path):
+  [nodes | select(.Type == "FuncDecl") | .Name.Value] as $functions
+  | ($path | test("(^|/)(hooks|tests)/")) as $ambient
+  | nodes
+  | select(.Type == "CallExpr")
+  | real_words as $w
+  | ($w[0].Parts[0].Value // "") as $cmd
+  | select($cmd != "" and ($functions | index($cmd) | not))
+  | (no_long_form[$cmd] // []) as $always
+  | select($always != "*")
+  | (if $ambient then (macos_short[$cmd] // []) else [] end) as $scoped
+  | ($w[1:] | (map(.Parts[0].Value // "") | index("--")) as $end | if $end == null then . else .[:$end] end)[]
+  | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
+  | .Parts[0].Value as $flag
+  | select($flag | test("^-[A-Za-z0-9]"))
+  | select(($flag | test("^-[0-9]+(\\.[0-9]+)?$") | not) or ($cmd | IN("head", "tail")))
+  | select(($always + $scoped) | index($flag) | not)
+  | {line: .Pos.Line, rule: "long-options", message: ("use the long form of " + $cmd + " " + $flag)};
+
+# rm, mv and cp take -- before their paths, every time.
+def double_dash_before_paths:
+  nodes
+  | select(.Type == "CallExpr")
+  | real_words as $w
+  | ($w[0].Parts[0].Value // "") as $cmd
+  | select($cmd | IN("rm", "mv", "cp"))
+  | select([$w[1:][] | .Parts[0].Value // ""] | index("--") | not)
+  | {line: .Pos.Line, rule: "double-dash-before-paths", message: ("put -- before the paths given to " + $cmd)};
+
+# xargs always carries --no-run-if-empty and an explicit --max-args.
+def xargs_flags:
+  nodes
+  | select(.Type == "CallExpr")
+  | real_words as $w
+  | select(($w[0].Parts[0].Value // "") == "xargs")
+  | [$w[1:][] | .Parts[0].Value // ""] as $flags
+  | select((($flags | index("--no-run-if-empty")) == null) or ($flags | any(test("^--max-args=")) | not))
+  | {line: .Pos.Line, rule: "xargs-flags", message: "xargs needs --no-run-if-empty and --max-args=N"};
+
+# echo -e is never portable; printf does the job. Every leading option word
+# counts, so echo -n -e is caught as well as echo -ne.
+def no_echo_e:
+  nodes
+  | select(.Type == "CallExpr" and cmdname == "echo")
+  | select(
+      [
+        foreach (args[1:][] | .Parts[0].Value // "") as $word (
+          true;
+          . and ($word | test("^-[a-zA-Z]+$"));
+          if . then $word else empty end
+        )
+      ]
+      | any(test("e"))
+    )
+  | {line: .Pos.Line, rule: "no-echo-e", message: "use printf with a format string, not echo -e"};
+
+# Non-interactive curl and wget ignore the invoking user's config files. A
+# `command -v curl` lookup fetches nothing and is left alone.
+def fetch_flags:
+  nodes
+  | select(.Type == "CallExpr")
+  | select(([args[1:][] | .Parts[0].Value // ""] | any(IN("-v", "-V"))) and cmdname == "command" | not)
+  | real_words as $w
+  | ($w[0].Parts[0].Value // "") as $cmd
+  | [$w[1:][] | .Parts[0].Value // ""] as $flags
+  | (
+      if $cmd == "curl" then ["--disable", "--fail", "--silent", "--location", "--show-error"]
+      elif $cmd == "wget" then ["--no-config"]
+      else []
+      end
+    ) as $need
+  | ($need - $flags) as $missing
+  | select(($missing | length) > 0)
+  | {line: .Pos.Line, rule: "fetch-flags", message: ($cmd + " is missing " + ($missing | join(" ")))};
+
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
@@ -215,7 +361,7 @@ def markers:
 def report($path; $src):
   if .Type != "File" then error("not a shfmt syntax tree") else . end
   | markers as $markers
-  | [hits($src)] as $hits
+  | [hits($path; $src)] as $hits
   | (
       $hits[]
       | . as $hit

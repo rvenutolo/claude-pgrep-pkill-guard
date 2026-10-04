@@ -2,8 +2,9 @@
 
 # @description Enforce the mechanically decidable bash style rules on the files
 #              named as arguments. Each file is parsed by `shfmt --to-json` and
-#              the syntax tree is handed to the rules in .ci/bash-style.jq,
-#              which is where the rule list lives.
+#              the syntax tree, with whether the file is sourced or executed,
+#              is handed to the rules in .ci/bash-style.jq, which is where the
+#              rule list lives.
 #
 #              One site may be excused with a comment on the statement, or
 #              alone on the line above it:
@@ -37,16 +38,46 @@ readonly SCRIPT_DIR
 readonly CANARY=$'canary() {\n\t:\n}\n'
 readonly -a CANARY_RULES=('function-keyword' 'no-raw-tab')
 
+# @description Say whether a file is sourced or executed. A bats file is
+#              sourced. Otherwise the tracked mode decides, which keeps
+#              .ci/check-executable-bit the one place that says which files
+#              are which; a file outside a git tree, or one git does not track,
+#              falls back to its on-disk executable bit.
+# @arg $1 path the file to classify
+# @stdout `true` when the file is sourced, `false` when it is executed
+function is_sourced() {
+  local -r path="$1"
+  local staged
+  if [[ "${path}" == *.bats ]]; then
+    printf 'true\n'
+    return
+  fi
+  staged="$(git ls-files --stage -- "${path}" 2> /dev/null)" || staged='NOT-TRACKED'
+  case "${staged}" in
+    100644*) printf 'true\n' ;;
+    100755*) printf 'false\n' ;;
+    *)
+      if [[ -x "${path}" ]]; then
+        printf 'false\n'
+      else
+        printf 'true\n'
+      fi
+      ;;
+  esac
+}
+
 # @description Run every rule over one syntax tree.
 # @arg $1 display_path the path to print in FAIL lines
 # @arg $2 src_file a file holding the source text the tree was parsed from
+# @arg $3 sourced true when the file is sourced, false when it is executed
 # @stdout one FAIL line per violation
 function run_rules() {
   local -r display_path="$1"
   local -r src_file="$2"
+  local -r sourced="$3"
   jq --raw-output --library-path "${SCRIPT_DIR}" \
-    --arg path "${display_path}" --rawfile src "${src_file}" \
-    'import "bash-style" as style; style::report($path; $src)'
+    --arg path "${display_path}" --rawfile src "${src_file}" --argjson sourced "${sourced}" \
+    'import "bash-style" as style; style::report($path; $src; $sourced)'
 }
 
 # @description Prove the pipeline still reports a known violation of each kind.
@@ -57,7 +88,7 @@ function run_rules() {
 function check_canary() {
   local out rule
   if ! out="$(printf '%s' "${CANARY}" | shfmt --filename 'canary.sh' --to-json \
-    | run_rules 'canary' <(printf '%s' "${CANARY}"))"; then
+    | run_rules 'canary' <(printf '%s' "${CANARY}") 'true')"; then
     printf 'FAIL: the canary could not be scanned\n' >&2
     return 1
   fi
@@ -97,11 +128,12 @@ function main() {
     return 1
   fi
 
-  local path out
+  local path out sourced
   local dirty=0
   for path in "$@"; do
+    sourced="$(is_sourced "${path}")"
     # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
-    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" | run_rules "${path}" "${path}")"; then
+    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" | run_rules "${path}" "${path}" "${sourced}")"; then
       printf 'FAIL: %s could not be scanned\n' "${path}" >&2
       dirty="$((dirty + 1))"
       continue

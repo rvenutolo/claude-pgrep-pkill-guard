@@ -945,3 +945,12 @@ function assert_passes() {
   assert_fires 'l.sh' 'max-line-length' 1 "echo ${long} ${short}"
   assert_passes 'l.sh' "echo ${short} ${short}"
 }
+
+@test "bash style: max-line-length excuses a long quoted string after an assignment or an option" {
+  local text
+  text="$(printf 'word %.0s' {1..30})"
+  assert_passes 'l.sh' "PROG='${text}'"
+  assert_passes 'l.sh' "readonly PROG=\"\${HOME} ${text}\""
+  assert_passes 'l.sh' "some_command --regex='${text}'"
+  assert_fires 'l.sh' 'max-line-length' 1 "some_command --first='${text}' --second='${text}'"
+}

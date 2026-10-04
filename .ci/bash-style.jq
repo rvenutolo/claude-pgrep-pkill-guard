@@ -569,15 +569,16 @@ def no_default_wellknown_env:
 
 # A line over 120 characters. A line is excused when exactly one quoted string
 # or unbroken word on it is 100 characters or more: that literal would overflow
-# even alone on a continuation line, so wrapping cannot help. Two such literals
-# can each take a line, so those lines are reported. A comment line is never
-# excused. Marker text does not count.
+# even alone on a continuation line, so wrapping cannot help. A quoted string
+# counts wherever it starts in a word, so name='...' and --opt='...' are one
+# literal. Two such literals can each take a line, so those lines are reported.
+# A comment line is never excused. Marker text does not count.
 def max_line_length($src):
   $src | split("\n") | to_entries[]
   | (.value | sub(" ?# bash-style allow=.*$"; "")) as $text
   | ($text | length) as $len
   | select($len > 120)
-  | ([$text | match("'[^']*'|\"[^\"]*\"|[^ ]+"; "g") | .string | length | select(. >= 100)] | length) as $literals
+  | ([$text | match("(?:'[^']*'|\"[^\"]*\"|[^ '\"]|['\"])+"; "g") | .string | length | select(. >= 100)] | length) as $literals
   | select($literals != 1 or ($text | test("^\\s*#")))
   | {line: (.key + 1), rule: "max-line-length", message: ("\($len) characters; the limit is 120")};
 

@@ -1359,3 +1359,39 @@ function assert_passes() {
 @test "bash style: todo-form reports TODO with a name in parentheses, which is not the TODO: form" {
   assert_fires 'c.sh' 'todo-form' 1 '# TODO(name): tidy this' 'echo PAYLOAD_RAN'
 }
+
+@test "bash style: mktemp-exit-trap reports an executed script that calls mktemp with no EXIT trap" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  tmp="$(mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [mktemp-exit-trap]"
+}
+
+@test "bash style: mktemp-exit-trap passes an EXIT trap, a dry run, and a sourced file" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  trap cleanup EXIT' '  tmp="$(mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  mktemp --dry-run' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  assert_passes 'lib.sh' 'tmp="$(mktemp)"'
+}
+
+@test "bash style: mktemp-exit-trap does not count a trap that only clears EXIT" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  trap - EXIT' '  tmp="$(mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [mktemp-exit-trap]"
+}

@@ -537,3 +537,17 @@ function assert_passes() {
 @test "bash style: explicit-for-in reports the implicit loop inside a function" {
   assert_fires 't.sh' 'explicit-for-in' 2 'function f() {' '  for arg; do' '    echo PAYLOAD_RAN' '  done' '}'
 }
+
+@test "bash style: no-for-in-subst reports a loop over a command substitution" {
+  assert_fires 't.sh' 'no-for-in-subst' 1 'for line in $(some_command); do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: no-for-in-subst reports a substitution mixed with other words" {
+  assert_fires 't.sh' 'no-for-in-subst' 1 "for line in 'first' \$(some_command); do" '  echo PAYLOAD_RAN' 'done'
+  assert_fires 't.sh' 'no-for-in-subst' 1 'for line in $(some_command)-suffix; do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: no-for-in-subst passes a quoted substitution and a plain list" {
+  assert_passes 't.sh' 'for line in "$(some_command)"; do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' "for line in 'first' 'second'; do" '  echo PAYLOAD_RAN' 'done'
+}

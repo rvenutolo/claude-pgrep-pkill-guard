@@ -522,6 +522,13 @@ function assert_marker_stops_at_header() {
   assert_passes 'x.sh' 'some_command | xargs --no-run-if-empty --max-args=1 other_command'
 }
 
+@test "bash style: xargs-flags and long-options leave BSD xargs alone under hooks/ and tests/" {
+  assert_passes 'tests/x.sh' 'some_command | xargs -0 -n 1 other_command'
+  assert_passes 'hooks/x.sh' 'some_command | xargs -r -I {} other_command {}'
+  assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs -0 -n 1 other_command'
+  assert_output --partial '[long-options] use the long form of xargs -n'
+}
+
 @test "bash style: no-echo-e reports echo -e" {
   assert_fires 'e.sh' 'no-echo-e' 1 "echo -e 'PAYLOAD_RAN'"
   assert_passes 'e.sh' "echo 'PAYLOAD_RAN'" "printf '%s\n' 'PAYLOAD_RAN'"

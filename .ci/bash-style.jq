@@ -244,12 +244,17 @@ def no_long_form: {
   "sed": ["-i.bak"]
 };
 
-# Short flags the macOS (BSD) tool has no long form for. Allowed only in
-# hooks/ and tests/, which run against ambient tools.
+# Whether a file runs against ambient tools, which on macOS are the BSD ones:
+# everything under hooks/ and tests/.
+def is_ambient($path): $path | test("(^|/)(hooks|tests)/");
+
+# Short flags the macOS (BSD) tool has no long form for. Allowed only where
+# is_ambient holds.
 def macos_short: {
   "mkdir": ["-p", "-m"], "rm": ["-f"], "mv": ["-f"], "cp": ["-R"],
   "ln": ["-s"], "wc": ["-l", "-c"], "tr": ["-d", "-s"], "uname": ["-s"],
-  "sed": ["-e"], "head": ["-n"], "mktemp": ["-u"]
+  "sed": ["-e"], "head": ["-n"], "mktemp": ["-u"],
+  "xargs": ["-0", "-n", "-r", "-I"]
 };
 
 # A short flag on a tool that has a long form. Flags after a -- are data, as
@@ -258,7 +263,7 @@ def macos_short: {
 # -5 is a legacy spelling of --lines=5.
 def long_options($path):
   [nodes | select(.Type == "FuncDecl") | .Name.Value] as $functions
-  | ($path | test("(^|/)(hooks|tests)/")) as $ambient
+  | is_ambient($path) as $ambient
   | nodes
   | select(.Type == "CallExpr")
   | real_words as $w
@@ -285,9 +290,12 @@ def double_dash_before_paths:
   | select([$w[1:][] | .Parts[0].Value // ""] | index("--") | not)
   | {line: .Pos.Line, rule: "double-dash-before-paths", message: ("put -- before the paths given to " + $cmd)};
 
-# xargs always carries --no-run-if-empty and an explicit --max-args.
-def xargs_flags:
-  nodes
+# xargs always carries --no-run-if-empty and an explicit --max-args. Not where
+# is_ambient holds: BSD xargs has neither long option, so demanding them there
+# would demand a line that fails on macOS.
+def xargs_flags($path):
+  select(is_ambient($path) | not)
+  | nodes
   | select(.Type == "CallExpr")
   | real_words as $w
   | select(($w[0].Parts[0].Value // "") == "xargs")
@@ -917,7 +925,7 @@ def mktemp_exit_trap($sourced):
   | select($armed | not)
   | {line: $call.Pos.Line, rule: "mktemp-exit-trap", message: "arm an EXIT trap that removes what mktemp creates"};
 
-def hits($path; $src; $sourced; $tracked; $functions): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
+def hits($path; $src; $sourced; $tracked; $functions): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
 
 # The last line a marker attached to this node reaches. A simple command or a
 # pipeline is reached whole, continuation lines included. A compound statement

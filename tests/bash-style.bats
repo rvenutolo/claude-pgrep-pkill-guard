@@ -1046,3 +1046,31 @@ function assert_passes() {
     '# @description' '#   Inert.' '# @noargs' \
     'function multi() {' '  echo PAYLOAD_RAN' '}'
 }
+
+@test "bash style: shdoc-arg-positions reports a body that reads a positional the block does not document" {
+  assert_fires 'd.sh' 'shdoc-arg-positions' 3 \
+    '# @description Inert.' '# @noargs' 'function reads() {' '  echo "$2"' '}'
+  assert_fires 'd.sh' 'shdoc-arg-positions' 3 \
+    '# @description Inert.' '# @arg $1 name a thing' 'function unread() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-arg-positions passes matching positions, varargs, and \$0" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $1 name a thing' '# @arg $@ rest more things' \
+    'function matched() {' '  local -r name="$1"' '  shift' '  echo "${name}" "${0##*/}" "$@"' '}'
+}
+
+@test "bash style: shdoc-arg-positions lets a documented \$@ cover a peek at \$1" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $@ args the words given' \
+    'function peeks() {' '  echo "${1:-}" "$@"' '}'
+}
+
+@test "bash style: shdoc-arg-positions leaves a nested function's positionals to that function" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @noargs' \
+    'function outer() {' \
+    '  # @description Inert.' '  # @arg $1 word a word' \
+    '  function inner() {' '    echo "$1"' '  }' \
+    '  inner PAYLOAD_RAN' '}'
+}

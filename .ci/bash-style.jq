@@ -11,7 +11,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -619,7 +619,54 @@ def shdoc_present:
       message: (.name + " needs " + (if $described then "@arg or @noargs" else "@description" end))
     };
 
-def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present;
+# The positional numbers a doc block documents with `@arg $N`, as strings,
+# plus "@" when it has `@arg $@`.
+def doc_positions: [.doc[] | capture("^ *@arg \\$(?<n>[0-9]+|@)") | .n] | unique;
+
+# Every object under a node, leaving out the bodies of nested functions: their
+# positionals are their own.
+def own_nodes:
+  if type == "object" then
+    ., (if .Type == "FuncDecl" then empty else .[] | own_nodes end)
+  elif type == "array" then
+    .[] | own_nodes
+  else
+    empty
+  end;
+
+# The positional numbers a body reads, as strings, plus "@" for $@ and $*.
+def body_positions:
+  [
+    .body | own_nodes
+    | select(.Type == "ParamExp")
+    | (.Param.Value // "")
+    | select(test("^([1-9][0-9]*|[@*])$"))
+    | if . == "*" then "@" else . end
+  ]
+  | unique;
+
+# The @arg lines name exactly the positionals the body reads. A block that
+# documents `$@` also covers numbered reads: a variadic function may peek at
+# `$1`.
+def shdoc_arg_positions:
+  documented_functions
+  | select(.doc | any(test("^ *@(arg|noargs)\\b")))
+  | doc_positions as $doc
+  | body_positions as $body
+  | select(
+      if ($doc | index("@")) != null then
+        ($body | index("@")) == null
+      else
+        $doc != $body
+      end
+    )
+  | {
+      line,
+      rule: "shdoc-arg-positions",
+      message: (.name + " documents [" + ($doc | join(" ")) + "] and reads [" + ($body | join(" ")) + "]")
+    };
+
+def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

@@ -23,8 +23,8 @@
 # @arg $@ paths the bash and bats files to check
 # @stderr one FAIL line per violation, then a verdict line
 # @exitcode 0 every file is clean
-# @exitcode 1 a violation, no files given, a file shfmt cannot parse, or a
-#             failed canary
+# @exitcode 1 a violation, no files given, a file shfmt cannot parse, a
+#             failed canary, or a git that cannot list the repository
 # @exitcode 2 a required tool is not on PATH
 
 set -Eeuo pipefail
@@ -35,6 +35,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
+readonly REPO_DIR="${SCRIPT_DIR}/.."
 
 # A snippet that breaks one tree rule and one text rule. If the pipeline stops
 # reporting both, the tree no longer has the shape the rules were written for.
@@ -85,9 +86,11 @@ function run_rules() {
   local -r sourced="$3"
   local -r tracked="$4"
   local -r functions="$5"
+  # The lists reach jq as files, not `--arg` strings: one argument is capped at
+  # 128 KiB on Linux, and a large repository's lists are not.
   jq --raw-output --library-path "${SCRIPT_DIR}" \
     --arg path "${display_path}" --rawfile src "${src_file}" --argjson sourced "${sourced}" \
-    --arg tracked "${tracked}" --arg functions "${functions}" \
+    --rawfile tracked <(printf '%s\n' "${tracked}") --rawfile functions <(printf '%s\n' "${functions}") \
     'import "bash-style" as style;
      style::report($path; $src; $sourced; $tracked | split("\n"); $functions | split("\n"))'
 }
@@ -96,16 +99,29 @@ function run_rules() {
 #              define, so a comment may name a function from a file the run is
 #              not scanning, and a fixture's own function counts.
 # @arg $@ paths the files named on the command line
-# @stdout one function name per line, written `<namespace>::<name>`, duplicates included
+# @stdout one function name per line, written `<namespace>::<name>`
+# @stderr a FAIL line when git or grep fails, as opposed to finding nothing
+# @exitcode 0 the list was written, possibly empty
+# @exitcode 1 git or grep failed
 function namespaced_functions() {
-  {
-    # `git grep` has no long form for its pattern option `-e`, and no long
-    # form for dropping the file name, so the sed below strips it.
-    git -C "${SCRIPT_DIR}/.." grep --only-matching --extended-regexp \
-      -e "${NAMESPACED_FUNCTION}" || true # no namespaced function in the repo is a valid answer
-    grep --no-filename --only-matching --extended-regexp \
-      --regexp="${NAMESPACED_FUNCTION}" -- "$@" || true # nor is a file list with none
-  } | sed --expression='s/^.*function //'
+  local repo_matches file_matches
+  local status=0
+  # `git grep` has no long form for its pattern option `-e`, and no long
+  # form for dropping the file name, so the sed below strips it.
+  repo_matches="$(git -C "${REPO_DIR}" grep --only-matching --extended-regexp \
+    -e "${NAMESPACED_FUNCTION}")" || status=$? # 1 is no match, a valid answer
+  if ((status > 1)); then
+    printf 'FAIL: could not search the repository for function definitions\n' >&2
+    return 1
+  fi
+  status=0
+  file_matches="$(grep --no-filename --only-matching --extended-regexp \
+    --regexp="${NAMESPACED_FUNCTION}" -- "$@")" || status=$? # 1 is no match, a valid answer
+  if ((status > 1)); then
+    printf 'FAIL: could not search the named files for function definitions\n' >&2
+    return 1
+  fi
+  printf '%s\n%s\n' "${repo_matches}" "${file_matches}" | sed --expression='s/^.*function //'
 }
 
 # @description Prove the pipeline still reports a known violation of each kind.
@@ -158,8 +174,17 @@ function main() {
 
   local path out sourced tracked functions
   local dirty=0
-  tracked="$(git -C "${SCRIPT_DIR}/.." ls-files)"
-  functions="$(namespaced_functions "$@")"
+  if ! tracked="$(git -C "${REPO_DIR}" ls-files)"; then
+    printf 'FAIL: could not list the files git tracks\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
+    trap - ERR
+    return 1
+  fi
+  if ! functions="$(namespaced_functions "$@")"; then
+    trap - ERR
+    return 1
+  fi
   for path in "$@"; do
     sourced="$(is_sourced "${path}")"
     # shellcheck disable=SC2094 # both sides only read the file; nothing writes it

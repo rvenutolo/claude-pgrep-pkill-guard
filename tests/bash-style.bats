@@ -1469,3 +1469,39 @@ function assert_passes() {
   assert_failure 1
   assert_output --partial "FAIL: ${FIXTURE}:5: [mktemp-exit-trap]"
 }
+
+@test "bash style: a git that cannot list the repository is a verdict, not a crash" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_git
+  real_git="$(command -v git)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'case "$*" in' \
+    '  *ls-files*) exit 1 ;;' \
+    'esac' \
+    "exec ${real_git} \"\$@\"" > "${shim_dir}/git"
+  chmod +x "${shim_dir}/git"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: could not list the files git tracks'
+  refute_output --partial 'ERROR: line'
+}
+
+@test "bash style: a git grep that fails is a verdict, not a crash" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_git
+  real_git="$(command -v git)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'case "$*" in' \
+    '  *" grep "*) exit 128 ;;' \
+    'esac' \
+    "exec ${real_git} \"\$@\"" > "${shim_dir}/git"
+  chmod +x "${shim_dir}/git"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: could not search the repository for function definitions'
+  refute_output --partial 'ERROR: line'
+}

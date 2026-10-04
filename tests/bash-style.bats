@@ -930,10 +930,18 @@ function assert_passes() {
   refute_output --partial '[max-line-length]'
 }
 
-@test "bash style: max-line-length never excuses a long comment, and reports a long line inside a heredoc" {
+@test "bash style: max-line-length excuses a comment with one unbroken word, not one of ordinary words" {
+  local url prose
+  url="https://example.invalid/$(printf 'a%.0s' {1..90})"
+  prose="$(printf 'word %.0s' {1..30})"
+  assert_passes 'l.sh' "# see ${url} for the details of this"
+  assert_fires 'l.sh' 'max-line-length' 1 "# ${prose}"
+  assert_fires 'l.sh' 'max-line-length' 1 "# ${url} ${url}"
+}
+
+@test "bash style: max-line-length reports a long line inside a heredoc" {
   local literal
   literal="$(printf 'a%.0s' {1..130})"
-  assert_fires 'l.sh' 'max-line-length' 1 "# ${literal}"
   assert_fires 'l.sh' 'max-line-length' 2 "cat <<'EOF'" "echo ${literal} ${literal}" 'EOF'
   assert_passes 'l.sh' "printf '%s\\n' '${literal}'"
 }

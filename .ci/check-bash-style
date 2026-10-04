@@ -58,7 +58,8 @@ readonly REPO_DIR="${SCRIPT_DIR}/.."
 
 # The directory the scan jobs write their logs and verdicts to. Script-level,
 # not a local of `main`: the EXIT trap that removes it runs after `main` has
-# returned. Empty until `main` creates it.
+# returned, or instead of the rest of `main` on an interrupt. Empty until
+# `main` creates it.
 WORK_DIR=''
 
 # A snippet, parsed and never run, that breaks the rules in CANARY_RULES, and
@@ -172,6 +173,27 @@ function run_rules() {
     --rawfile helpers <(printf '%s\n' "${helpers}") \
     'import "bash-style" as style;
      style::report($path; $src; $sourced; $tracked | split("\n"); $functions | split("\n"); $helpers | split("\n"))'
+}
+
+# @description Remove the work directory, as the EXIT trap. On an interrupt
+#              scans are still running: they are stopped and waited for first,
+#              because a scan that outlives the directory fails to write its
+#              verdict and says so, and one creating its log while the
+#              directory is being removed can leave it behind.
+# @noargs
+function remove_work_dir() {
+  local running
+  local -a pids=()
+  if [[ -z "${WORK_DIR}" ]]; then
+    return
+  fi
+  running="$(jobs -pr)"
+  if [[ -n "${running}" ]]; then
+    mapfile -t pids <<< "${running}"
+    kill "${pids[@]}" 2> /dev/null || true # a scan may end between the listing and the signal
+    wait
+  fi
+  rm --recursive --force -- "${WORK_DIR}"
 }
 
 # @description Scan one file, as a job that runs beside the scans of the other
@@ -336,8 +358,8 @@ function main() {
 
   # Armed before the directory exists, so no exit can leave it behind. The
   # jobs below are subshells, which do not inherit an EXIT trap: only this
-  # shell removes the directory, and only after every job has ended.
-  trap 'if [[ -n "${WORK_DIR}" ]]; then rm --recursive --force -- "${WORK_DIR}"; fi' EXIT
+  # shell removes the directory, and remove_work_dir ends every job first.
+  trap 'remove_work_dir' EXIT
   WORK_DIR="$(mktemp --directory)"
   max_jobs="$(nproc)"
   for path in "$@"; do

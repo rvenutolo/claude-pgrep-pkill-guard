@@ -24,8 +24,8 @@
 #              unknown rule id, or nothing to excuse is itself a violation.
 #
 #              Devshell only: the tree's shape belongs to the shfmt the flake
-#              pins. The canary in `main` fails the gate when a different
-#              shfmt answers.
+#              pins. The canary checked before any file is scanned fails the
+#              gate when a different shfmt answers.
 # @arg $@ paths the bash and bats files to check
 # @stderr one FAIL line per violation, then a verdict line
 # @exitcode 0 every file is clean
@@ -44,10 +44,44 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly REPO_DIR="${SCRIPT_DIR}/.."
 
-# A snippet that breaks one tree rule and one text rule. If the pipeline stops
-# reporting both, the tree no longer has the shape the rules were written for.
-readonly CANARY=$'canary() {\n\t:\n}\n'
-readonly -a CANARY_RULES=('function-keyword' 'no-raw-tab')
+# A snippet, parsed and never run, that breaks one rule for each shape of tree
+# the rules read: a function declaration, a declaration clause and its
+# variant, a parameter expansion with its default and its subscript, a
+# double-quoted literal, a redirect, a test operator, both sides of a `||`, an
+# assignment of a substitution, an arithmetic command, a loop header, a case
+# item's operator, a heredoc and a comment; and one text rule, the raw tab. A
+# rule whose tree key a different shfmt renames matches nothing and would pass
+# every file, so check_canary fails the gate when any rule in CANARY_RULES is
+# missing from the snippet's report. A key whose loss makes a rule report
+# more, not less (a heredoc's body, a redirect's descriptor number, the
+# `function` keyword flag), is not proved here: that fails on real files.
+# shellcheck disable=SC2016 # the canary is scanned source, never expanded
+readonly -a CANARY=(
+  '# FIXME'
+  '# @arg $1 name'
+  'canary() {'
+  $'\t''local other="$1"'
+  '  echo ${other} "${HOME:-x}" "literal" "${items[${other}]}" >&2'
+  '  [[ a = b ]] || true'
+  '  count=$(some_command)'
+  '  count="$(some_command)" || exit 1'
+  '  export CANARY_GLOBAL=1'
+  '  ((count))'
+  '  for item; do'
+  '    case x in'
+  '      x) cat <<EOF ;&'
+  'PAYLOAD_RAN'
+  'EOF'
+  '    esac'
+  '  done'
+  '}'
+)
+readonly -a CANARY_RULES=(
+  'function-keyword' 'no-raw-tab' 'shdoc-arg-name' 'quote-expansions' 'no-default-wellknown-env'
+  'no-braces-in-arith' 'single-quote-literals' 'shdoc-stderr' 'test-double-equals' 'blank-fallback-comment'
+  'quote-subst-in-assign' 'no-subst-or-exit' 'shdoc-set' 'bare-arith-stmt' 'explicit-for-in' 'no-fallthrough'
+  'quote-heredoc-terminator' 'todo-form'
+)
 
 # The shape of a namespaced function definition, for grep.
 readonly NAMESPACED_FUNCTION='function [a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*'
@@ -161,15 +195,16 @@ function helper_functions() {
   printf '%s\n' "${matches}" | sed --expression='s/^.*function //'
 }
 
-# @description Prove the pipeline still reports a known violation of each kind.
+# @description Prove the pipeline still reports every violation the canary
+#              holds, one per shape of tree the rules read.
 # @noargs
 # @stderr a FAIL line when the canary is not reported
 # @exitcode 0 the canary came back
 # @exitcode 1 it did not
 function check_canary() {
   local out rule
-  if ! out="$(printf '%s' "${CANARY}" | shfmt --filename 'canary.sh' --to-json \
-    | run_rules 'canary' <(printf '%s' "${CANARY}") 'true' '' '' '')"; then
+  if ! out="$(printf '%s\n' "${CANARY[@]}" | shfmt --filename 'canary.sh' --to-json \
+    | run_rules 'canary' <(printf '%s\n' "${CANARY[@]}") 'true' '' '' '')"; then
     printf 'FAIL: the canary could not be scanned\n' >&2
     return 1
   fi

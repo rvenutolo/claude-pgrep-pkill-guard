@@ -70,6 +70,27 @@ function make_tool_dir() {
   done
 }
 
+# @description Put a shfmt on PATH that answers with the real tree after one
+#              key in it is renamed, and assert the canary fails the gate.
+# @arg $1 key the tree key to rename
+function assert_canary_catches_renamed_key() {
+  local -r key="$1"
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_shfmt
+  real_shfmt="$(command -v shfmt)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    "${real_shfmt} \"\$@\" | sed -e 's/\"${key}\":/\"Renamed\":/g'" > "${shim_dir}/shfmt"
+  chmod +x "${shim_dir}/shfmt"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  # Either verdict fails the gate: a rule that no longer fires, or a rule that
+  # cannot read the tree at all.
+  assert_output --regexp 'FAIL: the canary (did not trip|could not be scanned)'
+  refute_output --partial 'ERROR: line'
+}
+
 # @description Assert the gate reports one rule at one line of a fixture.
 # @arg $1 name fixture file name; its directory part scopes path-based rules
 # @arg $2 rule the rule id expected in the FAIL line
@@ -358,6 +379,14 @@ function assert_marker_stops_at_header() {
   PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial 'FAIL: the canary did not trip function-keyword'
+}
+
+@test "bash style: the canary catches a renamed key in each tree shape the rules read" {
+  local key
+  for key in 'Type' 'Stmts' 'Cmd' 'Args' 'Assigns' 'Parts' 'Value' 'Name' 'Param' 'Exp' 'Index' 'Op' 'X' 'Y' \
+    'Redirs' 'Word' 'Items' 'Loop' 'Body' 'Variant' 'Comments' 'Hash' 'Text' 'Pos' 'Line'; do
+    assert_canary_catches_renamed_key "${key}"
+  done
 }
 
 @test "bash style: a jq that stops reporting the text rule fails the canary" {

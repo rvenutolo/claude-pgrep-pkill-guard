@@ -577,8 +577,11 @@ markers.
 
 The gate runs only in the devShell, because the tree's shape belongs to the
 `shfmt` the flake pins. Before it scans anything it feeds itself a snippet that
-must trip two rules; a `shfmt` that answers with a different tree fails there,
-loudly, not by passing every file.
+must trip one rule for each shape of tree the rules read, plus one rule that
+reads the source text. A rule whose tree key a different `shfmt` renames
+matches nothing, which would pass every file; the missing rule fails the gate
+there instead, loudly. A key whose loss makes a rule report more, not less, is
+not proved by the snippet: that failure shows up on real files.
 
 ### Line coverage
 

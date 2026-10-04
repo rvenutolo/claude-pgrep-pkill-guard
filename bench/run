@@ -210,7 +210,7 @@ function validate_one() {
   local -r payload="$1"
   local response
   response="$(printf '%s' "${payload}" | "${HOOK}")"
-  jq --exit-status . > /dev/null 2>&1 <<< "${response}" \
+  jq --exit-status '.' > /dev/null 2>&1 <<< "${response}" \
     || die "hook response is not valid JSON for payload: ${payload}"
 }
 
@@ -257,7 +257,7 @@ function cpu_model() {
       '/proc/cpuinfo' || true)" # awk exits 1 only if the read fails; best effort
   fi
   if [[ -z "${model}" ]] && command -v sysctl > /dev/null 2>&1; then
-    model="$(sysctl -n machdep.cpu.brand_string 2> /dev/null || true)" # absent on Linux; the probe is best effort
+    model="$(sysctl -n 'machdep.cpu.brand_string' 2> /dev/null || true)" # absent on Linux; the probe is best effort
   fi
   printf '%s\n' "${model:-unknown}"
 }
@@ -538,11 +538,11 @@ function main() {
     reps=1
     for i in "${!payload_of[@]}"; do
       case "${cohort_of[i]}" in
-        typical) ((seen_typical++ > 0)) && continue ;;
-        quiet) ((seen_quiet++ > 0)) && continue ;;
-        inspect) ((seen_inspect++ > 0)) && continue ;;
-        deny) ((seen_deny++ > 0)) && continue ;;
-        skipped) ((seen_skipped++ > 0)) && continue ;;
+        'typical') ((seen_typical++ > 0)) && continue ;;
+        'quiet') ((seen_quiet++ > 0)) && continue ;;
+        'inspect') ((seen_inspect++ > 0)) && continue ;;
+        'deny') ((seen_deny++ > 0)) && continue ;;
+        'skipped') ((seen_skipped++ > 0)) && continue ;;
         *) continue ;;
       esac
       indices+=("${i}")

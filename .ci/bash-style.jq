@@ -919,18 +919,40 @@ def mktemp_exit_trap($sourced):
 
 def hits($path; $src; $sourced; $tracked; $functions): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
 
+# The last line a marker attached to this node reaches. A simple command or a
+# pipeline is reached whole, continuation lines included. A compound statement
+# is reached through its header only, so a marker above a function, a test, a
+# block or a subshell stops at the opening line, one above a `case` at the line
+# of its word, one above an `if` or a loop at the line of its `then` or `do`
+# (the condition is covered), and one above a case arm at the line of its
+# pattern. Reaching the body as well would excuse every hit inside it.
+def marker_reach:
+  if has("Cmd") then
+    (.Cmd.Type // "") as $type
+    | if $type | IN("FuncDecl", "TestDecl", "Block", "Subshell") then .Pos.Line
+      elif $type == "CaseClause" then .Cmd.Word.End.Line
+      elif $type == "IfClause" then .Cmd.ThenPos.Line
+      elif $type | IN("WhileClause", "ForClause") then .Cmd.DoPos.Line
+      else .End.Line
+      end
+  elif has("Patterns") then
+    (.Patterns | last | .End.Line)
+  else
+    .End.Line
+  end;
+
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
 # other `bash-style` comment has `malformed: true`. A comment shfmt attached to
-# a statement covers that statement's line span; a marker alone on the line
-# above a statement is attached to that statement, so the span starts at the
-# marker. A comment attached to nothing (after the last statement of a file or
-# of a block) covers only its own line.
+# a statement covers that statement's lines as far as marker_reach says; a
+# marker alone on the line above a statement is attached to that statement, so
+# the span starts at the marker. A comment attached to nothing (after the last
+# statement of a file or of a block) covers only its own line.
 def markers:
   ([
     .. | objects
     | select(has("Comments") and has("End"))
-    | .End.Line as $to
+    | marker_reach as $to
     | .Comments[]
     | {key: (.Hash.Line | tostring), value: $to}
   ] | from_entries) as $spans

@@ -83,6 +83,19 @@ function assert_passes() {
   assert_success
 }
 
+# @description Assert a marker on the first line of a fixture excuses the
+#              long-options hit on the second line and not the one on the
+#              third.
+# @arg $@ lines the fixture's lines after the marker
+function assert_marker_stops_at_header() {
+  write_fixture 'header.sh' '# bash-style allow=long-options: fixture reason' "$@"
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [long-options]"
+  refute_output --partial "${FIXTURE}:2: ["
+  refute_output --partial '[marker-unused]'
+}
+
 @test "bash style: function-keyword passes a function defined with the keyword" {
   assert_passes 'kw.sh' '# @description Inert.' '# @noargs' 'function greet() {' '  echo PAYLOAD_RAN' '}'
 }
@@ -173,6 +186,64 @@ function assert_passes() {
     "  echo 'a$(printf '\t')b'"
   run "${CHECK}" "${FIXTURE}"
   assert_success
+}
+
+@test "bash style: a marker above a function header does not reach into the body" {
+  write_fixture 'wide.sh' \
+    '# @description Inert.' '# @noargs' \
+    '# bash-style allow=long-options: fixture reason' \
+    'function wide() {' \
+    "  grep -q 'x' 'file'" \
+    '}'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [long-options]"
+  assert_output --partial "FAIL: ${FIXTURE}:3: [marker-unused]"
+}
+
+@test "bash style: a marker above a case covers the header and not an arm" {
+  write_fixture 'header.sh' \
+    '# bash-style allow=long-options: fixture reason' \
+    'case "$(some_tool -s)" in' \
+    "  x) grep -q 'x' 'file' ;;" \
+    'esac'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [long-options]"
+  refute_output --partial "${FIXTURE}:2: ["
+  refute_output --partial '[marker-unused]'
+}
+
+@test "bash style: a marker above an if or a loop covers the condition and not the body" {
+  assert_marker_stops_at_header 'if some_tool -s; then' "  grep -q 'x' 'file'" 'fi'
+  assert_marker_stops_at_header 'while some_tool -s; do' "  grep -q 'x' 'file'" 'done'
+  assert_marker_stops_at_header 'until some_tool -s; do' "  grep -q 'x' 'file'" 'done'
+  assert_marker_stops_at_header 'for item in "$(some_tool -s)"; do' "  grep -q 'x' 'file'" 'done'
+}
+
+@test "bash style: a marker above a block, a subshell, a test or a case arm covers only its first line" {
+  assert_marker_stops_at_header '{ some_tool -s &&' "  grep -q 'x' 'file'; }"
+  assert_marker_stops_at_header '(some_tool -s &&' "  grep -q 'x' 'file')"
+  write_fixture 'header.bats' \
+    '# bash-style allow=long-options: fixture reason' \
+    '@test "inert" {' \
+    "  grep -q 'x' 'file'" \
+    '}'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [long-options]"
+  assert_output --partial "FAIL: ${FIXTURE}:1: [marker-unused]"
+  write_fixture 'arm.sh' \
+    'case x in' \
+    '  # bash-style allow=long-options: fixture reason' \
+    '  x)' \
+    "    grep -q 'x' 'file'" \
+    '    ;;' \
+    'esac'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:4: [long-options]"
+  assert_output --partial "FAIL: ${FIXTURE}:2: [marker-unused]"
 }
 
 @test "bash style: a marker does not reach the next statement" {

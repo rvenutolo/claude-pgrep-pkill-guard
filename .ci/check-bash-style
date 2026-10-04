@@ -14,6 +14,11 @@
 #
 #                # bash-style allow=<rule-id>: <reason>
 #
+#              A marker reaches every line of a simple command or pipeline.
+#              Above a compound statement (a function, a `case`, an `if`, a
+#              loop, a block, a subshell) it reaches the header only, never the
+#              body, so one marker cannot excuse a whole function.
+#
 #              A marker that does not follow that form, or has no reason, an
 #              unknown rule id, or nothing to excuse is itself a violation.
 #
@@ -23,8 +28,9 @@
 # @arg $@ paths the bash and bats files to check
 # @stderr one FAIL line per violation, then a verdict line
 # @exitcode 0 every file is clean
-# @exitcode 1 a violation, no files given, a file shfmt cannot parse, a
-#             failed canary, or a git that cannot list the repository
+# @exitcode 1 a violation, no files given, a file shfmt cannot parse, a named
+#             path that cannot be read or searched (a directory, a missing
+#             file), a failed canary, or a git that cannot list the repository
 # @exitcode 2 a required tool is not on PATH
 
 set -Eeuo pipefail

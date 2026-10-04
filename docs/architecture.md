@@ -559,9 +559,16 @@ above it:
 # bash-style allow=<rule-id>: <reason>
 ```
 
+A marker reaches every line of a simple command or pipeline. Above a compound
+statement (a function, a `case`, an `if`, a loop, a block, a subshell) it
+reaches the header only: the opening line, through the `case` word or the
+`then` or `do`, so a flag in the condition is covered and the body is not. One
+marker therefore never excuses a whole function.
+
 A marker that does not follow that form, has no reason, names an id no rule
-has, or has nothing to excuse is itself a violation, so an exception cannot outlive the code it excused. A
-pattern that recurs belongs in the rule, not in markers.
+has, or has nothing to excuse is itself a violation, so an exception cannot
+outlive the code it excused. A pattern that recurs belongs in the rule, not in
+markers.
 
 The gate runs only in the devShell, because the tree's shape belongs to the
 `shfmt` the flake pins. Before it scans anything it feeds itself a snippet that

@@ -10,6 +10,12 @@
 #              script, whatever files are named, so a comment or a helper call
 #              in any file is checked against the same repository.
 #
+#              The files are scanned concurrently, as many at a time as the
+#              machine has processors. Each scan writes to its own log in a
+#              temporary directory, and the logs are printed in argument
+#              order once every scan has ended, so the output does not depend
+#              on which scan finishes first.
+#
 #              One site may be excused with a comment on the statement, or
 #              alone on the line above it:
 #
@@ -47,6 +53,11 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly REPO_DIR="${SCRIPT_DIR}/.."
+
+# The directory the scan jobs write their logs and verdicts to. Script-level,
+# not a local of `main`: the EXIT trap that removes it runs after `main` has
+# returned. Empty until `main` creates it.
+WORK_DIR=''
 
 # A snippet, parsed and never run, that breaks one rule for each shape of tree
 # the rules read: a function declaration, a declaration clause and its
@@ -152,6 +163,42 @@ function run_rules() {
      style::report($path; $src; $sourced; $tracked | split("\n"); $functions | split("\n"); $helpers | split("\n"))'
 }
 
+# @description Scan one file, as a job that runs beside the scans of the other
+#              files. Everything the scan says, the parser's own complaint
+#              about a file it cannot read included, goes to the job's log,
+#              which `main` prints in argument order: jobs writing straight to
+#              stderr would interleave their lines. The verdict is a file too,
+#              because `wait -n` does not say which job it reaped; a job that
+#              dies before writing one leaves none, and `main` reads that as a
+#              failure.
+# @arg $1 index the file's position among the arguments, naming the job's files
+# @arg $2 path the file to scan
+# @arg $3 tracked the repository's tracked paths, one per line
+# @arg $4 functions the namespaced function names defined anywhere, one per line
+# @arg $5 helpers the function names the test helpers define, one per line
+function scan_file() {
+  local -r index="$1"
+  local -r path="$2"
+  local -r tracked="$3"
+  local -r functions="$4"
+  local -r helpers="$5"
+  local out sourced
+  local verdict='dirty'
+  {
+    sourced="$(is_sourced "${path}")"
+    # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
+    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" \
+      | run_rules "${path}" "${path}" "${sourced}" "${tracked}" "${functions}" "${helpers}")"; then
+      printf 'FAIL: %s could not be scanned\n' "${path}"
+    elif [[ -n "${out}" ]]; then
+      printf '%s\n' "${out}"
+    else
+      verdict='clean'
+    fi
+  } > "${WORK_DIR}/${index}.log" 2>&1
+  printf '%s\n' "${verdict}" > "${WORK_DIR}/${index}.verdict"
+}
+
 # @description List the namespaced functions the repository or the named files
 #              define, so a comment may name a function from a file the run is
 #              not scanning, and a fixture's own function counts.
@@ -252,8 +299,10 @@ function main() {
     return 1
   fi
 
-  local path out sourced tracked functions helpers
+  local path tracked functions helpers max_jobs verdict
   local dirty=0
+  local index=0
+  local running=0
   if ! tracked="$(git -C "${REPO_DIR}" ls-files)"; then
     printf 'FAIL: could not list the files git tracks\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so
@@ -265,19 +314,40 @@ function main() {
     trap - ERR
     return 1
   fi
+
+  # Armed before the directory exists, so no exit can leave it behind. The
+  # jobs below are subshells, which do not inherit an EXIT trap: only this
+  # shell removes the directory, and only after every job has ended.
+  trap 'if [[ -n "${WORK_DIR}" ]]; then rm --recursive --force -- "${WORK_DIR}"; fi' EXIT
+  WORK_DIR="$(mktemp --directory)"
+  max_jobs="$(nproc)"
   for path in "$@"; do
-    sourced="$(is_sourced "${path}")"
-    # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
-    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" \
-      | run_rules "${path}" "${path}" "${sourced}" "${tracked}" "${functions}" "${helpers}")"; then
-      printf 'FAIL: %s could not be scanned\n' "${path}" >&2
-      dirty="$((dirty + 1))"
-      continue
+    if ((running >= max_jobs)); then
+      wait -n || true # a job's verdict is the file it writes, read below, not its exit status
+      running="$((running - 1))"
     fi
-    if [[ -n "${out}" ]]; then
-      printf '%s\n' "${out}" >&2
-      dirty="$((dirty + 1))"
+    scan_file "${index}" "${path}" "${tracked}" "${functions}" "${helpers}" &
+    running="$((running + 1))"
+    index="$((index + 1))"
+  done
+  wait
+
+  index=0
+  for path in "$@"; do
+    if [[ -s "${WORK_DIR}/${index}.log" ]]; then
+      cat -- "${WORK_DIR}/${index}.log" >&2
     fi
+    verdict="$(cat -- "${WORK_DIR}/${index}.verdict" 2> /dev/null)" || verdict='NO-VERDICT'
+    case "${verdict}" in
+      clean) ;;
+      dirty) dirty="$((dirty + 1))" ;;
+      *)
+        # The job died before it could say. Never a silent pass.
+        printf 'FAIL: %s could not be scanned\n' "${path}" >&2
+        dirty="$((dirty + 1))"
+        ;;
+    esac
+    index="$((index + 1))"
   done
 
   if ((dirty > 0)); then

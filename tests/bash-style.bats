@@ -387,6 +387,49 @@ function assert_marker_stops_at_header() {
   assert_output --partial 'FAIL: 2 of 2 files break the bash style rules'
 }
 
+@test "bash style: the files are reported in argument order, whichever scan ends first" {
+  local -a filler=()
+  mapfile -t filler < <(printf 'echo PAYLOAD_RAN %s\n' {1..400})
+  write_fixture 'slow.sh' "${filler[@]}" 'echo "PAYLOAD_RAN"'
+  local -r slow="${FIXTURE}"
+  write_fixture 'quick.sh' 'echo "PAYLOAD_RAN"'
+  local -r quick="${FIXTURE}"
+  run "${CHECK}" "${slow}" "${quick}"
+  assert_failure 1
+  assert_line --index 0 --partial "FAIL: ${slow}:401: [single-quote-literals]"
+  assert_line --index 1 --partial "FAIL: ${quick}:1: [single-quote-literals]"
+  assert_line --index 2 'FAIL: 2 of 2 files break the bash style rules'
+  run "${CHECK}" "${quick}" "${slow}"
+  assert_failure 1
+  assert_line --index 0 --partial "FAIL: ${quick}:1: [single-quote-literals]"
+  assert_line --index 1 --partial "FAIL: ${slow}:401: [single-quote-literals]"
+}
+
+@test "bash style: the parser's complaint about a file stays with that file's lines" {
+  write_fixture 'one.sh' 'echo "PAYLOAD_RAN"'
+  local -r first="${FIXTURE}"
+  write_fixture 'broken.sh' 'function greet() {'
+  local -r broken="${FIXTURE}"
+  write_fixture 'two.sh' 'echo "PAYLOAD_RAN"'
+  run "${CHECK}" "${first}" "${broken}" "${FIXTURE}"
+  assert_failure 1
+  assert_line --index 0 --partial "FAIL: ${first}:1: [single-quote-literals]"
+  assert_line --index 1 --partial "${broken}:1:"
+  assert_line --index 2 "FAIL: ${broken} could not be scanned"
+  assert_line --index 3 --partial "FAIL: ${FIXTURE}:1: [single-quote-literals]"
+  assert_line --index 4 'FAIL: 3 of 3 files break the bash style rules'
+}
+
+@test "bash style: the gate leaves nothing behind in the temporary directory" {
+  local -r scratch="${BATS_TEST_TMPDIR}/scratch"
+  mkdir -p "${scratch}"
+  write_fixture 'one.sh' 'echo "PAYLOAD_RAN"'
+  TMPDIR="${scratch}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  run find "${scratch}" -mindepth 1
+  assert_output ''
+}
+
 @test "bash style: a shfmt that answers with another tree shape fails the canary" {
   local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
   mkdir -p "${shim_dir}"

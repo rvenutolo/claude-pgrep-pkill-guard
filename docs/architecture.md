@@ -581,6 +581,15 @@ has, or has nothing to excuse is itself a violation, so an exception cannot
 outlive the code it excused. A pattern that recurs belongs in the rule, not in
 markers.
 
+Every rule walks the whole tree, so a scan costs time in proportion to the
+file, and the gate scans the files concurrently, as many at a time as the
+machine has processors. Each scan writes to its own log, and the gate prints
+the logs in argument order once every scan has ended, so the output is the same
+whichever scan finishes first. A scan that dies without a verdict is reported
+as a file that could not be scanned, never as a pass. A file that fails is a
+`FAIL:` line and exit 1; so is an empty file list, a path that cannot be read,
+and a git that cannot list the repository. A missing `shfmt` or `jq` is exit 2.
+
 The gate runs only in the devShell, because the tree's shape belongs to the
 `shfmt` the flake pins. Before it scans anything it feeds itself a snippet that
 must trip one rule for each shape of tree the rules read, plus one rule that

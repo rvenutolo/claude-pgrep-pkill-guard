@@ -566,3 +566,13 @@ function assert_passes() {
 @test "bash style: no-pipe-while passes a loop whose output is piped on" {
   assert_passes 't.sh' 'while read -r line; do' '  echo PAYLOAD_RAN' 'done < <(some_command) | other_command'
 }
+
+@test "bash style: source-not-dot reports the dot command" {
+  assert_fires 't.sh' 'source-not-dot' 1 ". 'lib.sh'"
+  assert_passes 't.sh' "source 'lib.sh'"
+}
+
+@test "bash style: source-not-dot reports the dot command behind a wrapper" {
+  assert_fires 't.sh' 'source-not-dot' 1 "builtin . 'lib.sh'"
+  assert_fires 't.sh' 'source-not-dot' 1 "command . 'lib.sh'"
+}

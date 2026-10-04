@@ -1345,3 +1345,17 @@ function assert_passes() {
     '# Nothing here waits until nowhere is reachable.' \
     'echo PAYLOAD_RAN'
 }
+
+@test "bash style: todo-form reports a deferred-work marker that is not TODO:" {
+  assert_fires 'c.sh' 'todo-form' 1 '# todo: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# FIXME tidy this' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# TODO: tidy this' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form passes a word that only contains a marker" {
+  assert_passes 'c.sh' '# The mastodon client keeps its todos in a list.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form reports TODO with a name in parentheses, which is not the TODO: form" {
+  assert_fires 'c.sh' 'todo-form' 1 '# TODO(name): tidy this' 'echo PAYLOAD_RAN'
+}

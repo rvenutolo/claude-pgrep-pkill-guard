@@ -487,6 +487,14 @@ function assert_marker_stops_at_header() {
   assert_passes 'o.sh' "echo 'rm -f inert-string'" "cat <<'EOF'" 'grep -q x' 'EOF'
 }
 
+@test "bash style: long-options reads a flag handed to a test helper as data" {
+  # run_hook is defined in tests/test_helper/common.bash, which the gate reads
+  # from the repository that holds it, not from the fixture's directory.
+  assert_passes 'tests/o.bats' \
+    '@test "inert" {' "  run_hook -x 'echo PAYLOAD_RAN'" "  run run_hook -x 'echo PAYLOAD_RAN'" '}'
+  assert_fires 'tests/o.bats' 'long-options' 2 '@test "inert" {' "  no_such_helper -x 'echo PAYLOAD_RAN'" '}'
+}
+
 @test "bash style: long-options allows the macOS short flags only under hooks/ and tests/" {
   assert_passes 'hooks/o.sh' "mkdir -p 'dir'" "rm -f -- 'file'"
   assert_passes 'tests/o.bats' '@test "inert" {' "  mkdir -p 'dir'" '}'

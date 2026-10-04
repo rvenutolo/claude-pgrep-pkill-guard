@@ -3,11 +3,12 @@
 # @description Enforce the mechanically decidable bash style rules on the files
 #              named as arguments. Each file is parsed by `shfmt --to-json` and
 #              the syntax tree, with whether the file is sourced or executed,
-#              the repository's tracked paths and its namespaced function
-#              names, is handed to the rules in .ci/bash-style.jq, which is
-#              where the rule list lives. The two lists come from the
-#              repository that holds this script, whatever files are named, so
-#              a comment in any file is checked against the same repository.
+#              the repository's tracked paths, its namespaced function names
+#              and the functions its test helpers define, is handed to the
+#              rules in .ci/bash-style.jq, which is where the rule list lives.
+#              The three lists come from the repository that holds this
+#              script, whatever files are named, so a comment or a helper call
+#              in any file is checked against the same repository.
 #
 #              One site may be excused with a comment on the statement, or
 #              alone on the line above it:
@@ -51,6 +52,11 @@ readonly -a CANARY_RULES=('function-keyword' 'no-raw-tab')
 # The shape of a namespaced function definition, for grep.
 readonly NAMESPACED_FUNCTION='function [a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*'
 
+# The shape of a plain function definition, for grep, and the directory whose
+# definitions every suite loads.
+readonly PLAIN_FUNCTION='^function [a-z_][a-z0-9_]*'
+readonly HELPER_DIR='tests/test_helper'
+
 # @description Say whether a file is sourced or executed. A bats file is
 #              sourced. Otherwise the tracked mode decides, which keeps
 #              .ci/check-executable-bit the one place that says which files
@@ -85,6 +91,7 @@ function is_sourced() {
 # @arg $3 sourced true when the file is sourced, false when it is executed
 # @arg $4 tracked the repository's tracked paths, one per line
 # @arg $5 functions the namespaced function names defined anywhere, one per line
+# @arg $6 helpers the function names the test helpers define, one per line
 # @stdout one FAIL line per violation
 function run_rules() {
   local -r display_path="$1"
@@ -92,13 +99,15 @@ function run_rules() {
   local -r sourced="$3"
   local -r tracked="$4"
   local -r functions="$5"
+  local -r helpers="$6"
   # The lists reach jq as files, not `--arg` strings: one argument is capped at
   # 128 KiB on Linux, and a large repository's lists are not.
   jq --raw-output --library-path "${SCRIPT_DIR}" \
     --arg path "${display_path}" --rawfile src "${src_file}" --argjson sourced "${sourced}" \
     --rawfile tracked <(printf '%s\n' "${tracked}") --rawfile functions <(printf '%s\n' "${functions}") \
+    --rawfile helpers <(printf '%s\n' "${helpers}") \
     'import "bash-style" as style;
-     style::report($path; $src; $sourced; $tracked | split("\n"); $functions | split("\n"))'
+     style::report($path; $src; $sourced; $tracked | split("\n"); $functions | split("\n"); $helpers | split("\n"))'
 }
 
 # @description List the namespaced functions the repository or the named files
@@ -130,6 +139,28 @@ function namespaced_functions() {
   printf '%s\n%s\n' "${repo_matches}" "${file_matches}" | sed --expression='s/^.*function //'
 }
 
+# @description List the functions the repository's test helpers define. A flag
+#              handed to one is data for the thing under test, not an option
+#              of a tool that has a long form.
+# @noargs
+# @stdout one function name per line
+# @stderr a FAIL line when git fails, as opposed to finding nothing
+# @exitcode 0 the list was written, possibly empty
+# @exitcode 1 git failed
+function helper_functions() {
+  local matches
+  local status=0
+  # `git grep` has no long form for its pattern option `-e`, and no long
+  # form for dropping the file name, so the sed below strips it.
+  matches="$(git -C "${REPO_DIR}" grep --only-matching --extended-regexp \
+    -e "${PLAIN_FUNCTION}" -- "${HELPER_DIR}")" || status=$? # 1 is no match, a valid answer
+  if ((status > 1)); then
+    printf 'FAIL: could not search the test helpers for function definitions\n' >&2
+    return 1
+  fi
+  printf '%s\n' "${matches}" | sed --expression='s/^.*function //'
+}
+
 # @description Prove the pipeline still reports a known violation of each kind.
 # @noargs
 # @stderr a FAIL line when the canary is not reported
@@ -138,7 +169,7 @@ function namespaced_functions() {
 function check_canary() {
   local out rule
   if ! out="$(printf '%s' "${CANARY}" | shfmt --filename 'canary.sh' --to-json \
-    | run_rules 'canary' <(printf '%s' "${CANARY}") 'true' '' '')"; then
+    | run_rules 'canary' <(printf '%s' "${CANARY}") 'true' '' '' '')"; then
     printf 'FAIL: the canary could not be scanned\n' >&2
     return 1
   fi
@@ -178,7 +209,7 @@ function main() {
     return 1
   fi
 
-  local path out sourced tracked functions
+  local path out sourced tracked functions helpers
   local dirty=0
   if ! tracked="$(git -C "${REPO_DIR}" ls-files)"; then
     printf 'FAIL: could not list the files git tracks\n' >&2
@@ -187,14 +218,15 @@ function main() {
     trap - ERR
     return 1
   fi
-  if ! functions="$(namespaced_functions "$@")"; then
+  if ! functions="$(namespaced_functions "$@")" || ! helpers="$(helper_functions)"; then
     trap - ERR
     return 1
   fi
   for path in "$@"; do
     sourced="$(is_sourced "${path}")"
     # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
-    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" | run_rules "${path}" "${path}" "${sourced}" "${tracked}" "${functions}")"; then
+    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" \
+      | run_rules "${path}" "${path}" "${sourced}" "${tracked}" "${functions}" "${helpers}")"; then
       printf 'FAIL: %s could not be scanned\n' "${path}" >&2
       dirty="$((dirty + 1))"
       continue

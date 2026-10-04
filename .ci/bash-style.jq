@@ -4,9 +4,9 @@
 # Input is one `shfmt --to-json` tree. Each rule is a function that emits zero
 # or more {line, rule, message} objects. Besides the tree, `report` and `hits`
 # receive the file's display path, its source text, whether the file is
-# sourced or executed, the repository's tracked paths and the namespaced
-# function names defined anywhere; a rule takes the ones it needs as
-# parameters. `report` runs every rule, drops the hits an exception marker
+# sourced or executed, the repository's tracked paths, the namespaced function
+# names defined anywhere and the function names the test helpers define; a rule
+# takes the ones it needs as parameters. `report` runs every rule, drops the hits an exception marker
 # covers, and prints one line per remaining hit.
 #
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
@@ -258,11 +258,12 @@ def macos_short: {
 };
 
 # A short flag on a tool that has a long form. Flags after a -- are data, as
-# are flags given to a function the file defines or to a command held in a
-# variable, and a negative number is an argument, except to head and tail, where
-# -5 is a legacy spelling of --lines=5.
-def long_options($path):
-  [nodes | select(.Type == "FuncDecl") | .Name.Value] as $functions
+# are flags given to a function the file defines, to a function the test
+# helpers define ($helpers) or to a command held in a variable: each is input
+# for the thing under test. A negative number is an argument, except to head
+# and tail, where -5 is a legacy spelling of --lines=5.
+def long_options($path; $helpers):
+  ([nodes | select(.Type == "FuncDecl") | .Name.Value] + $helpers) as $functions
   | is_ambient($path) as $ambient
   | nodes
   | select(.Type == "CallExpr")
@@ -925,7 +926,7 @@ def mktemp_exit_trap($sourced):
   | select($armed | not)
   | {line: $call.Pos.Line, rule: "mktemp-exit-trap", message: "arm an EXIT trap that removes what mktemp creates"};
 
-def hits($path; $src; $sourced; $tracked; $functions): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
+def hits($path; $src; $sourced; $tracked; $functions; $helpers): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path; $helpers), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
 
 # The last line a marker attached to this node reaches. A simple command or a
 # pipeline is reached whole, continuation lines included. A compound statement
@@ -980,10 +981,10 @@ def markers:
       }
   ];
 
-def report($path; $src; $sourced; $tracked; $functions):
+def report($path; $src; $sourced; $tracked; $functions; $helpers):
   if .Type != "File" then error("not a shfmt syntax tree") else . end
   | markers as $markers
-  | [hits($path; $src; $sourced; $tracked; $functions)] as $hits
+  | [hits($path; $src; $sourced; $tracked; $functions; $helpers)] as $hits
   | (
       $hits[]
       | . as $hit

@@ -552,6 +552,11 @@ function list also covers the scanned files themselves. A comment that cites a
 path under an untracked directory (`.claude/`, `docs/superpowers/`) is a
 violation, because a clone cannot follow it.
 
+`long-options` gets a third list from the same repository: the functions
+defined under `tests/test_helper/`. A flag handed to one of them, like a flag
+handed to a function the scanned file defines, is input for the thing under
+test, not an option of a tool that has a long form.
+
 One site can be excused with a comment on the statement, or alone on the line
 above it:
 

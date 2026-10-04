@@ -1030,3 +1030,19 @@ function assert_passes() {
   run "${CHECK}" "${FIXTURE}"
   assert_success
 }
+
+@test "bash style: shdoc-present reports a function with no doc block, and one with no @arg or @noargs" {
+  assert_fires 'd.sh' 'shdoc-present' 1 'function bare() {' '  echo PAYLOAD_RAN' '}'
+  assert_fires 'd.sh' 'shdoc-present' 2 '# @description Inert.' 'function half() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-present leaves main and the bats hook functions alone" {
+  assert_passes 'd.sh' 'function main() {' '  echo PAYLOAD_RAN' '}'
+  assert_passes 'd.bats' 'function setup() {' '  echo PAYLOAD_RAN' '}' '@test "inert" {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: shdoc-present accepts a description that starts on the next line" {
+  assert_passes 'd.sh' \
+    '# @description' '#   Inert.' '# @noargs' \
+    'function multi() {' '  echo PAYLOAD_RAN' '}'
+}

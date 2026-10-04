@@ -399,7 +399,7 @@ function assert_passes() {
     "test -f 'file'" \
     "bash -c 'echo PAYLOAD_RAN'" \
     'hash -r' \
-    'alias -p' \
+    'unalias -a' \
     "getopts 'ab' opt"
 }
 
@@ -588,4 +588,13 @@ function assert_passes() {
 
 @test "bash style: no-let-expr passes a lookup of let or expr" {
   assert_passes 't.sh' 'command -v expr > /dev/null' 'command -v let > /dev/null'
+}
+
+@test "bash style: no-alias reports an alias" {
+  assert_fires 't.sh' 'no-alias' 1 "alias greet='echo PAYLOAD_RAN'"
+  assert_fires 't.sh' 'no-alias' 1 "builtin alias greet='echo PAYLOAD_RAN'"
+}
+
+@test "bash style: no-alias passes a lookup of alias" {
+  assert_passes 't.sh' 'command -v alias > /dev/null'
 }

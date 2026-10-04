@@ -515,3 +515,16 @@ function assert_passes() {
 @test "bash style: no-one-line-case passes an expanded case inside a function" {
   assert_passes 't.sh' 'function f() {' '  case x in' '    x) echo PAYLOAD_RAN ;;' '  esac' '}'
 }
+
+@test "bash style: no-fallthrough reports ;& and ;;&" {
+  assert_fires 't.sh' 'no-fallthrough' 2 'case x in' '  x) echo PAYLOAD_RAN ;&' '  y) echo PAYLOAD_RAN ;;' 'esac'
+  assert_fires 't.sh' 'no-fallthrough' 2 'case x in' '  x) echo PAYLOAD_RAN ;;&' '  y) echo PAYLOAD_RAN ;;' 'esac'
+}
+
+@test "bash style: no-fallthrough passes a case that ends every arm with ;;" {
+  assert_passes 't.sh' 'case x in' '  x) echo PAYLOAD_RAN ;;' '  y) echo PAYLOAD_RAN ;;' 'esac'
+}
+
+@test "bash style: no-fallthrough passes a last arm with no terminator" {
+  assert_passes 't.sh' 'case x in' '  x) echo PAYLOAD_RAN ;;' '  y) echo PAYLOAD_RAN' 'esac'
+}

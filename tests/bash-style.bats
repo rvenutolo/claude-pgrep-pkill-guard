@@ -1304,7 +1304,7 @@ function assert_passes() {
 }
 
 @test "bash style: comment-missing-function reports a namespaced function nothing defines" {
-  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls nothing::defined_here first.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::defined_nowhere first.' 'echo PAYLOAD_RAN'
   assert_passes 'c.sh' '# Calls classify::classify_command first.' 'echo PAYLOAD_RAN'
 }
 
@@ -1323,7 +1323,7 @@ function assert_passes() {
 
 @test "bash style: comment-missing-function reports a name defined nowhere even beside a defined one" {
   assert_fires 'c.sh' 'comment-missing-function' 1 \
-    '# @description Calls classify::classify_command, then nothing::defined_here.' '# @noargs' \
+    '# @description Calls classify::classify_command, then classify::defined_nowhere.' '# @noargs' \
     'function caller() {' '  echo PAYLOAD_RAN' '}'
 }
 
@@ -1394,4 +1394,16 @@ function assert_passes() {
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial "FAIL: ${FIXTURE}:6: [mktemp-exit-trap]"
+}
+
+@test "bash style: comment-missing-function skips a namespace no function uses" {
+  assert_passes 'c.sh' \
+    '# See style::report for the entry point.' \
+    '# std::string is not bash.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-function still reports a misspelt name in a used namespace" {
+  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::no_such_function first.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::classify_commands first.' 'echo PAYLOAD_RAN'
 }

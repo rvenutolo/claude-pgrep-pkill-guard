@@ -851,15 +851,20 @@ def comment_missing_path($tracked):
   | select(($tracked | any(startswith($ref + "/"))) | not)
   | {line: $line, rule: "comment-missing-path", message: ("no tracked file or directory is named " + $ref)};
 
-# A comment that names a namespaced function nothing defines. The list covers
-# every file in the repository and every file scanned, so the definition may be
-# anywhere, including later in the same file.
+# A comment that names a function in a namespace some defined function uses,
+# where nothing defines that name. The list covers every file in the
+# repository and every file scanned, so the definition may be anywhere,
+# including later in the same file. A `word::word` whose namespace no function
+# uses (`std::string`, a jq module call) is not a bash function name, so it is
+# not checked; a misspelt name inside a used namespace still is.
 def comment_missing_function($functions):
-  comments
+  ($functions | map(select(contains("::")) | split("::")[0]) | unique) as $namespaces
+  | comments
   | .line as $line
   | [.text | match("[a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*"; "g") | .string]
   | unique[]
   | . as $ref
+  | select($namespaces | index($ref | split("::")[0]))
   | select(($functions | index($ref)) == null)
   | {line: $line, rule: "comment-missing-function", message: ("no function is named " + $ref)};
 

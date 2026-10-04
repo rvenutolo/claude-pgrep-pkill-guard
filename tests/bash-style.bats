@@ -528,3 +528,12 @@ function assert_passes() {
 @test "bash style: no-fallthrough passes a last arm with no terminator" {
   assert_passes 't.sh' 'case x in' '  x) echo PAYLOAD_RAN ;;' '  y) echo PAYLOAD_RAN' 'esac'
 }
+
+@test "bash style: explicit-for-in reports the implicit positional loop" {
+  assert_fires 't.sh' 'explicit-for-in' 1 'for arg; do' '  echo PAYLOAD_RAN' 'done'
+  assert_passes 't.sh' 'for arg in "$@"; do' '  echo PAYLOAD_RAN' 'done'
+}
+
+@test "bash style: explicit-for-in reports the implicit loop inside a function" {
+  assert_fires 't.sh' 'explicit-for-in' 2 'function f() {' '  for arg; do' '    echo PAYLOAD_RAN' '  done' '}'
+}

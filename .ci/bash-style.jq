@@ -249,7 +249,7 @@ def no_long_form: {
 def macos_short: {
   "mkdir": ["-p", "-m"], "rm": ["-f"], "mv": ["-f"], "cp": ["-R"],
   "ln": ["-s"], "wc": ["-l", "-c"], "tr": ["-d", "-s"], "uname": ["-s"],
-  "sed": ["-e"], "head": ["-n"]
+  "sed": ["-e"], "head": ["-n"], "mktemp": ["-u"]
 };
 
 # A short flag on a tool that has a long form. Flags after a -- are data, as
@@ -902,15 +902,20 @@ def todo_form:
 # An executed script that calls mktemp arms an EXIT trap somewhere, so the
 # temporary file or directory does not outlive it. A trap that only clears
 # (`trap - EXIT`) arms nothing. A sourced file is exempt: it must not install a
-# trap into its caller's shell. A dry run creates nothing.
+# trap into its caller's shell. A dry run (--dry-run, or -u, the spelling BSD
+# mktemp has) creates nothing. The command is found behind wrappers, so
+# `command mktemp` and `env VAR=x mktemp` count.
 def mktemp_exit_trap($sourced):
   select($sourced | not)
   | ([nodes | select(.Type == "CallExpr" and cmdname == "trap") | [args[] | (.Parts[0].Value // "")] | select(.[1] != "-" and any(. == "EXIT" or . == "0"))] | length > 0) as $armed
   | nodes
-  | select(.Type == "CallExpr" and cmdname == "mktemp")
-  | select([args[] | (.Parts[0].Value // "")] | any(. == "--dry-run") | not)
+  | select(.Type == "CallExpr")
+  | . as $call
+  | real_words as $w
+  | select(($w[0].Parts[0].Value // "") == "mktemp")
+  | select([$w[1:][] | (.Parts[0].Value // "") | select(. == "--dry-run" or test("^-[A-Za-z]*u[A-Za-z]*$"))] | length == 0)
   | select($armed | not)
-  | {line: .Pos.Line, rule: "mktemp-exit-trap", message: "arm an EXIT trap that removes what mktemp creates"};
+  | {line: $call.Pos.Line, rule: "mktemp-exit-trap", message: "arm an EXIT trap that removes what mktemp creates"};
 
 def hits($path; $src; $sourced; $tracked; $functions): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
 

@@ -1441,3 +1441,31 @@ function assert_passes() {
   assert_fires 'c.sh' 'todo-form' 1 '# Todo: tidy this' 'echo PAYLOAD_RAN'
   assert_fires 'c.sh' 'todo-form' 1 '# fixme: tidy this' 'echo PAYLOAD_RAN'
 }
+
+@test "bash style: mktemp-exit-trap skips the short dry-run flag" {
+  # Under hooks/ the short flag is the macOS form, so long-options allows it.
+  mkdir -p "${BATS_TEST_TMPDIR}/hooks"
+  write_script 'hooks/m.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  mktemp -u' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: mktemp-exit-trap sees mktemp behind a wrapper" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  tmp="$(command mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [mktemp-exit-trap]"
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  tmp="$(env VAR=x mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [mktemp-exit-trap]"
+}

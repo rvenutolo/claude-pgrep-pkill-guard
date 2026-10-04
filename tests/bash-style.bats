@@ -906,3 +906,42 @@ function assert_passes() {
   assert_fires 'e.sh' 'no-default-wellknown-env' 1 'echo "${SDKMAN_DIR:-/nowhere}"'
   assert_passes 'e.sh' 'echo "${HOME:+set}" "${TMPDIR:-/tmp}"'
 }
+
+@test "bash style: max-line-length reports a long multi-word line and a long comment" {
+  local word
+  word="$(printf 'a%.0s' {1..70})"
+  assert_fires 'l.sh' 'max-line-length' 1 "echo ${word} ${word}"
+  assert_fires 'l.sh' 'max-line-length' 1 "# ${word} ${word}"
+}
+
+@test "bash style: max-line-length excuses one unbreakable literal, and counts characters, not bytes" {
+  local literal dashes
+  literal="$(printf 'a%.0s' {1..130})"
+  assert_passes 'l.sh' "echo '${literal}'"
+  # 110 em dashes are 110 characters and 330 bytes.
+  dashes="$(printf '—%.0s' {1..110})"
+  assert_passes 'l.sh' "# ${dashes}"
+}
+
+@test "bash style: max-line-length does not count marker text" {
+  local word
+  word="$(printf 'a%.0s' {1..100})"
+  assert_fires 'hooks/l.sh' 'marker-unused' 1 "echo ${word} # bash-style allow=function-keyword: fixture reason"
+  refute_output --partial '[max-line-length]'
+}
+
+@test "bash style: max-line-length never excuses a long comment, and reports a long line inside a heredoc" {
+  local literal
+  literal="$(printf 'a%.0s' {1..130})"
+  assert_fires 'l.sh' 'max-line-length' 1 "# ${literal}"
+  assert_fires 'l.sh' 'max-line-length' 2 "cat <<'EOF'" "echo ${literal} ${literal}" 'EOF'
+  assert_passes 'l.sh' "printf '%s\\n' '${literal}'"
+}
+
+@test "bash style: max-line-length reports a line of exactly 121 characters and passes one of 120" {
+  local long short
+  long="$(printf 'a%.0s' {1..58})"
+  short="$(printf 'a%.0s' {1..57})"
+  assert_fires 'l.sh' 'max-line-length' 1 "echo ${long} ${short}"
+  assert_passes 'l.sh' "echo ${short} ${short}"
+}

@@ -54,6 +54,43 @@ function make_tracked_script() {
   chmod "${disk_mode}" "${REPO_ROOT}/t.sh"
 }
 
+# @description Build a directory holding only the named tools, as links to the
+#              ones on PATH, so a test can run the gate with one tool missing.
+# @arg $1 name directory name, created under BATS_TEST_TMPDIR
+# @arg $@ tools the tools to link
+# @set TOOL_DIR the directory holding the links
+function make_tool_dir() {
+  local -r name="$1"
+  shift
+  local tool
+  TOOL_DIR="${BATS_TEST_TMPDIR}/${name}"
+  mkdir -p "${TOOL_DIR}"
+  for tool in "$@"; do
+    ln -s "$(command -v "${tool}")" "${TOOL_DIR}/${tool}"
+  done
+}
+
+# @description Put a shfmt on PATH that answers with the real tree after one
+#              key in it is renamed, and assert the canary fails the gate.
+# @arg $1 key the tree key to rename
+function assert_canary_catches_renamed_key() {
+  local -r key="$1"
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_shfmt
+  real_shfmt="$(command -v shfmt)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    "${real_shfmt} \"\$@\" | sed -e 's/\"${key}\":/\"Renamed\":/g'" > "${shim_dir}/shfmt"
+  chmod +x "${shim_dir}/shfmt"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  # Either verdict fails the gate: a rule that no longer fires, or a rule that
+  # cannot read the tree at all.
+  assert_output --regexp 'FAIL: the canary (did not trip|could not be scanned)'
+  refute_output --partial 'ERROR: line'
+}
+
 # @description Assert the gate reports one rule at one line of a fixture.
 # @arg $1 name fixture file name; its directory part scopes path-based rules
 # @arg $2 rule the rule id expected in the FAIL line
@@ -81,6 +118,19 @@ function assert_passes() {
   write_fixture "${name}" "$@"
   run "${CHECK}" "${FIXTURE}"
   assert_success
+}
+
+# @description Assert a marker on the first line of a fixture excuses the
+#              long-options hit on the second line and not the one on the
+#              third.
+# @arg $@ lines the fixture's lines after the marker
+function assert_marker_stops_at_header() {
+  write_fixture 'header.sh' '# bash-style allow=long-options: fixture reason' "$@"
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [long-options]"
+  refute_output --partial "${FIXTURE}:2: ["
+  refute_output --partial '[marker-unused]'
 }
 
 @test "bash style: function-keyword passes a function defined with the keyword" {
@@ -175,6 +225,64 @@ function assert_passes() {
   assert_success
 }
 
+@test "bash style: a marker above a function header does not reach into the body" {
+  write_fixture 'wide.sh' \
+    '# @description Inert.' '# @noargs' \
+    '# bash-style allow=long-options: fixture reason' \
+    'function wide() {' \
+    "  grep -q 'x' 'file'" \
+    '}'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [long-options]"
+  assert_output --partial "FAIL: ${FIXTURE}:3: [marker-unused]"
+}
+
+@test "bash style: a marker above a case covers the header and not an arm" {
+  write_fixture 'header.sh' \
+    '# bash-style allow=long-options: fixture reason' \
+    'case "$(some_tool -s)" in' \
+    "  x) grep -q 'x' 'file' ;;" \
+    'esac'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [long-options]"
+  refute_output --partial "${FIXTURE}:2: ["
+  refute_output --partial '[marker-unused]'
+}
+
+@test "bash style: a marker above an if or a loop covers the condition and not the body" {
+  assert_marker_stops_at_header 'if some_tool -s; then' "  grep -q 'x' 'file'" 'fi'
+  assert_marker_stops_at_header 'while some_tool -s; do' "  grep -q 'x' 'file'" 'done'
+  assert_marker_stops_at_header 'until some_tool -s; do' "  grep -q 'x' 'file'" 'done'
+  assert_marker_stops_at_header 'for item in "$(some_tool -s)"; do' "  grep -q 'x' 'file'" 'done'
+}
+
+@test "bash style: a marker above a block, a subshell, a test or a case arm covers only its first line" {
+  assert_marker_stops_at_header '{ some_tool -s &&' "  grep -q 'x' 'file'; }"
+  assert_marker_stops_at_header '(some_tool -s &&' "  grep -q 'x' 'file')"
+  write_fixture 'header.bats' \
+    '# bash-style allow=long-options: fixture reason' \
+    '@test "inert" {' \
+    "  grep -q 'x' 'file'" \
+    '}'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:3: [long-options]"
+  assert_output --partial "FAIL: ${FIXTURE}:1: [marker-unused]"
+  write_fixture 'arm.sh' \
+    'case x in' \
+    '  # bash-style allow=long-options: fixture reason' \
+    '  x)' \
+    "    grep -q 'x' 'file'" \
+    '    ;;' \
+    'esac'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:4: [long-options]"
+  assert_output --partial "FAIL: ${FIXTURE}:2: [marker-unused]"
+}
+
 @test "bash style: a marker does not reach the next statement" {
   write_fixture 'next.sh' \
     'echo PAYLOAD_RAN # bash-style allow=function-keyword: fixture reason' \
@@ -241,6 +349,23 @@ function assert_passes() {
   run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial "FAIL: ${FIXTURE}:1: [marker-malformed]"
+  assert_fires 'bare.sh' 'marker-malformed' 1 'echo PAYLOAD_RAN # bash-style'
+}
+
+@test "bash style: two markers in one comment excuse two rules" {
+  local -r first='# bash-style allow=single-quote-literals: fixture reason'
+  local -r second='# bash-style allow=quote-literal-path: another reason'
+  assert_passes 'two.sh' "echo \"PAYLOAD_RAN\" /etc/os-release ${first} ${second}"
+}
+
+@test "bash style: each marker in one comment is judged alone" {
+  local -r first='# bash-style allow=single-quote-literals: fixture reason'
+  assert_fires 'two.sh' 'marker-malformed' 1 "echo \"PAYLOAD_RAN\" ${first} # bash-style allow=no-colon"
+  refute_output --partial '[single-quote-literals]'
+  assert_fires 'two.sh' 'marker-no-reason' 1 "echo \"PAYLOAD_RAN\" ${first} # bash-style allow=no-raw-tab:"
+  assert_fires 'two.sh' 'marker-unused' 1 "echo \"PAYLOAD_RAN\" ${first} # bash-style allow=no-raw-tab: unused"
+  assert_output --partial 'nothing here violates no-raw-tab'
+  refute_output --partial '[single-quote-literals]'
 }
 
 @test "bash style: a marker that excuses nothing is a violation" {
@@ -262,6 +387,49 @@ function assert_passes() {
   assert_output --partial 'FAIL: 2 of 2 files break the bash style rules'
 }
 
+@test "bash style: the files are reported in argument order, whichever scan ends first" {
+  local -a filler=()
+  mapfile -t filler < <(printf 'echo PAYLOAD_RAN %s\n' {1..400})
+  write_fixture 'slow.sh' "${filler[@]}" 'echo "PAYLOAD_RAN"'
+  local -r slow="${FIXTURE}"
+  write_fixture 'quick.sh' 'echo "PAYLOAD_RAN"'
+  local -r quick="${FIXTURE}"
+  run "${CHECK}" "${slow}" "${quick}"
+  assert_failure 1
+  assert_line --index 0 --partial "FAIL: ${slow}:401: [single-quote-literals]"
+  assert_line --index 1 --partial "FAIL: ${quick}:1: [single-quote-literals]"
+  assert_line --index 2 'FAIL: 2 of 2 files break the bash style rules'
+  run "${CHECK}" "${quick}" "${slow}"
+  assert_failure 1
+  assert_line --index 0 --partial "FAIL: ${quick}:1: [single-quote-literals]"
+  assert_line --index 1 --partial "FAIL: ${slow}:401: [single-quote-literals]"
+}
+
+@test "bash style: the parser's complaint about a file stays with that file's lines" {
+  write_fixture 'one.sh' 'echo "PAYLOAD_RAN"'
+  local -r first="${FIXTURE}"
+  write_fixture 'broken.sh' 'function greet() {'
+  local -r broken="${FIXTURE}"
+  write_fixture 'two.sh' 'echo "PAYLOAD_RAN"'
+  run "${CHECK}" "${first}" "${broken}" "${FIXTURE}"
+  assert_failure 1
+  assert_line --index 0 --partial "FAIL: ${first}:1: [single-quote-literals]"
+  assert_line --index 1 --partial "${broken}:1:"
+  assert_line --index 2 "FAIL: ${broken} could not be scanned"
+  assert_line --index 3 --partial "FAIL: ${FIXTURE}:1: [single-quote-literals]"
+  assert_line --index 4 'FAIL: 3 of 3 files break the bash style rules'
+}
+
+@test "bash style: the gate leaves nothing behind in the temporary directory" {
+  local -r scratch="${BATS_TEST_TMPDIR}/scratch"
+  mkdir -p "${scratch}"
+  write_fixture 'one.sh' 'echo "PAYLOAD_RAN"'
+  TMPDIR="${scratch}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  run find "${scratch}" -mindepth 1
+  assert_output ''
+}
+
 @test "bash style: a shfmt that answers with another tree shape fails the canary" {
   local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
   mkdir -p "${shim_dir}"
@@ -271,6 +439,55 @@ function assert_passes() {
   PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
   assert_failure 1
   assert_output --partial 'FAIL: the canary did not trip function-keyword'
+}
+
+@test "bash style: the canary catches a rename of each tree key its rules read" {
+  local key
+  for key in 'Type' 'Stmts' 'Cmd' 'Args' 'Assigns' 'Parts' 'Value' 'Name' 'Param' 'Exp' 'Index' 'Op' 'X' 'Y' \
+    'Redirs' 'Word' 'Items' 'Loop' 'Then' 'Do' 'Rbrace' 'Body' 'Variant' 'Comments' 'Hash' 'Text' 'Pos' 'Line'; do
+    assert_canary_catches_renamed_key "${key}"
+  done
+}
+
+@test "bash style: a jq that stops reporting the text rule fails the canary" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_jq
+  real_jq="$(command -v jq)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    "${real_jq} \"\$@\" | grep --invert-match 'no-raw-tab'" \
+    'exit 0' > "${shim_dir}/jq"
+  chmod +x "${shim_dir}/jq"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: the canary did not trip no-raw-tab'
+  refute_output --partial 'ERROR: line'
+}
+
+@test "bash style: a shfmt that fails on the canary is a verdict, not a crash" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "${shim_dir}/shfmt"
+  chmod +x "${shim_dir}/shfmt"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: the canary could not be scanned'
+  refute_output --partial 'ERROR: line'
+}
+
+@test "bash style: a missing shfmt or jq is exit 2, before anything is scanned" {
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  # bash and dirname are what the gate needs to reach its tool check.
+  make_tool_dir 'no-shfmt' 'bash' 'dirname' 'jq'
+  run env PATH="${TOOL_DIR}" "${CHECK}" "${FIXTURE}"
+  assert_failure 2
+  assert_output 'FAIL: shfmt is not on PATH; run this gate through .ci/in-devshell'
+  make_tool_dir 'no-jq' 'bash' 'dirname' 'shfmt'
+  run env PATH="${TOOL_DIR}" "${CHECK}" "${FIXTURE}"
+  assert_failure 2
+  assert_output 'FAIL: jq is not on PATH; run this gate through .ci/in-devshell'
 }
 
 @test "bash style: quote-expansions reports an unquoted expansion as an argument" {
@@ -306,6 +523,12 @@ function assert_passes() {
 @test "bash style: quote-literal-path reports a bare path argument" {
   assert_fires 'p.sh' 'quote-literal-path' 1 'some_command /etc/os-release'
   assert_fires 'p.sh' 'quote-literal-path' 1 'some_command ./relative'
+}
+
+@test "bash style: quote-literal-path leaves the command word alone, behind wrappers too" {
+  assert_passes 'p.sh' './tool --flag' 'run ./tool --flag' 'run timeout 5 ./tool --flag'
+  assert_fires 'p.sh' 'quote-literal-path' 1 'run ./tool ./relative'
+  assert_fires 'p.sh' 'quote-literal-path' 1 'env --chdir=x timeout 5 ./tool /etc/os-release'
 }
 
 @test "bash style: quote-literal-path passes a quoted path and a bare redirect target" {
@@ -416,6 +639,14 @@ function assert_passes() {
   assert_passes 'o.sh' "echo 'rm -f inert-string'" "cat <<'EOF'" 'grep -q x' 'EOF'
 }
 
+@test "bash style: long-options reads a flag handed to a test helper as data" {
+  # run_hook is defined in tests/test_helper/common.bash, which the gate reads
+  # from the repository that holds it, not from the fixture's directory.
+  assert_passes 'tests/o.bats' \
+    '@test "inert" {' "  run_hook -x 'echo PAYLOAD_RAN'" "  run run_hook -x 'echo PAYLOAD_RAN'" '}'
+  assert_fires 'tests/o.bats' 'long-options' 2 '@test "inert" {' "  no_such_helper -x 'echo PAYLOAD_RAN'" '}'
+}
+
 @test "bash style: long-options allows the macOS short flags only under hooks/ and tests/" {
   assert_passes 'hooks/o.sh' "mkdir -p 'dir'" "rm -f -- 'file'"
   assert_passes 'tests/o.bats' '@test "inert" {' "  mkdir -p 'dir'" '}'
@@ -449,6 +680,13 @@ function assert_passes() {
   assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs --max-args=1 other_command'
   assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs --no-run-if-empty other_command'
   assert_passes 'x.sh' 'some_command | xargs --no-run-if-empty --max-args=1 other_command'
+}
+
+@test "bash style: xargs-flags and long-options leave BSD xargs alone under hooks/ and tests/" {
+  assert_passes 'tests/x.sh' 'some_command | xargs -0 -n 1 other_command'
+  assert_passes 'hooks/x.sh' 'some_command | xargs -r -I {} other_command {}'
+  assert_fires 'x.sh' 'xargs-flags' 1 'some_command | xargs -0 -n 1 other_command'
+  assert_output --partial '[long-options] use the long form of xargs -n'
 }
 
 @test "bash style: no-echo-e reports echo -e" {
@@ -1004,6 +1242,17 @@ function assert_passes() {
   assert_success
 }
 
+@test "bash style: the tracked mode is read from the file's own repository, wherever the gate is run from" {
+  make_tracked_script '+x' '-x'
+  cd "${BATS_TEST_TMPDIR}"
+  run "${CHECK}" "${REPO_ROOT}/t.sh"
+  assert_failure 1
+  assert_output --partial 't.sh:1: [strict-prologue]'
+  make_tracked_script '-x' '+x'
+  run "${CHECK}" "${REPO_ROOT}/t.sh"
+  assert_success
+}
+
 @test "bash style: main-last reports exec main and an exit after main" {
   write_script 'm.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
@@ -1239,4 +1488,269 @@ function assert_passes() {
   assert_passes 'd.sh' \
     '# @description Inert.' '# @arg $1 thing a header line that is not an argument of first' '' \
     '# @description Inert.' '# @noargs' 'function first() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: comment-line-ref reports a file:line citation" {
+  assert_fires 'c.sh' 'comment-line-ref' 1 '# See hooks/lib/classify.sh:120 for the caller.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# See classify::classify_command in hooks/lib/classify.sh.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-line-ref passes a port, a time, a placeholder and an shdoc exit code" {
+  assert_passes 'c.sh' \
+    '# The server answers on http://localhost:8080 at 12:30; retries: 123.' \
+    '# Write the citation as file.sh:NN, never with a number.' \
+    '# @exitcode 1 a violation' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-untracked-ref reports a file under an untracked directory" {
+  assert_fires 'c.sh' 'comment-untracked-ref' 1 '# The plan is docs/superpowers/plans/thing.md.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-untracked-ref' 1 '# See .claude/CLAUDE.md.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# docs/superpowers/ is untracked, so it is skipped.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-untracked-ref passes a sentence that only names the directory" {
+  assert_passes 'c.sh' \
+    '# The gate never reads `.claude/`; it is untracked, like (docs/superpowers/).' \
+    '# A .claude directory is the author-local one.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path reports a repo path no tracked file has" {
+  assert_fires 'c.sh' 'comment-missing-path' 1 '# Parts live in hooks/lib/no-such-part.sh.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path reports a path hyphenated across two comment lines" {
+  assert_fires 'c.sh' 'comment-missing-path' 1 \
+    '# Same trade .ci/run-plugin-' \
+    '# validate makes for the CLI.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path passes real files, real directories, globs and placeholders" {
+  assert_passes 'c.sh' \
+    '# hooks/lib/classify.sh sits under hooks/lib, with hooks/lib/*.sh,' \
+    '# .ci/check-<name> and tests/${suite}.bats beside it.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path ignores punctuation around a real path" {
+  assert_passes 'c.sh' \
+    '# See hooks/lib/classify.sh, `.ci/check-bash-style`, (docs/architecture.md),' \
+    '# tests/cases/ and .github/workflows/ci.yml.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path ignores a path inside a URL or another repository" {
+  assert_passes 'c.sh' \
+    '# See https://example.com/docs/no-such-page and' \
+    '# anthropics/claude-code/.github/workflows/no-such.yml for the upstream.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-path skips an elided path" {
+  assert_passes 'c.sh' '# The parts under hooks/.../no-such.sh are elided here.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-function reports a namespaced function nothing defines" {
+  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::defined_nowhere first.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# Calls classify::classify_command first.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-function accepts a function the scanned file defines" {
+  # The prefix is a variable, so no `function <name>::<part>` line sits in this
+  # suite for the gate to find in the repository: only the scanned file defines it.
+  local -r ns='scanned'
+  assert_passes 'c.sh' \
+    "# @description Inert; ${ns}::helper is this function." '# @noargs' \
+    "function ${ns}::helper() {" '  echo PAYLOAD_RAN' '}'
+  assert_passes 'c.sh' \
+    "# Calls ${ns}::later, defined below." \
+    '# @description Inert.' '# @noargs' \
+    "function ${ns}::later() {" '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: comment-missing-function reports a name defined nowhere even beside a defined one" {
+  assert_fires 'c.sh' 'comment-missing-function' 1 \
+    '# @description Calls classify::classify_command, then classify::defined_nowhere.' '# @noargs' \
+    'function caller() {' '  echo PAYLOAD_RAN' '}'
+}
+
+@test "bash style: comment-commit-relative reports commit-relative wording with no issue anchor" {
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Until now this was unguarded.' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# Before this change (#72) it was unguarded; a retry used to hide it.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative reports each listed phrase" {
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this gate it was unchecked.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Correct when this was written.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# The commit before this one broke it.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# As of this commit it is checked.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative passes past-tense accounts of a trap and a word that contains a phrase" {
+  assert_passes 'c.sh' \
+    '# The old message said "x"; a retry used to hide the failure.' \
+    '# Nothing here waits until nowhere is reachable.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form reports a deferred-work marker that is not TODO:" {
+  assert_fires 'c.sh' 'todo-form' 1 '# todo: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# FIXME tidy this' 'echo PAYLOAD_RAN'
+  assert_passes 'c.sh' '# TODO: tidy this' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form passes a word that only contains a marker" {
+  assert_passes 'c.sh' '# The mastodon client keeps its todos in a list.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form reports TODO with a name in parentheses, which is not the TODO: form" {
+  assert_fires 'c.sh' 'todo-form' 1 '# TODO(name): tidy this' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: mktemp-exit-trap reports an executed script that calls mktemp with no EXIT trap" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  tmp="$(mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [mktemp-exit-trap]"
+}
+
+@test "bash style: mktemp-exit-trap passes an EXIT trap, a dry run, and a sourced file" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  trap cleanup EXIT' '  tmp="$(mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  mktemp --dry-run' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+  assert_passes 'lib.sh' 'tmp="$(mktemp)"'
+}
+
+@test "bash style: mktemp-exit-trap does not count a trap that only clears EXIT" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  trap - EXIT' '  tmp="$(mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:6: [mktemp-exit-trap]"
+}
+
+@test "bash style: comment-missing-function skips a namespace no function uses" {
+  assert_passes 'c.sh' \
+    '# See style::report for the entry point.' \
+    '# std::string is not bash.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-missing-function still reports a misspelt name in a used namespace" {
+  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::no_such_function first.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-missing-function' 1 '# Calls classify::classify_commands first.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative passes present-tense ordering prose" {
+  assert_passes 'c.sh' \
+    '# Lint runs before this gate, so the tree is formatted.' \
+    '# Before this change takes effect the cache is empty.' \
+    '# Before this gate (#72) there was no check.' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative reports before-this with a past-tense verb" {
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this gate there was no check.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this change it used to hang.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this commit nobody could tell.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form passes prose that is not a marker" {
+  assert_passes 'c.sh' \
+    '# Add a todo item to the list; xxx stands in for a name here.' \
+    '# The mastodon client; TODO: tidy this' \
+    'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form reports an upper-case marker not followed directly by a colon" {
+  assert_fires 'c.sh' 'todo-form' 1 '# TODO tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# TODO - tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# FIXME: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# XXX: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# XXX tidy this' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: todo-form reports a lower or mixed case marker with a colon" {
+  assert_fires 'c.sh' 'todo-form' 1 '# Todo: tidy this' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'todo-form' 1 '# fixme: tidy this' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: mktemp-exit-trap skips the short dry-run flag" {
+  # Under hooks/ the short flag is the macOS form, so long-options allows it.
+  mkdir -p "${BATS_TEST_TMPDIR}/hooks"
+  write_script 'hooks/m.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  mktemp -u' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
+@test "bash style: mktemp-exit-trap sees mktemp behind a wrapper" {
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  tmp="$(command mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [mktemp-exit-trap]"
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  local tmp' '  tmp="$(env VAR=x mktemp)"' '  echo "${tmp}"' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial "FAIL: ${FIXTURE}:5: [mktemp-exit-trap]"
+}
+
+@test "bash style: a git that cannot list the repository is a verdict, not a crash" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_git
+  real_git="$(command -v git)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'case "$*" in' \
+    '  *ls-files*) exit 1 ;;' \
+    'esac' \
+    "exec ${real_git} \"\$@\"" > "${shim_dir}/git"
+  chmod +x "${shim_dir}/git"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: could not list the files git tracks'
+  refute_output --partial 'ERROR: line'
+}
+
+@test "bash style: a git grep that fails is a verdict, not a crash" {
+  local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
+  local real_git
+  real_git="$(command -v git)"
+  mkdir -p "${shim_dir}"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'case "$*" in' \
+    '  *" grep "*) exit 128 ;;' \
+    'esac' \
+    "exec ${real_git} \"\$@\"" > "${shim_dir}/git"
+  chmod +x "${shim_dir}/git"
+  write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
+  PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"
+  assert_failure 1
+  assert_output --partial 'FAIL: could not search the repository for function definitions'
+  refute_output --partial 'ERROR: line'
 }

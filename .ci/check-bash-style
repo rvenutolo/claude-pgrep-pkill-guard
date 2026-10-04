@@ -3,25 +3,47 @@
 # @description Enforce the mechanically decidable bash style rules on the files
 #              named as arguments. Each file is parsed by `shfmt --to-json` and
 #              the syntax tree, with whether the file is sourced or executed,
-#              is handed to the rules in .ci/bash-style.jq, which is where the
-#              rule list lives.
+#              the repository's tracked paths, its namespaced function names
+#              and the functions its test helpers define, is handed to the
+#              rules in .ci/bash-style.jq, which is where the rule list lives.
+#              The three lists come from the repository that holds this
+#              script, whatever files are named, so a comment or a helper call
+#              in any file is checked against the same repository.
+#
+#              The files are scanned concurrently, as many at a time as the
+#              machine has processors. Each scan writes to its own log in a
+#              temporary directory, and the logs are printed in argument
+#              order once every scan has ended, so the output does not depend
+#              on which scan finishes first.
 #
 #              One site may be excused with a comment on the statement, or
 #              alone on the line above it:
 #
 #                # bash-style allow=<rule-id>: <reason>
 #
+#              One comment may hold several markers, each with its own
+#              `# bash-style allow=` and its own reason, so one statement can
+#              be excused from more than one rule.
+#
+#              A marker reaches every line of a simple command or pipeline.
+#              Above a compound statement (a function, a bats test, a `case`
+#              or one of its arms, an `if`, a loop, a block, a subshell) it
+#              reaches the header only, never the body, so one marker cannot
+#              excuse a whole function.
+#
 #              A marker that does not follow that form, or has no reason, an
 #              unknown rule id, or nothing to excuse is itself a violation.
 #
 #              Devshell only: the tree's shape belongs to the shfmt the flake
-#              pins. The canary in `main` fails the gate when a different
-#              shfmt answers.
+#              pins. The canary checked before any file is scanned fails the
+#              gate when a different shfmt answers.
 # @arg $@ paths the bash and bats files to check
 # @stderr one FAIL line per violation, then a verdict line
 # @exitcode 0 every file is clean
-# @exitcode 1 a violation, no files given, a file shfmt cannot parse, or a
-#             failed canary
+# @exitcode 1 a violation, no files given, a file shfmt cannot parse, a named
+#             path that cannot be read or searched (a directory, a missing
+#             file), a scan that dies before it gives a verdict, a failed
+#             canary, or a git that cannot list or search the repository
 # @exitcode 2 a required tool is not on PATH
 
 set -Eeuo pipefail
@@ -32,17 +54,78 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
+readonly REPO_DIR="${SCRIPT_DIR}/.."
 
-# A snippet that breaks one tree rule and one text rule. If the pipeline stops
-# reporting both, the tree no longer has the shape the rules were written for.
-readonly CANARY=$'canary() {\n\t:\n}\n'
-readonly -a CANARY_RULES=('function-keyword' 'no-raw-tab')
+# The directory the scan jobs write their logs and verdicts to. Script-level,
+# not a local of `main`: the EXIT trap that removes it runs after `main` has
+# returned, or instead of the rest of `main` on an interrupt. Empty until
+# `main` creates it.
+WORK_DIR=''
+
+# A snippet, parsed and never run, that breaks the rules in CANARY_RULES, and
+# one text rule, the raw tab. It proves the tree keys those rules read on
+# their way to a hit: a rule whose key a different shfmt renames matches
+# nothing and would pass every file, so check_canary fails the gate when a
+# demanded rule is missing from the snippet's report.
+#
+# It does not prove every key the rules read. A rename of any of these goes
+# unnoticed here: `Hdoc`, `Array`, `Elems`, `N`, `RsrvWord`, `InPos`,
+# `Negated`, `Background`, `Slice`, `Repl`, `Length`, `Excl`, the keys a
+# marker's reach is read from (`ThenPos`, `DoPos`, `Patterns`, `End`), and
+# `Description`, which only a bats file has.
+# shellcheck disable=SC2016 # the canary is scanned source, never expanded
+readonly -a CANARY=(
+  '# FIXME'
+  '# @arg $1 name'
+  'canary() {'
+  $'\t''local other="$1"'
+  '  echo ${other} "${HOME:-x}" "literal" "${items[${other}]}" >&2'
+  '  [[ a = b ]] || true'
+  '  count=$(some_command)'
+  '  count="$(some_command)" || exit 1'
+  '  export CANARY_GLOBAL=1'
+  '  ((count))'
+  '  if some_command; then'
+  '    ((count))'
+  '  fi'
+  '  for item; do'
+  '    ((count))'
+  '    case x in'
+  '      x) cat <<EOF ;&'
+  'PAYLOAD_RAN'
+  'EOF'
+  '    esac'
+  '  done'
+  '}'
+)
+readonly -a CANARY_RULES=(
+  'function-keyword' 'no-raw-tab' 'shdoc-arg-name' 'quote-expansions' 'no-default-wellknown-env'
+  'no-braces-in-arith' 'single-quote-literals' 'shdoc-stderr' 'test-double-equals' 'blank-fallback-comment'
+  'quote-subst-in-assign' 'no-subst-or-exit' 'shdoc-set' 'bare-arith-stmt' 'explicit-for-in' 'no-fallthrough'
+  'quote-heredoc-terminator' 'todo-form'
+)
+# The canary lines that must each trip bare-arith-stmt: the statement in the
+# function body, the one in the `if` body and the one in the loop body. The
+# rule finds each through a different key, and its id alone cannot say which
+# of the three came back.
+readonly -a CANARY_BARE_ARITH_LINES=(10 12 15)
+
+# The shape of a namespaced function definition, for grep.
+readonly NAMESPACED_FUNCTION='function [a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*'
+
+# The shape of a plain function definition, for grep, and the directory whose
+# definitions every suite loads.
+readonly PLAIN_FUNCTION='^function [a-z_][a-z0-9_]*'
+readonly HELPER_DIR='tests/test_helper'
 
 # @description Say whether a file is sourced or executed. A bats file is
 #              sourced. Otherwise the tracked mode decides, which keeps
 #              .ci/check-executable-bit the one place that says which files
-#              are which; a file outside a git tree, or one git does not track,
-#              falls back to its on-disk executable bit.
+#              are which. The repository asked is the one the file is in, not
+#              the one the working directory is in, so the answer does not
+#              depend on where the gate is run from. A file outside a git
+#              tree, or one git does not track, falls back to its on-disk
+#              executable bit.
 # @arg $1 path the file to classify
 # @stdout `true` when the file is sourced, `false` when it is executed
 function is_sourced() {
@@ -52,7 +135,8 @@ function is_sourced() {
     printf 'true\n'
     return
   fi
-  staged="$(git ls-files --stage -- "${path}" 2> /dev/null)" || staged='NOT-TRACKED'
+  staged="$(git -C "$(dirname -- "${path}")" ls-files --stage -- "$(basename -- "${path}")" 2> /dev/null)" \
+    || staged='NOT-TRACKED'
   case "${staged}" in
     100644*) printf 'true\n' ;;
     100755*) printf 'false\n' ;;
@@ -70,31 +154,159 @@ function is_sourced() {
 # @arg $1 display_path the path to print in FAIL lines
 # @arg $2 src_file a file holding the source text the tree was parsed from
 # @arg $3 sourced true when the file is sourced, false when it is executed
+# @arg $4 tracked the repository's tracked paths, one per line
+# @arg $5 functions the namespaced function names defined anywhere, one per line
+# @arg $6 helpers the function names the test helpers define, one per line
 # @stdout one FAIL line per violation
 function run_rules() {
   local -r display_path="$1"
   local -r src_file="$2"
   local -r sourced="$3"
+  local -r tracked="$4"
+  local -r functions="$5"
+  local -r helpers="$6"
+  # The lists reach jq as files, not `--arg` strings: one argument is capped at
+  # 128 KiB on Linux, and a large repository's lists are not.
   jq --raw-output --library-path "${SCRIPT_DIR}" \
     --arg path "${display_path}" --rawfile src "${src_file}" --argjson sourced "${sourced}" \
-    'import "bash-style" as style; style::report($path; $src; $sourced)'
+    --rawfile tracked <(printf '%s\n' "${tracked}") --rawfile functions <(printf '%s\n' "${functions}") \
+    --rawfile helpers <(printf '%s\n' "${helpers}") \
+    'import "bash-style" as style;
+     style::report($path; $src; $sourced; $tracked | split("\n"); $functions | split("\n"); $helpers | split("\n"))'
 }
 
-# @description Prove the pipeline still reports a known violation of each kind.
+# @description Remove the work directory, as the EXIT trap. On an interrupt
+#              scans are still running: they are stopped and waited for first,
+#              because a scan that outlives the directory fails to write its
+#              verdict and says so, and one creating its log while the
+#              directory is being removed can leave it behind.
+# @noargs
+function remove_work_dir() {
+  local running
+  local -a pids=()
+  if [[ -z "${WORK_DIR}" ]]; then
+    return
+  fi
+  running="$(jobs -pr)"
+  if [[ -n "${running}" ]]; then
+    mapfile -t pids <<< "${running}"
+    kill "${pids[@]}" 2> /dev/null || true # a scan may end between the listing and the signal
+    wait
+  fi
+  rm --recursive --force -- "${WORK_DIR}"
+}
+
+# @description Scan one file, as a job that runs beside the scans of the other
+#              files. Everything the scan says, the parser's own complaint
+#              about a file it cannot read included, goes to the job's log,
+#              which `main` prints in argument order: jobs writing straight to
+#              stderr would interleave their lines. The verdict is a file too,
+#              because `wait -n` does not say which job it reaped; a job that
+#              dies before writing one leaves none, and `main` reads that as a
+#              failure.
+# @arg $1 index the file's position among the arguments, naming the job's files
+# @arg $2 path the file to scan
+# @arg $3 tracked the repository's tracked paths, one per line
+# @arg $4 functions the namespaced function names defined anywhere, one per line
+# @arg $5 helpers the function names the test helpers define, one per line
+function scan_file() {
+  local -r index="$1"
+  local -r path="$2"
+  local -r tracked="$3"
+  local -r functions="$4"
+  local -r helpers="$5"
+  local out sourced
+  local verdict='dirty'
+  {
+    sourced="$(is_sourced "${path}")"
+    # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
+    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" \
+      | run_rules "${path}" "${path}" "${sourced}" "${tracked}" "${functions}" "${helpers}")"; then
+      printf 'FAIL: %s could not be scanned\n' "${path}"
+    elif [[ -n "${out}" ]]; then
+      printf '%s\n' "${out}"
+    else
+      verdict='clean'
+    fi
+  } > "${WORK_DIR}/${index}.log" 2>&1
+  printf '%s\n' "${verdict}" > "${WORK_DIR}/${index}.verdict"
+}
+
+# @description List the namespaced functions the repository or the named files
+#              define, so a comment may name a function from a file the run is
+#              not scanning, and a fixture's own function counts.
+# @arg $@ paths the files named on the command line
+# @stdout one function name per line, written `<namespace>::<name>`
+# @stderr a FAIL line when git or grep fails, as opposed to finding nothing
+# @exitcode 0 the list was written, possibly empty
+# @exitcode 1 git or grep failed
+function namespaced_functions() {
+  local repo_matches file_matches
+  local status=0
+  # `git grep` has no long form for its pattern option `-e`, and no long
+  # form for dropping the file name, so the sed below strips it.
+  repo_matches="$(git -C "${REPO_DIR}" grep --only-matching --extended-regexp \
+    -e "${NAMESPACED_FUNCTION}")" || status=$? # 1 is no match, a valid answer
+  if ((status > 1)); then
+    printf 'FAIL: could not search the repository for function definitions\n' >&2
+    return 1
+  fi
+  status=0
+  file_matches="$(grep --no-filename --only-matching --extended-regexp \
+    --regexp="${NAMESPACED_FUNCTION}" -- "$@")" || status=$? # 1 is no match, a valid answer
+  if ((status > 1)); then
+    printf 'FAIL: could not search the named files for function definitions\n' >&2
+    return 1
+  fi
+  printf '%s\n%s\n' "${repo_matches}" "${file_matches}" | sed --expression='s/^.*function //'
+}
+
+# @description List the functions the repository's test helpers define. A flag
+#              handed to one is data for the thing under test, not an option
+#              of a tool that has a long form.
+# @noargs
+# @stdout one function name per line
+# @stderr a FAIL line when git fails, as opposed to finding nothing
+# @exitcode 0 the list was written, possibly empty
+# @exitcode 1 git failed
+function helper_functions() {
+  local matches
+  local status=0
+  # `git grep` has no long form for its pattern option `-e`, and no long
+  # form for dropping the file name, so the sed below strips it.
+  matches="$(git -C "${REPO_DIR}" grep --only-matching --extended-regexp \
+    -e "${PLAIN_FUNCTION}" -- "${HELPER_DIR}")" || status=$? # 1 is no match, a valid answer
+  if ((status > 1)); then
+    printf 'FAIL: could not search the test helpers for function definitions\n' >&2
+    return 1
+  fi
+  printf '%s\n' "${matches}" | sed --expression='s/^.*function //'
+}
+
+# @description Prove the pipeline still reports the violations the canary
+#              holds: every rule in CANARY_RULES, and bare-arith-stmt on each
+#              line in CANARY_BARE_ARITH_LINES.
 # @noargs
 # @stderr a FAIL line when the canary is not reported
 # @exitcode 0 the canary came back
 # @exitcode 1 it did not
 function check_canary() {
-  local out rule
-  if ! out="$(printf '%s' "${CANARY}" | shfmt --filename 'canary.sh' --to-json \
-    | run_rules 'canary' <(printf '%s' "${CANARY}") 'true')"; then
+  local out rule line
+  if ! out="$(printf '%s\n' "${CANARY[@]}" | shfmt --filename 'canary.sh' --to-json \
+    | run_rules 'canary' <(printf '%s\n' "${CANARY[@]}") 'true' '' '' '')"; then
     printf 'FAIL: the canary could not be scanned\n' >&2
     return 1
   fi
   for rule in "${CANARY_RULES[@]}"; do
     if [[ "${out}" != *"[${rule}]"* ]]; then
       printf 'FAIL: the canary did not trip %s\n' "${rule}" >&2
+      printf '      shfmt or jq is not the version the rules were written for.\n' >&2
+      return 1
+    fi
+  done
+  for line in "${CANARY_BARE_ARITH_LINES[@]}"; do
+    if [[ "${out}" != *"canary:${line}: [bare-arith-stmt]"* ]]; then
+      printf 'FAIL: the canary did not trip bare-arith-stmt at its line %s\n' "${line}" >&2
       printf '      shfmt or jq is not the version the rules were written for.\n' >&2
       return 1
     fi
@@ -128,20 +340,55 @@ function main() {
     return 1
   fi
 
-  local path out sourced
+  local path tracked functions helpers max_jobs verdict
   local dirty=0
+  local index=0
+  local running=0
+  if ! tracked="$(git -C "${REPO_DIR}" ls-files)"; then
+    printf 'FAIL: could not list the files git tracks\n' >&2
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
+    trap - ERR
+    return 1
+  fi
+  if ! functions="$(namespaced_functions "$@")" || ! helpers="$(helper_functions)"; then
+    trap - ERR
+    return 1
+  fi
+
+  # Armed before the directory exists, so no exit can leave it behind. The
+  # jobs below are subshells, which do not inherit an EXIT trap: only this
+  # shell removes the directory, and remove_work_dir ends every job first.
+  trap 'remove_work_dir' EXIT
+  WORK_DIR="$(mktemp --directory)"
+  max_jobs="$(nproc)"
   for path in "$@"; do
-    sourced="$(is_sourced "${path}")"
-    # shellcheck disable=SC2094 # both sides only read the file; nothing writes it
-    if ! out="$(shfmt --filename "${path}" --to-json < "${path}" | run_rules "${path}" "${path}" "${sourced}")"; then
-      printf 'FAIL: %s could not be scanned\n' "${path}" >&2
-      dirty="$((dirty + 1))"
-      continue
+    if ((running >= max_jobs)); then
+      wait -n || true # a job's verdict is the file it writes, read below, not its exit status
+      running="$((running - 1))"
     fi
-    if [[ -n "${out}" ]]; then
-      printf '%s\n' "${out}" >&2
-      dirty="$((dirty + 1))"
+    scan_file "${index}" "${path}" "${tracked}" "${functions}" "${helpers}" &
+    running="$((running + 1))"
+    index="$((index + 1))"
+  done
+  wait
+
+  index=0
+  for path in "$@"; do
+    if [[ -s "${WORK_DIR}/${index}.log" ]]; then
+      cat -- "${WORK_DIR}/${index}.log" >&2
     fi
+    verdict="$(cat -- "${WORK_DIR}/${index}.verdict" 2> /dev/null)" || verdict='NO-VERDICT'
+    case "${verdict}" in
+      clean) ;;
+      dirty) dirty="$((dirty + 1))" ;;
+      *)
+        # The job died before it could say. Never a silent pass.
+        printf 'FAIL: %s could not be scanned\n' "${path}" >&2
+        dirty="$((dirty + 1))"
+        ;;
+    esac
+    index="$((index + 1))"
   done
 
   if ((dirty > 0)); then

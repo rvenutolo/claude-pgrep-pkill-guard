@@ -12,10 +12,10 @@
 #              number.
 #
 #              Deliberately NOT wired into run-all-checks, and ImageMagick is
-#              deliberately NOT in the devShell. Same trade .ci/run-plugin-
-#              validate makes for the Claude Code CLI: the gate is hermetic, and
-#              a step depending on the ambient PATH would make it
-#              non-deterministic. Here the cost argument is also plain -- an
+#              deliberately NOT in the devShell. Same trade
+#              .ci/run-plugin-validate makes for the Claude Code CLI: the gate
+#              is hermetic, and a step depending on the ambient PATH would make
+#              it non-deterministic. Here the cost argument is also plain -- an
 #              ImageMagick closure in every contributor's `nix develop`, paid on
 #              every shell entry, for an asset regenerated roughly never. Unlike
 #              run-plugin-validate a missing tool FAILS rather than exiting 0,

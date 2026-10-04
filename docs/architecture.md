@@ -541,8 +541,23 @@ one function per rule, each with a stable kebab-case id.
 
 Each rule is also told whether the file is sourced or executed. A bats file is
 sourced; otherwise the tracked mode decides (`100644` sourced, `100755`
-executed), the same fact `.ci/check-executable-bit` enforces. A file outside a
-git tree, or one git does not track, falls back to its on-disk executable bit.
+executed), the same fact `.ci/check-executable-bit` enforces. The mode is read
+from the repository the file is in, so it does not depend on the directory the
+gate is run from. A file outside a git tree, or one git does not track, falls
+back to its on-disk executable bit.
+
+The comment-reference rules also get the repository's tracked paths and every
+namespaced function name defined in it, so a comment that cites a path or a
+function is checked against what a clone contains. Both lists come from the
+repository that holds the gate, whatever files it is asked to scan, and the
+function list also covers the scanned files themselves. A comment that cites a
+path under an untracked directory (`.claude/`, `docs/superpowers/`) is a
+violation, because a clone cannot follow it.
+
+`long-options` gets a third list from the same repository: the functions
+defined under `tests/test_helper/`. A flag handed to one of them, like a flag
+handed to a function the scanned file defines, is input for the thing under
+test, not an option of a tool that has a long form.
 
 One site can be excused with a comment on the statement, or alone on the line
 above it:
@@ -551,14 +566,40 @@ above it:
 # bash-style allow=<rule-id>: <reason>
 ```
 
+One comment may hold several markers, each introduced by its own
+`# bash-style allow=` and each with its own reason, so one statement can be
+excused from more than one rule. Each is judged alone.
+
+A marker reaches every line of a simple command or pipeline. Above a compound
+statement (a function, a bats test, a `case` or one of its arms, an `if`, a
+loop, a block, a subshell) it reaches the header only: the opening line,
+through the `case` word, the arm's pattern, or the `then` or `do`, so a flag in
+the condition is covered and the body is not. One marker therefore never
+excuses a whole function.
+
 A marker that does not follow that form, has no reason, names an id no rule
-has, or has nothing to excuse is itself a violation, so an exception cannot outlive the code it excused. A
-pattern that recurs belongs in the rule, not in markers.
+has, or has nothing to excuse is itself a violation, so an exception cannot
+outlive the code it excused. A pattern that recurs belongs in the rule, not in
+markers.
+
+Every rule walks the whole tree, so a scan costs time in proportion to the
+file, and the gate scans the files concurrently, as many at a time as the
+machine has processors. Each scan writes to its own log, and the gate prints
+the logs in argument order once every scan has ended, so the output is the same
+whichever scan finishes first. A scan that dies without a verdict is reported
+as a file that could not be scanned, never as a pass. A file that fails is a
+`FAIL:` line and exit 1; so is an empty file list, a path that cannot be read,
+a failed canary, and a git that cannot list or search the repository. A missing
+`shfmt` or `jq` is exit 2.
 
 The gate runs only in the devShell, because the tree's shape belongs to the
 `shfmt` the flake pins. Before it scans anything it feeds itself a snippet that
-must trip two rules; a `shfmt` that answers with a different tree fails there,
-loudly, not by passing every file.
+must trip a fixed list of rules, one of them a rule that reads the source text.
+A rule whose tree key a different `shfmt` renames matches nothing, which would
+pass every file; the missing rule fails the gate there instead, loudly. The
+snippet proves the keys those rules read on their way to a hit, not every key
+the rules read: the comment above `CANARY` in the gate names the ones a rename
+of which goes unnoticed (`Hdoc` and `Array` among them).
 
 ### Line coverage
 

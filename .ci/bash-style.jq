@@ -3,15 +3,16 @@
 #
 # Input is one `shfmt --to-json` tree. Each rule is a function that emits zero
 # or more {line, rule, message} objects. Besides the tree, `report` and `hits`
-# receive the file's display path, its source text, and whether the file is
-# sourced or executed; a rule takes the ones it needs as parameters. `report`
-# runs every rule, drops the hits an exception marker covers, and prints one
-# line per remaining hit.
+# receive the file's display path, its source text, whether the file is
+# sourced or executed, the repository's tracked paths, the namespaced function
+# names defined anywhere and the function names the test helpers define; a rule
+# takes the ones it needs as parameters. `report` runs every rule, drops the
+# hits an exception marker covers, and prints one line per remaining hit.
 #
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr", "comment-line-ref", "comment-untracked-ref", "comment-missing-path", "comment-missing-function", "comment-commit-relative", "todo-form", "mktemp-exit-trap"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -19,6 +20,8 @@ def args: (.Args // []);
 def cmdname: (args[0].Parts[0].Value // "");
 # Every line that carries a comment.
 def comment_lines: [nodes | select(has("Hash")) | .Hash.Line] | unique;
+# Every comment as {line, text}; the text starts after the `#`.
+def comments: nodes | select(has("Hash")) | {line: .Hash.Line, text: (.Text // "")};
 
 # A function defined as `name() { ...; }`, without the `function` keyword.
 def function_keyword:
@@ -83,18 +86,6 @@ def single_quote_literals:
   | select($text | test("['\\\\]") | not)
   | select(.Pos.Line as $l | $test_lines | index($l) | not)
   | {line: .Pos.Line, rule: "single-quote-literals", message: ("single-quote the literal " + ($text | tojson))};
-
-# A bare word that is plainly a path, passed as a command argument. A redirect
-# target is shell syntax and lives in Redirs, so it never reaches this rule. A
-# path holding a glob character is left alone: quoting it would break the glob.
-def quote_literal_path:
-  nodes
-  | select(.Type == "CallExpr")
-  | args[1:][]
-  | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
-  | select(.Parts[0].Value | test("^(/|\\./|\\.\\./)"))
-  | select(.Parts[0].Value | test("[*?\\[]") | not)
-  | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
 
 # name=$(...) or name=$((...)) with no quotes around the substitution.
 def quote_subst_in_assign:
@@ -219,6 +210,22 @@ def real_words:
     )
   | $w[.i:];
 
+# A bare word that is plainly a path, passed as a command argument. A redirect
+# target is shell syntax and lives in Redirs, so it never reaches this rule. A
+# path holding a glob character is left alone: quoting it would break the glob.
+# The command word is not an argument, wherever it sits: in `run timeout 5
+# ./tool`, the path is the command the wrappers run.
+def quote_literal_path:
+  nodes
+  | select(.Type == "CallExpr")
+  | real_words[0] as $command
+  | args[1:][]
+  | select(. != $command)
+  | select((.Parts | length) == 1 and .Parts[0].Type == "Lit")
+  | select(.Parts[0].Value | test("^(/|\\./|\\.\\./)"))
+  | select(.Parts[0].Value | test("[*?\\[]") | not)
+  | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
+
 # Short flags with no long form on any platform. "*" allows every flag: shell
 # builtins, and tools whose whole option syntax is single-dash.
 def no_long_form: {
@@ -241,21 +248,27 @@ def no_long_form: {
   "sed": ["-i.bak"]
 };
 
-# Short flags the macOS (BSD) tool has no long form for. Allowed only in
-# hooks/ and tests/, which run against ambient tools.
+# Whether a file runs against ambient tools, which on macOS are the BSD ones:
+# everything under hooks/ and tests/.
+def is_ambient($path): $path | test("(^|/)(hooks|tests)/");
+
+# Short flags the macOS (BSD) tool has no long form for. Allowed only where
+# is_ambient holds.
 def macos_short: {
   "mkdir": ["-p", "-m"], "rm": ["-f"], "mv": ["-f"], "cp": ["-R"],
   "ln": ["-s"], "wc": ["-l", "-c"], "tr": ["-d", "-s"], "uname": ["-s"],
-  "sed": ["-e"], "head": ["-n"]
+  "sed": ["-e"], "head": ["-n"], "mktemp": ["-u"],
+  "xargs": ["-0", "-n", "-r", "-I"]
 };
 
 # A short flag on a tool that has a long form. Flags after a -- are data, as
-# are flags given to a function the file defines or to a command held in a
-# variable, and a negative number is an argument, except to head and tail, where
-# -5 is a legacy spelling of --lines=5.
-def long_options($path):
-  [nodes | select(.Type == "FuncDecl") | .Name.Value] as $functions
-  | ($path | test("(^|/)(hooks|tests)/")) as $ambient
+# are flags given to a function the file defines, to a function the test
+# helpers define ($helpers) or to a command held in a variable: each is input
+# for the thing under test. A negative number is an argument, except to head
+# and tail, where -5 is a legacy spelling of --lines=5.
+def long_options($path; $helpers):
+  ([nodes | select(.Type == "FuncDecl") | .Name.Value] + $helpers) as $functions
+  | is_ambient($path) as $ambient
   | nodes
   | select(.Type == "CallExpr")
   | real_words as $w
@@ -282,9 +295,12 @@ def double_dash_before_paths:
   | select([$w[1:][] | .Parts[0].Value // ""] | index("--") | not)
   | {line: .Pos.Line, rule: "double-dash-before-paths", message: ("put -- before the paths given to " + $cmd)};
 
-# xargs always carries --no-run-if-empty and an explicit --max-args.
-def xargs_flags:
-  nodes
+# xargs always carries --no-run-if-empty and an explicit --max-args. Not where
+# is_ambient holds: BSD xargs has neither long option, so demanding them there
+# would demand a line that fails on macOS.
+def xargs_flags($path):
+  select(is_ambient($path) | not)
+  | nodes
   | select(.Type == "CallExpr")
   | real_words as $w
   | select(($w[0].Parts[0].Value // "") == "xargs")
@@ -818,20 +834,140 @@ def shdoc_stderr:
     )
   | {line: $fn.line, rule: "shdoc-stderr", message: ($fn.name + " writes to stderr without an @stderr line")};
 
-def hits($path; $src; $sourced): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr;
+# A comment that cites code by line number: file.sh:123. Line numbers drift
+# with every edit; cite a function or a heading.
+def comment_line_ref:
+  comments
+  | (.text | match("[A-Za-z0-9_./-]+\\.(sh|bash|bats|awk|jq|md|nix|yml|yaml|json|toml):[0-9]+") | .string) as $ref
+  | {line, rule: "comment-line-ref", message: ("cite a function or heading, not a line number: " + $ref)};
 
-# Every comment that starts with `bash-style`, as a marker. A marker well formed
-# as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any
-# other `bash-style` comment has `malformed: true`. A comment shfmt attached to
-# a statement covers that statement's line span; a marker alone on the line
-# above a statement is attached to that statement, so the span starts at the
-# marker. A comment attached to nothing (after the last statement of a file or
-# of a block) covers only its own line.
+# A comment that points at a file a clone does not contain. Naming the
+# untracked directory itself (to say it is excluded) is fine.
+def comment_untracked_ref:
+  comments
+  | (.text | match("\\.claude/[A-Za-z0-9_.-]+[A-Za-z0-9_./-]*|docs/superpowers/[A-Za-z0-9_.-]+[A-Za-z0-9_./-]*") | .string) as $ref
+  | {line, rule: "comment-untracked-ref", message: ("this path is not tracked: " + $ref)};
+
+# A comment that names a repo path no tracked file has. A path with a glob, a
+# placeholder or an ellipsis in it is not checked, and the untracked planning
+# directory is comment_untracked_ref's business. A path preceded by a slash
+# belongs to a URL or another repository.
+def comment_missing_path($tracked):
+  comments
+  | .line as $line
+  | [.text | match("(?<![A-Za-z0-9_./*<{$-])(hooks|tests|bench|assets|docs|\\.ci|\\.githooks|\\.github)/[A-Za-z0-9_./*<>{}$-]*[A-Za-z0-9_*>}]"; "g") | .string]
+  | unique[]
+  | select(test("[*<>{}$]|\\.\\.") | not)
+  | select(startswith("docs/superpowers") | not)
+  | . as $ref
+  | select(($tracked | index($ref)) == null)
+  | select(($tracked | any(startswith($ref + "/"))) | not)
+  | {line: $line, rule: "comment-missing-path", message: ("no tracked file or directory is named " + $ref)};
+
+# A comment that names a function in a namespace some defined function uses,
+# where nothing defines that name. The list covers every file in the
+# repository and every file scanned, so the definition may be anywhere,
+# including later in the same file. A `word::word` whose namespace no function
+# uses (`std::string`, a jq module call) is not a bash function name, so it is
+# not checked; a misspelt name inside a used namespace still is.
+def comment_missing_function($functions):
+  ($functions | map(select(contains("::")) | split("::")[0]) | unique) as $namespaces
+  | comments
+  | .line as $line
+  | [.text | match("[a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*"; "g") | .string]
+  | unique[]
+  | . as $ref
+  | select($namespaces | index($ref | split("::")[0]))
+  | select(($functions | index($ref)) == null)
+  | {line: $line, rule: "comment-missing-function", message: ("no function is named " + $ref)};
+
+# Wording that only makes sense next to the commit that added it. An issue
+# reference on the same line anchors it and is allowed. `before this
+# gate|change|commit` is ordinary present-tense ordering ("lint runs before
+# this gate") unless a past-tense verb follows in the same sentence, which
+# makes the commit the referent; the other phrases have no present-tense use.
+def comment_commit_relative:
+  comments
+  | select(.text | test("#[0-9]+") | not)
+  | (
+      .text
+      | match(
+          "\\b(until now|when this was written|the commit before this one|as of this commit)\\b|\\bbefore this (gate|change|commit)\\b[^.]*\\b(was|were|had|did|used to|could|would)\\b";
+          "i"
+        )
+      | .string
+    ) as $phrase
+  | {line, rule: "comment-commit-relative", message: ("state it in the present tense, or anchor it to an issue: \"" + $phrase + "\"")};
+
+# Deferred work is marked TODO:, upper-case with a colon. Only a marker shape
+# is a finding: an upper-case TODO, FIXME or XXX word not followed directly by
+# a colon (FIXME: and XXX: included, since the form is TODO:), or a lower or
+# mixed case todo: or fixme:. Prose such as "a todo item" or "xxx" as filler
+# is not a marker.
+def todo_form:
+  comments
+  | select(
+      (.text | test("\\bTODO\\b(?!:)|\\b(FIXME|XXX)\\b"))
+      or ([.text | match("\\b(todo|fixme):"; "gi") | .string] | any(. != "TODO:"))
+    )
+  | {line, rule: "todo-form", message: "mark deferred work as TODO:"};
+
+# An executed script that calls mktemp arms an EXIT trap somewhere, so the
+# temporary file or directory does not outlive it. A trap that only clears
+# (`trap - EXIT`) arms nothing. A sourced file is exempt: it must not install a
+# trap into its caller's shell. A dry run (--dry-run, or -u, the spelling BSD
+# mktemp has) creates nothing. The command is found behind wrappers, so
+# `command mktemp` and `env VAR=x mktemp` count.
+def mktemp_exit_trap($sourced):
+  select($sourced | not)
+  | ([nodes | select(.Type == "CallExpr" and cmdname == "trap") | [args[] | (.Parts[0].Value // "")] | select(.[1] != "-" and any(. == "EXIT" or . == "0"))] | length > 0) as $armed
+  | nodes
+  | select(.Type == "CallExpr")
+  | . as $call
+  | real_words as $w
+  | select(($w[0].Parts[0].Value // "") == "mktemp")
+  | select([$w[1:][] | (.Parts[0].Value // "") | select(. == "--dry-run" or test("^-[A-Za-z]*u[A-Za-z]*$"))] | length == 0)
+  | select($armed | not)
+  | {line: $call.Pos.Line, rule: "mktemp-exit-trap", message: "arm an EXIT trap that removes what mktemp creates"};
+
+def hits($path; $src; $sourced; $tracked; $functions; $helpers): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path; $helpers), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
+
+# The last line a marker attached to this node reaches. A simple command or a
+# pipeline is reached whole, continuation lines included. A compound statement
+# is reached through its header only, so a marker above a function, a test, a
+# block or a subshell stops at the opening line, one above a `case` at the line
+# of its word, one above an `if` or a loop at the line of its `then` or `do`
+# (the condition is covered), and one above a case arm at the line of its
+# pattern. Reaching the body as well would excuse every hit inside it.
+def marker_reach:
+  if has("Cmd") then
+    (.Cmd.Type // "") as $type
+    | if $type | IN("FuncDecl", "TestDecl", "Block", "Subshell") then .Pos.Line
+      elif $type == "CaseClause" then .Cmd.Word.End.Line
+      elif $type == "IfClause" then .Cmd.ThenPos.Line
+      elif $type | IN("WhileClause", "ForClause") then .Cmd.DoPos.Line
+      else .End.Line
+      end
+  elif has("Patterns") then
+    (.Patterns | last | .End.Line)
+  else
+    .End.Line
+  end;
+
+# Every marker in every comment that starts with `bash-style`. One comment may
+# hold several, each introduced by its own `# bash-style` and each with its own
+# reason, so one statement can be excused from more than one rule. A marker
+# well formed as `# bash-style allow=<rule-id>: <reason>` carries its rule and
+# reason; any other `bash-style` text has `malformed: true`. A comment shfmt
+# attached to a statement covers that statement's lines as far as marker_reach
+# says; a marker alone on the line above a statement is attached to that
+# statement, so the span starts at the marker. A comment attached to nothing
+# (after the last statement of a file or of a block) covers only its own line.
 def markers:
   ([
     .. | objects
     | select(has("Comments") and has("End"))
-    | .End.Line as $to
+    | marker_reach as $to
     | .Comments[]
     | {key: (.Hash.Line | tostring), value: $to}
   ] | from_entries) as $spans
@@ -840,7 +976,8 @@ def markers:
     | select(has("Hash") and has("Text"))
     | select(.Text | test("^ ?bash-style\\b"))
     | .Hash.Line as $line
-    | ((.Text | capture("^ ?bash-style allow=(?<rule>[a-z0-9-]+): *(?<reason>.*)$")) // null) as $m
+    | (.Text | sub("^ ?bash-style"; "") | split(" # bash-style") | if length == 0 then [""] else . end | .[])
+    | ((capture("^ allow=(?<rule>[a-z0-9-]+): *(?<reason>.*)$")) // null) as $m
     | {
         line: $line,
         rule: ($m.rule // ""),
@@ -851,10 +988,10 @@ def markers:
       }
   ];
 
-def report($path; $src; $sourced):
+def report($path; $src; $sourced; $tracked; $functions; $helpers):
   if .Type != "File" then error("not a shfmt syntax tree") else . end
   | markers as $markers
-  | [hits($path; $src; $sourced)] as $hits
+  | [hits($path; $src; $sourced; $tracked; $functions; $helpers)] as $hits
   | (
       $hits[]
       | . as $hit

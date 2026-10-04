@@ -634,28 +634,31 @@ def own_nodes:
     empty
   end;
 
-# The positional numbers a body reads, as strings, plus "@" for $@ and $*.
+# The positionals a body reads, as strings: the numbers, "@" for $@ and $*, and
+# "#" for $#.
 def body_positions:
   [
     .body | own_nodes
     | select(.Type == "ParamExp")
     | (.Param.Value // "")
-    | select(test("^([1-9][0-9]*|[@*])$"))
+    | select(test("^([1-9][0-9]*|[@*#])$"))
     | if . == "*" then "@" else . end
   ]
   | unique;
 
-# The @arg lines name exactly the positionals the body reads. A block that
-# documents `$@` also covers numbered reads: a variadic function may peek at
-# `$1`.
+# The @arg lines name exactly the positionals the body reads. `$@` documents a
+# variadic function, which walks its arguments with `$1` and `shift` or only
+# counts them with `$#`; such a block is wrong only when the body reads no
+# positional at all. `$#` alone never names a numbered `@arg`.
 def shdoc_arg_positions:
   documented_functions
   | select(.doc | any(test("^ *@(arg|noargs)\\b")))
   | doc_positions as $doc
-  | body_positions as $body
+  | body_positions as $read
+  | ($read - ["#"]) as $body
   | select(
       if ($doc | index("@")) != null then
-        ($body | index("@")) == null
+        ($read | length) == 0
       else
         $doc != $body
       end

@@ -1171,3 +1171,18 @@ function assert_passes() {
     '  function inner() {' '    echo PAYLOAD_RAN >&2' '  }' \
     '  inner' '}'
 }
+
+@test "bash style: shdoc-arg-positions passes a variadic function that loops over or counts its arguments" {
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $@ args the words given' \
+    'function loops() {' '  while (($# > 0)); do' '    case "$1" in' '      x) echo PAYLOAD_RAN ;;' '    esac' \
+    '    shift' '  done' '}'
+  assert_passes 'd.sh' \
+    '# @description Inert.' '# @arg $@ args the words given' \
+    'function counts() {' '  echo "$#"' '}'
+}
+
+@test "bash style: shdoc-arg-positions reports a documented \$@ over a body that reads no positional" {
+  assert_fires 'd.sh' 'shdoc-arg-positions' 3 \
+    '# @description Inert.' '# @arg $@ args the words given' 'function ignores() {' '  echo PAYLOAD_RAN' '}'
+}

@@ -482,3 +482,17 @@ function assert_passes() {
   assert_fires 't.sh' 'test-double-equals' 1 "[[ 'a' = 'b' ]] && echo PAYLOAD_RAN"
   assert_passes 't.sh' "[[ 'a' == 'b' ]] && echo PAYLOAD_RAN"
 }
+
+@test "bash style: empty-string-test reports a comparison against the empty string" {
+  assert_fires 't.sh' 'empty-string-test' 2 'name=x' "[[ \"\${name}\" == '' ]] && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'empty-string-test' 2 'name=x' "[[ \"\${name}\" != \"\" ]] && echo PAYLOAD_RAN"
+  assert_passes 't.sh' 'name=x' '[[ -z "${name}" ]] && echo PAYLOAD_RAN'
+}
+
+@test "bash style: empty-string-test sees the empty string on the left" {
+  assert_fires 't.sh' 'empty-string-test' 2 'name=x' "[[ '' == \"\${name}\" ]] && echo PAYLOAD_RAN"
+}
+
+@test "bash style: empty-string-test passes a string that is not empty" {
+  assert_passes 't.sh' 'name=x' "[[ \"\${name}\" == ' ' ]] && echo PAYLOAD_RAN" '[[ "${name}" == "${name}" ]] && echo PAYLOAD_RAN'
+}

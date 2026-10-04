@@ -8,7 +8,7 @@
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
 # `hits`. tests/bash-style.bats names every id, so an id is never renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -331,7 +331,22 @@ def test_double_equals:
   | select(.Type == "BinaryTest" and .Op == "=")
   | {line: .Pos.Line, rule: "test-double-equals", message: "use == for equality inside [[ ]]"};
 
-def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals;
+# A word that is exactly '' or "".
+def is_empty_word:
+  (.Parts // []) as $parts
+  | ($parts | length) == 1
+    and ($parts[0].Type | IN("SglQuoted", "DblQuoted"))
+    and (($parts[0].Value // "") == "")
+    and (($parts[0].Parts // []) | length) == 0;
+
+# [[ "${x}" == '' ]], on either side: write -z or -n.
+def empty_string_test:
+  nodes
+  | select(.Type == "BinaryTest" and (.Op | IN("==", "!=", "=")))
+  | select((.X | is_empty_word) or (.Y | is_empty_word))
+  | {line: .Pos.Line, rule: "empty-string-test", message: "test emptiness with -z or -n"};
+
+def hits($path; $src): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path), double_dash_before_paths, xargs_flags, no_echo_e, fetch_flags, test_double_equals, empty_string_test;
 
 # Every comment that starts with `bash-style`, as a marker. A marker well formed
 # as `# bash-style allow=<rule-id>: <reason>` carries its rule and reason; any

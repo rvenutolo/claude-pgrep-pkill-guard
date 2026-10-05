@@ -10,7 +10,7 @@ never exit.
 
 ![Claude Code denying a `pkill --full` call. The guard's reason explains that
 the pattern matches the invoking `bash -c` shell and would terminate the
-session, then lists three fixes: kill by PID, `--ignore-ancestors`, or the
+session, then lists the fixes: kill by PID, `--ignore-ancestors`, or the
 `"[p]attern"` bracket trick.](assets/deny-message.png)
 
 The reason leads with the Write tool on purpose: quoting a denied command in
@@ -27,7 +27,7 @@ The Bash tool runs every command as `bash -c '<command>'`. The command text is
 therefore part of an **ancestor process command line**, and any pattern search
 over full command lines finds it.
 
-Two things follow, and both happen in practice:
+What follows happens in practice, in both of these forms:
 
 - `pkill --full java` matches the `bash -c 'pkill --full java'` that is running
   it.
@@ -42,7 +42,7 @@ $ pkill --full java
 (the session shell is gone)
 ```
 
-After — the hook denies the call and hands the agent three ways out:
+After — the hook denies the call and hands the agent the ways out:
 
 ```console
 $ jq --null-input --arg cmd 'pkill --full java' \
@@ -75,7 +75,7 @@ retry of the same one.
 
 ## What it denies
 
-Four deny kinds, plus a warn tier. Everything else is allowed with a bare `{}`.
+These deny kinds, plus a warn tier. Everything else is allowed with a bare `{}`.
 
 | Kind        | Fires on                                                                                                                                 | Mitigation the reason names                                                                                                       |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -110,12 +110,13 @@ stateful rule:
 ```
 
 The repo is its own marketplace, so there is no separate marketplace to add.
-The third line activates the newly installed hook in the running session.
+The last line activates the newly installed hook in the running session.
 
-If the install reports that the marketplace is not found, the first line has not
-taken effect yet. Run it, then `/reload-plugins`, then retry the install.
+If the install reports that the marketplace is not found, the `marketplace add`
+line has not taken effect yet. Run it, then `/reload-plugins`, then retry the
+install.
 
-The same two steps from the CLI, for scripting a machine or a dotfiles
+The same steps from the CLI, for scripting a machine or a dotfiles
 bootstrap:
 
 ```console
@@ -127,7 +128,7 @@ claude plugin install pgrep-pkill-guard@rvenutolo
 or `local`, and defaults to `user`. `user` records the install for every project
 on this machine, `project` records it in the repo for the team, and `local`
 records it for this checkout only. `claude plugin marketplace add` takes its own
-`--scope`, with the same three values and the same `user` default, but no short
+`--scope`, with the same values and the same `user` default, but no short
 form.
 
 ## Compatibility
@@ -144,11 +145,12 @@ job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 | macOS, `brew install bash`   | Homebrew bash                            | stock `/usr/bin/awk` (one-true-awk)  | `compat (macos, homebrew bash)`  |
 | macOS, stock bash 3.2        | 3.2 — the guard reports itself INACTIVE  | not reached                          | `compat (macos, stock bash 3.2)` |
 
-The two `gate` legs run the whole gate — formatting, lints, the governance
+The `gate` legs run the whole gate — formatting, lints, the governance
 checks and the bats suite twice, once under gawk and once under one-true-awk —
 inside the flake's devShell, so both the bash and both awks come from
-`flake.lock` rather than from the runner. The two ambient `compat` legs run the
-test suite only, against the tools the runner ships: `compat (ubuntu, ambient)`
+`flake.lock` rather than from the runner. The `compat (ubuntu, ambient)` and
+`compat (macos, homebrew bash)` legs run the test suite only, against the tools
+the runner ships: `compat (ubuntu, ambient)`
 takes the image's own bash, `jq` and `awk`, and prints which awk it got, since
 the image may resolve it to either gawk or mawk. `compat (macos, homebrew
 bash)` installs bash from Homebrew and nothing else, then asserts that `awk`
@@ -159,7 +161,7 @@ than quietly doing nothing.
 
 The table lists only the jobs that exercise a platform, bash or awk, so some CI
 jobs are deliberately absent from it. `commitlint` and `validate` sit in
-`ci.yml` and exercise none of the three.
+`ci.yml` and exercise none of those.
 [`links.yml`](.github/workflows/links.yml) checks every link in the tracked tree
 on each pull request and again every Monday, but it lives outside `ci.yml`,
 exercises no platform, bash or awk, and is advisory rather than required — link
@@ -222,14 +224,14 @@ learn you were unprotected.
   the guard inactive for that command and says so. Any other unexpected failure
   inside the hook is caught by an `ERR` trap that emits a bare allow. No
   precondition failure ever produces a deny.
-- **The state rule is best-effort.** `repeat` needs two things it cannot
+- **The state rule is best-effort.** `repeat` needs things it cannot
   guarantee: a `session_id` on the request, and a state directory it owns,
   created if it is absent. Without either
   it returns without a word, and the command proceeds. Unlike the precondition
-  failures above, this stand-down is silent — nothing tells you the third probe
+  failures above, this stand-down is silent — nothing tells you a probe
   went uncounted.
 - **Pattern rules are bypassable by construction.** The guard matches command
-  shapes, so a rewrite defeats it, and two of those rewrites are documented
+  shapes, so a rewrite defeats it, and some of those rewrites are documented
   escapes on purpose. It is a guardrail against a mistake, not a boundary
   against an adversary — see [Security](#security).
 
@@ -262,11 +264,11 @@ it does not hold still from one run to the next either, even when
 `hooks/pgrep-pkill-guard.sh` is byte-identical between them: `typical`
 exercises the prefilter short-circuit, which never sources the body file, so a
 move in it is the machine and not this guard's code. Compare rows within one
-run. Comparing a figure here against one in an older run compares two machine
-states, and even a within-run difference travels less well across them than it
-looks like it should.
+run. Comparing a figure here against one in an older run compares one machine
+state against another, and even a within-run difference travels less well
+across them than it looks like it should.
 
-Three things keep an ordinary command that cheap. The prefilter answers it
+Here is what keeps an ordinary command that cheap. The prefilter answers it
 before `jq` or the scanner is spawned. No helper process runs ahead of the
 prefilter: the payload is read with the `read` builtin rather than a `cat`, and
 the `dirname` that locates the scanner runs only for a command the prefilter
@@ -277,10 +279,12 @@ call.
 
 The parse cost is the reason `hooks/` holds an entry script and a body at all.
 `hooks/pgrep-pkill-guard.sh` is the entry script — held at or under 200 lines by
-`.ci/check-fast-path-size` — carrying only what an ordinary call actually
+`.ci/check-fast-path-size` — carrying what an ordinary call actually
 executes: the locale, the bash-version guard, the `ERR` trap, `emit_allow`, the
 `--help`/`--version` dispatch, the builtin read of stdin, and the prefilter.
-Everything the prefilter short-circuits past lives in
+The only other code in it is `load_body` and the `resolve_hook_dir` it calls,
+the one function that brings in everything else. Everything the prefilter
+short-circuits past lives in
 `hooks/pgrep-pkill-guard-body.sh`, which the entry script sources only for the
 `--help`/`--version` dispatch or after the prefilter has failed to decide, and
 which an ordinary command never reads. That file is itself a loader for the
@@ -292,7 +296,8 @@ guard of 2203 lines 6.49 ms (+2.38). A smaller split — moving only
 the fast path — recovers only about 0.6 ms of that.
 
 A change to the fast path is measured as an interleaved alternation rather than
-as two runs minutes apart: before, after, before, after, on one machine, with
+as one run before and one after, minutes apart: before, after, before, after,
+on one machine, with
 `bench/run --reps 15` every time. The control is `baseline`, the empty hook,
 and a comparison is worth quoting only when the control moves in no direction
 across the runs.
@@ -343,15 +348,15 @@ pattern.
 
 The other escape is the classic bracket trick, `pkill --full "[j]ava"`, which
 hides the needle from its own regex. It is accepted, but only when the bare
-literal appears nowhere else in the same command — a second copy silently
+literal appears nowhere else in the same command — another copy silently
 defeats it, and the guard checks for that.
 
 There is no supported environment variable or config flag that disables the
 guard wholesale. [Uninstall](#uninstall) the plugin if you want it off. The
 suite's test seam, `PGREP_GUARD_SCANNER_OVERRIDE`, points the hook at another
-scanner file and is not an off switch: aimed at a missing or broken scanner it
-makes the guard report itself INACTIVE, loudly, on every command that passes
-the prefilter.
+scanner file and is not an off switch: aimed at a missing scanner it makes the
+guard report itself INACTIVE, loudly, on every command that passes the
+prefilter, and aimed at a broken one, on every command the scanner is run on.
 
 ## `PGREP_PKILL_GUARD_STATE_DIR`
 
@@ -439,7 +444,7 @@ does not see, and where it stands down.
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the Nix
 devShell, the gate, the commit convention and the rules the test suite is held
 to; [docs/architecture.md](docs/architecture.md) traces how a command moves
-through the guard and records the six design invariants that look like
+through the guard and records the design invariants that look like
 inconsistencies and are not.
 
 ## License

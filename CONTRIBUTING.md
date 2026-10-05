@@ -47,7 +47,7 @@ the devShell cannot inherit the caller's `PATH` and no gate step can silently
 resolve a tool from the machine it happens to be running on. Local runs and CI
 runs therefore cannot drift. The `just` recipes that run a gate tool go through
 it. `validate`, `hooks` and `install` run on the host, and so does the `nix`
-command behind `format`, `format-check` and the first half of `fix`:
+command behind `format`, `format-check` and the treefmt step of `fix`:
 
 | Recipe              | What it does                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------- |
@@ -68,7 +68,7 @@ every failing category. It also runs the bats suite twice, once under gawk and
 once under one-true-awk, because the hook must behave identically on both.
 
 **When `just check` goes red on formatting, spelling or markdown style, run
-`just fix` first.** `just format` is only treefmt, and treefmt leaves four
+`just fix` first.** `just format` is only treefmt, and treefmt leaves
 gaps: it never reindents the extensionless bash scripts this repo is mostly
 built out of (`run-all-checks`, `run-tests`, every bash script under `.ci/` and
 `.githooks/`, `bench/run`, `assets/build-social-preview`), never touches
@@ -77,7 +77,7 @@ applies `shfmt --write`, `just --fmt`, `markdownlint-cli2 --fix` and
 `typos --write-changes` over exactly the file lists the lint gate checks. It can
 still exit non-zero, and that is not a bug: `markdownlint-cli2 --fix` reports
 rule violations no rewrite can settle, and `typos` deliberately refuses to guess
-between two plausible corrections. Those are the ones to fix by hand.
+between plausible corrections. Those are the ones to fix by hand.
 
 `just links` is deliberately **not** part of `just check`. The gate is hermetic
 and offline: every tool comes from the flake and every step is deterministic, so
@@ -92,7 +92,7 @@ certificate should not be able to block an unrelated merge.
 A PR is ready when `just format`, `just check` and `just validate` are all
 green.
 
-Seven status checks are **required** by the `protect-main` ruleset and a pull
+These status checks are **required** by the `protect-main` ruleset and a pull
 request cannot merge without all of them green:
 
 | Check                            | What it covers                                 |
@@ -121,7 +121,8 @@ explains _why_, not _what_.
 
 commitlint enforces the `type: subject` form and the allowed types through the
 tracked `commit-msg` hook that `just hooks` activates, running inside the
-devShell so the same commitlint runs locally and in CI. The 72-character
+devShell; the CI `commitlint` job reads the same `.commitlintrc.yml`. The
+72-character
 subject and the imperative mood are conventions it does not check.
 
 release-please consumes that history to cut releases and to write
@@ -130,7 +131,7 @@ overwrites it, and the edit is lost along with whatever it was trying to say.
 
 ## Tests
 
-The suite is bats only, under `tests/`. Three rules:
+The suite is bats only, under `tests/`. The rules:
 
 - **Drive the hook as a subprocess with hook JSON on stdin, and assert on the
   JSON it writes to stdout.** `tests/test_helper/common.bash` provides
@@ -198,7 +199,7 @@ denied, is a bug worth reporting. Use the issue forms:
 Include the exact command verbatim — quoting and whitespace both matter, since
 the guard tokenizes the string — the hook's JSON output, and your platform with
 `bash --version` and `awk --version`. The README's reproduction recipe captures
-the first two in one command.
+the command and the output in one command.
 
 **A guard bypass is a public issue, not a private report.** A command shape
 that slips through is a false negative in a heuristic, not a vulnerability, and

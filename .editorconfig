@@ -16,12 +16,12 @@ space_redirects = true
 
 # `.bats` is its own shfmt dialect, and the split is load-bearing rather than
 # tidiness: under `shell_variant = bash` shfmt cannot PARSE a bats file at all --
-# every one of the eleven dies with ``tests/x.bats:NN:1: `}` can only be used to
-# close a block`` on the first `@test "..." { ... }`. The dialect has to reach
-# shfmt from here and not from an `-ln bats` flag on the command line, because
-# shfmt reads .editorconfig only when it is given NO parser or printer flag: the
-# flag would buy the dialect and silently discard the three style keys below,
-# reindenting all eleven files to tabs. That is the 1899-line diff #72 measured.
+# every one dies with ``tests/x.bats:NN:1: `}` can only be used to close a
+# block`` on the first `@test "..." { ... }`. The dialect has to reach shfmt
+# from here and not from an `-ln bats` flag on the command line, because shfmt
+# reads .editorconfig only when it is given NO parser or printer flag: the flag
+# would buy the dialect and silently discard the three style keys below,
+# reindenting every bats file to tabs (#72).
 [*.bats]
 shell_variant = bats
 binary_next_line = true

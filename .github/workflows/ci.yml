@@ -4,15 +4,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Three of the jobs below -- every `compat (...)` job -- test against the
-  # runner image's AMBIENT tools by design, and GitHub rolls those images
-  # roughly weekly. Without a scheduled run the suite can go red in a week
-  # nobody pushed, and the breakage then surfaces on the next PR looking like
-  # that PR's fault. The hermetic `gate` jobs are pinned by flake.lock so an
-  # image roll cannot move them, but they still depend on cache.nixos.org and
-  # the Nix installer, which this covers too. GitHub emails the repo owner when
-  # a scheduled workflow fails, so a red run is not silent even with nobody
-  # watching Actions.
+  # Every `compat (...)` job below tests against the runner image's AMBIENT
+  # tools by design, and GitHub rolls those images roughly weekly. Without a
+  # scheduled run the suite can go red in a week nobody pushed, and the breakage
+  # then surfaces on the next PR looking like that PR's fault. The hermetic
+  # `gate` jobs are pinned by flake.lock so an image roll cannot move them, but
+  # they still depend on cache.nixos.org and the Nix installer, which this
+  # covers too. GitHub emails the repo owner when a scheduled workflow fails, so
+  # a red run is not silent even with nobody watching Actions.
   #
   # :47 rather than :00 -- on-the-hour cron slots are the most contended on
   # GitHub's shared scheduler, and therefore the most delayed. The minute
@@ -70,7 +69,7 @@ jobs:
           # since the commit bench/RESULTS.md was generated at -- a question a
           # shallow clone cannot answer. The check skips rather than fails when
           # the recorded commit is missing, so at depth 1 it would skip on every
-          # CI run and the gate would be theatre. The history is ~150 commits.
+          # CI run and the gate would be theatre.
           fetch-depth: 0
           persist-credentials: false
       # zizmor's `self-repository` audit, new in 1.30.0, asks that a local
@@ -80,17 +79,17 @@ jobs:
       # The concern it exists for is a job that checks out a ref it does not
       # control and then runs an action from it.
       #
-      # `$/` is not adoptable yet. No released actionlint parses it -- 1.7.12,
-      # the latest, rejects every one of these lines with "invalid format
-      # because ref is missing" -- and actionlint runs one linter EARLIER than
-      # zizmor in .ci/run-lint-checks, so converting the call sites would trade
-      # this audit for a hard parse error on all five. Upstream support is an
-      # open, unmerged pull request against rhysd/actionlint. Every one of
+      # `$/` is not adoptable yet. No released actionlint parses it -- it
+      # rejects every one of these lines with "invalid format because ref is
+      # missing" -- and actionlint runs one linter EARLIER than zizmor in
+      # .ci/run-lint-checks, so converting the call sites would trade this
+      # audit for a hard parse error on every one of them. Upstream support is
+      # an open, unmerged pull request against rhysd/actionlint. Every one of
       # these suppressions lifts when it ships (#137).
       #
-      # Here, and at the two compat legs below and the one site in links.yml,
-      # the checkout immediately above is this workflow's own commit, so `./`
-      # and `$/` resolve to the same tree and the audit has nothing to bite on.
+      # Here, and at the compat legs below and in links.yml, the checkout
+      # immediately above is this workflow's own commit, so `./` and `$/`
+      # resolve to the same tree and the audit has nothing to bite on.
       # The one site in this repo where the two forms genuinely differ is
       # release.yml's reformat job; the rationale lives there, next to it.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
@@ -108,24 +107,23 @@ jobs:
         # would add an unpinned dependency and a second network path (it already
         # failed here once on a transient pkg-containers DNS error), whereas the
         # flake is pinned by flake.lock and ./setup has just installed it. The
-        # INNER in-devshell run is still --ignore-environment, so the hermetic
-        # boundary is exactly as before -- this only chooses the interpreter
+        # INNER in-devshell run is --ignore-environment all the same, so the
+        # hermetic boundary is unaffected -- this only chooses the interpreter
         # that reads the entrypoint script.
         #
-        # .ci/in-devshell now carries an explicit `bash >= 4.2` guard, so a
+        # .ci/in-devshell carries an explicit `bash >= 4.4` guard, so a
         # coworker running `just check` on a stock Mac gets an actionable
-        # sentence instead of the raw shopt error. This job still selects the
-        # flake's bash, because the point here is to RUN the gate, not to
+        # sentence instead of the raw shopt error. This job selects the flake's
+        # bash all the same, because the point here is to RUN the gate, not to
         # rediscover that the host bash is too old.
         shell: nix develop --command bash -e {0}
-        # RUNNER_TEMP rather than a path in the workspace: the gate asserts the
-        # suite left the repo untouched, and a report directory written under
-        # the checkout would be an untracked file the next `git status` sees.
-        # It is already in .ci/in-devshell's KEEP_VARS, so it resolves to the
-        # same path inside and outside the hermetic boundary.
+        # RUNNER_TEMP rather than a path in the workspace: a report directory
+        # written under the checkout would be an untracked file in the tree the
+        # gate grades. It is already in .ci/in-devshell's KEEP_VARS, so it
+        # resolves to the same path inside and outside the hermetic boundary.
         run: ./.ci/in-devshell ./run-all-checks --report "${RUNNER_TEMP}/bats-junit"
       # if: failure() -- the report is only interesting when something went red,
-      # and uploading ~22 KB of green XML on every push is noise. run-all-checks
+      # and uploading green XML on every push is noise. run-all-checks
       # writes gawk/ and bwk/ subdirectories, so both suite runs survive (#83).
       # The name must be unique across the whole workflow run, hence the matrix
       # OS: two legs uploading `bats-junit-gate` would collide.
@@ -152,18 +150,16 @@ jobs:
         if: runner.os == 'Linux'
         # See the gate step above for why the interpreter is the flake's bash.
         shell: nix develop --command bash -e {0}
-        # RUNNER_TEMP, not the workspace: run-tests asserts the suite left the
-        # repo untouched, and a report written under the checkout would be an
-        # untracked tree the next `git status` sees. It is already in
-        # .ci/in-devshell's KEEP_VARS, so it names the same path on both sides
-        # of the hermetic boundary.
+        # RUNNER_TEMP, not the workspace: a report written under the checkout
+        # would be an untracked tree in the repo the suite runs from. It is
+        # already in .ci/in-devshell's KEEP_VARS, so it names the same path on
+        # both sides of the hermetic boundary.
         #
         # stderr goes to a file, and only surfaces if the step fails. kcov's
         # bash tracing forwards every trace line it cannot parse -- the
         # continuation lines of any multi-line traced command, of which the
         # suite's JSON payloads produce a great many -- to its own stderr. That
-        # is ~1200 lines for one .bats file and roughly 12000 for the suite,
-        # which would bury the run in the job log. bats writes its TAP to
+        # spill would bury the run in the job log. bats writes its TAP to
         # STDOUT, so the test results themselves are unaffected and stay
         # visible; only the trace spill is captured.
         run: |
@@ -183,9 +179,9 @@ jobs:
         # in KEEP_VARS, so it survives --ignore-environment.
         run: ./.ci/in-devshell ./.ci/report-coverage "${RUNNER_TEMP}/coverage"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        # Unconditional on this leg, and only this leg: the HTML is ~1.4 MB and
-        # is the part of the coverage run actually worth reading -- the per-line
-        # hit counts, which the job summary's single percentage cannot carry.
+        # Unconditional on this leg, and only this leg: the HTML is the part of
+        # the coverage run actually worth reading -- the per-line hit counts,
+        # which the job summary's single percentage cannot carry.
         if: runner.os == 'Linux'
         with:
           name: coverage-html
@@ -359,12 +355,12 @@ jobs:
         # one more SHA to pin and one more thing to bump for no gain here.
         #
         # zizmor's adhoc-packages is suppressed here, and only here: the version
-        # is not ad-hoc at all. CLAUDE_CODE_VERSION is pinned below and Renovate
-        # bumps it, which is the property a lockfile would buy -- see that env
-        # key's own comment for why the pin is load-bearing rather than tidy.
-        # The suppression sits on the `run:` key because zizmor reads YAML
-        # comments: a `#` inside the block scalar is part of the shell script,
-        # not a comment zizmor can see, and is silently ignored.
+        # is not ad-hoc at all. CLAUDE_CODE_VERSION is pinned in this job's `env`
+        # and Renovate bumps it, which is the property a lockfile would buy --
+        # see that env key's own comment for why the pin is load-bearing rather
+        # than tidy. The suppression sits on the `run:` key because zizmor reads
+        # YAML comments: a `#` inside the block scalar is part of the shell
+        # script, not a comment zizmor can see, and is silently ignored.
         run: |  # zizmor: ignore[adhoc-packages]
           set -Eeuo pipefail
           npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"

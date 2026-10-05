@@ -64,7 +64,8 @@ function make_exec_bit_fixture() {
 }
 
 # Every case drives FIXTURE mode, which needs nothing but bash and git, so the
-# ambient macOS compat legs run this suite for real rather than skipping it.
+# ambient `compat (macos, homebrew bash)` leg runs this suite for real rather
+# than skipping it.
 # Hence no devShell skip here, the same as tests/shell-shebangs.bats.
 #
 # The first case is the exception that keeps the rest honest: it points the gate

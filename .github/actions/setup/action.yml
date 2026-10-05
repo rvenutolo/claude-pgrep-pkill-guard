@@ -10,10 +10,10 @@ runs:
       with:
         # `-v2-` is a generation marker, not tidiness. Garbage collection (below)
         # runs only when the save phase finds no cache under the primary key,
-        # and every existing cache was saved without it; with the old key
-        # layout the bloated caches would be restored and never replaced, so
-        # the GC setting would be dead config. Bump the marker whenever a
-        # change to this action must invalidate every cache it ever saved.
+        # so a cache saved under a key without the marker would be restored and
+        # never replaced, and the GC setting would be dead config for it. Bump
+        # the marker whenever a change to this action must invalidate every
+        # cache it ever saved.
         primary-key: nix-${{ runner.os }}-v2-${{ hashFiles('flake.lock') }}
         restore-prefixes-first-match: nix-${{ runner.os }}-v2-
         # Collect ALL garbage before saving. Without this the cache is the
@@ -37,9 +37,8 @@ runs:
       # runtime closure -- and only the runtime closure -- survive to the
       # save. The gate's later `nix develop` runs reuse the same derivation.
       #
-      # RUNNER_TEMP rather than the workspace: the gate asserts the suite left
-      # the repo untouched, and a profile symlink under the checkout would be
-      # an untracked file the next `git status` sees.
+      # RUNNER_TEMP rather than the workspace: a profile symlink under the
+      # checkout would be an untracked file in the tree the gate grades.
       #
       # Flake inputs (the nixpkgs source tree among them) are NOT rooted and
       # are collected. They are re-fetched from the cache.nixos.org tarball

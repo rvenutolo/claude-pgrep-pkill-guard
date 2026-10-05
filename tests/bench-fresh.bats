@@ -102,10 +102,11 @@ function record_commit() {
   write_results "${root}" "${sha}"
 }
 
-# The first case points the script at the real repo; every other case drives
-# FIXTURE mode, which needs no devShell -- only git -- so this suite carries no
-# skip and runs on the ambient compat legs too, the same as
-# tests/devshell-provides.bats and tests/invariant-markers.bats.
+# The first case points the script at the real repo, and the last passes the
+# real repo only to be rejected on its argument count before anything is read;
+# every case between them drives FIXTURE mode. None of that needs a devShell --
+# only git -- so this suite carries no skip and runs on the ambient compat legs
+# too, the same as tests/devshell-provides.bats and tests/invariant-markers.bats.
 
 @test "bench fresh: the real repo is accepted" {
   # Only the exit code is asserted, deliberately. The two ambient compat legs
@@ -337,7 +338,8 @@ RESULTS
   printf 'guard, split\n' > "${root}/hooks/pgrep-pkill-guard.sh"
   git -C "${root}" add 'hooks/pgrep-pkill-guard.sh'
   commit_fixture "${root}" 'perf: split the guard'
-  # Explicitly unset: a caller's environment must not leak a strict verdict in.
+  # Explicitly empty, which the check reads the same as unset: a caller's
+  # environment must not leak a strict verdict in.
   BENCH_FRESH_STRICT='' run "${CHECK}" "${root}"
   assert_success
   assert_output --partial 'WARN: bench/RESULTS.md is stale'
@@ -378,8 +380,8 @@ RESULTS
 
 @test "bench fresh: a surplus argument is rejected, not ignored" {
   # Every positional is optional, so an extra argument can only be a typo -- a
-  # misplaced flag, a stray path. Swallowing it silently would run the default
-  # check and report success on something nobody asked for. Exit 2 rather than
+  # misplaced flag, a stray path. Swallowing it silently would run the check
+  # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
   run "${CHECK}" "${REPO_DIR}" extra
   assert_failure 2

@@ -16,7 +16,8 @@ def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quo
 
 def nodes: .. | objects;
 def args: (.Args // []);
-# The literal first word of a command, or "" when it is not a plain word.
+# The leading literal text of a command's first word, or "" when the word
+# starts with an expansion or a double-quoted string.
 def cmdname: (args[0].Parts[0].Value // "");
 # Every line that carries a comment.
 def comment_lines: [nodes | select(has("Hash")) | .Hash.Line] | unique;
@@ -188,8 +189,8 @@ def wrapper_value_flags: {
 
 # A command's words with leading wrappers removed, along with the wrappers'
 # own options, the values those options take, VAR=value words and durations, so
-# the first word left is the tool that reads the flags. A first word that is
-# not a plain literal (a variable holding a path) is kept and reads as "".
+# the first word left is the tool that reads the flags. A first word that
+# starts with an expansion (a variable holding a path) is kept and reads as "".
 def real_words:
   args as $w
   | {i: 0, wrapper: "", done: false}
@@ -226,8 +227,9 @@ def quote_literal_path:
   | select(.Parts[0].Value | test("[*?\\[]") | not)
   | {line: .Pos.Line, rule: "quote-literal-path", message: ("single-quote the path " + .Parts[0].Value)};
 
-# Short flags with no long form on any platform. "*" allows every flag: shell
-# builtins, and tools whose whole option syntax is single-dash.
+# Short flags allowed in every file: the tool has no long form, or none that
+# every platform's build accepts. "*" allows every flag: shell builtins, and
+# tools whose whole option syntax is single-dash.
 def no_long_form: {
   "set": "*", "shopt": "*", "read": "*", "mapfile": "*", "printf": "*",
   "unset": "*", "type": "*", "export": "*", "cd": "*", "pwd": "*", "kill": "*",
@@ -248,8 +250,9 @@ def no_long_form: {
   "sed": ["-i.bak"]
 };
 
-# Whether a file runs against ambient tools, which on macOS are the BSD ones:
-# everything under hooks/ and tests/.
+# Whether the gate treats a file as running against ambient tools, which on
+# macOS are the BSD ones: everything under hooks/ and tests/. A line elsewhere
+# that runs on the ambient legs takes an exception marker.
 def is_ambient($path): $path | test("(^|/)(hooks|tests)/");
 
 # Short flags the macOS (BSD) tool has no long form for. Allowed only where
@@ -416,9 +419,10 @@ def no_pipe_while:
     )
   | {line: .Y.Pos.Line, rule: "no-pipe-while", message: "feed the loop with < <(cmd), not a pipe"};
 
-# The literal first word of a command once leading wrappers are removed, or ""
-# when it is not a plain word or the command only looks the name up
-# (`command -v name` runs nothing).
+# The leading literal text of a command's first word once leading wrappers are
+# removed, or "" when the word starts with an expansion or a double-quoted
+# string, or the command only looks the name up (`command -v name` runs
+# nothing).
 def real_cmdname:
   if cmdname == "command" and ([args[1:][] | .Parts[0].Value // ""] | any(IN("-v", "-V")))
   then ""
@@ -522,8 +526,8 @@ def is_main_call:
   and .Cmd.Args[1].Parts[0].Type == "DblQuoted"
   and ([.Cmd.Args[1].Parts[0].Parts[]? | .Param.Value?] == ["@"]);
 
-# An executed script with helper functions: main is the last function, and
-# `main "$@"` is the last statement.
+# An executed script that defines a function at top level: main is the last
+# function, and `main "$@"` is the last statement.
 def main_last($sourced):
   select($sourced | not)
   | [top[] | select(.Cmd.Type == "FuncDecl")] as $functions
@@ -560,8 +564,8 @@ def is_ifs_assignment:
   (.Type == "CallExpr" and (args | length) == 0 and any(.Assigns[]?; .Name.Value == "IFS"))
   or (.Type == "DeclClause" and any(args[]; .Name.Value? == "IFS"));
 
-# An executed script sets strict mode and then the strict IFS, both before its
-# first function.
+# An executed script sets strict mode and then assigns IFS, to any value, both
+# before its first function.
 def strict_prologue($sourced):
   select($sourced | not)
   | top as $stmts
@@ -605,8 +609,8 @@ def max_line_length($src):
   | select($literals != 1)
   | {line: (.key + 1), rule: "max-line-length", message: ("\($len) characters; the limit is 120")};
 
-# The functions bats itself calls. They take no arguments and exist to set
-# per-test globals, so they carry no shdoc block.
+# The functions bats itself calls, with no arguments. The shdoc rules do not
+# require a block above them.
 def bats_hooks: ["setup", "teardown", "setup_file", "teardown_file"];
 
 # The comment lines that end on the line directly above $line, each directly
@@ -642,7 +646,8 @@ def documented_functions:
       body: .Cmd.Body
     };
 
-# A function other than main carries @description, and @arg or @noargs.
+# A function other than main and the bats hooks carries @description, and @arg
+# or @noargs.
 def shdoc_present:
   documented_functions
   | (.doc | any(test("^ *@description\\b"))) as $described
@@ -712,8 +717,8 @@ def shdoc_arg_positions:
       message: (.name + " documents [" + ($doc | join(" ")) + "] and reads [" + ($body | join(" ")) + "]")
     };
 
-# The number N when a word is exactly "$N", "${N}" or "${N:-default}": a
-# positional bound whole, not transformed.
+# The number N when a word is exactly "$N", "${N}", "${N:-default}" or
+# "${N-default}": a positional bound whole, not transformed.
 def bound_positional:
   ((.Parts // []) | select(length == 1) | .[0]) as $part
   | ($part | if .Type == "DblQuoted" then ((.Parts // []) | select(length == 1) | .[0]) else . end) as $value

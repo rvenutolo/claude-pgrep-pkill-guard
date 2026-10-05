@@ -113,6 +113,7 @@ function trap_installing_files() {
 # @arg $1 file repo-relative path
 # @exitcode 0 the file's ERR trap exits 0
 # @exitcode 1 it does not
+# @exitcode 2 the file could not be read
 function fail_open() {
   grep --quiet --extended-regexp --regexp="${FAIL_OPEN_TRAP_RE}" -- "${REPO_DIR}/$1"
 }

@@ -6,8 +6,8 @@
 #
 #              docs/architecture.md's "Design invariants" section opens by
 #              promising that each rule "is repeated as a comment in the source
-#              it constrains; if one changes here, change the comment too". Two
-#              of the six invariants have a gate behind them
+#              it constrains; if one changes here, change the comment too". Some
+#              of the invariants have a gate behind them
 #              (.ci/check-fast-path-size, .ci/check-err-trap-hygiene); the rest
 #              rest on that promise alone, and a promise nothing checks is a
 #              comment about a comment. This gate makes the promise mechanical:
@@ -32,8 +32,8 @@
 #              formatter with opinions, and the first person to reflow a comment
 #              would delete it instead.
 #
-#              A fifth row was proposed and DROPPED rather than forgotten: the
-#              `trap - ERR` rationale (invariant 6) across every gate script.
+#              The `trap - ERR` rationale (invariant 6) across every gate script
+#              deliberately has no row here:
 #              .ci/check-err-trap-hygiene already enforces that invariant
 #              mechanically, by parsing every deliberate non-zero return in
 #              every file that installs the trap. Restating it here as a phrase
@@ -124,7 +124,7 @@ readonly MARKERS=(
 #              would write it.
 #
 #              sed and tr rather than a bash read loop: the files in the table
-#              run to ~1000 lines and this runs on every gate invocation. Both
+#              are long and this runs on every gate invocation. Both
 #              invocations stay within POSIX syntax (`#*` rather than
 #              `#\{1,\}`, no GNU-only flags) because the bats suite drives this
 #              script on the ambient macOS compat leg that runs bats, where
@@ -140,7 +140,9 @@ function collapsed_text() {
 # @description Report whether one marker phrase appears in one file.
 # @arg $1 phrase the marker phrase
 # @arg $2 relative_path the file to search, relative to the repo root
-# @stderr one FAIL line when the file is unreadable or the phrase is absent
+# @stderr one FAIL line when the file is unreadable, reads as empty, or lacks
+#         the phrase; the last is followed by indented lines saying how to
+#         restore the marker
 # @exitcode 0 the phrase is present
 # @exitcode 1 the file is unreadable or reads as empty, or the phrase is absent
 function check_marker() {

@@ -13,9 +13,11 @@
 #              body, or outside every loop. A for/select head reports "none": it is evaluated once,
 #              so a self-matching pgrep there pins no termination test. `$(`, a backtick, and a plain
 #              `(` each push a scope-barrier marker so that a loop entirely inside one cannot pop, or
-#              be popped by, a loop spanning the enclosing command: a stray `do`/`done` inside a
+#              be popped by, a loop spanning the enclosing command: a stray `done` inside a
 #              substitution (whether from a real nested loop or just literal text, such as an echoed
-#              "done") is bounded by its own barrier and can never reach past it. The marker is
+#              "done") finds the barrier on top and pops nothing beyond it. An unmatched
+#              command-position `do` there is not bounded: it pushes `body` above the marker, the
+#              closing `)` then pops nothing, and the tokens after it read as `body`. The marker is
 #              transparent when reading the context AT the target index, though: an invocation that is
 #              simply inside a substitution with no loop of its own still belongs to whatever cond/body
 #              span encloses that substitution, which is why `until [ -z "$(pgrep --full x)" ]; do ...`

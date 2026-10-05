@@ -84,7 +84,8 @@ function classify::task_poll_detected() {
 #              not -- raw slices, as in classify::task_poll_detected; the key starts at `claude-`, so a
 #              /tmp and a $TMPDIR spelling of one file share a key), and `pgrep:<operand>` for
 #              every pgrep in command position that has a pattern operand -- any pgrep, not only
-#              --full. pkill is a kill, not a probe. Wrapper payloads are not descended.
+#              --full. pkill is a kill, not a probe. Wrapper payloads are not descended. A key that
+#              would carry a tab or a newline is dropped: either byte would forge a state-line boundary.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @stdout the keys, newline-terminated; nothing when there are none
@@ -172,9 +173,10 @@ function classify::classify_invocation() {
 }
 
 # @description Classify the code a shell wrapper in this command would run: a `bash -c '...'`
-#              payload, or a heredoc body fed to `bash`, gets the same classification the outer
-#              command just got. A deny inside wins outright; a warn inside only lifts an allow.
-#              Bounded by MAX_PAYLOAD_DEPTH so a payload that wraps a payload cannot recurse forever.
+#              payload, a heredoc body fed to `bash`, or a literal piped into it (`echo '...' | bash`)
+#              gets the same classification the outer command just got. A deny inside wins outright;
+#              a warn inside only lifts an allow. Bounded by MAX_PAYLOAD_DEPTH so a payload that wraps
+#              a payload cannot recurse forever.
 # @arg $1 command the raw command
 # @arg $2 tokens the scanner's token stream for the command
 # @arg $3 depth the current nesting depth
@@ -210,7 +212,7 @@ function classify::classify_wrapper_payloads() {
 
 # @description Classify a Bash command string.
 # @arg $1 command the command string
-# @arg $2 depth wrapper-payload recursion depth, 0 for the command the user actually ran
+# @arg $2 depth optional wrapper-payload recursion depth; defaults to 0, the command the user actually ran
 # @stdout allow, warn, inactive (the scanner stream failed its integrity check, here or in a wrapper
 #         payload), or deny:loop / deny:kill / deny:task-poll followed by a tab and the invoked
 #         tool (or, for task-poll, the polled path)

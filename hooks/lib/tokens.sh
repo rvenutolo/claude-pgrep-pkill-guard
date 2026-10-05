@@ -143,17 +143,21 @@ function tokens::prefix_breaks_chain() {
 #              scanner::find_invocations and wrappers::shell_wrapper_payloads both need it and a second copy would
 #              drift -- the bare-word version was already duplicated when it was wrong.
 #
-#              An operator or keyword restores command position and clears the chain. A prefix word
-#              opens one. Inside a chain, the prefix's own flags keep command position for what
-#              follows, a flag's value is skipped without ever being in command position itself
-#              (`env -u pkill cmd` unsets a variable, it does not run one), `--` ends the flags, and
-#              the operands the prefix is entitled to are spent one per word. The first word that is
-#              none of those IS the command, so the chain ends there. An option that makes the
-#              prefix run nothing ends it too.
+#              An operator or keyword restores command position and clears the chain, except that a
+#              `|` leaves the sentinel `pipe` in it, because `time` is the reserved word only in a
+#              pipeline's first command. An assignment word in command position leaves the sentinel
+#              `assignment` for the same reason, and the reserved word itself leaves
+#              `time-builtin`. A prefix word opens a chain. Inside a chain, the prefix's own flags
+#              keep command position for what follows, a flag's value is skipped without ever being
+#              in command position itself (`env -u pkill cmd` unsets a variable, it does not run
+#              one), `--` ends the flags, and the operands the prefix is entitled to are spent one
+#              per word. The first word that is none of those IS the command, so the chain ends
+#              there. An option that makes the prefix run nothing ends it too.
 # @arg $1 token the raw token
 # @arg $2 word the token reduced to its basename
 # @arg $3 at_cmd 1 when this token is itself in command position
-# @arg $4 chain name of the caller's variable holding the prefix in effect, empty when none
+# @arg $4 chain name of the caller's variable holding the prefix in effect, or one of the sentinels
+#         `pipe`, `assignment`, `time-builtin` and `--`, which match no prefix; empty when neither
 # @arg $5 skip name of the caller's variable marking the next word as a flag's value
 # @arg $6 operands name of the caller's variable holding the chain's remaining operand budget
 # @exitcode 0 the next word is in command position

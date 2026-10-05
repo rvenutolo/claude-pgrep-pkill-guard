@@ -5,8 +5,8 @@ function setup() {
 
 # @description Build a minimal, VALID tree in the shape the marker table
 #              expects: the seven files it names, each carrying every phrase its
-#              row demands, and nothing else. Each negative case below then
-#              corrupts exactly one of them.
+#              row demands, and nothing else. The negative cases below then
+#              corrupt, empty or remove files in it.
 #
 #              The phrases are written out here rather than read from the
 #              script. That duplication is the point: if someone edits the table

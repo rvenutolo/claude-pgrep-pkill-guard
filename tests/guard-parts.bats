@@ -5,8 +5,8 @@ function setup() {
 
 # @description Build a minimal tracked tree in the shape the gate reads: a
 #              loader carrying a two-row GUARD_PARTS table, and the two parts it
-#              names, each defining its paired function. Each negative case
-#              below then corrupts exactly one of them.
+#              names, each defining its paired function. The negative cases
+#              below then corrupt, add or remove files in it.
 #
 #              The table is written out here rather than copied from the real
 #              loader. That duplication is the point: the gate must be graded

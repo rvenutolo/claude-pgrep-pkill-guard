@@ -236,9 +236,10 @@ function scan_file() {
 #              define, so a comment may name a function from a file the run is
 #              not scanning, and a fixture's own function counts.
 # @arg $@ paths the files named on the command line
-# @stdout one function name per line, written `<namespace>::<name>`
+# @stdout one function name per line, written `<namespace>::<name>`; a search
+#         that matched nothing leaves one blank line in its place
 # @stderr a FAIL line when git or grep fails, as opposed to finding nothing
-# @exitcode 0 the list was written, possibly empty
+# @exitcode 0 the list was written; it holds no name when neither search matched
 # @exitcode 1 git or grep failed
 function namespaced_functions() {
   local repo_matches file_matches
@@ -265,9 +266,9 @@ function namespaced_functions() {
 #              handed to one is data for the thing under test, not an option
 #              of a tool that has a long form.
 # @noargs
-# @stdout one function name per line
+# @stdout one function name per line, or one blank line when none is defined
 # @stderr a FAIL line when git fails, as opposed to finding nothing
-# @exitcode 0 the list was written, possibly empty
+# @exitcode 0 the list was written; it holds no name when nothing matched
 # @exitcode 1 git failed
 function helper_functions() {
   local matches

@@ -217,7 +217,7 @@ function recorded_commit() {
 # @description Report whether a commit object is present in this clone.
 # @arg $1 sha the recorded commit
 # @exitcode 0 the object is present
-# @exitcode 1 it is not -- a shallow, partial or fresh clone
+# @exitcode * non-zero when it is not -- a shallow, partial or fresh clone
 function commit_present() {
   local -r sha="$1"
   # The `^{commit}` peel is load-bearing: `cat-file -e <sha>` is true for ANY
@@ -249,8 +249,9 @@ function commit_present() {
 #              plus an add, whose content lines then fail the regex, rather than
 #              as a `similarity index` line this would have to reason about; the
 #              prefixes are set explicitly so `--- `/`+++ ` headers are always
-#              `a/`- or `b/`-prefixed and cannot be confused with a content line
-#              that starts the same way.
+#              `a/`- or `b/`-prefixed, which keeps the skip as narrow as a prefix
+#              match can be: a removed line whose own text starts `-- a/`, or an
+#              added one starting `++ b/`, still reads as a header and is skipped.
 # @arg $1 recorded the recorded commit
 # @stdout the reason the difference is harmless, for the caller's `OK:` line
 # @exitcode 0 nothing in the net difference can change the measured cost

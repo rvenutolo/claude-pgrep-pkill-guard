@@ -37,8 +37,8 @@ readonly -a FIXTURE_NON_EXECUTABLE=(
 
 # @description Build a minimal tracked tree in the shape the gate checks: a git
 #              repo holding one file per expected-mode row, each tracked with
-#              the mode its row demands. Each negative case below then corrupts
-#              exactly one of them.
+#              the mode its row demands. The negative cases below then change
+#              a tracked mode, or add or remove a file.
 #
 #              The mode is set in the index with `git update-index --chmod`
 #              rather than on disk, because the gate reads the tracked mode

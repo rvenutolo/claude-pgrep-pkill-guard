@@ -158,9 +158,9 @@ function run_cli() {
 @test "cli: the JSON path is unchanged by the human-mode dispatch" {
   # The regression guard for the whole feature. run_hook pipes hook JSON in and
   # passes no arguments, which is exactly how Claude Code invokes the hook, so
-  # neither dispatch test can fire and the verdict must be what it always was.
-  # `pkill --full java` is an inert string inside a JSON payload here; nothing
-  # in this suite ever runs it.
+  # neither dispatch test can fire and the verdict must be the one the JSON path
+  # gives. `pkill --full java` is an inert string inside a JSON payload here;
+  # nothing in this suite ever runs it.
   local out
   out="$(run_hook 'ls -la')"
   [[ "${out}" == '{}' ]]

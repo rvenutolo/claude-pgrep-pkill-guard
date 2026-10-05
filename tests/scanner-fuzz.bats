@@ -21,6 +21,11 @@
 # offsets. A random input has no expected token stream, and inventing one would
 # mean reimplementing the scanner inside the test.
 #
+# setup_file sets and exports FUZZ_SEED, the seed the corpus is generated from,
+# and FUZZ_N, the corpus size, and writes the corpus to BATS_FILE_TMPDIR. setup
+# exports LC_ALL=C and sets FUZZ_FRAGMENTS and FUZZ_GLUE, the fragment catalogue
+# and its separators, and FUZZ_CORPUS, the corpus read back from that file.
+#
 # --- The corpus -------------------------------------------------------------
 #
 # Uniform random bytes would be a weak fuzzer: they essentially never produce
@@ -131,8 +136,7 @@ function setup_file() {
   # BATS_FILE_TMPDIR, NUL-delimited. Not a micro-optimisation: bats traps DEBUG
   # to track line numbers, so every simple command inside a test costs on the
   # order of 200us, and rebuilding the corpus in setup() -- which runs once per
-  # test -- was measured at 1.8s a time, roughly ten times what the awk spawns
-  # this file exists to make cost. NUL rather than newline because a generated
+  # test -- was measured at 1.8s a time. NUL rather than newline because a generated
   # case routinely CONTAINS newlines; it can never contain a NUL, since the
   # catalogue is ASCII text and FUZZ_ALPHABET spans 0x20-0x7E.
   fuzz_catalogue
@@ -158,7 +162,7 @@ function setup() {
   # the hook slices the raw command back out with them, so a UTF-8 locale would
   # make the index bases disagree. For BASH it is what makes
   # `${#FUZZ_CORPUS[i]}` a byte count rather than a character count, which is
-  # the number every assertion in this file compares against. The catalogue
+  # the number fuzz_scan_pass expects in every trailer. The catalogue
   # is pure ASCII so the counts agree, but a single non-ASCII fragment added later
   # would silently turn every byte-count assertion into a character-count
   # assertion, and it would still pass.
@@ -388,9 +392,9 @@ function scan_raw() {
 
 # @description Verify a scanner stream ends in a well-formed integrity trailer
 #              carrying the expected byte count. This is the single comparison
-#              every property in this file rests on, which is why the
+#              both trailer properties in this file rest on, which is why the
 #              "trailer comparison rejects a known-bad trailer" test feeds it
-#              one: a comparison that always held would make every property
+#              one: a comparison that always held would make both of them
 #              green forever.
 #
 #              The failures are distinguished by the reason text -- "not a
@@ -528,7 +532,7 @@ function fuzz_scan_pass() {
 
   # Varied, but deliberately NOT "all distinct". The generator draws from a
   # finite catalogue and a case can be only a few fragments long, so exact
-  # collisions are expected at any interesting N, and demanding uniqueness would
+  # collisions are possible at any N, and demanding uniqueness would
   # make this red for a reason that has nothing to do with what it guards. The
   # measured rate is 100% distinct at FUZZ_N=200, 5000 and 10000 across seeds,
   # so the 90% floor is not a description of the generator -- it is headroom
@@ -658,9 +662,9 @@ function fuzz_scan_pass() {
   # the pass itself rather than passing vacuously on no evidence.
   #
   # The allowance is 10s of fixed slack plus 50ms per case per pass, several
-  # times the measured cost. It is deliberately loose: this is a hang
-  # detector on shared CI hardware, not a performance assertion, and a red
-  # budget on a slow runner would teach everyone to ignore it.
+  # times the measured cost. It is deliberately loose: this catches gross
+  # degradation on shared CI hardware and is not a performance assertion, and
+  # a red budget on a slow runner would teach everyone to ignore it.
   local -r budget="$((10 + FUZZ_N / 10))"
   local mode total=0 elapsed
   for mode in 'terminated' 'raw'; do

@@ -1,3 +1,6 @@
+# .ci/check-devshell-provides, driven against fixture inventories of packages,
+# declared tools and formatters, and its rejection of a surplus argument.
+#
 # `run --separate-stderr` is a bats 1.5.0 flag, and the linux-only skip case
 # needs stdout and stderr apart: the SKIP line is a diagnostic, so it must land
 # on stderr, which a merged capture cannot tell apart from stdout.

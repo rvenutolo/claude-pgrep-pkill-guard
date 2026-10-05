@@ -174,8 +174,8 @@ BODY
 }
 
 @test "guard parts: a function half that is not a function name is still malformed" {
-  # The relaxation above grades the remainder as a name rather than counting
-  # colons; a trailing `:extra` is not one, and must not slip through.
+  # The function half is graded as a name rather than by counting colons; a
+  # trailing `:extra` is not one, and must not slip through.
   local -r root="${BATS_TEST_TMPDIR}/bad-half"
   make_parts_fixture "${root}"
   cat > "${root}/hooks/pgrep-pkill-guard-body.sh" << 'BODY'

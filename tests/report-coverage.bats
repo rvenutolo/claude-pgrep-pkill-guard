@@ -14,8 +14,8 @@ function setup() {
 # the report was produced -- a Nix build sandbox, a CI runner checkout, someone
 # else's home directory -- so a fixture carrying THIS repo's path would let a
 # reporter that matched on the absolute path pass, and that reporter would go red
-# on every real report. Every case that wants a broken report passes its own
-# array as make_report $3.
+# on every real report. Every case that wants a defective files[] passes its
+# own array as make_report $3.
 HEALTHY_FILES='[
   {"covered_lines": 143, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard.sh",
    "percent_covered": "95.33", "total_lines": 150},
@@ -177,8 +177,7 @@ function make_report() {
 # repo controls, which is whether the reporter notices.
 
 @test "report-coverage: a report missing the body file fails rather than printing" {
-  # The proved failure mode: the entry script survives, the body file is gone,
-  # and every remaining number is internally consistent.
+  # The proved failure mode: the entry script survives and the body file is gone.
   make_report "${BATS_TEST_TMPDIR}/cov" '76.42' '[
     {"covered_lines": 143, "file": "/build/kcov-src-9f2c/hooks/pgrep-pkill-guard.sh",
      "percent_covered": "95.33", "total_lines": 150}

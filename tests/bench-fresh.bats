@@ -71,9 +71,10 @@ function short_head() {
 }
 
 # @description Write a bench/RESULTS.md whose provenance table records one sha.
-#              The table carries another row and a paragraph that both contain
-#              the word "commit", so a check that matched on that word alone
-#              rather than on the row's structure would read the wrong cell.
+#              The table carries another row, and a paragraph follows it, that
+#              both contain the word "commit", so a check that matched on that
+#              word alone rather than on the row's structure would read the
+#              wrong cell.
 # @arg $1 root the fixture repo
 # @arg $2 sha the commit to record
 function write_results() {

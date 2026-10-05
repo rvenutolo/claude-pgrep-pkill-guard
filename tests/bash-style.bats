@@ -1,3 +1,7 @@
+# .ci/check-bash-style, driven against fixture files written under
+# BATS_TEST_TMPDIR: the shapes its rules report and pass, the exception markers,
+# the canary and the gate's own failure paths.
+#
 # The fixtures hold shell source text as single-quoted strings: `${name}` and
 # `$((...))` there are what the gate scans, never something to expand here.
 # Double-quoting them would expand them in the test. Too many sites for per-site

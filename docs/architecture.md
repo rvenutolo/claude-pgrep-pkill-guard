@@ -823,7 +823,7 @@ command:
 # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is not guaranteed
 # to be exported into the hook's environment. BSD `dirname` has no long options, so the bare
 # `--` is all it takes: a short flag only where macOS has no long form, deliberately. The phrase
-# is kept on one line on purpose -- docs/architecture.md tells a reader to grep for it, and
+# is kept on one line on purpose -- docs/architecture.md names it, so a grep for it lands here, and
 # .ci/check-invariant-markers checks it is here (invariant 1).
 ```
 
@@ -893,10 +893,12 @@ each file named here. In `hooks/lib/classify.sh`, in
 `classify::repeat_tier_reason` directly above that assignment:
 
 ```text
-# The `||` is load-bearing beyond the obvious fallback: it is what keeps this
-# whole command substitution off errexit's radar for its entire dynamic
-# extent, so nothing inside repeat::repeat_check can trip the top-level ERR trap. Do
-# not turn this into a plain assignment.
+# The `||` is load-bearing beyond the obvious fallback only for a caller that
+# runs this function outside a `||` list. classify::inspect_command calls it
+# inside a substitution on the left side of one, which already keeps every
+# command in here, repeat::repeat_check included, off errexit and the
+# top-level ERR trap; the `||` here keeps that true whoever the caller is.
+# Do not turn this into a plain assignment.
 ```
 
 And again on each `source`, where the same construct does the same job for a
@@ -904,9 +906,10 @@ file that will not load. In `hooks/pgrep-pkill-guard.sh`, above the `source` of
 the body:
 
 ```text
-# The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
-# repeat::repeat_check call inside the body: it keeps a failing `source` off the ERR
-# trap, so a corrupt sibling produces this message rather than a bare `{}`.
+# The `||` is load-bearing beyond the obvious fallback only for a caller that runs load_body outside a
+# `||` list. Both callers in main run it as the left side of one, which already keeps a failing `source`
+# off errexit and the ERR trap; the `||` here keeps that true whoever the caller is, so a corrupt
+# sibling produces this message rather than a bare `{}`.
 ```
 
 and in `hooks/pgrep-pkill-guard-body.sh`, on the loop that sources the parts,

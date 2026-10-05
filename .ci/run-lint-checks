@@ -106,9 +106,8 @@ function main() {
   # The same list shellcheck and shfmt just read, on purpose: a second copy of
   # shell_files would be a second place for a file to drop out unnoticed. The
   # gate itself fails on an empty list, so no length guard is needed here.
-  # The paths are repo-relative, like the shellcheck and shfmt calls above, so
-  # this script runs from the repo root, and because the gate's path-scoped
-  # rules match on hooks/ and tests/.
+  # The paths are repo-relative, like the ones the shellcheck and shfmt calls
+  # above take, so this script must be run from the repo root.
   "${REPO_DIR}/.ci/check-bash-style" "${files[@]}" || rc=1
 
   log 'running gawk --lint over the awk programs'
@@ -266,8 +265,7 @@ function main() {
   # Explicit file list, not a bare `typos`. Bare `typos` walks the tree and
   # SKIPS HIDDEN PATHS, so it silently leaves out .ci/, .github/,
   # .claude-plugin/ and .githooks/ and reports a clean pass regardless (#46).
-  # `--hidden` is the wrong fix -- it also picks up UNTRACKED hidden paths,
-  # which here means the author's docs/superpowers/ and .claude/ trees.
+  # `--hidden` is the wrong fix -- it also picks up UNTRACKED hidden paths.
   #
   # `git grep -I --files-with-matches ''` is every tracked file git considers
   # text: it matches every line, so it names every file, and -I drops the

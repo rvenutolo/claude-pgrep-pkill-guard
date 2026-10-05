@@ -395,8 +395,8 @@ function consumption::result_is_consumed() {
         ;;
       'wc' | 'xargs') ((pipe >= 1)) && return 0 ;;
       ';') break ;;
-      # As in consumption::feeds_a_kill: a newline right after a trailing `|` continues the
-      # pipeline, so `| wc -l` on the next line is still consumption.
+      # As in consumption::feeds_a_kill_forward: a newline right after a trailing `|` continues the
+      # pipeline, so a `wc -l` on the next line is still consumption.
       '<NL>') [[ "${prev}" == '|' ]] || break ;;
       *) amp=0 ;;
     esac

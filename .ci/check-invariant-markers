@@ -49,6 +49,9 @@
 #         can be wrapped, unwrapped, or absent on purpose -- in milliseconds.
 #         Without it the only possible test would be "exits 0 on the real
 #         repo", which a script that unconditionally returned 0 would also pass.
+# @stderr the usage line, one FAIL line per missing marker (with indented
+#         hints), unreadable or empty file, or empty table, and one OK line
+#         when every marker is present
 # @exitcode 0 every phrase appears in every file its row names
 # @exitcode 1 a phrase is missing, a listed file is unreadable or reads as
 #             empty, or the table is empty
@@ -126,8 +129,8 @@ readonly MARKERS=(
 #              would write it.
 #
 #              sed and tr rather than a bash read loop: the files in the table
-#              are long and this runs on every gate invocation. Both
-#              invocations stay within POSIX syntax (`#*` rather than
+#              are long and this runs on every gate invocation. Every
+#              invocation stays within POSIX syntax (`#*` rather than
 #              `#\{1,\}`, no GNU-only flags) because the bats suite drives this
 #              script on the ambient macOS compat leg that runs bats, where
 #              sed and tr are BSD.

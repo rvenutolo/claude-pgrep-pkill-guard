@@ -16,8 +16,9 @@
 # @exitcode * otherwise the failing git status; core.hooksPath is not set
 
 set -Eeuo pipefail
-# No inherit_errexit: each command substitution in main is tested where it is
-# assigned (`if !`, `||`), so there is no errexit for the option to carry in.
+# No inherit_errexit: the repo_dir substitution in main is tested where it is
+# assigned (`if !`), and the core.hooksPath one guards its git call with `||`
+# inside the substitution, so the option would change nothing.
 IFS=$'\n\t'
 
 function main() {

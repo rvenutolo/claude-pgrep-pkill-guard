@@ -9,8 +9,8 @@ function setup() {
 }
 
 # @description Build a minimal tracked tree in the shape the gate scans: a git
-#              repo holding shebang-less .bats files. The cases below that
-#              use it then rewrite those files or add one beside them.
+#              repo holding shebang-less .bats files. A case that needs a
+#              different tree rewrites those files or adds one beside them.
 #
 #              A real `git init` rather than a path walk, because the gate reads
 #              its file list from `git ls-files` on purpose -- an untracked

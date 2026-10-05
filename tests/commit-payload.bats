@@ -1,3 +1,6 @@
+# .ci/build-commit-payload: the payload it builds from what a case stages in a
+# throwaway git repo, and its usage, nothing-staged and not-a-repository errors.
+#
 # `run --separate-stderr` is a bats 1.5.0 flag, and the error cases below need
 # stdout and stderr apart: the contract is a diagnostic on stderr and NOTHING
 # on stdout, which a merged capture cannot tell apart from a payload.

@@ -1,5 +1,5 @@
 # The stateful repeat tier: repeated probes of one target within a session are
-# denied, and a missing, corrupt, oversized or unwritable state store fails
+# denied, and a corrupt, oversized, unwritable or symlinked state store fails
 # open. Driven only through the hook as a subprocess (invariant 3), with a
 # session id in the payload.
 #

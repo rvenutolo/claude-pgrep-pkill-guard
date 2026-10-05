@@ -1,3 +1,7 @@
+# run-all-checks' argument handling, in a throwaway repo with a `nix` stub: a
+# malformed invocation is rejected with exit 2 and the usage line, and a
+# well-formed one runs the gate.
+#
 # `run --separate-stderr` is a bats 1.5.0 flag: the usage line belongs on
 # stderr, and a merged capture cannot tell it apart from a stray stdout write.
 #
@@ -15,7 +19,7 @@ function setup() {
 
 # @description Build the throwaway repo these cases run the gate in: a bare
 #              `git init` holding a copy of run-all-checks and nothing else,
-#              plus a `nix` stub on PATH that only touches a marker.
+#              plus a `nix` stub that only touches a marker.
 #
 #              Never the real script in the real repo. Every case here feeds
 #              an argument shape the gate should reject, and the gate used to
@@ -30,7 +34,8 @@ function setup() {
 #              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 #
-#              Builds at the FIXTURE, STUB_DIR and MARKER paths setup() chose.
+#              Builds at the FIXTURE and STUB_DIR paths setup() chose; the stub
+#              touches MARKER.
 # @noargs
 function make_fixture() {
   mkdir -p "${FIXTURE}" "${STUB_DIR}"

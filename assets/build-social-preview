@@ -91,10 +91,11 @@ readonly FADE=32
 # Width the crop is scaled to, leaving the same 72px margin as the text.
 readonly INSET_W=1136
 
-# Sampled from the capture itself with `magick ... -colors 8 histogram:info:`
-# rather than guessed, so the card's background is exactly the terminal's and
-# the faded crop dissolves into it with no visible seam. BG is Nord polar
-# night; ACCENT is the colour the guard's own denial text is rendered in.
+# BG and ACCENT are the capture's own colours, as `magick ... -colors 8
+# histogram:info:` reports them, so the card's background is exactly the
+# terminal's and the faded crop dissolves into it with no visible seam. BG is
+# Nord polar night; ACCENT is the colour the guard's own denial text is rendered
+# in.
 readonly BG='#2E3440'
 readonly ACCENT='#E56377'
 readonly TITLE_FILL='#ECEFF4'

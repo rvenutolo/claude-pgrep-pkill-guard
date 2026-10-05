@@ -1,3 +1,11 @@
+# hooks/pgrep-scan.awk, driven directly under LC_ALL=C (invariant 3): its token
+# stream, heredoc masking and integrity trailer. Also, driven through the hook
+# as a subprocess: the INACTIVE notice for a missing awk, scanner, body or part,
+# for a body or part that will not load and for a mangled trailer, and the jq
+# @tsv round trip.
+#
+# setup only loads test_helper/common.
+#
 # Single-quoted strings in this file hold literal `$(...)` and `$((...))`
 # text that is the SUBJECT of the test rather than something to expand:
 # the scanner's whole job is deciding which of those the shell would have
@@ -31,8 +39,8 @@ function scan() {
 }
 
 # @description A literal tab, for anchoring greps at the token field. `\b` is a
-#              GNU grep extension and a compat CI leg runs BSD grep, so every
-#              "is this token in the stream" check anchors on <tab>token<eol>
+#              GNU grep extension and a compat CI leg runs BSD grep, so a check
+#              for a word token in the stream anchors on <tab>token<eol>
 #              instead of a word boundary.
 # @noargs
 # @stdout one tab character
@@ -417,8 +425,8 @@ function orphan_probe() {
 
 @test "scanner: a sibling body that fails to load announces the guard inactive" {
   # Syntactically broken on purpose, so `source` returns non-zero. The `||` on
-  # the source call is what keeps that off the ERR trap, turning a corrupt
-  # sibling into this message rather than the trap's silent allow.
+  # the source call is what turns a corrupt sibling into this message rather
+  # than the trap's silent allow.
   printf 'function {{{\n' > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   local out
   out="$(orphan_probe)"
@@ -442,8 +450,8 @@ function loader_probe() {
   [[ "${out}" == *'lib/tokens.sh'* ]]
   # Pinned to the branch under test. The loader has a message per cause here, and this
   # is the one for a part that is not there at all; the cases below whose part
-  # is present take the other branch, and without this assertion this case would
-  # pass on either.
+  # is present but does not define its paired function take the other branch,
+  # and without this assertion this case would pass on either.
   [[ "${out}" == *'is missing or unreadable'* ]]
   # Exactly one JSON line: the loader exits rather than returning, so the entry
   # script's own fail-open branch must not fire a second message.
@@ -476,7 +484,7 @@ function loader_probe() {
   #
   # A short flag only where macOS has no long form, on purpose, and POSIX sed
   # syntax: BSD `cp` and `sed` have no long forms, and the ambient macOS compat
-  # legs run this suite against them.
+  # leg that runs this suite runs it against them.
   cp -R -- "${LIB_DIR}" "${BATS_TEST_TMPDIR}/lib"
   sed -e 's/classify.sh:classify::inspect_command/classify.sh:inspect_command_gone/' \
     "${BODY}" > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"

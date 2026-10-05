@@ -91,8 +91,8 @@
               # different expression language.
               yq-go
               # commitlint is invoked by .githooks/commit-msg. Without it here,
-              # check-devshell-provides fails AND every git commit dies with
-              # "commitlint: command not found" once activate-githooks has run.
+              # check-devshell-provides fails AND every git commit dies in the
+              # commit-msg hook once activate-githooks has run.
               commitlint
               # renovate, here only for its `renovate-config-validator` binary,
               # which .ci/run-lint-checks runs over .github/renovate.json. Without

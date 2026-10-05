@@ -51,8 +51,9 @@ function repeat::repeat_check() {
   # `mode=`). hooks/ takes a long option only where the BSD tool has one, and
   # mkdir has none -- the guard has to run on whatever userland ships.
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
-  # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR,
-  # XDG_RUNTIME_DIR or TMPDIR, which the caller owns the mode of.
+  # intermediate ever missing here is a hand-set XDG_RUNTIME_DIR or TMPDIR, or
+  # a parent of a hand-set PGREP_PKILL_GUARD_STATE_DIR, which the caller owns
+  # the mode of.
   if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then
     return 0
   fi
@@ -144,7 +145,7 @@ function repeat::repeat_check() {
     # `|| true` so a bare rm failure (e.g. the directory lost write permission
     # after the mkdir check above) can never trip errexit here. `--` guards a
     # relative state dir that starts with `-`: `file` begins with `dir`.
-    rm -f -- "${file}" 2> /dev/null || true # unguarded rm: a failure must never trip errexit
+    rm -f -- "${file}" 2> /dev/null || true # a failed rm must never trip errexit
     return 0
   fi
   local tmp

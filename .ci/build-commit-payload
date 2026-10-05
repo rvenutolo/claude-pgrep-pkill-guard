@@ -143,7 +143,7 @@ function main() {
   # a trap string that parses when it fires.
   local cleanup
   printf -v cleanup 'rm --recursive --force -- %q' "${scratch}"
-  # shellcheck disable=SC2064 # expand scratch NOW, not when the trap fires
+  # shellcheck disable=SC2064 # expand cleanup NOW, not when the trap fires
   trap "${cleanup}" EXIT
 
   # One JSON object per staged change, appended to a single accumulator file and
@@ -172,7 +172,7 @@ function main() {
   local status path blob_file index=0
   while IFS= read -r -d '' status && IFS= read -r -d '' path; do
     case "${status}" in
-      A | M)
+      'A' | 'M')
         # A distinct file per blob rather than one reused scratch path: the
         # index is what keeps two staged files from overwriting each other, and
         # it is a counter rather than the path because a path can hold a slash.
@@ -189,7 +189,7 @@ function main() {
           '{kind: "addition", path: $path, contents: $contents}' >> "${changes_file}"
         index="$((index + 1))"
         ;;
-      D)
+      'D')
         jq --null-input --compact-output \
           --arg path "${path}" \
           '{kind: "deletion", path: $path}' >> "${changes_file}"

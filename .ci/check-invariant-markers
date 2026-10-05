@@ -6,8 +6,8 @@
 #
 #              docs/architecture.md's "Design invariants" section opens by
 #              promising that each rule "is repeated as a comment in the source
-#              it constrains; if one changes here, change the comment too". Two
-#              of the six invariants have a gate behind them
+#              it constrains; if one changes here, change the comment too". Some
+#              of the invariants have a gate behind them
 #              (.ci/check-fast-path-size, .ci/check-err-trap-hygiene); the rest
 #              rest on that promise alone, and a promise nothing checks is a
 #              comment about a comment. This gate makes the promise mechanical:
@@ -32,8 +32,8 @@
 #              formatter with opinions, and the first person to reflow a comment
 #              would delete it instead.
 #
-#              A fifth row was proposed and DROPPED rather than forgotten: the
-#              `trap - ERR` rationale (invariant 6) across every gate script.
+#              The `trap - ERR` rationale (invariant 6) across every gate script
+#              deliberately has no row here:
 #              .ci/check-err-trap-hygiene already enforces that invariant
 #              mechanically, by parsing every deliberate non-zero return in
 #              every file that installs the trap. Restating it here as a phrase
@@ -53,6 +53,8 @@
 # @exitcode 1 a phrase is missing, a listed file is unreadable or reads as
 #             empty, or the table is empty
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when no fixture directory is
+#             given and the repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -62,7 +64,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo -- a
 # misplaced flag, a stray path -- not input. Silently ignoring it would run the
-# default check and report success on something nobody asked for. Exit 2 rather
+# check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
 # ERR trap is dropped first only for symmetry with the verdict returns (#43,
@@ -124,23 +126,25 @@ readonly MARKERS=(
 #              would write it.
 #
 #              sed and tr rather than a bash read loop: the files in the table
-#              run to ~1000 lines and this runs on every gate invocation. Both
+#              are long and this runs on every gate invocation. Both
 #              invocations stay within POSIX syntax (`#*` rather than
 #              `#\{1,\}`, no GNU-only flags) because the bats suite drives this
-#              script on the ambient macOS compat legs, where sed and tr are
-#              BSD.
+#              script on the ambient macOS compat leg that runs bats, where
+#              sed and tr are BSD.
 # @arg $1 file path to read
 # @stdout the file's text as a single collapsed line
 function collapsed_text() {
   local -r file="$1"
-  # bash-style allow=long-options: runs on the ambient macOS legs; BSD sed and tr have no long form
+  # bash-style allow=long-options: runs on the ambient macOS leg; BSD sed and tr have no long form
   sed -e 's/^[[:space:]]*//' -e 's/^#*[[:space:]]*//' -- "${file}" | tr '\n' ' ' | tr -s '[:space:]' ' '
 }
 
 # @description Report whether one marker phrase appears in one file.
 # @arg $1 phrase the marker phrase
 # @arg $2 relative_path the file to search, relative to the repo root
-# @stderr one FAIL line when the file is unreadable or the phrase is absent
+# @stderr one FAIL line when the file is unreadable, reads as empty, or lacks
+#         the phrase; the last is followed by indented lines saying how to
+#         restore the marker
 # @exitcode 0 the phrase is present
 # @exitcode 1 the file is unreadable or reads as empty, or the phrase is absent
 function check_marker() {
@@ -183,8 +187,8 @@ function check_marker() {
 
 function main() {
   # A table that scanned nothing would pass everything. This is the same class
-  # of bug as an empty tool list in check-devshell-provides, and it is worth one
-  # line to make impossible.
+  # of bug as an empty tool list in check-devshell-provides, and it is worth a
+  # guard to make impossible.
   if ((${#MARKERS[@]} == 0)); then
     printf 'FAIL: the marker table is empty; an empty scan is not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the

@@ -3,7 +3,7 @@
 # Assert the guard deactivates LOUDLY under a bash older than 4.4, rather than
 # emitting a bare {} and leaving the user silently unprotected. Deliberately
 # POSIX sh and deliberately NOT bats: the bats harness loads bats-assert and the
-# transcribed helpers use bash-4 constructs, so on a stock-macOS runner the
+# suites use bash-4 constructs such as `mapfile`, so on a stock-macOS runner the
 # suite could only fail for reasons unrelated to the property under test.
 #
 # The hook is invoked DIRECTLY so its #!/usr/bin/env bash shebang resolves the

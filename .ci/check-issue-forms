@@ -53,6 +53,8 @@
 #             unparsable, the labels file is missing or declares nothing, a rule
 #             program fails to run, or a rule is violated
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when a default path is needed and
+#             the repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -62,7 +64,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo -- a
 # misplaced flag, a stray path -- not input. Silently ignoring it would run the
-# default check and report success on something nobody asked for. Exit 2 rather
+# check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
 # ERR trap is dropped first only for symmetry with the verdict returns (#43,
@@ -251,8 +253,8 @@ function check_form_labels() {
     [[ -n "${name}" ]] || continue
     # `grep --line-regexp --fixed-strings` rather than a bash `[[ ]]` match: a
     # label name may hold a space (`good first issue`) or a colon
-    # (`autorelease: pending`), and a substring match would let a declared `bug`
-    # satisfy a reference to `bugs`.
+    # (`autorelease: pending`), and a substring match would let a declared `bugs`
+    # satisfy a reference to `bug`.
     if ! printf '%s\n' "${declared}" | grep --line-regexp --fixed-strings --quiet -- "${name}"; then
       fail "${label}: references label \"${name}\", which ${LABELS_FILE##*/} does not declare"
       rc=1

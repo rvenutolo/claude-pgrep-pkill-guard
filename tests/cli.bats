@@ -36,7 +36,7 @@ function run_cli() {
 }
 
 @test "cli: --help prints help on stdout, exits 0, and says nothing on stderr" {
-  run_cli help --help
+  run_cli 'help' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
   [[ -s "${CLI_STDOUT}" ]]
   # Help is not a diagnostic: it was asked for, so it belongs on stdout and
@@ -52,9 +52,9 @@ function run_cli() {
 @test "cli: -h produces byte-identical output to --help" {
   # Byte-identical, not merely "also non-empty": two spellings of one flag that
   # drifted apart would be a bug no looser assertion could see.
-  run_cli long --help
+  run_cli 'long' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
-  run_cli short -h
+  run_cli 'short' -h
   [[ "${CLI_STATUS}" -eq 0 ]]
   cmp --silent "${BATS_TEST_TMPDIR}/long.out" "${BATS_TEST_TMPDIR}/short.out"
 }
@@ -63,25 +63,25 @@ function run_cli() {
   # clig.dev: -h/--help prints help and ignores everything else, whatever the
   # order. Both orders matter -- a naive `case "$1"` dispatch handles the first
   # and errors on the second.
-  run_cli baseline --help
+  run_cli 'baseline' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
 
-  run_cli help_first --help --bogus
+  run_cli 'help_first' --help --bogus
   [[ "${CLI_STATUS}" -eq 0 ]]
   [[ ! -s "${BATS_TEST_TMPDIR}/help_first.err" ]]
   cmp --silent "${BATS_TEST_TMPDIR}/baseline.out" "${BATS_TEST_TMPDIR}/help_first.out"
 
-  run_cli help_last --bogus --help
+  run_cli 'help_last' --bogus --help
   [[ "${CLI_STATUS}" -eq 0 ]]
   [[ ! -s "${BATS_TEST_TMPDIR}/help_last.err" ]]
   cmp --silent "${BATS_TEST_TMPDIR}/baseline.out" "${BATS_TEST_TMPDIR}/help_last.out"
 }
 
 @test "cli: help states the stdin contract, the state dir, and the probe recipe" {
-  run_cli contract --help
+  run_cli 'contract' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
   # The three things a person running this by hand actually came for: what the
-  # script reads, the one environment variable that changes its behaviour, and
+  # script reads, the environment variable that says where its state lives, and
   # the copy-pasteable recipe the README's "Reporting a false verdict" tells
   # them to use. Help that omits any of them is help in name only.
   grep --quiet --fixed-strings 'stdin' "${CLI_STDOUT}"
@@ -90,7 +90,7 @@ function run_cli() {
 }
 
 @test "cli: --version prints exactly the program name and a semver" {
-  run_cli version --version
+  run_cli 'version' --version
   [[ "${CLI_STATUS}" -eq 0 ]]
   [[ ! -s "${CLI_STDERR}" ]]
   # Exactly one line, GNU style: name then version, no trailing prose. This is
@@ -107,7 +107,7 @@ function run_cli() {
   # nothing at runtime can catch it drifting. release-please bumps both and
   # .ci/check-versions-in-sync gates the source; this asserts the same thing
   # through the interface a user actually sees.
-  run_cli version --version
+  run_cli 'version' --version
   [[ "${CLI_STATUS}" -eq 0 ]]
   local manifest_version
   manifest_version="$(jq --raw-output '.version' "${PLUGIN_JSON}")"
@@ -115,7 +115,7 @@ function run_cli() {
 }
 
 @test "cli: an unrecognized option exits 2 and names it on stderr" {
-  run_cli bogus --bogus
+  run_cli 'bogus' --bogus
   # 2, not 1: this is the one path in the repo that does not fail open (see
   # docs/architecture.md, "There is exactly one exception, and it is on
   # argv"). hooks/hooks.json passes no arguments, so argv can only come from a

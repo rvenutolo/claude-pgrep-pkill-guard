@@ -5,8 +5,8 @@ function setup() {
 
 # @description Build a minimal, VALID tree in the shape the marker table
 #              expects: the seven files it names, each carrying every phrase its
-#              row demands, and nothing else. Each negative case below then
-#              corrupts exactly one of them.
+#              row demands, and nothing else. The negative cases below then
+#              corrupt, empty or remove files in it.
 #
 #              The phrases are written out here rather than read from the
 #              script. That duplication is the point: if someone edits the table
@@ -66,7 +66,7 @@ ARCH
   # REPO_DIR explicitly rather than relying on the argument-less default: the
   # default resolves through `git rev-parse --show-toplevel`, and a bats test
   # must not depend on the directory the suite happened to be launched from.
-  # The path taken is identical either way.
+  # Past that one branch the script runs the same either way.
   run "${CHECK}" "${REPO_DIR}"
   assert_success
   assert_output --partial 'invariant markers present'
@@ -181,10 +181,10 @@ BROKEN
 
 @test "invariant markers: a surplus argument is rejected, not ignored" {
   # Every positional is optional, so an extra argument can only be a typo -- a
-  # misplaced flag, a stray path. Swallowing it silently would run the default
-  # check and report success on something nobody asked for. Exit 2 rather than
+  # misplaced flag, a stray path. Swallowing it silently would run the check
+  # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
-  run "${CHECK}" "${REPO_DIR}" extra
+  run "${CHECK}" "${REPO_DIR}" 'extra'
   assert_failure 2
   assert_output --partial 'usage:'
 }

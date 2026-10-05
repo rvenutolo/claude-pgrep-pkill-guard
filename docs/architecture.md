@@ -241,9 +241,10 @@ equal `${#command}` before it trusts a single offset, and strips the trailer
 before returning the stream. The check catches any awk that strips, splits or
 reshapes bytes on the way through and would otherwise desync every offset while
 still producing plausible output. It is in-band rather than an `exit 1` because
-only the hook knows the length of the command it sent: an awk that reshapes
-bytes still exits 0, and `scanner::scan_command` already turns a non-zero exit
-into the same `inactive` verdict. The scanner
+an awk that reshapes bytes still exits 0: an exit status cannot report it, and
+only the hook knows the length of the command it sent, so only a count carried
+in the stream gives it something to compare. A non-zero exit needs no trailer:
+`scanner::scan_command` fails on it exactly as it fails on a bad count. The scanner
 depends on nothing awk-specific: it reads with `getline` under the default `RS`
 so gawk, mawk and one-true-awk all behave identically, and the caller
 terminates its input with exactly one newline because POSIX awk cannot

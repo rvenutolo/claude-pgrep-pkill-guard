@@ -6,9 +6,11 @@
 #              the repository's tracked paths, its namespaced function names
 #              and the functions its test helpers define, is handed to the
 #              rules in .ci/bash-style.jq, which is where the rule list lives.
-#              The three lists come from the repository that holds this
-#              script, whatever files are named, so a comment or a helper call
-#              in any file is checked against the same repository.
+#              The lists come from the repository that holds this script,
+#              whatever files are named, so a comment or a helper call in any
+#              file is checked against the same repository. The function names
+#              also include the ones the named files define, so a fixture's own
+#              function counts.
 #
 #              The files are scanned concurrently, as many at a time as the
 #              machine has processors. Each scan writes to its own log in a
@@ -62,11 +64,11 @@ readonly REPO_DIR="${SCRIPT_DIR}/.."
 # `main` creates it.
 WORK_DIR=''
 
-# A snippet, parsed and never run, that breaks the rules in CANARY_RULES, and
-# one text rule, the raw tab. It proves the tree keys those rules read on
-# their way to a hit: a rule whose key a different shfmt renames matches
-# nothing and would pass every file, so check_canary fails the gate when a
-# demanded rule is missing from the snippet's report.
+# A snippet, parsed and never run, that breaks the rules in CANARY_RULES, one
+# of them a text rule, the raw tab. It proves the tree keys the other rules
+# read on their way to a hit: a rule whose key a different shfmt renames
+# matches nothing and would pass every file, so check_canary fails the gate
+# when a demanded rule is missing from the snippet's report.
 #
 # It does not prove every key the rules read. A rename of any of these goes
 # unnoticed here: `Hdoc`, `Array`, `Elems`, `N`, `RsrvWord`, `InPos`,
@@ -236,9 +238,10 @@ function scan_file() {
 #              define, so a comment may name a function from a file the run is
 #              not scanning, and a fixture's own function counts.
 # @arg $@ paths the files named on the command line
-# @stdout one function name per line, written `<namespace>::<name>`
+# @stdout one function name per line, written `<namespace>::<name>`; a search
+#         that matched nothing leaves one blank line in its place
 # @stderr a FAIL line when git or grep fails, as opposed to finding nothing
-# @exitcode 0 the list was written, possibly empty
+# @exitcode 0 the list was written; it holds no name when neither search matched
 # @exitcode 1 git or grep failed
 function namespaced_functions() {
   local repo_matches file_matches
@@ -265,9 +268,9 @@ function namespaced_functions() {
 #              handed to one is data for the thing under test, not an option
 #              of a tool that has a long form.
 # @noargs
-# @stdout one function name per line
+# @stdout one function name per line, or one blank line when none is defined
 # @stderr a FAIL line when git fails, as opposed to finding nothing
-# @exitcode 0 the list was written, possibly empty
+# @exitcode 0 the list was written; it holds no name when nothing matched
 # @exitcode 1 git failed
 function helper_functions() {
   local matches
@@ -352,6 +355,8 @@ function main() {
     return 1
   fi
   if ! functions="$(namespaced_functions "$@")" || ! helpers="$(helper_functions)"; then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
     trap - ERR
     return 1
   fi
@@ -380,8 +385,8 @@ function main() {
     fi
     verdict="$(cat -- "${WORK_DIR}/${index}.verdict" 2> /dev/null)" || verdict='NO-VERDICT'
     case "${verdict}" in
-      clean) ;;
-      dirty) dirty="$((dirty + 1))" ;;
+      'clean') ;;
+      'dirty') dirty="$((dirty + 1))" ;;
       *)
         # The job died before it could say. Never a silent pass.
         printf 'FAIL: %s could not be scanned\n' "${path}" >&2

@@ -4,8 +4,8 @@ function setup() {
 }
 
 # @description Build a minimal tracked tree in the shape the gate scans: a git
-#              repo holding two shebang-less .bats files. Each negative case
-#              below then rewrites one of them.
+#              repo holding two shebang-less .bats files. The cases below that
+#              use it then rewrite those files or add one beside them.
 #
 #              A real `git init` rather than a path walk, because the gate reads
 #              its file list from `git ls-files` on purpose -- an untracked
@@ -38,9 +38,10 @@ function gate_in() {
   (cd "${dir}" && "${CHECK}")
 }
 
-# Every case needs nothing but bash and git -- deliberately no coreutils long
-# options and no Nix -- so the ambient macOS compat legs run this suite for real
-# rather than skipping it. Hence no devShell skip here, the same as
+# Every case needs nothing but bash, git and a POSIX `mkdir -p` -- deliberately
+# no coreutils long options and no Nix -- so the ambient
+# `compat (macos, homebrew bash)` leg runs this suite for real rather than
+# skipping it. Hence no devShell skip here, the same as
 # tests/shell-shebangs.bats.
 #
 # The first case is the exception that keeps the rest honest: it runs the gate

@@ -5,8 +5,8 @@
 #              exists and defines the function the row pairs it with, and every
 #              part is named by exactly one row.
 #
-#              hooks/pgrep-pkill-guard-body.sh pins nine function names as
-#              STRINGS, and proves a part loaded by calling `declare -F` on the
+#              hooks/pgrep-pkill-guard-body.sh pins one function name per part as
+#              a STRING, and proves a part loaded by calling `declare -F` on the
 #              paired name (#147). That makes a rename that misses the table a
 #              runtime failure: the guard prints INACTIVE and allows the command
 #              through. The bats suite catches it -- every case that reaches the
@@ -26,7 +26,7 @@
 #              gate to the guard's internals.
 #
 #              It finds a definition by matching `function <name>()` at column
-#              zero, which is how all 46 functions under hooks/lib/ are written
+#              zero, which is how every function under hooks/lib/ is written
 #              and what the bash style rules require. The failure text says so,
 #              because a definition written another way would read as missing.
 #              Policing that style is not this gate's job: the style rules own
@@ -43,6 +43,8 @@
 #             unlisted or listed twice, the table is empty, or no tracked part
 #             exists under hooks/lib/
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when no fixture directory is
+#             given and the repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -52,7 +54,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo -- a
 # misplaced flag, a stray path -- not input. Silently ignoring it would run the
-# default check and report success on something nobody asked for. Exit 2 rather
+# check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
 # ERR trap is dropped first only for symmetry with the verdict returns (#43,
@@ -83,7 +85,7 @@ readonly LIB_DIR='hooks/lib'
 # @description Print the `GUARD_PARTS` rows from the loader, one per line,
 #              stripped of indentation and the surrounding single quotes.
 #
-#              A bash read loop rather than sed or awk: the table is nine lines
+#              A bash read loop rather than sed or awk: the table is a few lines
 #              and this needs no external process, no locale assumption, and no
 #              BSD-versus-GNU question. The loop stops at the closing paren, so
 #              a later array in the same file cannot leak in.
@@ -118,7 +120,9 @@ function guard_part_rows() {
 
 # @description Grade one row of the table.
 # @arg $1 row the `<file>:<function>` row
-# @stderr one FAIL line, plus its remedy, for a row that does not grade clean
+# @stderr one FAIL line for a row that does not grade clean, plus indented
+#         lines of explanation and remedy when the part is missing or the
+#         function is not defined in it
 # @exitcode 0 the part exists and defines the paired function
 # @exitcode 1 the row is malformed, the part is missing, or the function is not
 #             defined in it

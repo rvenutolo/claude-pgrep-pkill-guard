@@ -10,10 +10,11 @@
 #      n == len(B) - 1 when B ends with a newline, and n == len(B) when it does
 #      not.
 #
-# Rule 1 is not decoration. The hook calls the scanner inside a command
-# substitution, so a non-zero exit is swallowed by the ERR trap and becomes a
-# silent ALLOW. An exit code is not an available failure channel, which is
-# exactly why the trailer exists at all -- see the trailer comment at the foot of
+# Rule 1 is not decoration. A non-zero exit fails scanner::scan_command, and
+# the hook then reports the guard INACTIVE and allows the command, so a scanner
+# that died on some odd input would switch the guard off for it. An exit code
+# also says nothing about an awk that mangles the stream and still exits 0,
+# which is why the trailer exists -- see the trailer comment at the foot of
 # hooks/pgrep-scan.awk.
 #
 # What is deliberately NOT asserted here is which tokens appear, or at what
@@ -155,33 +156,35 @@ function setup() {
   # LC_ALL=C twice over, and both are load-bearing. For `awk` it is the same
   # requirement tests/scanner.bats documents: the scanner emits BYTE offsets and
   # the hook slices the raw command back out with them, so a UTF-8 locale would
-  # make the two index bases disagree. For BASH it is what makes `${#input}` a
-  # byte count rather than a character count, which is the number every
-  # assertion in this file compares against. Today's catalogue is pure ASCII so
-  # the two agree, but a single non-ASCII fragment added later would silently
-  # turn every byte-count assertion into a character-count assertion, and it
-  # would still pass.
+  # make the two index bases disagree. For BASH it is what makes
+  # `${#FUZZ_CORPUS[i]}` a byte count rather than a character count, which is
+  # the number every assertion in this file compares against. Today's catalogue
+  # is pure ASCII so the two agree, but a single non-ASCII fragment added later
+  # would silently turn every byte-count assertion into a character-count
+  # assertion, and it would still pass.
   export LC_ALL=C
-  # The catalogue is cheap and the two anti-vacuity tests regenerate from it;
-  # the corpus itself is read back from the file setup_file wrote.
+  # The catalogue is cheap and the generator's anti-vacuity test regenerates
+  # from it; the corpus itself is read back from the file setup_file wrote.
   fuzz_catalogue
   fuzz_read_corpus
 }
 
 # --- The fragment catalogue -------------------------------------------------
 
-# @description Populate FUZZ_FRAGMENTS with one entry per trouble spot the
-#              scanner's header names. Built in a function rather than at file
-#              scope because bats sources this file once per test to discover
-#              it, and top-level work runs on every one of those passes.
+# @description Populate FUZZ_FRAGMENTS with short strings drawn from the trouble
+#              spots the scanner's header names, several per spot, plus near
+#              misses and long single-character runs. Built in a function rather
+#              than at file scope because bats sources this file once per test
+#              to discover it, and top-level work runs on every one of those
+#              passes.
 # @noargs
-# @set FUZZ_FRAGMENTS one entry per trouble spot the scanner's header names
+# @set FUZZ_FRAGMENTS the fragment strings a case is assembled from
 # @set FUZZ_GLUE the separators a case is assembled with
 function fuzz_catalogue() {
   FUZZ_FRAGMENTS=(
-    # Quote openers with no closer, and their backslash-escaped forms. An
-    # unclosed quote is what makes quote parity the scanner's most fragile
-    # invariant.
+    # Quote openers with no closer, their backslash-escaped forms, and the
+    # empty pair of each. An unclosed quote is what makes quote parity the
+    # scanner's most fragile invariant.
     "'"
     '"'
     "\\'"
@@ -221,7 +224,8 @@ function fuzz_catalogue() {
     $'\tEOF'
     'EOF   '
     'EOFX'
-    # The shift the scanner must not read as a heredoc operator.
+    # The shifts, and the here-string, that the scanner must not read as a
+    # heredoc operator.
     '$((1 << 2))'
     '(( x << 2 ))'
     '<<< x'
@@ -248,8 +252,9 @@ function fuzz_catalogue() {
     '|'
     '&&'
   )
-  # A very long run of one character, three ways. The `'` run is the
-  # interesting one: it flips quote parity 384 times in a row.
+  # A very long run of one character, once per character in the loop below.
+  # The `'` run is the interesting one: it flips quote parity 384 times in a
+  # row.
   local pad ch
   printf -v pad '%*s' 384 ''
   for ch in 'a' "'" '$' '<'; do
@@ -317,8 +322,9 @@ function fuzz_case() {
 
 # @description Build a corpus into FUZZ_CORPUS, deterministically from
 #              FUZZ_SEED. setup_file calls this once and writes the result out;
-#              only the two anti-vacuity tests call it again, to show that a
-#              seed reproduces its corpus and that a different seed does not.
+#              only the generator's anti-vacuity test calls it again, to show
+#              that a seed reproduces its corpus and that a different seed does
+#              not. Reseeds bash's RANDOM from the seed as a side effect.
 # @arg $1 wanted how many cases to generate; defaults to FUZZ_N
 # @arg $2 seed  which seed to generate from; defaults to FUZZ_SEED. Taken as an
 #         argument rather than by reassigning FUZZ_SEED, because a test that
@@ -463,6 +469,7 @@ function fuzz_fail() {
 #
 #              Records its own elapsed seconds so the budget test can assert
 #              against the REAL loops rather than adding a pass of its own.
+#              Resets the shell's SECONDS to 0 to time the pass.
 # @arg $1 mode `terminated` for the documented calling convention (exactly one
 #         newline appended), `raw` for the convention violated
 # @stdout nothing; writes elapsed seconds to BATS_FILE_TMPDIR
@@ -479,11 +486,6 @@ function fuzz_scan_pass() {
     # drop applies only when the input supplied that newline itself. Under
     # `terminated` the caller supplies it and the drop always lands on the
     # appended one, so `expect` is the length either way.
-    #
-    # An `if`, not `[[ ... ]] && expect=...`: bats runs tests under `set -e`,
-    # and an `&&` list whose left side is false is a failing command, so the
-    # short form would abort the loop on the first case that does NOT end with
-    # a newline -- silently turning this into a one-case test.
     if [[ "${mode}" == 'raw' && "${FUZZ_CORPUS[i]}" == *$'\n' ]]; then
       expect="$((expect - 1))"
     fi

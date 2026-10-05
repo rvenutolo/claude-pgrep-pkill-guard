@@ -62,6 +62,8 @@
 # @exitcode 0 every in-scope return is preceded by `trap - ERR`
 # @exitcode 1 at least one is not, or the scan came up empty or emitted a
 #             record it cannot read
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -113,6 +115,7 @@ function trap_installing_files() {
 # @arg $1 file repo-relative path
 # @exitcode 0 the file's ERR trap exits 0
 # @exitcode 1 it does not
+# @exitcode 2 the file could not be read
 function fail_open() {
   grep --quiet --extended-regexp --regexp="${FAIL_OPEN_TRAP_RE}" -- "${REPO_DIR}/$1"
 }
@@ -173,9 +176,9 @@ function main() {
     fi
   done
 
-  # An empty scan is never a clean pass. Every gate in this repo says so, and
-  # here it would mean the trap pattern stopped matching the family rather than
-  # that the family stopped installing traps.
+  # An empty scan is never a clean pass: here it would mean the trap pattern
+  # stopped matching the family rather than that the family stopped installing
+  # traps.
   if ((${#scripts[@]} == 0)); then
     printf 'FAIL: no tracked file installs a reporting ERR trap — an empty scan is not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
@@ -187,12 +190,12 @@ function main() {
   local rc=0 returns=0 kind file line text
   while IFS=$'\t' read -r kind file line text; do
     case "${kind}" in
-      V)
+      'V')
         printf 'FAIL: %s:%s: deliberate non-zero return with no preceding "trap - ERR": %s\n' \
           "${file}" "${line}" "${text}" >&2
         rc=1
         ;;
-      N)
+      'N')
         # The count rides in the record's second field, where a V record
         # carries the file name.
         returns="${file}"

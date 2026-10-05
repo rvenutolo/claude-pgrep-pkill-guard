@@ -5,8 +5,8 @@ function setup() {
 
 # @description Build a minimal tracked tree in the shape the gate reads: a
 #              loader carrying a two-row GUARD_PARTS table, and the two parts it
-#              names, each defining its paired function. Each negative case
-#              below then corrupts exactly one of them.
+#              names, each defining its paired function. The negative cases
+#              below then corrupt, add or remove files in it.
 #
 #              The table is written out here rather than copied from the real
 #              loader. That duplication is the point: the gate must be graded
@@ -51,7 +51,7 @@ BODY
   # REPO_DIR explicitly rather than relying on the argument-less default: the
   # default resolves through `git rev-parse --show-toplevel`, and a bats test
   # must not depend on the directory the suite happened to be launched from.
-  # The path taken is identical either way.
+  # Past that one branch the script runs the same either way.
   run "${CHECK}" "${REPO_DIR}"
   assert_success
   assert_output --partial 'GUARD_PARTS rows resolve'
@@ -67,7 +67,8 @@ BODY
 @test "guard parts: a row whose function was renamed away is named" {
   # The bug this gate was filed for. The part loads perfectly well; only the
   # string in the table is stale, and at runtime that stands the guard down on
-  # every call while the message blames the file (#147).
+  # every call that reaches the body, with a message that cannot say whether
+  # the part failed to parse or the row is stale (#147).
   local -r root="${BATS_TEST_TMPDIR}/renamed"
   make_parts_fixture "${root}"
   printf 'function inspect_payload() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"
@@ -267,10 +268,10 @@ BODY
 
 @test "guard parts: a surplus argument is rejected, not ignored" {
   # Every positional is optional, so an extra argument can only be a typo -- a
-  # misplaced flag, a stray path. Swallowing it silently would run the default
-  # check and report success on something nobody asked for. Exit 2 rather than
+  # misplaced flag, a stray path. Swallowing it silently would run the check
+  # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
-  run "${CHECK}" "${REPO_DIR}" extra
+  run "${CHECK}" "${REPO_DIR}" 'extra'
   assert_failure 2
   assert_output --partial 'usage:'
 }

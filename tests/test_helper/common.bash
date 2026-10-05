@@ -9,6 +9,12 @@
 #   BODY     — absolute path to the sibling the entry script sources
 #   LIB_DIR  — the directory of parts the body sources
 #   SCANNER  — absolute path to the awk scanner
+#   GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM — /dev/null
+#   GIT_CEILING_DIRECTORIES — the repo root
+#
+# Globals unset:
+#   every repo-local GIT_* variable `git rev-parse --local-env-vars` names
+#   BASH_ENV — unless COVERAGE is set
 
 REPO_DIR="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"
@@ -22,8 +28,8 @@ export REPO_DIR HOOK BODY LIB_DIR SCANNER
 # they set BATS_LIB_PATH themselves before invoking bats; either way a bats that
 # cannot find the libraries fails loudly here rather than silently missing
 # assertions.
-bats_load_library bats-support
-bats_load_library bats-assert
+bats_load_library 'bats-support'
+bats_load_library 'bats-assert'
 
 # --- Fixture-escape hardening: every test is hermetic w.r.t. the real repo ---
 
@@ -68,7 +74,7 @@ fi
 #              stateful repeat tier out of the stateless verdict cases.
 # @arg $1 command the command string to classify
 # @arg $2 session_id optional session id; omit for stateless cases
-# @stdout one line of JSON
+# @stdout the payload as one JSON object, pretty-printed over several lines
 function hook_json() {
   local -r command="$1"
   local -r session_id="${2:-}"

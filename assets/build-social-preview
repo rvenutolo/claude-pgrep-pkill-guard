@@ -31,6 +31,7 @@
 # @exitcode 1 ImageMagick is missing, the source capture is not readable, or
 #             the host bash is older than 4.4
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing status of git, mktemp or an ImageMagick step
 
 set -Eeuo pipefail
 # This script runs under the HOST bash -- ImageMagick is deliberately outside
@@ -109,9 +110,8 @@ function log() {
 }
 
 # @description Print one fatal diagnostic to stderr and exit 1. Drops the ERR
-#              trap on the way out, so a script reporting its own verdict ends
-#              on that diagnostic rather than on a trap line about this
-#              function.
+#              trap on the way out only for symmetry with the verdict returns:
+#              `exit` itself never fires it.
 # @arg $1 message the diagnostic text
 # @stderr the `[<script>] FATAL: <message>` line
 # @exitcode 1 always
@@ -141,7 +141,7 @@ function main() {
   # a trap string that parses when it fires.
   local cleanup=''
   printf -v cleanup 'rm --recursive --force -- %q' "${work}"
-  # shellcheck disable=SC2064 # expand work NOW, not when the trap fires
+  # shellcheck disable=SC2064 # expand cleanup NOW: it is a local of main, gone when the trap fires
   trap "${cleanup}" EXIT
 
   local source_w=''
@@ -159,20 +159,20 @@ function main() {
 
   # An alpha mask that is opaque down to the last FADE rows and ramps to
   # transparent across them.
-  magick -size "${INSET_W}x${solid}" xc:white \
-    -size "${INSET_W}x${FADE}" gradient:white-black -append "${work}/mask.png"
+  magick -size "${INSET_W}x${solid}" 'xc:white' \
+    -size "${INSET_W}x${FADE}" 'gradient:white-black' -append "${work}/mask.png"
   magick "${work}/crop.png" "${work}/mask.png" \
     -alpha off -compose CopyOpacity -composite "${work}/inset.png"
 
   magick -size "${CARD_W}x${CARD_H}" "xc:${BG}" -gravity NorthWest \
     "${work}/inset.png" -geometry +72+282 -compose over -composite \
-    -font DejaVu-Sans-Bold -pointsize 66 -fill "${TITLE_FILL}" \
+    -font 'DejaVu-Sans-Bold' -pointsize 66 -fill "${TITLE_FILL}" \
     -annotate +72+58 'pgrep-pkill-guard' \
     -fill "${ACCENT}" -draw 'rectangle 72,150 168,153' \
-    -font DejaVu-Sans -pointsize 29 -fill "${TAGLINE_FILL}" \
+    -font 'DejaVu-Sans' -pointsize 29 -fill "${TAGLINE_FILL}" \
     -annotate +72+176 'Blocks the pgrep/pkill shapes that make a Claude Code agent' \
     -annotate +72+214 'kill its own session — or spin forever waiting on it.' \
-    -font FiraCode-Nerd-Font-Mono-Reg -pointsize 21 -fill "${FOOTER_FILL}" \
+    -font 'FiraCode-Nerd-Font-Mono-Reg' -pointsize 21 -fill "${FOOTER_FILL}" \
     -annotate +72+548 'github.com/rvenutolo/claude-pgrep-pkill-guard' \
     "${OUTPUT}"
 

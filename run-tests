@@ -38,13 +38,15 @@
 #              COVERAGE is set, so this flag exports COVERAGE=1; without that the
 #              report is 0.00% with no files (#91).
 # @arg $@ args optional `--awk=bwk`, `--report DIR` and `--coverage DIR` in any
-#         order, then bats arguments or test paths; omit paths to run all of
-#         tests/
+#         order, then bats arguments and test paths; give neither to run all
+#         of tests/
 # @exitcode 0 all tests passed and the repo was left untouched
 # @exitcode 1 bats missing, nawk missing or not one-true-awk under --awk=bwk,
 #             kcov missing under --coverage, --report or --coverage given
 #             without a directory, a test failed, the suite mutated the repo, or
 #             the host bash is older than 4.4
+# @exitcode * otherwise the failing git status when the repository root cannot be
+#             resolved, or the status bats or kcov exited with
 
 set -Eeuo pipefail
 # `inherit_errexit` is a bash 4.4 builtin option: on stock macOS bash 3.2, and
@@ -107,7 +109,7 @@ function use_bwk_awk() {
   # a trap string that parses when it fires.
   local cleanup
   printf -v cleanup 'rm --recursive --force -- %q' "${shim}"
-  # shellcheck disable=SC2064 # expand shim NOW, not when the trap fires
+  # shellcheck disable=SC2064 # expand cleanup NOW, not when the trap fires
   trap "${cleanup}" EXIT
   ln --symbolic "${nawk}" "${shim}/awk"
   export PATH="${shim}:${PATH}"
@@ -194,7 +196,7 @@ function main() {
     # this feature died here with `mkdir: illegal option -- -` before a single
     # test ran, which is also why the upload step it exists to feed found
     # nothing to upload.
-    # bash-style allow=long-options: runs on the ambient macOS legs; BSD mkdir has no long form
+    # bash-style allow=long-options: runs on the ambient macOS leg; BSD mkdir has no long form
     mkdir -p "${report_dir}"
     # --report-formatter, NOT --formatter: the first writes JUnit to a file and
     # leaves the terminal formatter alone, the second REPLACES terminal output.
@@ -209,7 +211,7 @@ function main() {
     if ! command -v kcov > /dev/null 2>&1; then
       # Two genuinely different failures, and the wrong message sends a reader
       # off to install something that does not exist for their platform.
-      # bash-style allow=long-options: runs on the ambient macOS legs; BSD uname has no long form
+      # bash-style allow=long-options: runs on the ambient macOS leg; BSD uname has no long form
       case "$(uname -s)" in
         'Darwin')
           die 'kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only (#91)'
@@ -224,7 +226,7 @@ function main() {
     # a CI path is safe to name before the tool runs. A short flag only where
     # macOS has no long form, for the reason spelled out on --report's
     # `mkdir -p` above -- this line is on the ambient-tool path too.
-    # bash-style allow=long-options: runs on the ambient macOS legs; BSD mkdir has no long form
+    # bash-style allow=long-options: runs on the ambient macOS leg; BSD mkdir has no long form
     mkdir -p "${coverage_dir}"
     # The one caller of COVERAGE. tests/test_helper/common.bash unsets BASH_ENV
     # for fixture hygiene unless it sees this, and BASH_ENV is the channel kcov

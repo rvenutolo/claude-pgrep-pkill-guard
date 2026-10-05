@@ -14,11 +14,11 @@
 #                 names every tracked file, and `-I` (git grep has no long form
 #                 for it) drops the binaries, which keeps lychee from reading
 #                 assets/deny-message.png as prose.
-#              2. The config is passed by ABSOLUTE path. The tracked config spent
-#                 its whole life named `.lycheerc`, a default lychee moved away
-#                 from in 0.24, so it was read by nobody while looking
-#                 configured. Relying on a default once already produced an inert
-#                 config; relying on cwd would be the same mistake in a second
+#              2. The config is passed by ABSOLUTE path. lychee's default
+#                 config name differs between releases (`.lycheerc` in older
+#                 ones), and a config under a name the installed release does
+#                 not look for is read by nobody while looking configured
+#                 (#42). Relying on cwd would be the same mistake in a second
 #                 form.
 #              3. A missing GitHub token WARNS rather than fails. The token
 #                 lifts anonymous GitHub rate limits on this repo's own links
@@ -39,6 +39,8 @@
 # @noargs
 # @exitcode 0 every link in the tracked tree resolves
 # @exitcode 1 a link failed, or the file list came up empty
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

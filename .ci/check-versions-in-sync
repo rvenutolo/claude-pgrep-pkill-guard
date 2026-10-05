@@ -25,6 +25,8 @@
 # @exitcode 0 every version field agrees
 # @exitcode 1 a file is missing or unparsable, a version field is absent,
 #             malformed or unannotated, or the versions disagree
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -56,7 +58,8 @@ readonly BOOTSTRAP_VERSION='0.0.0'
 # @arg $1 file the JSON file to read
 # @arg $2 filter the jq filter to apply
 # @stdout the extracted value
-# @stderr one FAIL line naming the file and filter, on any failure path
+# @stderr one FAIL line on any failure path, naming the file and, unless the
+#         file is missing, the filter
 # @exitcode 0 the field exists and is semver-shaped
 # @exitcode 1 the file is missing, unparsable, or the field is absent or malformed
 function read_version() {

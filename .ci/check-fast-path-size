@@ -5,13 +5,8 @@
 #              it, at roughly 1.2 us per line, and this hook runs on EVERY Bash
 #              tool call in every session -- so the file's length is a latency
 #              tax paid even by the commands the guard has no opinion about.
-#              Measured with `bash -n` over valid prefixes of the pre-split
-#              2203-line guard (400 reps, `env -u BASH_ENV`): 4426 us for an
-#              empty script, 4559 at 120 lines, 5096 at 300, 5807 at 1100,
-#              7099 at 2203. That is ~2.4 ms of pure parse on every call, four
-#              fifths of what the guard cost.
 #
-#              #55 fixed it by splitting the guard in two: a small entry script
+#              The guard is therefore split in two (#55): a small entry script
 #              that runs the payload prefilter, and
 #              hooks/pgrep-pkill-guard-body.sh, a loader for the parts under
 #              hooks/lib/, none of it with a shebang or exec bit -- which
@@ -26,6 +21,8 @@
 # @noargs
 # @exitcode 0 the entry script is within the ceiling
 # @exitcode 1 it is over the ceiling, missing or unreadable, or reads as zero lines
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

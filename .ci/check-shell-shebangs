@@ -43,6 +43,8 @@
 # @exitcode 1 a shebang is non-canonical or contradicts its exemption, an
 #             exemption is stale, or nothing was scanned
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when no fixture directory is
+#             given and the repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -52,7 +54,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo -- a
 # misplaced flag, a stray path -- not input. Silently ignoring it would run the
-# default check and report success on something nobody asked for. Exit 2 rather
+# check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
 # ERR trap is dropped first only for symmetry with the verdict returns (#43,
@@ -86,9 +88,9 @@ readonly CANONICAL='#!/usr/bin/env bash'
 # One row today. .ci/check-inactive-on-old-bash is POSIX sh on purpose: it is
 # the stock-bash-3.2 compat leg's entry point, so it must run on a shell that
 # predates everything the rest of this repo assumes. Its own header explains
-# that at :3-11, and docs/architecture.md records it in both its `--help` on
-# bash below 4.4 limitation and its invariant 6 exemption list. Without this
-# row, run-lint-checks would skip it by MECHANISM (its first line is not the
+# that, and docs/architecture.md records it in both its `--help` on bash below
+# 4.4 limitation and its invariant 6 exemption list. Without this row,
+# run-lint-checks would skip it by MECHANISM (its first line is not the
 # canonical string) rather than by name, which is indistinguishable from the bug
 # this gate closes.
 readonly SHEBANG_EXEMPT=(

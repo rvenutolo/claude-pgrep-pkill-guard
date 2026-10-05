@@ -240,8 +240,8 @@ equal `${#command}` before it trusts a single offset, and strips the trailer
 before returning the stream. The check catches any awk that strips, splits or
 reshapes bytes on the way through and would otherwise desync every offset while
 still producing plausible output. It is in-band rather than an `exit 1` because
-the hook calls the scanner inside a command substitution, where a non-zero exit
-is swallowed by the `ERR` trap and turns into a silent allow. The scanner
+an awk that reshapes bytes still exits 0: an exit status cannot report it, and
+only a count carried in the stream gives the hook something to compare. The scanner
 depends on nothing awk-specific: it reads with `getline` under the default `RS`
 so gawk, mawk and one-true-awk all behave identically, and the caller
 terminates its input with exactly one newline because POSIX awk cannot

@@ -10,6 +10,8 @@ function setup() {
 #
 # A short flag only where macOS has no long form, on purpose -- see
 # make_manifest_fixture in tests/manifest.bats.
+#
+# setup sets PLUGIN_JSON, the path of the real plugin manifest.
 
 # @description Run the guard as a subprocess and capture stdout and stderr into
 #              SEPARATE files, so a test can assert one is empty without the

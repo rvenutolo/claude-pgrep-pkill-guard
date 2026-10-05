@@ -1,3 +1,8 @@
+# .ci/check-shell-shebangs, against the real repo and against fixture
+# repositories of tracked files with planted shebangs.
+#
+# setup sets CHECK, the gate under test.
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-shell-shebangs"

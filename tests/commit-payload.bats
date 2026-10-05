@@ -1,6 +1,8 @@
 # `run --separate-stderr` is a bats 1.5.0 flag, and the error cases below need
 # stdout and stderr apart: the contract is a diagnostic on stderr and NOTHING
 # on stdout, which a merged capture cannot tell apart from a payload.
+#
+# setup sets BUILD, the script under test.
 bats_require_minimum_version 1.5.0
 
 function setup() {

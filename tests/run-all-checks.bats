@@ -1,5 +1,8 @@
 # `run --separate-stderr` is a bats 1.5.0 flag: the usage line belongs on
 # stderr, and a merged capture cannot tell it apart from a stray stdout write.
+#
+# setup sets FIXTURE, the throwaway repo the gate runs in, STUB_DIR, the
+# directory holding the `nix` stub, and MARKER, the file that stub touches.
 bats_require_minimum_version 1.5.0
 
 function setup() {

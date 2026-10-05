@@ -1,3 +1,7 @@
+# .ci/report-coverage, against fixture kcov output directories.
+#
+# setup sets REPORTER, the script under test.
+
 function setup() {
   load 'test_helper/common'
   REPORTER="${REPO_DIR}/.ci/report-coverage"

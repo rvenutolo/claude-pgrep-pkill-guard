@@ -1,3 +1,8 @@
+# .ci/check-guard-parts, against the real repo and against fixture trees
+# holding a loader table and the parts it names.
+#
+# setup sets CHECK, the gate under test.
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-guard-parts"

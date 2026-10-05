@@ -1,6 +1,8 @@
 # `run --separate-stderr` is a bats 1.5.0 flag, and the linux-only skip case
 # needs stdout and stderr apart: the SKIP line is a diagnostic, so it must land
 # on stderr, which a merged capture cannot tell apart from stdout.
+#
+# setup sets CHECK, the gate under test.
 bats_require_minimum_version 1.5.0
 
 function setup() {

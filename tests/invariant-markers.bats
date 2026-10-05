@@ -1,3 +1,8 @@
+# .ci/check-invariant-markers, against the real repo and against fixture trees
+# holding the files its marker table names.
+#
+# setup sets CHECK, the gate under test.
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-invariant-markers"

@@ -24,9 +24,10 @@ The entry script, and the only file `hooks/hooks.json` names. It holds the work
 an ordinary Bash tool call has to pay for, and nothing else. Bash parses a whole
 script before it executes a line of it, at roughly 1.2 us per line, and this
 hook runs on every Bash call in every session — so the file's length is a
-latency tax paid even by the commands the guard has no opinion about. Everything
-past the prefilter therefore lives in the sibling below, and invariant 5 is the
-ceiling that keeps it there.
+latency tax paid even by the commands the guard has no opinion about. A guard
+parsed whole at 2203 lines pays ~2.4 ms of pure parse per call, almost all of it
+on code the call never reaches. Everything past the prefilter therefore lives in
+the sibling below, and invariant 5 is the ceiling that keeps it there.
 
 In execution order:
 
@@ -992,7 +993,11 @@ with the rest.
 
 **Why:** bash parses a whole script before it executes any of it, at roughly
 1.2 us per line, and this hook runs on every Bash tool call in every session —
-including the overwhelming majority the guard has no opinion about. Every line
+including the overwhelming majority the guard has no opinion about. Measured
+with `bash -n` over valid prefixes of a 2203-line script (400 reps,
+`env -u BASH_ENV`): 4426 us for an empty script, 4559 at 120 lines, 5096 at
+300, 5807 at 1100, and 7099 at 2203. A guard parsed whole at that length pays
+~2.4 ms of pure parse on every call. Every line
 the entry script carries is parse time paid by a call that never reaches it,
 which is why the guard is split in two and everything past the prefilter lives
 where the fast path does not read it.

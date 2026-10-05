@@ -271,7 +271,9 @@ before `jq` or the scanner is spawned. No helper process runs ahead of the
 prefilter: the payload is read with the `read` builtin rather than a `cat`, and
 the `dirname` that locates the scanner runs only for a command the prefilter
 lets through. And the script the fast path parses is short, because bash reads
-a script whole before it executes a line of it, at roughly 1.2 us per line.
+a script whole before it executes a line of it, at roughly 1.2 us per line — a
+guard parsed whole at 2203 lines pays about 2.4 ms of that on every Bash tool
+call.
 
 The parse cost is the reason `hooks/` holds an entry script and a body at all.
 `hooks/pgrep-pkill-guard.sh` is the entry script — held at or under 200 lines by
@@ -284,7 +286,10 @@ Everything the prefilter short-circuits past lives in
 which an ordinary command never reads. That file is itself a loader for the
 parts under `hooks/lib/`, one per concern; none of them is parsed on the fast
 path either. Parse cost alone, measured with `bash -n` over 400 repetitions: an
-empty script costs 4.12 ms and the entry script 4.25 ms (+0.13).
+empty script costs 4.12 ms, the entry script 4.25 ms (+0.13), and a single-file
+guard of 2203 lines 6.49 ms (+2.38). A smaller split — moving only
+`messages::deny_message`, the wrapper recursion and `repeat::repeat_check` off
+the fast path — recovers only about 0.6 ms of that.
 
 A change to the fast path is measured as an interleaved alternation rather than
 as two runs minutes apart: before, after, before, after, on one machine, with

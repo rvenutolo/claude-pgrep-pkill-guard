@@ -6,7 +6,8 @@ function setup() {
 # @description Build a minimal tracked tree in the shape the gate scans: a git
 #              repo holding one canonical bash script, one shebang-less sourced
 #              part, one non-script data file, and the exempt POSIX-sh gate.
-#              Each negative case below then corrupts exactly one of them.
+#              The negative cases below then corrupt, add or remove files in
+#              it.
 #
 #              A real `git init` rather than a path walk, because the gate reads
 #              its file list from `git ls-files` on purpose -- an untracked

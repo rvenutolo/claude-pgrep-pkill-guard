@@ -257,6 +257,9 @@ function main() {
   mapfile -t md_files < <(git -C "${REPO_DIR}" ls-files '*.md')
   if ((${#md_files[@]} > 0)); then
     markdownlint-cli2 "${md_files[@]}" || rc=1
+  else
+    log 'no markdown files found - this is a failure, not a clean pass'
+    rc=1
   fi
 
   log 'running typos'

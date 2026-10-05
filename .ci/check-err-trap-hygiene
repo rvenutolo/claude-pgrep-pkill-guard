@@ -229,8 +229,10 @@ function main() {
     printf 'OK: %s scripts install a reporting ERR trap; %s deliberate non-zero returns all clear it\n' \
       "${#scripts[@]}" "${returns}" >&2
     if ((${#skipped[@]} > 0)); then
+      # Joined under a space of its own: the script-wide IFS would put each
+      # path on its own line of a one-line message.
       printf 'OK: %s fail-open ERR trap(s) not policed by this rule: %s\n' \
-        "${#skipped[@]}" "${skipped[*]}" >&2
+        "${#skipped[@]}" "$(IFS=' ' && printf '%s' "${skipped[*]}")" >&2
     fi
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the

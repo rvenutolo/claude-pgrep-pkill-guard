@@ -109,8 +109,8 @@ function main() {
   # a table of phrases, collapsing line breaks and `#` continuations first, so
   # rewrapping a comment stays allowed and deleting one does not.
   # check-guard-parts holds the loader's GUARD_PARTS table to what is actually
-  # under hooks/lib/. The loader pins one function name per part as a STRING and
-  # proves a part loaded by calling `declare -F` on the paired name (#147), so a rename
+  # under hooks/lib/. The loader pins one function name per part as a STRING
+  # and proves a part loaded by calling `declare -F` on it (#147), so a rename
   # that misses the table makes the guard print INACTIVE and allow the command
   # through. The bats suite catches that at test time -- every case reaching the
   # body gets INACTIVE instead of a verdict -- and this gate catches it at lint
@@ -130,12 +130,13 @@ function main() {
   # provenance table against the hooks/ history since. The README quotes that
   # report's figures as measured, and nothing tied the two together: when the
   # gate was written the file said 4c189fb and hooks/ had moved twice since,
-  # including the split the benchmark exists to measure (#84). Five verdicts,
-  # not two -- the recorded commit can also be present but unreachable (its
-  # branch was rewritten), which is a failure with different wording because no
-  # comparison happened at all, or absent from the object store, which is a SKIP
+  # including the split the benchmark exists to measure (#84). More verdicts
+  # than pass and fail -- the recorded commit can also be present but
+  # unreachable (its branch was rewritten), which is a failure with different
+  # wording because no comparison happened at all, or absent from the object
+  # store, which is a SKIP
   # so that a shallow clone never gets a red gate over history it never fetched.
-  # The fifth is the release-please version line: it lives inside hooks/, so
+  # The last is the release-please version line: it lives inside hooks/, so
   # every release PR carried a hooks/ diff. A net difference confined to that
   # one line passes. And staleness itself convicts only under
   # BENCH_FRESH_STRICT, which ci.yml sets on release-please's branch alone:

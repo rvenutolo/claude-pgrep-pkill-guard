@@ -26,7 +26,7 @@ readonly -a LOCAL_USER_SWITCH_WRAPPERS=('su' 'runuser')
 
 # How many wrapper payloads deep to follow. `bash -c 'bash -c "..."'` resolves at
 # 2; the limit is a runaway backstop, not a judgement about nesting.
-# shellcheck disable=SC2034 # read by lib/classify.sh
+# shellcheck disable=SC2034 # read by hooks/lib/classify.sh
 readonly MAX_PAYLOAD_DEPTH=4
 
 # @description How many non-flag operands may precede a wrapper's `-c` before the wrapper stops
@@ -262,9 +262,9 @@ function wrappers::shell_wrapper_payloads() {
   # than `>f`), in which case the next token is the target and is not an
   # operand either.
   local -r redir_re='^[0-9]*(&?[<>]|[<>]{2})' redir_bare_re='^[0-9]*[<>&|]+$'
-  # The rest of this loop stays inline on purpose: each block reads and writes
-  # eight or more of the locals above, and a helper with that many namerefs is
-  # harder to read than the block.
+  # The rest of this loop stays inline on purpose: the blocks share most of
+  # the locals above, and a helper with that many namerefs is harder to read
+  # than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     word="${token##*/}"

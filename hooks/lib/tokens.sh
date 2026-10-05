@@ -9,7 +9,9 @@
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
 
-# Keywords after which the next word is in command position.
+# Keywords after which the guard treats the next word as being in command
+# position. For `for` and `select` that word is the loop variable's name,
+# not a command.
 readonly -a COMMAND_POSITION_KEYWORDS=(
   'do' 'then' 'else' 'elif' 'while' 'until' 'if' 'for' 'select' '!' 'time'
 )
@@ -172,7 +174,9 @@ function tokens::prefix_chain_step() {
     # behind: `time` may prefix only the FIRST command of a pipeline, so past a
     # `|` it is an ordinary word PATH resolves to GNU time. The `&` arm keeps
     # that sentinel so `|&` reads like the `|` it extends, while a `&` on its
-    # own still starts a command where the reserved word is legal.
+    # own still starts a command where the reserved word is legal. The scanner
+    # emits `||` as two `|` tokens, so the sentinel follows `||` as well, even
+    # though `time` is the reserved word there.
     if [[ "${token}" == '|' ]] || [[ "${token}" == '&' && "${chain_ref}" == 'pipe' ]]; then
       chain_ref='pipe'
     else
@@ -230,9 +234,9 @@ function tokens::prefix_chain_step() {
   fi
   if [[ "${token}" == '--' ]]; then
     # Past the terminator nothing is a flag any more, so `timeout -- -k 5 cmd`
-    # runs `-k`, not a kill-after option. The chain stays open because the
-    # operands the prefix is entitled to still come first: `timeout -- 5 cmd`
-    # runs cmd. The sentinel matches no arm of either table.
+    # takes `-k` as its duration, not as a kill-after option. The chain stays
+    # open because the operands the prefix is entitled to still come first:
+    # `timeout -- 5 cmd` runs cmd. The sentinel matches no arm of either table.
     chain_ref='--'
     return 0
   fi

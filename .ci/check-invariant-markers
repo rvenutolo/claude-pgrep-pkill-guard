@@ -62,7 +62,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo -- a
 # misplaced flag, a stray path -- not input. Silently ignoring it would run the
-# default check and report success on something nobody asked for. Exit 2 rather
+# check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
 # ERR trap is dropped first only for symmetry with the verdict returns (#43,
@@ -127,13 +127,13 @@ readonly MARKERS=(
 #              are long and this runs on every gate invocation. Both
 #              invocations stay within POSIX syntax (`#*` rather than
 #              `#\{1,\}`, no GNU-only flags) because the bats suite drives this
-#              script on the ambient macOS compat legs, where sed and tr are
-#              BSD.
+#              script on the ambient macOS compat leg that runs bats, where
+#              sed and tr are BSD.
 # @arg $1 file path to read
 # @stdout the file's text as a single collapsed line
 function collapsed_text() {
   local -r file="$1"
-  # bash-style allow=long-options: runs on the ambient macOS legs; BSD sed and tr have no long form
+  # bash-style allow=long-options: runs on the ambient macOS leg; BSD sed and tr have no long form
   sed -e 's/^[[:space:]]*//' -e 's/^#*[[:space:]]*//' -- "${file}" | tr '\n' ' ' | tr -s '[:space:]' ' '
 }
 
@@ -185,8 +185,8 @@ function check_marker() {
 
 function main() {
   # A table that scanned nothing would pass everything. This is the same class
-  # of bug as an empty tool list in check-devshell-provides, and it is worth one
-  # line to make impossible.
+  # of bug as an empty tool list in check-devshell-provides, and it is worth a
+  # guard to make impossible.
   if ((${#MARKERS[@]} == 0)); then
     printf 'FAIL: the marker table is empty; an empty scan is not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the

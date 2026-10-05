@@ -73,9 +73,9 @@ function tab() {
 }
 
 @test "scanner: a line continuation separates the words it joins" {
-  # A `\`-newline is a line continuation, which bash removes outright, so the
-  # words on either side must come out separate. Masked as filler they fuse into
-  # one token and the invocation stops being recognised.
+  # A `\`-newline is a line continuation, which bash removes outright. The
+  # scanner must emit it as a token delimiter: masked as filler it fuses onto
+  # the word after it and the invocation stops being recognised.
   local out
   out="$(scan "$(printf 'sudo \\\npkill --full java')")"
   run awk -F'\t' 'NR==2 {print $2}' <<< "${out}"
@@ -304,9 +304,10 @@ function tab() {
 }
 
 @test "scanner: a body line ending in a backslash does not swallow the terminator" {
-  # A body line ending in a backslash is literal text, not a continuation:
-  # masking the backslash together with the newline it precedes would swallow
-  # the terminator's own newline and mask to end of input.
+  # The scanner does not treat a body line ending in a backslash as a
+  # continuation, although bash does in an unquoted body: masking the
+  # backslash together with the newline it precedes would swallow the newline
+  # that starts the terminator check and mask to end of input.
   local out
   out="$(scan "$(printf 'cat <<EOF\nfoo \\\nEOF\npkill --full x')")"
   run grep --count "$(tab)pkill\$" <<< "${out}"
@@ -409,8 +410,8 @@ function orphan_probe() {
   local out
   out="$(orphan_probe)"
   [[ "${out}" == *'INACTIVE'* ]]
-  # Pinned to the branch under test: without this the sibling-fails-to-load case
-  # below would still pass if its broken file never got written.
+  # Pinned to the branch under test: without this the case would also pass on
+  # the entry script's other message, the one for a sibling that fails to load.
   [[ "${out}" == *'is missing'* ]]
 }
 
@@ -440,8 +441,9 @@ function loader_probe() {
   [[ "${out}" == *'INACTIVE'* ]]
   [[ "${out}" == *'lib/tokens.sh'* ]]
   # Pinned to the branch under test. The loader has two messages here, and this
-  # is the one for a part that is not there at all; the two cases below take the
-  # other branch, and without this assertion all three would pass on either.
+  # is the one for a part that is not there at all; the cases below whose part
+  # is present take the other branch, and without this assertion this case would
+  # pass on either.
   [[ "${out}" == *'is missing or unreadable'* ]]
   # Exactly one JSON line: the loader exits rather than returning, so the entry
   # script's own fail-open branch must not fire a second message.
@@ -541,12 +543,12 @@ function loader_probe() {
 @test "scanner: zero-byte stdin yields the trailer and nothing else" {
   # Not a duplicate of the test above. `scan ''` sends ONE newline, so the read
   # loop runs once and the reassembled command is "\n"; here stdin is zero
-  # bytes, the loop never runs, and the command is "". That is the only input
-  # that reaches the empty branch of the trailing-newline strip, and it is
-  # unreachable through the hook, which always newline-terminates what it sends
-  # the scanner. Invariant 3 in docs/architecture.md permits driving
-  # pgrep-scan.awk directly, under LC_ALL=C, because it has a public interface
-  # of its own.
+  # bytes, the loop never runs, and the command is "". Both take the empty
+  # branch of the trailing-newline strip, but this is the only input that
+  # reaches it with a zero-length command, and it is unreachable through the
+  # hook, which always newline-terminates what it sends the scanner. Invariant 3
+  # in docs/architecture.md permits driving pgrep-scan.awk directly, under
+  # LC_ALL=C, because it has a public interface of its own.
   #
   # It is also the input the `gawk --lint=fatal --posix` step in
   # .ci/run-lint-checks feeds the scanner, so this test and that gate cover the

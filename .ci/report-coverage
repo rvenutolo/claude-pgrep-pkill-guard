@@ -112,8 +112,8 @@ function main() {
     'pgrep-pkill-guard.sh'
     'pgrep-pkill-guard-body.sh'
     # The parts the body sources. Every one is driven by the suite: human.sh by
-    # tests/cli.bats, repeat.sh by tests/repeat.bats, the rest by every
-    # inspected payload.
+    # tests/cli.bats, repeat.sh by tests/repeat.bats, the rest by the suite's
+    # `pgrep`, `pkill` and `.output` payloads.
     'tokens.sh'
     'scanner.sh'
     'loops.sh'
@@ -128,7 +128,8 @@ function main() {
   for required_hook_file in "${required_hook_files[@]}"; do
     # One jq pass yields "<entries matched> <covered lines summed>". covered_lines
     # goes through tonumber because kcov writes some numeric fields as JSON
-    # strings, and `add` over strings is a jq type error rather than a total.
+    # strings, and `add` over strings concatenates them rather than totalling
+    # them, while a mix of strings and numbers is a jq type error.
     matched="$(
       jq --raw-output --arg name "${required_hook_file}" '
         [ .files[]? | select((.file | split("/") | last) == $name) ] as $hits

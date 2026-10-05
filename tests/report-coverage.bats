@@ -4,7 +4,7 @@ function setup() {
 }
 
 # A files[] array in which every required hooks/ file -- the entry script, the
-# loader, and the nine parts under hooks/lib/ -- is present and non-empty, i.e.
+# loader, and every part under hooks/lib/ -- is present and non-empty, i.e.
 # the shape a healthy kcov run produces. The absolute paths are deliberately
 # from a machine that is not this one: kcov records whatever path existed where
 # the report was produced -- a Nix build sandbox, a CI runner checkout, someone
@@ -220,7 +220,7 @@ function make_report() {
 }
 
 @test "report-coverage: a healthy report with all required files still prints the number" {
-  # The counterweight to the three cases above: the integrity rule must reject a
+  # The counterweight to the failing cases above: the integrity rule must reject a
   # lossy report without rejecting a good one. Passed explicitly rather than
   # relying on make_report's default so this case keeps grading the healthy shape
   # even if that default is ever narrowed.

@@ -174,9 +174,11 @@ function consumption::feeds_a_kill_backward() {
       '$' | '(' | '`') ;;
       -*) ;;
       'kill')
-        # A bare call whose non-zero status is the verdict: safe only because consumption::feeds_a_kill invokes
-        # this function as the right-hand side of `||`, which keeps the whole dynamic extent off
-        # errexit's radar. Call it the same way from anywhere new.
+        # A bare call whose non-zero status is the verdict: safe only because
+        # classify::classify_invocation calls consumption::feeds_a_kill in the condition of an `if`,
+        # which keeps the whole dynamic extent off errexit's radar. Being the right-hand side of
+        # `||` in consumption::feeds_a_kill does not: errexit still applies to the last command of
+        # a list. Call consumption::feeds_a_kill the same way from anywhere new.
         consumption::kill_in_command_position "${tokens_var}" "$((k - 1))"
         return
         ;;

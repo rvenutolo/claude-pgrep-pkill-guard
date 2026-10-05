@@ -1,10 +1,11 @@
 # The authoritative label set for this repository (#89).
 #
 # AUTHORITATIVE means exactly that: .github/workflows/labels.yml applies this
-# file with deletion enabled, so a label that is not listed here is DELETED on
-# the next push to main -- and deleting a label strips it from every issue and
-# pull request carrying it, which re-creating the label does not undo. Add
-# before you remove.
+# file with deletion enabled, so a label that is not listed here is DELETED the
+# next time that workflow runs on main -- a push that changes this file or the
+# workflow, or a manual dispatch -- and deleting a label strips it from every
+# issue and pull request carrying it, which re-creating the label does not undo.
+# Add before you remove.
 #
 # The two `autorelease:` labels are release-please's, not ours. They are listed
 # so the labeler does not delete what release-please immediately recreates,

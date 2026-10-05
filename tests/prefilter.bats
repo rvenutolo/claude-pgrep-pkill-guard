@@ -39,9 +39,10 @@ readonly TRIGGER_RE
 }
 
 @test "prefilter: the token set is minimal" {
-  # Each token must earn its place: dropping any one of the three must leave at
+  # Each token must earn its place: dropping any one of them must leave at
   # least one non-allow row uncovered. This is what stops the set from growing
-  # into an always-true filter that quietly restores the old cost.
+  # into an always-true filter that makes every Bash call pay for loading the
+  # body.
   local -ar tokens=("${TRIGGER_TOKENS[@]}")
   local i j reduced cmd_json expected command uncovered
   for i in "${!tokens[@]}"; do

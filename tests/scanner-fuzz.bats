@@ -10,10 +10,11 @@
 #      n == len(B) - 1 when B ends with a newline, and n == len(B) when it does
 #      not.
 #
-# Rule 1 is not decoration. The hook calls the scanner inside a command
-# substitution, so a non-zero exit is swallowed by the ERR trap and becomes a
-# silent ALLOW. An exit code is not an available failure channel, which is
-# exactly why the trailer exists at all -- see the trailer comment at the foot of
+# Rule 1 is not decoration. A non-zero exit fails scanner::scan_command, and
+# the hook then reports the guard INACTIVE and allows the command, so a scanner
+# that died on some odd input would switch the guard off for it. An exit code
+# also says nothing about an awk that mangles the stream and still exits 0,
+# which is why the trailer exists -- see the trailer comment at the foot of
 # hooks/pgrep-scan.awk.
 #
 # What is deliberately NOT asserted here is which tokens appear, or at what
@@ -155,12 +156,12 @@ function setup() {
   # LC_ALL=C twice over, and both are load-bearing. For `awk` it is the same
   # requirement tests/scanner.bats documents: the scanner emits BYTE offsets and
   # the hook slices the raw command back out with them, so a UTF-8 locale would
-  # make the two index bases disagree. For BASH it is what makes `${#input}` a
-  # byte count rather than a character count, which is the number every
-  # assertion in this file compares against. Today's catalogue is pure ASCII so
-  # the two agree, but a single non-ASCII fragment added later would silently
-  # turn every byte-count assertion into a character-count assertion, and it
-  # would still pass.
+  # make the two index bases disagree. For BASH it is what makes
+  # `${#FUZZ_CORPUS[i]}` a byte count rather than a character count, which is
+  # the number every assertion in this file compares against. Today's catalogue
+  # is pure ASCII so the two agree, but a single non-ASCII fragment added later
+  # would silently turn every byte-count assertion into a character-count
+  # assertion, and it would still pass.
   export LC_ALL=C
   # The catalogue is cheap and the generator's anti-vacuity test regenerates
   # from it; the corpus itself is read back from the file setup_file wrote.
@@ -181,9 +182,9 @@ function setup() {
 # @set FUZZ_GLUE the separators a case is assembled with
 function fuzz_catalogue() {
   FUZZ_FRAGMENTS=(
-    # Quote openers with no closer, and their backslash-escaped forms. An
-    # unclosed quote is what makes quote parity the scanner's most fragile
-    # invariant.
+    # Quote openers with no closer, their backslash-escaped forms, and the
+    # empty pair of each. An unclosed quote is what makes quote parity the
+    # scanner's most fragile invariant.
     "'"
     '"'
     "\\'"
@@ -223,7 +224,8 @@ function fuzz_catalogue() {
     $'\tEOF'
     'EOF   '
     'EOFX'
-    # The shift the scanner must not read as a heredoc operator.
+    # The shifts, and the here-string, that the scanner must not read as a
+    # heredoc operator.
     '$((1 << 2))'
     '(( x << 2 ))'
     '<<< x'
@@ -250,8 +252,9 @@ function fuzz_catalogue() {
     '|'
     '&&'
   )
-  # A very long run of one character, three ways. The `'` run is the
-  # interesting one: it flips quote parity 384 times in a row.
+  # A very long run of one character, once per character in the loop below.
+  # The `'` run is the interesting one: it flips quote parity 384 times in a
+  # row.
   local pad ch
   printf -v pad '%*s' 384 ''
   for ch in 'a' "'" '$' '<'; do
@@ -483,11 +486,6 @@ function fuzz_scan_pass() {
     # drop applies only when the input supplied that newline itself. Under
     # `terminated` the caller supplies it and the drop always lands on the
     # appended one, so `expect` is the length either way.
-    #
-    # An `if`, not `[[ ... ]] && expect=...`: bats runs tests under `set -e`,
-    # and an `&&` list whose left side is false is a failing command, so the
-    # short form would abort the loop on the first case that does NOT end with
-    # a newline -- silently turning this into a one-case test.
     if [[ "${mode}" == 'raw' && "${FUZZ_CORPUS[i]}" == *$'\n' ]]; then
       expect="$((expect - 1))"
     fi

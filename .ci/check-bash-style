@@ -62,11 +62,11 @@ readonly REPO_DIR="${SCRIPT_DIR}/.."
 # `main` creates it.
 WORK_DIR=''
 
-# A snippet, parsed and never run, that breaks the rules in CANARY_RULES, and
-# one text rule, the raw tab. It proves the tree keys those rules read on
-# their way to a hit: a rule whose key a different shfmt renames matches
-# nothing and would pass every file, so check_canary fails the gate when a
-# demanded rule is missing from the snippet's report.
+# A snippet, parsed and never run, that breaks the rules in CANARY_RULES, one
+# of them a text rule, the raw tab. It proves the tree keys the other rules
+# read on their way to a hit: a rule whose key a different shfmt renames
+# matches nothing and would pass every file, so check_canary fails the gate
+# when a demanded rule is missing from the snippet's report.
 #
 # It does not prove every key the rules read. A rename of any of these goes
 # unnoticed here: `Hdoc`, `Array`, `Elems`, `N`, `RsrvWord`, `InPos`,

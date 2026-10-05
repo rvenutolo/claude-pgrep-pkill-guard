@@ -101,7 +101,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo -- a
 # misplaced flag, a stray path -- not input. Silently ignoring it would run the
-# default check and report success on something nobody asked for. Exit 2 rather
+# check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
 # ERR trap is dropped first only for symmetry with the verdict returns (#43,
@@ -119,7 +119,8 @@ readonly FIXTURE_DIR="${1:-}"
 # `git rev-parse --show-toplevel` from a bats temp directory would either fail
 # or -- worse -- resolve to some enclosing repo, and the suite would then be
 # grading the author's checkout instead of its own fixture. Every git command
-# below therefore goes through `git -C "${REPO_DIR}"`, never bare `git`.
+# after REPO_DIR is bound therefore goes through `git -C "${REPO_DIR}"`, never
+# bare `git`.
 if [[ -n "${FIXTURE_DIR}" ]]; then
   readonly REPO_DIR="${FIXTURE_DIR}"
 else
@@ -143,10 +144,9 @@ readonly BENCH_SUBJECT='hooks/'
 #
 # release-please-config.json lists hooks/pgrep-pkill-guard-body.sh as a generic
 # extra-file, so every release PR carries a one-line diff to hooks/ and nothing
-# else. Before this exemption that diff made the gate fail on every release PR,
-# and the only way through was a benchmark re-run -- a wall-clock measurement
-# demanded by a change to a string that is never executed. #50 sat red for
-# twelve days over exactly that.
+# else. Without this exemption that diff fails the gate on every release PR,
+# and the only way through is a benchmark re-run -- a wall-clock measurement
+# demanded by a change to a string that is never executed.
 #
 # Anchored end to end, and the version cell required to look like a semver, so
 # a line that merely carries the annotation while also doing something --
@@ -159,11 +159,11 @@ readonly VERSION_LINE_RE="^[+-]readonly HOOK_VERSION='[0-9]+\.[0-9]+\.[0-9]+' # 
 #
 #   | commit | `4c189fb` |
 #
-# Matched structurally rather than by `grep 'commit'`, because "commit" also
-# appears in the prose below the table. The sha is required to look like a sha:
-# a row whose cell says `unknown` is a malformed report, and reporting it as
-# such beats handing an unusable string to `git` and letting the error surface
-# as a crash inside a plumbing command.
+# Matched structurally rather than by `grep 'commit'`, so no other line of the
+# report that mentions a commit can be taken for the row. The sha is required
+# to look like a sha: a row whose cell says `unknown` is a malformed report,
+# and reporting it as such beats handing an unusable string to `git` and
+# letting the error surface as a crash inside a plumbing command.
 # shellcheck disable=SC2016 # the backticks are markdown table syntax, not a substitution
 readonly PROVENANCE_RE='^\|[[:space:]]*commit[[:space:]]*\|[[:space:]]*`([0-9a-fA-F]{7,40})`[[:space:]]*\|[[:space:]]*$'
 
@@ -222,7 +222,8 @@ function commit_present() {
   local -r sha="$1"
   # The `^{commit}` peel is load-bearing: `cat-file -e <sha>` is true for ANY
   # object, so without it a sha that happened to name a blob or a tree would
-  # sail past this and fail confusingly two commands later.
+  # sail past this and be misreported by the reachability query as a commit
+  # that exists but is unreachable.
   git -C "${REPO_DIR}" cat-file -e "${sha}^{commit}" 2> /dev/null
 }
 
@@ -362,8 +363,8 @@ function main() {
 
   if [[ -n "${changes}" ]]; then
     # Verdict 5, checked before the stale verdict is announced: commits touched
-    # hooks/, but the net difference is one release-please cannot have made
-    # slower. See exempt_reason.
+    # hooks/, but the net difference cannot move the numbers -- it is empty, or
+    # it is only the release-please version line. See exempt_reason.
     local reason
     if reason="$(exempt_reason "${recorded}")"; then
       printf 'OK: %s was generated at %s; %s changed since, but\n' \

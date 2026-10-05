@@ -109,9 +109,9 @@ function use_fixture_path() {
 # suite for a hypothetical.
 #
 # Nothing here drives the argument-less REAL mode, so be plain about the split:
-# the two Nix expressions have no coverage in this suite at all. They are graded
-# by run-all-checks, which runs the argument-less gate on every gate run, locally
-# at pre-push and on both CI gate legs.
+# the gate's Nix expressions have no coverage in this suite at all. They are
+# graded by run-all-checks, which runs the argument-less gate on every gate run,
+# locally at pre-push and on every CI gate leg.
 #
 # That is a deliberate omission rather than an oversight. bats prepends its own
 # libexec to PATH, so inside a test `command -v bats` resolves to the unwrapped
@@ -269,7 +269,7 @@ function use_fixture_path() {
 }
 
 @test "devshell provides: an unannotated absent tool fails on every platform" {
-  # The control for the two cases above: without the annotation the platform is
+  # The control for the linux-only cases above: without the annotation the platform is
   # irrelevant, so `linux-only` cannot be doing nothing.
   local -r root="${BATS_TEST_TMPDIR}/plain-absent"
   make_devshell_fixture "${root}"
@@ -303,8 +303,8 @@ function use_fixture_path() {
 
 @test "devshell provides: a surplus argument is rejected, not ignored" {
   # Every positional is optional, so an extra argument can only be a typo -- a
-  # misplaced flag, a stray path. Swallowing it silently would run the default
-  # check and report success on something nobody asked for. Exit 2 rather than
+  # misplaced flag, a stray path. Swallowing it silently would run the check
+  # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
   run "${CHECK}" "${REPO_DIR}" extra
   assert_failure 2

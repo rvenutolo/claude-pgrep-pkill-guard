@@ -70,7 +70,7 @@ below — that granularity loss is the cost A1 accepted.
 
 Every "is this token in the stream" check among these greps for a token
 anchored on a literal tab (`grep --count "$(tab)pkill\$"`) rather than `\b`,
-because `\b` is a GNU extension and the compat CI legs run BSD grep. The rest
+because `\b` is a GNU extension and a compat CI leg runs BSD grep. The rest
 read a field with `awk`, match a `<HD:` marker or count `<<` tokens.
 
 Assertion 8 asserts that the pkill inside `$( )` in an **unquoted** heredoc body

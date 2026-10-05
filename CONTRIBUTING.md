@@ -29,7 +29,7 @@ Without direnv:
 nix develop
 ```
 
-That is the whole setup. The only thing the devShell does not supply is the
+That is the whole setup. The devShell does not supply the
 bash that runs the hook by hand outside it: the guard needs **bash 4.4 or
 newer**, so on macOS run `brew install bash` as the README instructs.
 
@@ -64,8 +64,8 @@ command behind `format`, `format-check` and the treefmt step of `fix`:
 
 `just check` is verify-only — it never rewrites the tree — so run `just format`
 first. It aggregates exit codes rather than failing fast, so one run surfaces
-every failing category. It also runs the bats suite twice, once under gawk and
-once under one-true-awk, because the hook must behave identically on both.
+every failing category. It also runs the bats suite under gawk and
+again under one-true-awk, because the hook must behave identically on both.
 
 **When `just check` goes red on formatting, spelling or markdown style, run
 `just fix` first.** `just format` is only treefmt, and treefmt leaves
@@ -163,7 +163,7 @@ repo even when bats exited 0.
 
 ## Style
 
-Shellcheck-clean, shfmt-formatted bash throughout, with one deliberate split:
+Shellcheck-clean, shfmt-formatted bash throughout, with these deliberate splits:
 
 - **`hooks/` and `tests/*.bats` use a short flag only where macOS has no long
   form** (`mkdir -p -m 0700`, `rm -f`, `mv -f`); where the BSD tool accepts the

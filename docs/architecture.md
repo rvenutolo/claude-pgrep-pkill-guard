@@ -286,7 +286,7 @@ of those checks `return 0` — see below.
 
 ### `tests/cases/`
 
-The tab-separated tables below drive most of the suite, each with shell-visible
+The tab-separated tables below drive the suites named beside them, each with shell-visible
 strings stored as JSON so quoting and whitespace survive:
 
 - `verdicts.tsv` — `<command>\t<verdict>`, read by `tests/classify.bats` (which
@@ -656,7 +656,7 @@ annotation the parser does not recognise is a failure, not a silent pass.
 line of the trace stream it cannot parse — which is every continuation line of a
 multi-line traced command, and the suite's JSON payloads produce a great many —
 to its own stderr: thousands of lines for the suite. bats writes its TAP to stdout, so the test results are unaffected; the
-gate's coverage step redirects stderr to a file and prints it only when the step
+gate's coverage step redirects stderr to a file and prints the tail of it only when the step
 fails. kcov's `--bash-method=DEBUG`, which traces through a `DEBUG` trap writing
 to a private fd, is silent — and reports **0.00%**. It looks like the right knob
 and is the wrong one; the noisy default method is the only one that produces
@@ -755,8 +755,7 @@ idx++))` and returns unconditionally at `idx == target`, so the loop cannot run
 past it; `loops::loop_context` reads the same token stream that produced `target`,
 counts indices the same way, and likewise returns there. Falling off either loop
 would need a `target` beyond the end of the stream it came from. Both guards
-stay — this is a redundancy, not a defect, the same one as
-`loops::loop_body_has_kill`'s `((found_do == 1)) || return 1` — and neither gets a test
+stay — this is a redundancy, not a defect — and neither gets a test
 row, because a row that cannot be written is not a coverage gap.
 
 What the report is good for is the per-line hit counts, read with all of the
@@ -804,7 +803,7 @@ below, and the `.ci/` gates whose bats suites run on those legs.
 where macOS has no long form, deliberately` phrase are the ones
 `.ci/check-invariant-markers` lists beside this document. One
 is `hooks/lib/repeat.sh`, in `repeat::repeat_check`, which is the one rule in the guard
-that touches the filesystem — its write path a few lines below carries the same
+that touches the filesystem — its write path further down the same function carries the same
 rationale in its own words, for the `rm` and `mv` calls there:
 
 ```text
@@ -856,8 +855,8 @@ bug.
 
 Every gate script that runs inside the devShell sets it. Of those that run under
 the host's own shell, `.ci/in-devshell`, `.ci/run-plugin-validate` and
-`run-tests` set it behind a bash 4.4 version guard, and the rest — `.githooks/`
-and `.ci/activate-githooks` — leave it out. None of the hook's bash files may
+`run-tests` set it behind a bash 4.4 version guard, and the rest — `.githooks/`,
+`.ci/activate-githooks` and the POSIX `sh` gate `.ci/check-inactive-on-old-bash` — leave it out. None of the hook's bash files may
 set it —
 the entry script, the loader, or any part under `hooks/lib/` — and no one may
 turn the assignment below into a plain one.
@@ -866,12 +865,14 @@ turn the assignment below into a plain one.
 reason="$(repeat::repeat_check "${session_id}" "${keys}")" || reason=''
 ```
 
-**Why:** the trailing `||` is what keeps that entire command substitution off
+**Why:** a trailing `||` keeps the entire command substitution on its left off
 errexit's radar for its whole dynamic extent, so nothing inside `repeat::repeat_check`
 — the guard's one stateful, filesystem-touching rule — can trip the top-level
-`ERR` trap. `inherit_errexit` pushes errexit back inside the substitution and
+`ERR` trap. `classify::inspect_command` calls `classify::repeat_tier_reason` inside
+such a substitution, which already covers this call; the `||` on this assignment
+keeps that true whoever the caller is. `inherit_errexit` pushes errexit back inside the substitution and
 reintroduces exactly the failure path the guard exists to avoid: a transient
-filesystem condition becoming a trapped error on an unrelated command. The
+filesystem condition becoming a trapped error on an unrelated command. For a caller outside a `||` list the
 `||` is load-bearing well beyond its visible role as a fallback, and the
 fallback is also why `classify::inspect_command` accepts the result as a deny only when it
 is shaped like `messages::repeat_message`'s output.
@@ -1078,8 +1079,8 @@ report `main` could ever have produced.
 
 **The same construct, wanted, one directory over.** Invariant 2 depends on that
 suppression deliberately: `reason="$(repeat::repeat_check …)" || reason=''`
-is what keeps the guard's one stateful, filesystem-touching rule off the trap's
-radar, so a transient filesystem condition cannot surface as a trapped error.
+keeps the guard's one stateful, filesystem-touching rule off the trap's
+radar whoever the caller is, so a transient filesystem condition cannot surface as a trapped error.
 Load-bearing there, silent gate failure here. The mechanic is identical and only
 the intent differs — whether the suppression is the thing you want. That is the
 contrast to hold on to before copying either line into the other place.
@@ -1088,7 +1089,7 @@ contrast to hold on to before copying either line into the other place.
 trap: `run-all-checks`, `run-tests`, the `.ci/check-*` and `.ci/run-*` scripts,
 and any other script that installs one, such as `.ci/report-coverage`,
 `.ci/build-commit-payload` and `assets/build-social-preview`. The scripts below
-have nothing for it to police, verified rather than assumed:
+have nothing for it to police:
 
 - `bench/run` — its `main` never returns non-zero. Bad input goes through
   `die`, and `exit` does not fire an `ERR` trap. It also installs an `EXIT`
@@ -1117,7 +1118,7 @@ That is a _fail-open_ trap, not a reporting one: its whole job is to make any
 unexpected failure emit an allow verdict rather than block the user's command,
 which is invariant 2's discipline. Applying this rule there would be actively
 wrong — a `trap - ERR` before a return in the hook's `main` would hand the user
-a broken guard instead of an open one. The hook has no such return today, so
+a broken guard instead of an open one. The hook's `main` has no such return, so
 the gate would be quiet either way; the exemption is written down so that it
 stays the right answer if one is ever added. It keys off what the handler
 **does** — exits 0 — rather than off a path, so another fail-open script is

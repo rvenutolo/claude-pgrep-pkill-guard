@@ -221,7 +221,8 @@ learn you were unprotected.
 - **It stands down rather than guessing.** Every precondition listed under
   [Compatibility](#compatibility) that fails — an old bash, a missing `jq` or
   `awk`, an unreadable scanner, an awk that fails the integrity trailer — makes
-  the guard inactive for that command and says so. Any other unexpected failure
+  the guard inactive for that command and says so, and so does a sourced file of
+  the guard that is missing or fails to load. Any other unexpected failure
   inside the hook is caught by an `ERR` trap that emits a bare allow. No
   precondition failure ever produces a deny.
 - **The state rule is best-effort.** `repeat` needs things it cannot

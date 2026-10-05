@@ -325,6 +325,18 @@ RESULTS
   assert_output --partial 'is missing or unreadable'
 }
 
+@test "bench fresh: a missing report is named by its repo-relative path" {
+  # The same name every other verdict prints, so the line reads the same on a
+  # CI runner as it does locally. The fixture root is the part that differs.
+  local -r root="${BATS_TEST_TMPDIR}/no-report-path"
+  make_bench_fixture "${root}"
+  rm -f -- "${root}/bench/RESULTS.md"
+  run "${CHECK}" "${root}"
+  assert_failure
+  assert_line 'FAIL: bench/RESULTS.md is missing or unreadable'
+  refute_output --partial "${root}"
+}
+
 # --- Advisory versus strict ---------------------------------------------------
 #
 # Freshness is a release-time property (see the header of .ci/check-bench-fresh).

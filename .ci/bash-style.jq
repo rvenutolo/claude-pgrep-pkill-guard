@@ -517,14 +517,23 @@ def eval_comment:
 # The top-level statements of the file, in order.
 def top: (.Stmts // []);
 
-# A statement that is exactly `main "$@"`.
+# `@` expanded whole: no default, replacement, slice, length or indirection.
+def plain_all_args:
+  .Type == "ParamExp" and .Param.Value == "@"
+  and (has("Exp") or has("Repl") or has("Slice") or has("Index") or has("Length") or has("Excl") | not);
+
+# A statement that is exactly `main "$@"`. A negated or backgrounded call does
+# not leave main's status as the script's, so neither is that statement.
 def is_main_call:
-  .Cmd.Type == "CallExpr"
+  ((.Negated // false) | not)
+  and ((.Background // false) | not)
+  and .Cmd.Type == "CallExpr"
   and (.Cmd | cmdname) == "main"
   and ((.Cmd | args) | length) == 2
   and (.Cmd.Args[1].Parts | length) == 1
   and .Cmd.Args[1].Parts[0].Type == "DblQuoted"
-  and ([.Cmd.Args[1].Parts[0].Parts[]? | .Param.Value?] == ["@"]);
+  and ((.Cmd.Args[1].Parts[0].Parts // []) | length) == 1
+  and (.Cmd.Args[1].Parts[0].Parts[0] | plain_all_args);
 
 # An executed script that defines a function at top level: main is the last
 # function, and `main "$@"` is the last statement.

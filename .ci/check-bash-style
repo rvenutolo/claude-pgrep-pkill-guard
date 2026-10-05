@@ -137,7 +137,7 @@ function is_sourced() {
     printf 'true\n'
     return
   fi
-  staged="$(git -C "$(dirname -- "${path}")" ls-files --stage -- "$(basename -- "${path}")" 2> /dev/null)" \
+  staged="$(git -C "$(dirname -- "${path}")" ls-files --stage -- "${path##*/}" 2> /dev/null)" \
     || staged='NOT-TRACKED'
   case "${staged}" in
     100644*) printf 'true\n' ;;
@@ -245,9 +245,10 @@ function scan_file() {
 # @exitcode 1 git or grep failed
 function namespaced_functions() {
   local repo_matches file_matches
+  local -a names
   local status=0
   # `git grep` has no long form for its pattern option `-e`, and no long
-  # form for dropping the file name, so the sed below strips it.
+  # form for dropping the file name, so the expansion below strips it.
   repo_matches="$(git -C "${REPO_DIR}" grep --only-matching --extended-regexp \
     -e "${NAMESPACED_FUNCTION}")" || status=$? # 1 is no match, a valid answer
   if ((status > 1)); then
@@ -261,7 +262,8 @@ function namespaced_functions() {
     printf 'FAIL: could not search the named files for function definitions\n' >&2
     return 1
   fi
-  printf '%s\n%s\n' "${repo_matches}" "${file_matches}" | sed --expression='s/^.*function //'
+  mapfile -t names <<< "${repo_matches}"$'\n'"${file_matches}"
+  printf '%s\n' "${names[@]##*function }"
 }
 
 # @description List the functions the repository's test helpers define. A flag
@@ -274,16 +276,18 @@ function namespaced_functions() {
 # @exitcode 1 git failed
 function helper_functions() {
   local matches
+  local -a names
   local status=0
   # `git grep` has no long form for its pattern option `-e`, and no long
-  # form for dropping the file name, so the sed below strips it.
+  # form for dropping the file name, so the expansion below strips it.
   matches="$(git -C "${REPO_DIR}" grep --only-matching --extended-regexp \
     -e "${PLAIN_FUNCTION}" -- "${HELPER_DIR}")" || status=$? # 1 is no match, a valid answer
   if ((status > 1)); then
     printf 'FAIL: could not search the test helpers for function definitions\n' >&2
     return 1
   fi
-  printf '%s\n' "${matches}" | sed --expression='s/^.*function //'
+  mapfile -t names <<< "${matches}"
+  printf '%s\n' "${names[@]##*function }"
 }
 
 # @description Prove the pipeline still reports the violations the canary
@@ -295,7 +299,8 @@ function helper_functions() {
 # @exitcode 1 it did not
 function check_canary() {
   local out rule line
-  if ! out="$(printf '%s\n' "${CANARY[@]}" | shfmt --filename 'canary.sh' --to-json \
+  if ! out="$(printf '%s\n' "${CANARY[@]}" \
+    | shfmt --filename 'canary.sh' --to-json \
     | run_rules 'canary' <(printf '%s\n' "${CANARY[@]}") 'true' '' '' '')"; then
     printf 'FAIL: the canary could not be scanned\n' >&2
     return 1

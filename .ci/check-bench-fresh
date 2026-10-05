@@ -301,7 +301,7 @@ function exempt_reason() {
 
 function main() {
   if [[ ! -r "${RESULTS_FILE}" ]]; then
-    printf 'FAIL: %s is missing or unreadable\n' "${RESULTS_FILE}" >&2
+    printf 'FAIL: %s is missing or unreadable\n' "${REPORT}" >&2
     printf '      Generate it with: just bench\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
     # diagnostics above are the last thing the reader sees (#43, invariant 6).

@@ -95,7 +95,12 @@ function main() {
     die "no coverage.json under ${coverage_dir} — did kcov actually run?"
   fi
   if ((${#reports[@]} > 1)); then
-    die "expected exactly one coverage.json under ${coverage_dir}, found ${#reports[@]}: ${reports[*]}"
+    # Joined under a space of its own, inside the substitution so the rest of
+    # `main` keeps the script-wide IFS, which would put each path on its own
+    # line of what die prints as one FATAL line.
+    die "expected exactly one coverage.json under ${coverage_dir}, found ${#reports[@]}: $(
+      IFS=' ' && printf '%s' "${reports[*]}"
+    )"
   fi
 
   # Report integrity, before anything is printed. See the header: kcov 43 can

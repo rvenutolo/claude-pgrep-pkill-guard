@@ -353,10 +353,10 @@ function fuzz_corpus() {
 # @noargs
 # @set FUZZ_CORPUS the corpus read back from BATS_FILE_TMPDIR
 function fuzz_read_corpus() {
-  local item
+  local input
   FUZZ_CORPUS=()
-  while IFS= read -r -d '' item; do
-    FUZZ_CORPUS+=("${item}")
+  while IFS= read -r -d '' input; do
+    FUZZ_CORPUS+=("${input}")
   done < "${BATS_FILE_TMPDIR}/corpus"
 }
 

@@ -1270,6 +1270,29 @@ function assert_marker_stops_at_header() {
   assert_output --partial "FAIL: ${FIXTURE}:7: [main-last] the last statement is main"
 }
 
+@test "bash style: main-last reports a negated or backgrounded main call and any other expansion of the arguments" {
+  # Each of these runs main, so a predicate that only looks for the name and
+  # an `@` takes it for the call the rule demands. None of them hands main the
+  # script's arguments and leaves its status as the script's.
+  local last_statement
+  for last_statement in '! main "$@"' 'main "$@" &' 'main "${@:2}"' 'main "${@:-x}"' 'main "${@/a/b}"' \
+    'main "${#@}"' 'main "${!@}"'; do
+    write_script 'm.sh' \
+      'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+      'function main() {' '  echo PAYLOAD_RAN' '}' \
+      "${last_statement}"
+    run "${CHECK}" "${FIXTURE}"
+    assert_failure 1
+    assert_output --partial "FAIL: ${FIXTURE}:6: [main-last] the last statement is main"
+  done
+  write_script 'm.sh' \
+    'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \
+    'function main() {' '  echo PAYLOAD_RAN' '}' \
+    'main "$@"'
+  run "${CHECK}" "${FIXTURE}"
+  assert_success
+}
+
 @test "bash style: the layout rules pass entry code between the last function and main" {
   write_script 'e.sh' \
     'set -Eeuo pipefail' "IFS=\$'\\n\\t'" \

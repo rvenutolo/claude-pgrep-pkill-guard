@@ -111,6 +111,10 @@ function make_report() {
   run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
   assert_failure
   assert_output --partial 'exactly one'
+  # Every path found rides on the one FATAL line, so the message reads whole.
+  local -r cov="${BATS_TEST_TMPDIR}/cov"
+  assert_line --partial \
+    "found 2: ${cov}/bats.0123456789abcdef/coverage.json ${cov}/bats.deadbeefdeadbeef/coverage.json"
 }
 
 @test "report-coverage: a report with no percent_covered fails" {

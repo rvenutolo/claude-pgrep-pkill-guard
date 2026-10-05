@@ -269,7 +269,7 @@ function use_fixture_path() {
 }
 
 @test "devshell provides: an unannotated absent tool fails on every platform" {
-  # The control for the two cases above: without the annotation the platform is
+  # The control for the linux-only cases above: without the annotation the platform is
   # irrelevant, so `linux-only` cannot be doing nothing.
   local -r root="${BATS_TEST_TMPDIR}/plain-absent"
   make_devshell_fixture "${root}"

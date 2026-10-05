@@ -66,7 +66,7 @@ ARCH
   # REPO_DIR explicitly rather than relying on the argument-less default: the
   # default resolves through `git rev-parse --show-toplevel`, and a bats test
   # must not depend on the directory the suite happened to be launched from.
-  # The path taken is identical either way.
+  # Past that one branch the script runs the same either way.
   run "${CHECK}" "${REPO_DIR}"
   assert_success
   assert_output --partial 'invariant markers present'

@@ -51,7 +51,7 @@ BODY
   # REPO_DIR explicitly rather than relying on the argument-less default: the
   # default resolves through `git rev-parse --show-toplevel`, and a bats test
   # must not depend on the directory the suite happened to be launched from.
-  # The path taken is identical either way.
+  # Past that one branch the script runs the same either way.
   run "${CHECK}" "${REPO_DIR}"
   assert_success
   assert_output --partial 'GUARD_PARTS rows resolve'
@@ -67,7 +67,8 @@ BODY
 @test "guard parts: a row whose function was renamed away is named" {
   # The bug this gate was filed for. The part loads perfectly well; only the
   # string in the table is stale, and at runtime that stands the guard down on
-  # every call while the message blames the file (#147).
+  # every call that reaches the body, with a message that cannot say whether
+  # the part failed to parse or the row is stale (#147).
   local -r root="${BATS_TEST_TMPDIR}/renamed"
   make_parts_fixture "${root}"
   printf 'function inspect_payload() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"

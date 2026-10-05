@@ -13,7 +13,6 @@ function setup() {
     needle="$(jq --raw-output . <<< "${needle_json}")"
     json="$(run_hook "${command}")"
 
-    # field selects which part of the response the assertion is about.
     case "${field}" in
       reason) haystack="$(reason_of "${json}")" ;;
       context) haystack="$(context_of "${json}")" ;;
@@ -26,7 +25,7 @@ function setup() {
     esac
 
     # mode selects the comparison. `lacks` asserts ABSENCE — getting this
-    # backwards would silently invert 5 of the 27 rows.
+    # backwards would silently invert every `lacks` row.
     ok=1
     case "${mode}" in
       contains) [[ "${haystack}" == *"${needle}"* ]] || ok=0 ;;

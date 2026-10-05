@@ -52,6 +52,8 @@
 #              would silently corrupt prose. Read the output, fix those by hand,
 #              and run again.
 # @noargs
+# @stderr a `[<script>] <message>` banner before each step, the reason for
+#         each empty file list, and a closing line on a non-zero verdict
 # @exitcode 0 every fixer ran and had nothing left it could not fix
 # @exitcode 1 a fixer failed, left an unfixable finding, or a file list came
 #             up empty
@@ -138,7 +140,7 @@ function main() {
   # text: the empty pattern matches every line, so git names every file, and -I
   # drops the binaries -- which keeps typos from reading assets/deny-message.png
   # as prose. Identical to the list .ci/run-lint-checks builds for the verify
-  # run; see that script for the full history of why a bare `typos` is wrong.
+  # run; see that script for why a bare `typos` is wrong.
   local -a typo_files=()
   mapfile -t typo_files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '')
   if ((${#typo_files[@]} > 0)); then

@@ -64,10 +64,10 @@
 # @stderr the usage line, one FAIL line (with indented hints) per failure, and
 #         one SKIP line per linux-only entry not checked off Linux
 # @exitcode 0 every declared tool resolves and every package is justified
-# @exitcode 1 the tools file is missing, the list is empty, a declared tool is
-#             missing or carries an unknown annotation, the package inventory
-#             or formatter list is unreadable, the inventory is empty, or a
-#             package justifies nothing
+# @exitcode 1 the tools file is missing or unreadable, the list is empty, a
+#             declared tool is missing or carries an unknown annotation, the
+#             package inventory or formatter list is unreadable, the inventory
+#             is empty, or a package justifies nothing
 # @exitcode 2 more arguments were given than the script accepts
 # @exitcode * otherwise the failing git status, when no fixture directory is
 #             given and the repository root cannot be resolved
@@ -95,8 +95,9 @@ fi
 readonly FIXTURE_DIR="${1:-}"
 
 # REPO_DIR is resolved only in real mode. Fixture mode must not need a git repo
-# at all: a bats test runs from a temp directory, and making the fixture path
-# depend on `git rev-parse` would couple it to the suite's working directory.
+# at all: a bats test builds its fixture under a temp directory, and making the
+# fixture path depend on `git rev-parse` would couple it to the suite's working
+# directory.
 if [[ -n "${FIXTURE_DIR}" ]]; then
   readonly TOOLS_FILE="${FIXTURE_DIR}/required-tools"
 else

@@ -29,8 +29,7 @@
 #              trailing `||` suppresses errexit and the `ERR` trap for the whole
 #              dynamic extent of `main`, so the script runs on past a failed
 #              command and the gate exits 0 -- a gate that can pass while
-#              broken. That was probed rather than assumed; the transcript is in
-#              invariant 6.
+#              broken. The transcript is in invariant 6.
 #
 #              The candidate set is derived from the tree -- `git ls-files`
 #              filtered to files whose text installs an `ERR` trap -- and never
@@ -48,10 +47,8 @@
 #              command -- invariant 2's fail-open discipline. Applying this
 #              rule there would be actively wrong: `trap - ERR` before a return
 #              in the hook's `main` would hand the user a broken guard instead
-#              of an open one. The hook has no such return today, so the gate
-#              is quiet either way; the exemption exists so that it stays the
-#              right answer if one is ever added. It keys off what the handler
-#              DOES, not off a path, so a second fail-open script needs no edit
+#              of an open one. The exemption keys off what the handler DOES,
+#              not off a path, so a second fail-open script needs no edit
 #              here.
 #
 #              This is a lexical check over a family of files that all follow

@@ -19,9 +19,9 @@ on:
 permissions: {}
 concurrency:
   # `github.event_name` for the same reason ci.yml and links.yml carry it: this
-  # workflow has no schedule today, but a push to main and a workflow_dispatch
-  # of the same ref would otherwise share a group and cancel each other -- and
-  # the cancelled one would be the manual run somebody is watching.
+  # workflow has no schedule, but a push to main and a workflow_dispatch of the
+  # same ref would otherwise share a group and cancel each other -- and the
+  # cancelled one would be the manual run somebody is watching.
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
@@ -39,7 +39,7 @@ jobs:
       # The trailing comment is what zizmor's `undocumented-permissions` audit
       # actually reads -- a comment block ABOVE the key does not satisfy it,
       # which is not obvious from the finding's wording ("needs an explanatory
-      # comment") and cost a lint cycle to establish.
+      # comment").
       issues: write  # labels are an issues-API resource; there is no narrower scope
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
@@ -56,7 +56,7 @@ jobs:
       # before merging.
       #
       # The input names are kebab-case (`yaml-file`, `skip-delete`, `dry-run`),
-      # verified against the action's own action.yml at the pinned SHA. An
+      # as the action's own action.yml declares them at the pinned SHA. An
       # unrecognised input is silently ignored by the runner, so a snake_case
       # `skip_delete` here would not disable deletion, it would leave deletion
       # at its default -- which happens to be the same value, and would

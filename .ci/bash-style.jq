@@ -329,8 +329,9 @@ def no_echo_e:
     )
   | {line: .Pos.Line, rule: "no-echo-e", message: "use printf with a format string, not echo -e"};
 
-# Non-interactive curl and wget ignore the invoking user's config files. A
-# `command -v curl` lookup fetches nothing and is left alone.
+# Non-interactive curl and wget ignore the invoking user's config files, and
+# curl also fails on an HTTP error, follows redirects and prints nothing but
+# errors. A `command -v curl` lookup fetches nothing and is left alone.
 def fetch_flags:
   nodes
   | select(.Type == "CallExpr")
@@ -523,8 +524,9 @@ def plain_all_args:
   .Type == "ParamExp" and .Param.Value == "@"
   and (has("Exp") or has("Repl") or has("Slice") or has("Index") or has("Length") or has("Excl") | not);
 
-# A statement that is exactly `main "$@"`. A negated or backgrounded call does
-# not leave main's status as the script's, so neither is that statement.
+# A statement that calls `main "$@"` with no other argument; a redirection or
+# an assignment prefix on the call is not looked at. A negated or backgrounded
+# call does not leave main's status as the script's, so neither counts.
 def is_main_call:
   ((.Negated // false) | not)
   and ((.Background // false) | not)

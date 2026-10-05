@@ -25,7 +25,8 @@
 #             that cannot be written, or (under --smoke) a hook response that is
 #             not valid JSON
 # @exitcode * otherwise the failing git status, when the repository root cannot
-#             be resolved
+#             be resolved, or the hook's own non-zero status, when the hook
+#             itself fails
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

@@ -195,7 +195,7 @@ function main() {
     # Reset first, then `|| :` rather than `|| first_line=''`: a file whose
     # only line lacks a trailing newline makes `read` set the variable AND
     # return 1, and the assignment form would blank the shebang it just read.
-    # An empty or unreadable file leaves the reset value and is skipped below.
+    # An empty file leaves the reset value and is skipped below.
     first_line=''
     IFS= read -r first_line < "${REPO_DIR}/${path}" || : # read returns 1 on an unterminated line yet stores it
     [[ "${first_line}" == '#!'* ]] || continue

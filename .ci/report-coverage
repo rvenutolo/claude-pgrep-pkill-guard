@@ -38,7 +38,9 @@
 # @arg $1 dir the directory passed to `run-tests --coverage`
 # @stdout the percentage, e.g. `76.42`
 # @stderr the usage line, or one `[<script>] FATAL: <message>` line naming what
-#         was wrong
+#         was wrong; when jq fails or ${GITHUB_STEP_SUMMARY} cannot be appended
+#         to, the failing command's own message and the ERR trap's
+#         `[<script>] ERROR: line <n> (exit <status>): <command>` report instead
 # @exitcode 0 exactly one complete report was found and its percentage printed
 # @exitcode 1 not exactly one argument given, the directory is missing, the
 #             number of reports found was not exactly one, the one report

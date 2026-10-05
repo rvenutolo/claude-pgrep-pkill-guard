@@ -136,13 +136,13 @@ function main() {
   # gate was written the file said 4c189fb and hooks/ had moved twice since,
   # including the split the benchmark exists to measure (#84). More verdicts
   # than pass and fail -- the recorded commit can also be present but
-  # unreachable (its branch was rewritten), which is a failure with different
+  # unreachable (its branch was rewritten), which is reported with different
   # wording because no comparison happened at all, or absent from the object
   # store, which is a SKIP
   # so that a shallow clone never gets a red gate over history it never fetched.
   # The last is the release-please version line: it lives inside hooks/, so
   # every release PR carried a hooks/ diff. A net difference confined to that
-  # one line passes. And staleness itself convicts only under
+  # one line passes. And the stale and unreachable verdicts convict only under
   # BENCH_FRESH_STRICT, which ci.yml sets on release-please's branch alone:
   # everywhere else the gate warns, because a wall-clock benchmark is a
   # release-time cost, not a per-PR one.

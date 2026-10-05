@@ -37,6 +37,10 @@
 #              the reader to ignore a red gate. It runs as its own CI job
 #              instead, plus weekly.
 # @noargs
+# @stdout lychee's report
+# @stderr a `[<script>] <message>` banner before the check, a `WARN:` advisory
+#         when no GitHub token is available, and a `FAIL:` line when the file
+#         list is empty or lychee fails
 # @exitcode 0 every link in the tracked tree resolves
 # @exitcode 1 a link failed or lychee itself could not run, or the file list came
 #             up empty

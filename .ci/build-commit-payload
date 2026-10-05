@@ -37,6 +37,9 @@
 # @arg $2 branch the branch to commit onto, e.g. release-please--branches--main
 # @arg $3 headline the commit subject
 # @stdout one JSON document: {"query": ..., "variables": {"input": ...}}
+# @stderr the usage line, or one `[<script>] FATAL: <message>` line naming what
+#         was wrong; on an `@exitcode *` failure, the failing command's own
+#         message and the ERR trap's `[<script>] ERROR: ...` report instead
 # @exitcode 0 the payload is on stdout
 # @exitcode 1 wrong argument count, not inside a git repo, nothing staged, or a
 #             staged change carries a status letter this script does not model

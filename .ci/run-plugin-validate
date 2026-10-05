@@ -16,6 +16,9 @@
 #              and never reaches plugin.json, so a directory argument would
 #              silently check half of what it appears to.
 # @noargs
+# @stderr a `[<script>] <message>` banner before each manifest, the `SKIP:`
+#         advisory when the CLI is not installed, and the upgrade hint when the
+#         host bash is older than 4.4
 # @exitcode 0 both manifests validate, or the CLI is not installed
 # @exitcode 1 at least one manifest failed validation, or the host bash is
 #             older than 4.4

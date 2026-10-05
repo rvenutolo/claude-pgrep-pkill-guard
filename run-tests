@@ -47,8 +47,9 @@
 # @exitcode 0 all tests passed and the repo was left untouched
 # @exitcode 1 bats missing, nawk missing or not one-true-awk under --awk=bwk,
 #             kcov missing under --coverage, --report or --coverage given
-#             without a directory, a test failed, the suite mutated the repo, or
-#             the host bash is older than 4.4
+#             without a directory or with one that cannot be created, a test
+#             failed, the suite mutated the repo, or the host bash is older
+#             than 4.4
 # @exitcode * otherwise the failing git status when the repository root cannot be
 #             resolved, or the status bats or kcov exited with
 
@@ -215,7 +216,7 @@ function main() {
     if ! command -v kcov > /dev/null 2>&1; then
       # Genuinely different failures, and the wrong message sends a reader
       # off to install something that does not exist for their platform.
-      # bash-style allow=long-options: runs on the ambient macOS leg; BSD uname has no long form
+      # bash-style allow=long-options: reachable on macOS outside the devShell; BSD uname has no long form
       case "$(uname -s)" in
         'Darwin')
           die 'kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only (#91)'
@@ -231,7 +232,7 @@ function main() {
     # flag only where
     # macOS has no long form, for the reason spelled out on --report's
     # `mkdir -p` above -- this line is on the ambient-tool path too.
-    # bash-style allow=long-options: runs on the ambient macOS leg; BSD mkdir has no long form
+    # bash-style allow=long-options: reachable outside the devShell; BSD mkdir has no long form
     mkdir -p "${coverage_dir}"
     # The one caller of COVERAGE. tests/test_helper/common.bash unsets BASH_ENV
     # for fixture hygiene unless it sees this, and BASH_ENV is the channel kcov

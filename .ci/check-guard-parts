@@ -38,6 +38,9 @@
 #         milliseconds. Without it the only possible test would be "exits 0 on
 #         the real repo", which a script that unconditionally returned 0 would
 #         also pass.
+# @stderr the usage line on a surplus argument; one FAIL line per fault, some
+#         with indented lines of explanation; the OK summary line when the
+#         table and hooks/lib/ agree
 # @exitcode 0 the table and hooks/lib/ agree in both directions
 # @exitcode 1 the loader is missing, a row is stale or malformed, a part is
 #             unlisted or listed twice, the table is empty, or no tracked part
@@ -121,8 +124,8 @@ function guard_part_rows() {
 # @description Grade one row of the table.
 # @arg $1 row the `<file>:<function>` row
 # @stderr one FAIL line for a row that does not grade clean, plus indented
-#         lines of explanation and remedy when the part is missing or the
-#         function is not defined in it
+#         lines of explanation when the part is missing, or of explanation and
+#         remedy when the function is not defined in it
 # @exitcode 0 the part exists and defines the paired function
 # @exitcode 1 the row is malformed, the part is missing, or the function is not
 #             defined in it

@@ -243,13 +243,17 @@ function declared_labels() {
 function check_form_labels() {
   local -r file="$1" declared="$2"
   local -r label="${file##*/}"
-  local referenced rc=0 name
-  if ! referenced="$(yq '[.labels // [] | .[]] | .[]' "${file}" 2> /dev/null)"; then
+  local output rc=0 name
+  local -a referenced=()
+  if ! output="$(yq '[.labels // [] | .[]] | .[]' "${file}" 2> /dev/null)"; then
     fail "${label}: the labels rule could not read .labels"
     return 1
   fi
-  [[ -n "${referenced}" ]] || return 0
-  while IFS= read -r name; do
+  # Guarded because a here-string always ends in a newline: an empty result
+  # would otherwise fill the array with one empty element.
+  [[ -n "${output}" ]] || return 0
+  mapfile -t referenced <<< "${output}"
+  for name in "${referenced[@]}"; do
     [[ -n "${name}" ]] || continue
     # `grep --line-regexp --fixed-strings` rather than a bash `[[ ]]` match: a
     # label name may hold a space (`good first issue`) or a colon
@@ -259,7 +263,7 @@ function check_form_labels() {
       fail "${label}: references label \"${name}\", which ${LABELS_FILE##*/} does not declare"
       rc=1
     fi
-  done <<< "${referenced}"
+  done
   return "${rc}"
 }
 

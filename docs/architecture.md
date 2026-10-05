@@ -346,13 +346,15 @@ fabricated kcov output directory), `tests/shell-shebangs.bats`
 (`.ci/check-shell-shebangs`, against a fabricated source tree),
 `tests/executable-bit.bats` (`.ci/check-executable-bit`, against a
 fabricated tree of tracked modes), `tests/guard-parts.bats`
-(`.ci/check-guard-parts`, against a fabricated loader and parts) and
+(`.ci/check-guard-parts`, against a fabricated loader and parts),
 `tests/bats-no-shebang.bats` (`.ci/check-bats-no-shebang`,
-against throwaway repos of fixture `.bats` files) and `tests/bash-style.bats`
-(`.ci/check-bash-style`, against fixture scripts written per case). Every one of them drives its
+against throwaway repos of fixture `.bats` files), `tests/bash-style.bats`
+(`.ci/check-bash-style`, against fixture scripts written per case) and
+`tests/lint-checks.bats` (`.ci/run-lint-checks`, against a throwaway repo with
+stub linters on `PATH`). Every one of them drives its
 script over a fabricated input — most through optional fixture-path arguments,
-`build-commit-payload` and `check-bats-no-shebang` by being invoked inside a
-throwaway repo, `check-bash-style` by being handed fixture paths, and `report-coverage` by being pointed at a directory a case
+`build-commit-payload`, `check-bats-no-shebang` and `run-lint-checks` by being
+invoked inside a throwaway repo, `check-bash-style` by being handed fixture paths, and `report-coverage` by being pointed at a directory a case
 built — for the same reason: a suite that only asserted "exits 0 on the real
 repo" would pass just as well against a script that unconditionally returned 0.
 

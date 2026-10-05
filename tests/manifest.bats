@@ -1,3 +1,11 @@
+# The plugin's manifests -- .claude-plugin/plugin.json,
+# .claude-plugin/marketplace.json and hooks/hooks.json -- and the files they
+# point at; the entry script's old-bash INACTIVE branch, pinned at source
+# level; and .ci/check-manifest-invariants, against the real repo and fixtures.
+#
+# setup sets PLUGIN_JSON, MARKET_JSON and HOOKS_JSON, the paths of the real
+# manifests.
+
 function setup() {
   load 'test_helper/common'
   PLUGIN_JSON="${REPO_DIR}/.claude-plugin/plugin.json"
@@ -143,7 +151,7 @@ function setup() {
 
 # @description Build a minimal, VALID fixture tree so each negative case can
 #              corrupt exactly one thing. A short flag only where macOS has no
-#              long form, on purpose: the compat CI legs run this suite against
+#              long form, on purpose: a compat CI leg runs this suite against
 #              macOS BSD coreutils, whose mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_manifest_fixture() {

@@ -1,3 +1,9 @@
+# The recorded message assertions: every row of tests/cases/messages.tsv is run
+# through the hook as a subprocess (invariant 3), and the field of the response
+# the row names -- reason, context or decision -- is compared with its needle.
+#
+# setup sets CASES, the path of that table.
+
 function setup() {
   load 'test_helper/common'
   CASES="${REPO_DIR}/tests/cases/messages.tsv"

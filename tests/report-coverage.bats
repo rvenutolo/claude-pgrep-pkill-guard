@@ -47,8 +47,8 @@ readonly HEALTHY_FILES
 #              INTEGRITY rule: every required hooks/ file present in files[]
 #              with a non-zero covered-line count. Both are pure
 #              JSON-and-filesystem shape and need no kcov at all. A short flag
-#              only where macOS has no long form, on purpose: the compat CI legs
-#              run this suite against macOS BSD coreutils, whose mkdir has no
+#              only where macOS has no long form, on purpose: a compat CI leg
+#              runs this suite against macOS BSD coreutils, whose mkdir has no
 #              --parents.
 #
 #              The healthy fixture carries a files[] array because the
@@ -63,7 +63,7 @@ readonly HEALTHY_FILES
 function make_report() {
   local -r root="$1" percent="$2" files="${3:-${HEALTHY_FILES}}"
   # The hashed directory name is the point: kcov derives it per run, which is
-  # why the reporter globs instead of hardcoding a path.
+  # why the reporter searches with find instead of hardcoding a path.
   mkdir -p "${root}/bats.deadbeefdeadbeef"
   # kcov creates this alongside the real report and leaves it EMPTY for a
   # single-binary run. Every fixture has it, because a reporter that reached for

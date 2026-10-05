@@ -4,14 +4,14 @@ function setup() {
 }
 
 # The human-facing surface of hooks/pgrep-pkill-guard.sh: --help, --version, and
-# the two usage errors. Driven ONLY as a subprocess (invariant 3) -- nothing here
+# the usage errors. Driven ONLY as a subprocess (invariant 3) -- nothing here
 # sources the hook or calls human::human_mode/human::print_help directly, because the thing
 # worth pinning is what a person at a terminal actually sees.
 #
 # A short flag only where macOS has no long form, on purpose -- see
 # make_manifest_fixture in tests/manifest.bats.
 
-# @description Run the guard as a subprocess and capture its two streams into
+# @description Run the guard as a subprocess and capture stdout and stderr into
 #              SEPARATE files, so a test can assert one is empty without the
 #              other's bytes leaking into it. bats' `run` merges them by default.
 #
@@ -50,7 +50,7 @@ function run_cli() {
 }
 
 @test "cli: -h produces byte-identical output to --help" {
-  # Byte-identical, not merely "also non-empty": two spellings of one flag that
+  # Byte-identical, not merely "also non-empty": spellings of one flag that
   # drifted apart would be a bug no looser assertion could see.
   run_cli 'long' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
@@ -61,8 +61,8 @@ function run_cli() {
 
 @test "cli: --help wins over an unknown argument in either position" {
   # clig.dev: -h/--help prints help and ignores everything else, whatever the
-  # order. Both orders matter -- a naive `case "$1"` dispatch handles the first
-  # and errors on the second.
+  # order. Both orders matter -- a naive `case "$1"` dispatch handles a leading
+  # `--help` and errors on a trailing one.
   run_cli 'baseline' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
 
@@ -80,7 +80,7 @@ function run_cli() {
 @test "cli: help states the stdin contract, the state dir, and the probe recipe" {
   run_cli 'contract' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
-  # The three things a person running this by hand actually came for: what the
+  # The things a person running this by hand actually came for: what the
   # script reads, the environment variable that says where its state lives, and
   # the copy-pasteable recipe the README's "Reporting a false verdict" tells
   # them to use. Help that omits any of them is help in name only.
@@ -144,7 +144,7 @@ function run_cli() {
   # No arguments: the dispatch can only fire on `[[ -t 0 ]]`. Without it the
   # script would block in `read -r -d ''` on an EOF a terminal never sends until
   # the user finds Ctrl-D -- so a regression here shows up as a hung suite, and
-  # the exit-2 assertion below is what turns that into a red test instead.
+  # once EOF does arrive the exit-2 assertion below is what makes the test red.
   "${HOOK}" > "${out}" 2> "${err}" < /dev/tty || status=$?
   [[ "${status}" -eq 2 ]]
   [[ ! -s "${out}" ]]

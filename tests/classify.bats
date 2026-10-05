@@ -1,3 +1,9 @@
+# The recorded verdicts: every row of tests/cases/verdicts.tsv is run through
+# the hook as a subprocess (invariant 3), and the response is graded against
+# the verdict the row records.
+#
+# setup sets CASES, the path of that table.
+
 function setup() {
   load 'test_helper/common'
   CASES="${REPO_DIR}/tests/cases/verdicts.tsv"

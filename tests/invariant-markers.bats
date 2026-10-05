@@ -4,7 +4,7 @@ function setup() {
 }
 
 # @description Build a minimal, VALID tree in the shape the marker table
-#              expects: the seven files it names, each carrying every phrase its
+#              expects: every file it names, each carrying every phrase its
 #              row demands, and nothing else. The negative cases below then
 #              corrupt, empty or remove files in it.
 #
@@ -14,8 +14,8 @@ function setup() {
 #              to say so out loud, instead of the check silently agreeing with
 #              whatever it was just changed to.
 #
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_marker_fixture() {
@@ -54,11 +54,12 @@ ARCH
 }
 
 # Every case drives FIXTURE mode, which needs no devShell and no Nix -- only
-# sed and tr, deliberately used in their POSIX form so the ambient macOS compat
-# legs run this suite for real rather than skipping it. Hence no skip here, the
-# same as tests/devshell-provides.bats and tests/issue-forms.bats.
+# sed and tr, deliberately used in their POSIX form so the ambient
+# `compat (macos, homebrew bash)` leg runs this suite for real rather than
+# skipping it. Hence no skip here, the same as tests/devshell-provides.bats and
+# tests/issue-forms.bats.
 #
-# The first case is the exception that keeps the rest honest: it points the
+# The real-repo case is the exception that keeps the rest honest: it points the
 # script at the real repo, so a fixture that has drifted away from the shape
 # the tracked sources actually have cannot hide behind a green suite.
 

@@ -31,7 +31,7 @@ function setup() {
   fi
 }
 
-# @description Build a throwaway git repo holding one seed commit with two
+# @description Build a throwaway git repo holding one seed commit of plain
 #              files, so each case can stage exactly the change it is about.
 #              A short flag only where macOS has no long form, on purpose, like
 #              every tests/*.bats file -- see make_manifest_fixture in

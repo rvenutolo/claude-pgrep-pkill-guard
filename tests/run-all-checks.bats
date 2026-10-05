@@ -20,11 +20,11 @@ function setup() {
 #              again, recursing through the whole gate. In the fixture every
 #              `${REPO_DIR}/...` callee is missing, so a gate that wrongly runs
 #              only collects exit 127s it already absorbs with `|| rc=1`; the
-#              `nix` stub, the first check it would reach, is the evidence
+#              `nix` stub, which the gate calls, is the evidence
 #              that it ran at all.
 #
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 #
 #              Builds at the FIXTURE, STUB_DIR and MARKER paths setup() chose.
@@ -91,8 +91,9 @@ function assert_rejected() {
 }
 
 @test "run-all-checks: no arguments runs the gate" {
-  # Every callee is missing from the fixture, so the verdict is a failure; the
-  # point is that the gate ran rather than stopping at the argument check.
+  # Every `${REPO_DIR}/...` callee is missing from the fixture, so the verdict
+  # is a failure; the point is that the gate ran rather than stopping at the
+  # argument check.
   run_gate
   assert_failure 1
   [[ -e "${MARKER}" ]]

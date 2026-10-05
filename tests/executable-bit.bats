@@ -45,8 +45,8 @@ readonly -a FIXTURE_NON_EXECUTABLE=(
 #              from `git ls-files --stage`, never the working tree. Every file
 #              holds an inert marker line: nothing here is ever executed.
 #
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_exec_bit_fixture() {
@@ -68,7 +68,7 @@ function make_exec_bit_fixture() {
 # than skipping it.
 # Hence no devShell skip here, the same as tests/shell-shebangs.bats.
 #
-# The first case is the exception that keeps the rest honest: it points the gate
+# The real-repo case is the exception that keeps the rest honest: it points the gate
 # at the real repo, so a fixture that has drifted away from the shape the
 # tracked tree actually has cannot hide behind a green suite.
 
@@ -165,7 +165,7 @@ function make_exec_bit_fixture() {
 }
 
 @test "executable bit: a repo with no tracked files fails" {
-  # An empty scan would grade nothing and pass everything.
+  # An empty scan grades no mode at all, so the gate names that cause outright.
   local -r root="${BATS_TEST_TMPDIR}/empty"
   mkdir -p "${root}"
   git -C "${root}" init --quiet

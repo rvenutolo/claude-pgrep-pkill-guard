@@ -15,8 +15,8 @@ function setup() {
 #              hardening is what keeps this `git` from resolving to the author's
 #              own checkout.
 #
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_shebang_fixture() {
@@ -31,12 +31,12 @@ function make_shebang_fixture() {
 }
 
 # Every case drives FIXTURE mode, which needs nothing but bash and git --
-# deliberately no coreutils long options and no Nix -- so the ambient macOS
-# compat legs run this suite for real rather than skipping it. Hence no
-# devShell skip here, the same as tests/invariant-markers.bats and
-# tests/issue-forms.bats.
+# deliberately no coreutils long options and no Nix -- so the ambient
+# `compat (macos, homebrew bash)` leg runs this suite for real rather than
+# skipping it. Hence no devShell skip here, the same as
+# tests/invariant-markers.bats and tests/issue-forms.bats.
 #
-# The first case is the exception that keeps the rest honest: it points the gate
+# The real-repo case is the exception that keeps the rest honest: it points the gate
 # at the real repo, so a fixture that has drifted away from the shape the
 # tracked sources actually have cannot hide behind a green suite.
 
@@ -134,7 +134,7 @@ function make_shebang_fixture() {
 }
 
 @test "shell shebangs: a .bats file is left to check-bats-no-shebang" {
-  # Two gates must not give a file contradictory orders. .bats files may carry
+  # Gates must not give a file contradictory orders. .bats files may carry
   # no shebang at all, which is check-bats-no-shebang's rule; this gate would
   # otherwise tell one to make its shebang canonical instead.
   local -r root="${BATS_TEST_TMPDIR}/bats"

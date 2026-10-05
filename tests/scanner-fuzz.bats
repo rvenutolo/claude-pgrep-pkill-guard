@@ -10,10 +10,11 @@
 #      n == len(B) - 1 when B ends with a newline, and n == len(B) when it does
 #      not.
 #
-# Rule 1 is not decoration. The hook calls the scanner inside a command
-# substitution, so a non-zero exit is swallowed by the ERR trap and becomes a
-# silent ALLOW. An exit code is not an available failure channel, which is
-# exactly why the trailer exists at all -- see the trailer comment at the foot of
+# Rule 1 is not decoration. A non-zero exit fails scanner::scan_command, and
+# the hook then reports the guard INACTIVE and allows the command, so a scanner
+# that died on some odd input would switch the guard off for it. An exit code
+# also says nothing about an awk that mangles the stream and still exits 0,
+# which is why the trailer exists -- see the trailer comment at the foot of
 # hooks/pgrep-scan.awk.
 #
 # What is deliberately NOT asserted here is which tokens appear, or at what

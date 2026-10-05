@@ -72,9 +72,9 @@ function tab() {
 }
 
 @test "scanner: a line continuation separates the words it joins" {
-  # A `\`-newline is a line continuation, which bash removes outright, so the
-  # words on either side must come out separate. Masked as filler they fuse into
-  # one token and the invocation stops being recognised.
+  # A `\`-newline is a line continuation, which bash removes outright. The
+  # scanner must emit it as a token delimiter: masked as filler it fuses onto
+  # the word after it and the invocation stops being recognised.
   local out
   out="$(scan "$(printf 'sudo \\\npkill --full java')")"
   run awk -F'\t' 'NR==2 {print $2}' <<< "${out}"
@@ -303,9 +303,10 @@ function tab() {
 }
 
 @test "scanner: a body line ending in a backslash does not swallow the terminator" {
-  # A body line ending in a backslash is literal text, not a continuation:
-  # masking the backslash together with the newline it precedes would swallow
-  # the terminator's own newline and mask to end of input.
+  # The scanner does not treat a body line ending in a backslash as a
+  # continuation, although bash does in an unquoted body: masking the
+  # backslash together with the newline it precedes would swallow the newline
+  # that starts the terminator check and mask to end of input.
   local out
   out="$(scan "$(printf 'cat <<EOF\nfoo \\\nEOF\npkill --full x')")"
   run grep --count "$(tab)pkill\$" <<< "${out}"

@@ -109,9 +109,9 @@ function use_fixture_path() {
 # suite for a hypothetical.
 #
 # Nothing here drives the argument-less REAL mode, so be plain about the split:
-# the two Nix expressions have no coverage in this suite at all. They are graded
-# by run-all-checks, which runs the argument-less gate on every gate run, locally
-# at pre-push and on both CI gate legs.
+# the gate's Nix expressions have no coverage in this suite at all. They are
+# graded by run-all-checks, which runs the argument-less gate on every gate run,
+# locally at pre-push and on every CI gate leg.
 #
 # That is a deliberate omission rather than an oversight. bats prepends its own
 # libexec to PATH, so inside a test `command -v bats` resolves to the unwrapped

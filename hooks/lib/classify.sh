@@ -339,7 +339,7 @@ function classify::repeat_tier_reason() {
   # into classify::probe_keys' arguments, a scanner failure would be swallowed by the
   # `|| keys=''` below and read as "this command carries no probe key".
   rt_tokens="$(scanner::scan_command "${command}")" || return 2
-  keys="$(classify::probe_keys "${command}" "${rt_tokens}")" || keys='' # no probe key: the rule does not apply
+  keys="$(classify::probe_keys "${command}" "${rt_tokens}")" || keys='' # a failed classify::probe_keys reads as no key
   [[ -n "${keys}" ]] || return 1
   # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
   # whole command substitution off errexit's radar for its entire dynamic
@@ -363,7 +363,7 @@ function classify::inspect_command() {
 
   # Past the short-circuit the scanner is about to be needed, so resolve it now.
   # This is the first thing below the prefilter because the scanner readability
-  # guard a few lines down is one of its two readers.
+  # guard a few lines down reads the path this resolves.
   scanner::resolve_scanner
 
   # Below here the guard is actually going to look at the command, so the

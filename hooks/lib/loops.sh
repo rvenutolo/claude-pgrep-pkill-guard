@@ -78,12 +78,14 @@ function loops::loop_context() {
         fi
         ;;
       ')')
-        # Only a `)` that actually closes something pops. A case-pattern `)`
+        # Only a `)` with a paren marker on top pops. A case-pattern `)`
         # terminates a pattern list and has no opener, so popping on it would
         # discard whatever span encloses the `case` -- the loop body itself,
-        # for a `case` written inside one. Requiring a paren
-        # marker on top makes the distinction without parsing `case`/`esac`:
-        # a pattern's `)` finds a body/cond/head marker there, or nothing.
+        # for a `case` written inside one. Requiring a paren marker on top
+        # makes the distinction without parsing `case`/`esac` wherever a
+        # body/cond/head or backtick marker, or nothing, is on top. A `case`
+        # written directly inside `$( )` or `( )` is not told apart: its
+        # pattern `)` finds the paren marker and pops it.
         if ((${#stack[@]} > 0)) && [[ "${stack[${#stack[@]} - 1]}" == 'subshell' ||
           "${stack[${#stack[@]} - 1]}" == 'capture' ]]; then
           unset 'stack[${#stack[@]}-1]'

@@ -4,7 +4,7 @@
 # hooks/pgrep-pkill-guard-body.sh whenever the entry script loads the body --
 # in human mode, or once the prefilter has let a payload through. Never
 # executed: no shebang, no exec bit, and it must not set `set -Eeuo pipefail`,
-# `IFS`, or the ERR trap -- the entry script owns all three, and a sourced file
+# `IFS`, or the ERR trap -- the entry script owns them all, and a sourced file
 # that sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
@@ -30,7 +30,7 @@ readonly -a LOCAL_USER_SWITCH_WRAPPERS=('su' 'runuser')
 readonly MAX_PAYLOAD_DEPTH=4
 
 # @description How many non-flag operands may precede a wrapper's `-c` before the wrapper stops
-#              owning the option. This is the whole difference between the two wrapper families.
+#              owning the option. This is the whole difference between the wrapper families.
 #
 #              A shell's own options end at its first operand: past that word it is running a
 #              SCRIPT, and a `-c` among the words after it is an argument being handed to that
@@ -132,14 +132,14 @@ function wrappers::pipe_carry_clear() {
 # @description Decide what a pipeline segment that just ended at a `|` leaves on the pipe for the
 #              next command. A `cat` whose only operand is `-` (or none) and that read a heredoc
 #              carries that heredoc's ordinal; an `echo`/`printf` whose literal can be
-#              reconstructed carries the text. A segment that redirected its output carries nothing:
-#              the pipe never sees it.
+#              reconstructed carries the text. A segment with any redirection other than a heredoc
+#              carries nothing: which fd it moved is not tracked, so the pipe may never see its output.
 # @arg $1 heredoc_var name of the carried heredoc ordinal variable (set)
 # @arg $2 text_var name of the carried literal payload variable (set)
 # @arg $3 text_set_var name of the flag saying whether text_var is meaningful (set)
 # @arg $4 seg_cmd the segment's command word
 # @arg $5 seg_heredoc the heredoc ordinal the segment read, or empty
-# @arg $6 seg_redir 1 when the segment redirected its output
+# @arg $6 seg_redir 1 when the segment carried any redirection other than a heredoc
 # @arg $@ seg_words the segment's operand words, quotes already stripped
 # @exitcode 0 always; the caller runs under errexit and a non-zero status here would fire the fail-open trap
 # shellcheck disable=SC2034 # the carry_* namerefs are the caller's variables, which shellcheck cannot follow
@@ -166,7 +166,7 @@ function wrappers::segment_pipe_carry() {
 # @description Find the payloads of local shell wrappers and print each one's raw text,
 #              NUL-terminated, with any surrounding quotes stripped.
 #
-#              A `-c` payload counts only when all three hold: the wrapper is in command position
+#              A `-c` payload counts only when all of these hold: the wrapper is in command position
 #              (so `ssh host bash -c ...` and a bare `echo bash -c ...` are both skipped, since
 #              neither runs the payload here); a `-c` precedes it, in the same simple command,
 #              within the wrapper's operand budget (see wrappers::wrapper_operand_budget -- this is what
@@ -253,7 +253,7 @@ function wrappers::shell_wrapper_payloads() {
   # evaluated unquoted in [[ =~ ]].
   local -r heredoc_re='^([0-9]*)<<([^<]|$)' bare_heredoc_re='^[0-9]*<<-?$'
   # Any other redirection: an optional fd, then `>`/`<`, `>>`/`<>`, or `&>`.
-  # Two other token shapes match it and must therefore stay ABOVE it: a `<<`
+  # Other token shapes match it and must therefore stay ABOVE it: a `<<`
   # heredoc operator, and a `<HD:5>` body marker -- both branches above
   # `continue`, so neither ever reaches here. The newline token `<NL>` matches
   # too and cannot be handled that way, since it is an operator that has to

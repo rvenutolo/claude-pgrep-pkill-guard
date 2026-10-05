@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # @description The pgrep/pkill PreToolUse guard for the Bash tool: reads the hook JSON on stdin, prints a decision.
-# @arg $@ args human-mode options (--help, --version); Claude Code passes none
+# @arg $@ args human-mode options (-h, --help, --version); Claude Code passes none
 # @stdout the decision or an INACTIVE notice as one JSON line, or the help text or version line
 # @stderr one error line plus a `--help` hint, on a human-mode usage error
 # @exitcode 0 a decision, a notice, the help or the version was printed; any unexpected failure fails open
@@ -11,8 +11,8 @@ set -Eeuo pipefail
 # No inherit_errexit: forbidden in hooks/, where `||` fallbacks keep substitutions off the ERR trap (invariant 2).
 IFS=$'\n\t'
 
-# Defined above the version guard below, which needs it: everything else in this
-# script is set up after that guard has already run.
+# Defined above the version guard below, which needs it: everything else but the
+# strict mode and IFS above is set up after that guard has already run.
 readonly HOOK_NAME='pgrep-pkill-guard'
 
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
@@ -33,7 +33,7 @@ trap 'emit_allow; exit 0' ERR
 # command back out with ${command:offset:length}. Bash string operations are
 # locale-aware, so under a UTF-8 locale a single multibyte character earlier in
 # the command shifts every later slice and silently voids the bracket mitigation.
-# Force the C locale so the two index bases agree.
+# Force the C locale so both index bases agree.
 export LC_ALL=C
 
 # Resolved lazily by resolve_hook_dir, via load_body: only the human-mode
@@ -53,7 +53,7 @@ function emit_allow() {
 }
 
 # @description Resolve the directory this script lives in and freeze it. Called once, from
-#              load_body. Both consumers are the sourced body and, through it, the awk
+#              load_body. It locates the sourced body and, through it, the awk
 #              scanner.
 # @set HOOK_DIR the absolute, symlink-resolved directory holding this script
 # @noargs
@@ -68,8 +68,8 @@ function resolve_hook_dir() {
 }
 
 # @description Bring in the sourced body: the whole guard past the prefilter, and human::human_mode with
-#              it. Two callers need it -- the human-mode dispatch and the JSON path -- so the
-#              resolution and both fail-open branches live here, not twice over (invariant 5).
+#              it. The human-mode dispatch and the JSON path each need it, so the
+#              resolution and both fail-open branches live here, not once per caller (invariant 5).
 # @noargs
 # @stdout on failure, one `{"systemMessage":...}` line
 # @exitcode 0 the body is loaded and its functions are callable
@@ -109,7 +109,7 @@ function main() {
   #
   # Sitting AFTER the bash-version guard is deliberate: on stock macOS bash 3.2
   # `--help` prints that guard's INACTIVE message instead of help. Fixing that
-  # needs a third, bash-3.2-safe file in hooks/ -- a large structural price for a
+  # needs another, bash-3.2-safe file in hooks/ -- a large structural price for a
   # message that already names that reader's exact problem. Known limitation.
   if (($# > 0)) || [[ -t 0 ]]; then
     load_body || return 0
@@ -130,7 +130,7 @@ function main() {
   # with an empty delimiter keeps the payload byte for byte: no word splitting,
   # no whitespace trimmed.
   #
-  # Two differences from `$(cat)`, both inert. A trailing newline survives
+  # The differences from `$(cat)` are both inert. A trailing newline survives
   # rather than being stripped: the prefilter is a substring test and `jq`
   # accepts trailing whitespace. And a raw NUL byte would truncate the payload,
   # which Claude Code's payloads cannot contain -- Node's JSON.stringify escapes
@@ -139,9 +139,9 @@ function main() {
   local input=''
   IFS= read -r -d '' input || : # an empty delimiter returns 1 at EOF with the payload stored
 
-  # The prefilter. Everything below this point costs a `jq` spawn and at least
-  # one `awk` scanner pass, and on an ordinary Bash call both find nothing:
-  # #32 measured 13.12 ms per call against a 1.55 ms spawn floor.
+  # The prefilter. Everything below this point costs a `jq` spawn, plus at least one
+  # `awk` scanner pass once the command names a trigger token, and on an ordinary
+  # Bash call none of it finds anything: #32 measured 13.12 ms per call against a 1.55 ms spawn floor.
   #
   # This is sound because it is provably weaker than a gate the guard already
   # applies to the parsed command:
@@ -165,7 +165,7 @@ function main() {
   # own `if:` handler filter unusable here (#29: 39 of 180 non-allow rows missed).
   #
   # The test is a superset, so it fails in the safe direction: a payload that
-  # matches merely takes today's path at today's cost. A `cwd` or
+  # matches merely takes the full path below at its full cost. A `cwd` or
   # `transcript_path` containing `kill` makes every call in that tree a false
   # positive, which is a performance non-event.
   #
@@ -173,7 +173,7 @@ function main() {
   # substring of the payload -- true because it does not unquote (#52). If that
   # ever changes, revisit this pattern in the same commit; tests/prefilter.bats
   # is what will catch the drift. It also assumes the payload spells the
-  # command's characters out literally rather than escaping them -- true today
+  # command's characters out literally rather than escaping them -- true
   # because Claude Code's payloads come from Node's JSON.stringify, which
   # never \u-escapes ASCII letters.
   #

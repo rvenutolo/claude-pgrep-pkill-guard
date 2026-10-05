@@ -1,11 +1,12 @@
 # shellcheck shell=bash
 #
-# Every message the guard emits: warn and deny envelopes, deny reasons, repeat
-# reasons, sourced by hooks/pgrep-pkill-guard-body.sh whenever the entry script
-# loads the body -- in human mode, or once the prefilter has let a payload
-# through. Never executed: no shebang, no exec bit, and it must not set
-# `set -Eeuo pipefail`, `IFS`, or the ERR trap -- the entry script owns all
-# three, and a sourced file that sets them reconfigures its caller. Never add
+# The guard's decision messages: the warn and deny envelopes, the warn text,
+# the deny and repeat reasons, and the tail of the scanner's INACTIVE notice,
+# sourced by hooks/pgrep-pkill-guard-body.sh whenever the entry script loads
+# the body -- in human mode, or once the prefilter has let a payload through.
+# Never executed: no shebang, no exec bit, and it must not set
+# `set -Eeuo pipefail`, `IFS`, or the ERR trap -- the entry script owns them
+# all, and a sourced file that sets them reconfigures its caller. Never add
 # `shopt -s inherit_errexit` (invariant 2). Long options only where the BSD
 # tool has them: this runs on BSD userland too (invariant 1).
 
@@ -18,11 +19,11 @@ of 0 does not mean the target process is running. Add `--ignore-ancestors` if th
 status is being used for anything.'
 
 # The tail of the INACTIVE notice for a scanner that tokenized the command
-# wrongly, emitted from two places in hooks/lib/classify.sh (the classify
-# verdict and the repeat-check rescan). One constant, because two copies of
-# the same sentence drift. Appended rather than written on one line: the
-# sentence is over the 120-column maximum, and shfmt collapses a backslash
-# continuation between two quoted halves back onto a single long line.
+# wrongly, emitted from hooks/lib/classify.sh for both the classify verdict
+# and the repeat-check rescan. One constant, because copies of the same
+# sentence drift. Appended rather than written on one line: the sentence is
+# over the 120-column maximum, and shfmt collapses a backslash continuation
+# between two quoted halves back onto a single long line.
 # shellcheck disable=SC2034 # read by hooks/lib/classify.sh
 SCANNER_INACTIVE_MESSAGE='the command scanner tokenized this command incorrectly (incompatible awk?); '
 SCANNER_INACTIVE_MESSAGE+='the pgrep/pkill guard is INACTIVE for this command.'

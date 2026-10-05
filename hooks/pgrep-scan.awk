@@ -25,7 +25,7 @@
 # previous RS="\0" design tripped the integrity trailer there for every heredoc
 # payload (#7). POSIX awk cannot tell `foo` from `foo\n` at end of input (there
 # is no RT), so the CALLER TERMINATES THE INPUT WITH EXACTLY ONE NEWLINE and the
-# loop below drops exactly one: a command's own trailing newline survives,
+# code below drops exactly one: a command's own trailing newline survives,
 # which is what a heredoc body's byte count depends on.
 BEGIN {
   ORS = ""

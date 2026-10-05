@@ -4,7 +4,7 @@
 # by hooks/pgrep-pkill-guard-body.sh whenever the entry script loads the body
 # -- in human mode, or once the prefilter has let a payload through. Never
 # executed: no shebang, no exec bit, and it must not set `set -Eeuo pipefail`,
-# `IFS`, or the ERR trap -- the entry script owns all three, and a sourced file
+# `IFS`, or the ERR trap -- the entry script owns them all, and a sourced file
 # that sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
@@ -187,7 +187,7 @@ function loops::body_has_terminator() {
 }
 
 # @description True when the do/done body belonging to the `for`/`select`/`while`/`until` head at
-#              head_idx contains `kill` in command position. Covers two idioms where `kill` is not
+#              head_idx contains `kill` in command position. Covers the idioms where `kill` is not
 #              adjacent to the invocation in the token stream at all, so the rest of this guard's
 #              kill detection (which looks for `kill` next to or piped from the invocation) cannot
 #              see it: `for pid in $(pgrep -f java); do kill "$pid"; done` (head_idx is the `in`

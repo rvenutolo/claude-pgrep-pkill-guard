@@ -159,7 +159,7 @@ function repeat::repeat_check() {
   # reverse order bash still applies `>` first, so the open failure prints
   # to the ORIGINAL stderr before the stderr redirect ever takes effect.
   if ! printf '%s' "${kept}" 2> /dev/null > "${tmp}"; then
-    rm -f -- "${tmp}" 2> /dev/null
+    rm -f -- "${tmp}" 2> /dev/null || true # a failed rm must never trip errexit
     return 0
   fi
   if ! mv -f -- "${tmp}" "${file}" 2> /dev/null; then

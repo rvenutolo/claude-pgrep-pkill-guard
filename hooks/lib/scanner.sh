@@ -66,9 +66,9 @@ function scanner::scan_command() {
 # @arg $1 tokens newline-separated "<offset>\t<token>" records from scanner::scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>"
 function scanner::find_invocations() {
+  local -r tokens="$1"
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0
-  local -r tokens="$1"
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     word="${token##*/}"
@@ -90,8 +90,7 @@ function scanner::find_invocations() {
 # @arg $2 target index of the pgrep/pkill token itself
 # @stdout lines of "<offset>\t<token>"
 function scanner::invocation_args() {
-  local -r tokens="$1"
-  local -r target="$2"
+  local -r tokens="$1" target="$2"
   local idx=0 offset token
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue

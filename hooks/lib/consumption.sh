@@ -69,7 +69,7 @@ function consumption::feeds_a_kill_forward() {
       *)
         prev="${word}"
         case "${segment}" in
-          head)
+          'head')
             case "${word}" in
               'kill') return 0 ;;
               'xargs')
@@ -87,7 +87,7 @@ function consumption::feeds_a_kill_forward() {
                 ;;
             esac
             ;;
-          xargs)
+          'xargs')
             if ((xargs_skip == 1)); then
               # Value word belonging to the option before it, not a command.
               xargs_skip=0

@@ -353,6 +353,8 @@ function main() {
     return 1
   fi
   if ! functions="$(namespaced_functions "$@")" || ! helpers="$(helper_functions)"; then
+    # A gate reporting its own verdict is not a crash: drop the ERR trap so
+    # the diagnostics above are the last thing the reader sees.
     trap - ERR
     return 1
   fi
@@ -381,8 +383,8 @@ function main() {
     fi
     verdict="$(cat -- "${WORK_DIR}/${index}.verdict" 2> /dev/null)" || verdict='NO-VERDICT'
     case "${verdict}" in
-      clean) ;;
-      dirty) dirty="$((dirty + 1))" ;;
+      'clean') ;;
+      'dirty') dirty="$((dirty + 1))" ;;
       *)
         # The job died before it could say. Never a silent pass.
         printf 'FAIL: %s could not be scanned\n' "${path}" >&2

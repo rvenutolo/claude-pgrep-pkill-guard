@@ -81,7 +81,7 @@ function assert_rejected() {
 }
 
 @test "run-all-checks: a surplus argument after --report DIR is rejected" {
-  run_gate --report "${BATS_TEST_TMPDIR}/out" extra
+  run_gate --report "${BATS_TEST_TMPDIR}/out" 'extra'
   assert_rejected
 }
 

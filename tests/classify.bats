@@ -19,14 +19,14 @@ function assert_row() {
   reason="$(reason_of "${json}")"
 
   case "${expected}" in
-    allow)
+    'allow')
       [[ "${decision}" == 'none' ]] || {
         printf 'expected bare {} for: %s\n' "${command}" >&2
         printf 'got: %s\n' "${json}" >&2
         return 1
       }
       ;;
-    warn)
+    'warn')
       [[ "${decision}" == 'allow' ]] || {
         printf 'expected allow+context for: %s; got %s\n' "${command}" "${decision}" >&2
         return 1
@@ -42,9 +42,9 @@ function assert_row() {
         return 1
       }
       case "${expected#deny:}" in
-        kill) needle='--ignore-ancestors' ;;
-        loop) needle='kill -0' ;;
-        task-poll) needle='TaskOutput' ;;
+        'kill') needle='--ignore-ancestors' ;;
+        'loop') needle='kill -0' ;;
+        'task-poll') needle='TaskOutput' ;;
         *)
           printf 'unknown deny kind: %s\n' "${expected}" >&2
           return 1
@@ -68,7 +68,7 @@ function assert_row() {
   while IFS=$'\t' read -r cmd_json expected; do
     [[ -z "${cmd_json}" ]] && continue
     count="$((count + 1))"
-    command="$(jq --raw-output . <<< "${cmd_json}")"
+    command="$(jq --raw-output '.' <<< "${cmd_json}")"
     if ! assert_row "${command}" "${expected}"; then
       failures="$((failures + 1))"
     fi

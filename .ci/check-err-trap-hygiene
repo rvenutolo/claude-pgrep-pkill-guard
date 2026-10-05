@@ -188,12 +188,12 @@ function main() {
   local rc=0 returns=0 kind file line text
   while IFS=$'\t' read -r kind file line text; do
     case "${kind}" in
-      V)
+      'V')
         printf 'FAIL: %s:%s: deliberate non-zero return with no preceding "trap - ERR": %s\n' \
           "${file}" "${line}" "${text}" >&2
         rc=1
         ;;
-      N)
+      'N')
         # The count rides in the record's second field, where a V record
         # carries the file name.
         returns="${file}"

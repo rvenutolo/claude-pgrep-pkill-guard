@@ -64,8 +64,9 @@ ACTION_YML="${1:-${REPO_DIR}/.github/actions/bats-ambient/action.yml}"
 LOCK_JSON="${2:-${REPO_DIR}/flake.lock}"
 readonly ACTION_YML LOCK_JSON
 
-# library name -> the action.yml env var carrying its SHA. The flake.lock node
-# name is the library name itself.
+# Rows are 'library:ENV_VAR', ':'-delimited: the library name, then the
+# action.yml env var carrying its SHA. The flake.lock node name is the library
+# name itself.
 readonly LIBRARIES=(
   'bats-support:BATS_SUPPORT_SHA'
   'bats-assert:BATS_ASSERT_SHA'

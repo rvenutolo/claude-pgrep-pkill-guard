@@ -77,7 +77,7 @@ function messages::deny_message() {
   local preamble fixes
 
   case "${kind}" in
-    loop)
+    'loop')
       # shellcheck disable=SC2016 # backticks are markdown spans in the deny text
       preamble='This loop can never exit. The Bash tool runs commands as `bash -c ...`, so the search
 pattern is by construction part of an ancestor process command line. `pgrep --full` matches that
@@ -97,7 +97,7 @@ one event.'
 2. Poll a PID, not a pattern: `while kill -0 "$pid" 2>/dev/null; do sleep 5; done`, with `$pid`
    recorded when the process was started (`$!`, a PID file). A PID cannot match a sibling.'
       ;;
-    kill)
+    'kill')
       # shellcheck disable=SC2016 # backticks are markdown spans in the deny text
       preamble='This matches the invoking shell itself. The Bash tool runs commands as `bash -c ...`,
 so the search pattern is part of an ancestor process command line, and killing that match terminates
@@ -115,7 +115,7 @@ the session shell.'
    appears NOWHERE ELSE in the same command. A second copy in the same call silently defeats it.'
       fixes="${fixes//__TOOL__/${detail}}"
       ;;
-    task-poll)
+    'task-poll')
       # The path is interpolated by concatenation so the backticks stay literal.
       # shellcheck disable=SC2016 # backticks are markdown spans in the deny text
       preamble='This loop polls a harness task-output file (`'"${detail}"'`). Background tasks are

@@ -225,7 +225,7 @@ function make_labels_fixture() {
   # misplaced flag, a stray path. Swallowing it silently would run the check
   # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
-  run "${CHECK}" "${FORMS_DIR}" "${REPO_DIR}/.github/labels.yml" extra
+  run "${CHECK}" "${FORMS_DIR}" "${REPO_DIR}/.github/labels.yml" 'extra'
   assert_failure 2
   assert_output --partial 'usage:'
 }

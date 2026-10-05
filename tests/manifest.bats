@@ -6,11 +6,11 @@ function setup() {
 }
 
 @test "manifest: all three files are valid JSON" {
-  run jq empty "${PLUGIN_JSON}"
+  run jq 'empty' "${PLUGIN_JSON}"
   assert_success
-  run jq empty "${MARKET_JSON}"
+  run jq 'empty' "${MARKET_JSON}"
   assert_success
-  run jq empty "${HOOKS_JSON}"
+  run jq 'empty' "${HOOKS_JSON}"
   assert_success
 }
 
@@ -360,7 +360,7 @@ function fixture_jq() {
   # misplaced flag, a stray path. Swallowing it silently would run the check
   # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
-  run "${REPO_DIR}/.ci/check-manifest-invariants" "${REPO_DIR}" extra
+  run "${REPO_DIR}/.ci/check-manifest-invariants" "${REPO_DIR}" 'extra'
   assert_failure 2
   assert_output --partial 'usage:'
 }

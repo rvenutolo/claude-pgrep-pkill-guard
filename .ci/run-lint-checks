@@ -232,7 +232,7 @@ function main() {
   fi
 
   log 'running yamllint'
-  yamllint --strict . || rc=1
+  yamllint --strict '.' || rc=1
 
   log 'running renovate-config-validator'
   # --no-global is required, not cosmetic: a config named on the command line is

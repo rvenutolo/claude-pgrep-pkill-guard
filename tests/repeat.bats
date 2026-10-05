@@ -60,7 +60,7 @@ function setup() {
 
 @test "repeat: three different task files are three first reads" {
   local name json
-  for name in a1 a2 a3; do
+  for name in 'a1' 'a2' 'a3'; do
     json="$(run_hook "cat ${TASK_BASE}/${name}.output" 's3')"
     [[ "$(decision_of "${json}")" == 'none' ]]
   done
@@ -68,7 +68,7 @@ function setup() {
 
 @test "repeat: sessions do not share state" {
   local suffix json
-  for suffix in a b c; do
+  for suffix in 'a' 'b' 'c'; do
     json="$(run_hook "cat ${TASK_PATH}" "s4${suffix}")"
     [[ "$(decision_of "${json}")" == 'none' ]]
   done

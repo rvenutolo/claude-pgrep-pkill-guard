@@ -162,7 +162,7 @@ function check_parses() {
     fail "${label} does not exist"
     return 1
   fi
-  if ! jq --exit-status type "${file}" > /dev/null 2>&1; then
+  if ! jq --exit-status 'type' "${file}" > /dev/null 2>&1; then
     fail "${label} is not parseable JSON"
     return 1
   fi

@@ -262,7 +262,7 @@ function exempt_reason() {
   local saw_version=''
 
   if ! diff="$(git -C "${REPO_DIR}" diff --unified=0 --no-color --no-renames \
-    --src-prefix=a/ --dst-prefix=b/ "${recorded}..HEAD" -- "${BENCH_SUBJECT}")"; then
+    --src-prefix='a/' --dst-prefix='b/' "${recorded}..HEAD" -- "${BENCH_SUBJECT}")"; then
     return 1
   fi
 

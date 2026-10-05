@@ -91,7 +91,7 @@ function wrappers::pipe_producer_payload() {
   local -a literals=()
   local word
   case "${name}" in
-    echo)
+    'echo')
       for word in "$@"; do
         [[ "${word}" =~ ^-[neE]+$ ]] && continue
         literals+=("${word}")
@@ -99,7 +99,7 @@ function wrappers::pipe_producer_payload() {
       ((${#literals[@]} == 1)) || return 1
       printf '%s' "${literals[0]}"
       ;;
-    printf)
+    'printf')
       for word in "$@"; do
         [[ "${word}" == '--' ]] && continue
         literals+=("${word}")

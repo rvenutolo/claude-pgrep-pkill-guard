@@ -2,7 +2,7 @@
 
 # @description Check every link in the tracked tree with lychee (#42).
 #
-#              Three choices here look arbitrary and are not:
+#              The choices below look arbitrary and are not:
 #
 #              1. The input list comes from `git grep -I --files-with-matches ''`
 #                 rather than from a bare `lychee .`. A tree walk does not honour
@@ -38,7 +38,8 @@
 #              instead, plus weekly.
 # @noargs
 # @exitcode 0 every link in the tracked tree resolves
-# @exitcode 1 a link failed, or the file list came up empty
+# @exitcode 1 a link failed or lychee itself could not run, or the file list came
+#             up empty
 # @exitcode * otherwise the failing git status, when the repository root cannot
 #             be resolved
 

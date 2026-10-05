@@ -9,12 +9,12 @@
 #              yamllint proves a file is YAML, not that it is a form, and
 #              `claude plugin validate` never looks at .github at all.
 #
-#              Nearly all of the checking happens inside two yq programs rather
+#              Nearly all of the checking happens inside yq programs rather
 #              than in bash, the way .ci/check-manifest-invariants puts nearly
-#              everything in one jq program; bash only walks the directory,
+#              everything in a jq program; bash only walks the directory,
 #              prefixes each emitted line with its filename, and counts.
 #
-#              Two yq behaviours shape how those programs are written, and both
+#              The yq behaviours that shape how those programs are written
 #              are traps rather than preferences:
 #
 #              1. `select(COND) | "message"` emits the message even when the
@@ -33,7 +33,7 @@
 #              a yq program because the existing ones are single-quoted
 #              expressions over ONE file and the labels are in a second, and
 #              restructuring them to reach it would trade a real rule against
-#              the two traps above. A form referencing a label that does not
+#              the traps above. A form referencing a label that does not
 #              exist does not error either -- GitHub files the issue without it
 #              -- so this is the same failure mode as the rest of the file (#89).
 # @arg $1 dir optional directory to check; defaults to the repo root plus
@@ -82,7 +82,7 @@ readonly DIR LABELS_FILE
 
 # config.yml is the chooser configuration, not a form: it carries no name,
 # description or body, so it gets its own program below rather than being
-# checked as a form and failing all three.
+# checked as a form and failing on each of them.
 readonly CONFIG_NAME='config.yml'
 
 # One yq program per file kind, each emitting one line per violation. Both are

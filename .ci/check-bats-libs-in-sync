@@ -3,7 +3,7 @@
 # @description Assert the bats library SHAs pinned in the ambient compat action
 #              match the ones flake.lock pins for the hermetic gate. The gate
 #              legs load bats-support and bats-assert from flake inputs; the
-#              two bats-running compat legs clone them by SHA from
+#              bats-running compat legs clone them by SHA from
 #              .github/actions/bats-ambient/action.yml. Nothing tied the two
 #              together, and they agreed only by coincidence (#101).
 #
@@ -142,8 +142,9 @@ function main() {
     return "${rc}"
   fi
 
-  # Aggregated, not fail-fast: a lock-file bump moves both libraries at once, so
-  # reporting only the first mismatch would hide half the work of fixing it.
+  # Aggregated, not fail-fast: a lock-file bump moves every library at once, so
+  # reporting only the first mismatch would hide the rest of the work of fixing
+  # it.
   for entry in "${LIBRARIES[@]}"; do
     library="${entry%%:*}"
     var="${entry##*:}"

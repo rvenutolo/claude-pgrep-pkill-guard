@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 
 # @description Run a command inside this repo's Nix devShell with a hermetic
-#              environment. The single entrypoint for every gate: the pre-push
-#              hook, the .justfile recipes, and every CI step go through it, so
-#              local and CI runs cannot drift and no gate can silently resolve a
-#              tool from the ambient machine.
+#              environment. The single entrypoint for every hermetic gate:
+#              the git hooks, the .justfile recipes that run a gate, and the CI
+#              steps that run one go through it, so local and CI runs cannot
+#              drift and no gate can silently resolve a tool from the ambient
+#              machine. What stays outside does so on purpose: the compat CI
+#              legs, which exist to run the suite against ambient tools, and
+#              `nix fmt`, which takes its formatters from the Nix store.
 #
 #              `nix develop --ignore-environment` is what makes the boundary
 #              real: without it the devShell inherits the caller's PATH and an

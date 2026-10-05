@@ -20,10 +20,10 @@
 #              author's job to re-run -- a gate that fired on every bench/run
 #              edit would be a gate people learned to ignore.
 #
-#              FIVE verdicts, not two. The obvious design -- `git log
+#              More verdicts than pass and fail. The obvious design -- `git log
 #              <recorded>..HEAD -- hooks/` is empty, pass, else fail -- assumes
-#              the recorded commit is reachable from HEAD, and neither of the
-#              two ways it can fail to be is hypothetical:
+#              the recorded commit is reachable from HEAD, and neither way it
+#              can fail to be is hypothetical:
 #
 #                1. reachable, hooks/ untouched since         -> pass
 #                2. reachable, hooks/ changed since           -> FAIL, stale
@@ -37,7 +37,7 @@
 #
 #              Verdict 5 exists because release-please owns a line inside
 #              hooks/. Without it every release PR is red on a gate whose only
-#              remedy is an hour of wall-clock benchmarking, and the release
+#              remedy is re-running the wall-clock benchmark, and the release
 #              cannot merge until someone pays it -- for a string the hook
 #              prints and never branches on. A change that was reverted before
 #              HEAD passes the same way: the two trees are byte-identical. See
@@ -78,8 +78,8 @@
 #              --is-ancestor` against HEAD rather than membership of main.
 # @arg $1 dir optional fixture directory, treated as the repo root: both the
 #         report and the git history are read from there. It exists so the bats
-#         suite can drive all five verdicts over a purpose-built two-commit
-#         repository in milliseconds. Without it the only possible test would be
+#         suite can drive every verdict over a purpose-built fixture repository
+#         in milliseconds. Without it the only possible test would be
 #         "exits 0 on the real repo", which a script that unconditionally
 #         returned 0 would also pass -- the same reasoning as
 #         .ci/check-devshell-provides' fixture argument. Only the location is
@@ -174,7 +174,7 @@ readonly PROVENANCE_RE='^\|[[:space:]]*commit[[:space:]]*\|[[:space:]]*`([0-9a-f
 # Freshness is a RELEASE-time property. The README quotes the report's figures
 # for the hook a consumer installs, which is a release, and a wall-clock
 # benchmark on an idle machine is not something every hooks/ PR can pay -- the
-# gate that demanded it was one people would learn to route around. So the two
+# gate that demanded it was one people would learn to route around. So the
 # stale verdicts below convict only when this variable is set, which ci.yml
 # does on release-please's branch alone; everywhere else they WARN and exit 0.
 # A missing or malformed report is a different thing -- a broken file, not old
@@ -198,7 +198,7 @@ function stale_prefix() {
 #              table is the first table in the file, and a second `commit` row
 #              would be a different report entirely.
 # @noargs
-# @stdout the recorded short sha
+# @stdout the recorded sha, as the row holds it
 # @stderr a diagnostic when no usable row is found
 # @exitcode 0 a commit row was found and its cell holds a hex sha
 # @exitcode 1 no such row exists
@@ -243,18 +243,20 @@ function commit_present() {
 #              change at all.
 #
 #              The diff is walked line by line with an allowlist rather than a
-#              denylist: only the five metadata lines a unified diff can emit
-#              here are skipped, only a content line matching VERSION_LINE_RE is
-#              forgiven, and ANYTHING else -- `old mode`, `new file mode`,
+#              denylist: only an empty line and the metadata lines a unified
+#              diff can emit here are skipped, only a content line matching
+#              VERSION_LINE_RE is forgiven, and ANYTHING else -- `old mode`,
+#              `new file mode`,
 #              `Binary files ... differ`, a content line that is not the version
 #              line -- returns 1. A denylist would have to enumerate every way
 #              git can describe a change, and the one it forgot would read as
 #              exempt. `--no-renames` is set so a rename arrives as a delete
 #              plus an add, whose content lines then fail the regex, rather than
 #              as a `similarity index` line this would have to reason about; the
-#              prefixes are set explicitly so `--- `/`+++ ` headers are always
-#              `a/`- or `b/`-prefixed, which keeps the skip as narrow as a prefix
-#              match can be: a removed line whose own text starts `-- a/`, or an
+#              prefixes are set explicitly so a `--- `/`+++ ` header is always
+#              `a/`- or `b/`-prefixed or names `/dev/null`, which keeps the
+#              skip as narrow as a prefix match can be: a removed line whose
+#              own text starts `-- a/`, or an
 #              added one starting `++ b/`, still reads as a header and is skipped.
 # @arg $1 recorded the recorded commit
 # @stdout the reason the difference is harmless, for the caller's `OK:` line
@@ -288,7 +290,7 @@ function exempt_reason() {
     esac
   done <<< "${diff}"
 
-  # Two different exemptions, said differently, because a reader who sees this
+  # Different exemptions, said differently, because a reader who sees this
   # line is being told why a gate that fired did not convict, and "the version
   # line moved" and "the tree came back to where it started" send them to
   # different places if they disagree.

@@ -7,9 +7,9 @@
 #              disagreement means a bump was lost rather than that a version was
 #              chosen.
 #
-#              The fourth source is the `HOOK_VERSION` constant in
+#              A further source is the `HOOK_VERSION` constant in
 #              hooks/pgrep-pkill-guard-body.sh -- the string the guard's
-#              `--version` prints. release-please rewrites it through a third
+#              `--version` prints. release-please rewrites it through its own
 #              `extra-files` entry (`type: "generic"`), which keys off the
 #              `# x-release-please-version` comment sitting on that same line.
 #              Unlike the manifest it gets NO `BOOTSTRAP_VERSION` exemption and

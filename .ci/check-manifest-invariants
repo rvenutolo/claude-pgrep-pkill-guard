@@ -151,9 +151,9 @@ function fail() {
 }
 
 # @description Assert a file exists and holds parseable JSON. The hooks manifest
-#              gets the same treatment as the other two because the runtime
-#              always probes it, and a malformed one is a crash rather than a
-#              degraded load.
+#              gets the same treatment as the marketplace and plugin manifests
+#              because the runtime always probes it, and a malformed one is a
+#              crash rather than a degraded load.
 # @arg $1 file absolute path to the JSON file
 # @exitcode 0 the file exists and parses
 # @exitcode 1 it is missing or unparsable

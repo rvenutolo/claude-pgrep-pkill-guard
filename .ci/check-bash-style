@@ -47,6 +47,8 @@
 #             file), a scan that dies before it gives a verdict, a failed
 #             canary, or a git that cannot list or search the repository
 # @exitcode 2 a required tool is not on PATH
+# @exitcode * otherwise the failing status of mktemp or nproc, when the work
+#             directory cannot be made or the processors cannot be counted
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -109,7 +111,7 @@ readonly -a CANARY_RULES=(
 # The canary lines that must each trip bare-arith-stmt: the statement in the
 # function body, the one in the `if` body and the one in the loop body. The
 # rule finds each through a different key, and its id alone cannot say which
-# of the three came back.
+# of them came back.
 readonly -a CANARY_BARE_ARITH_LINES=(10 12 15)
 
 # The shape of a namespaced function definition, for grep.

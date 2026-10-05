@@ -8,6 +8,8 @@
 #              codes rather than failing fast, so one run surfaces every
 #              failing category.
 # @noargs
+# @stderr a `[<script>] <message>` banner before each step, and the reason for
+#         each empty file list or missing directory
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed, a file list came up empty, or the
 #             .github directory is missing
@@ -32,7 +34,8 @@ function log() {
 }
 
 # @description Collect tracked shell scripts: *.sh, *.bash and *.bats, plus
-#              extensionless files whose first line is a bash shebang.
+#              any other file, outside a skip list of non-shell extensions,
+#              whose first line is exactly `#!/usr/bin/env bash`.
 #              `git ls-files` rather than a tree walk so untracked scratch files
 #              are never linted.
 #
@@ -45,7 +48,7 @@ function log() {
 #              help -- the bats dialect reaches it from .editorconfig, see the
 #              comment on that file's `[*.bats]` section.
 #
-#              The extensionless arm matches the canonical shebang as an EXACT
+#              The catch-all arm matches the canonical shebang as an EXACT
 #              string, and what makes that safe is a separate gate, not this
 #              function: .ci/check-shell-shebangs fails loudly on a tracked
 #              file whose shebang names bash in any other spelling, and forces
@@ -129,7 +132,7 @@ function main() {
   # lint verdict on a function that still exists; under --posix it is
   # `fatal: function 'gensub' called but never defined`, because in POSIX mode
   # there is no such function to call. The second is the stronger statement --
-  # it is what the other two awks would say -- and --posix also aligns the
+  # it is what the other awks would say -- and --posix also aligns the
   # regex and escape semantics gawk otherwise extends, which no lint level
   # does.
   #

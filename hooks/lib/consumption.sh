@@ -231,15 +231,15 @@ function consumption::invocation_is_captured() {
   local -n toks="$1"
   local -r target="$2"
   local -a stack=()
-  local idx dollar=0 token entry
+  local idx dollar=0 token opener
   for ((idx = 0; idx <= target; idx++)); do
     token="${toks[idx]}"
     if ((idx == target)); then
       if ((${#stack[@]} == 0)); then
         return 1
       fi
-      for entry in "${stack[@]}"; do
-        [[ "${entry}" == 'capture' || "${entry}" == 'backtick' ]] && return 0
+      for opener in "${stack[@]}"; do
+        [[ "${opener}" == 'capture' || "${opener}" == 'backtick' ]] && return 0
       done
       return 1
     fi

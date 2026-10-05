@@ -68,17 +68,16 @@
               # over-broad permissions, credential persistence, environment-file
               # writes. The two overlap nowhere, which is why both are here.
               #
-              # Note what this package does NOT cost, because the comment on
-              # `renovate` below records the opposite. renovate lists no
-              # x86_64-darwin in meta.platforms and so narrowed this devShell;
-              # zizmor evaluates on every system in the `systems` input,
-              # aarch64-darwin included, so adding it narrows nothing further.
+              # Unlike `renovate` below, which lists no x86_64-darwin in
+              # meta.platforms and so keeps this devShell off Intel Macs, zizmor
+              # evaluates on every system in the `systems` input, aarch64-darwin
+              # included: it costs this devShell no platform.
               zizmor
               # the two standard nix linters, both invoked by
               # .ci/run-lint-checks. nixfmt formats these files but says nothing
-              # about what they contain: statix catches antipatterns (it is what
-              # found the repeated `programs.` keys in .treefmt.nix) and deadnix
-              # catches unused bindings and arguments.
+              # about what they contain: statix catches antipatterns (a repeated
+              # `programs.` key, for one) and deadnix catches unused bindings and
+              # arguments.
               statix
               deadnix
               # the link checker .ci/check-links drives. Pinned here rather than
@@ -100,7 +99,7 @@
               # it a malformed config is not a CI failure: Renovate simply stops
               # opening dependency PRs, silently and forever. Note the cost --
               # nixpkgs' renovate lists no x86_64-darwin in meta.platforms, so
-              # this devShell no longer evaluates on an Intel Mac. The gate is
+              # this devShell does not evaluate on an Intel Mac. The gate is
               # unaffected: CI's macos-latest runner is arm64.
               renovate
               # tests / runtime
@@ -136,7 +135,7 @@
               # nix.out, NOT a bare `nix`. This package's default output is `dev`,
               # which has no bin/ at all, so a bare `nix` puts nothing on the
               # shell's PATH and the gates silently run whatever nix the host
-              # ships -- 2.35.2 here versus the locked 2.34.8. .out is what makes
+              # ships, which need not be the locked version. .out is what makes
               # the pinned nix the one that actually runs inside the shell.
               nix.out
               coreutils
@@ -151,11 +150,9 @@
               # platform at all in meta.platforms. An unconditional entry here
               # would break evaluation of this devShell on aarch64-darwin and
               # take the hermetic macOS gate down with it -- the same trap the
-              # util-linux/`flock` note above was written to avoid, and the
-              # second package in this pass that would have narrowed this
-              # shell's platforms (`renovate` above was the first, #102).
-              # `lib.optionals` keeps the narrowing at zero: off Linux the list
-              # is empty and nothing about kcov is ever evaluated.
+              # util-linux/`flock` note above avoids. `lib.optionals` keeps the
+              # narrowing at zero: off Linux the list is empty and nothing about
+              # kcov is ever evaluated.
               #
               # .ci/required-tools marks this entry `linux-only` so the forward
               # pass of .ci/check-devshell-provides skips it off Linux instead

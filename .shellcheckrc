@@ -1,4 +1,5 @@
-# Optional checks that match a rule in the bash style guide.
+# Optional checks, each matching a bash style rule this repo holds its scripts
+# to (docs/architecture.md, "The bash style gate").
 # require-variable-braces asks for ${var} and leaves the single-character
 # specials and the positionals ($?, $#, $1) alone, which is what the rule asks
 # for. require-double-brackets asks for [[ ]] over [ ]. deprecate-which asks for

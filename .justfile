@@ -18,10 +18,12 @@ test *ARGS:
 # and --ignore-environment stripped it back out again.
 #
 # Open DIR/index.html for the per-line view, which is the part worth reading; the
-# headline percentage is a floor, since kcov counts heredoc body lines as
-# coverable. See docs/architecture.md, "Line coverage".
+# headline percentage is a floor, since kcov counts lines as coverable that the
+# trace can never report a hit on: the continuation lines of a multi-line quoted
+# string, and a `case` pattern alone on its line. See docs/architecture.md,
+# "Line coverage".
 #
-# Expect ~12000 lines of noise on stderr. kcov forwards every trace line it
+# Expect thousands of lines of noise on stderr. kcov forwards every trace line it
 # cannot parse, which is every continuation line of a multi-line traced command,
 # and the suite's JSON payloads are full of them. bats' TAP is on stdout and is
 # unaffected. Redirect stderr if it bothers you; the gate's own coverage step
@@ -82,7 +84,7 @@ format-check:
 hooks:
     ./.ci/activate-githooks
 
-# Add this working copy as a local marketplace, for dogfooding
+# Print the Claude Code commands that add this working copy as a local marketplace, for dogfooding
 install:
     @echo "In Claude Code, run:"
     @echo "  /plugin marketplace add {{ justfile_directory() }}"

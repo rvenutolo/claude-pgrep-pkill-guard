@@ -37,8 +37,8 @@ readonly -a FIXTURE_NON_EXECUTABLE=(
 
 # @description Build a minimal tracked tree in the shape the gate checks: a git
 #              repo holding one file per expected-mode row, each tracked with
-#              the mode its row demands. Each negative case below then corrupts
-#              exactly one of them.
+#              the mode its row demands. The negative cases below then change
+#              a tracked mode, or add or remove a file.
 #
 #              The mode is set in the index with `git update-index --chmod`
 #              rather than on disk, because the gate reads the tracked mode
@@ -64,7 +64,8 @@ function make_exec_bit_fixture() {
 }
 
 # Every case drives FIXTURE mode, which needs nothing but bash and git, so the
-# ambient macOS compat legs run this suite for real rather than skipping it.
+# ambient `compat (macos, homebrew bash)` leg runs this suite for real rather
+# than skipping it.
 # Hence no devShell skip here, the same as tests/shell-shebangs.bats.
 #
 # The first case is the exception that keeps the rest honest: it points the gate

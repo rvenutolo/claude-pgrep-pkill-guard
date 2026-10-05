@@ -17,12 +17,11 @@ on:
 permissions: {}
 concurrency:
   # `github.event_name` belongs in this key for the same reason it does in
-  # ci.yml, and this workflow has carried the bug since #42 gave it a schedule.
-  # A scheduled run's `github.ref` is refs/heads/main, indistinguishable from a
-  # push to main, so without the event name the Monday-noon run and a push
-  # landing in the same window share a group and `cancel-in-progress` kills one
-  # of them -- usually the scheduled one, which is the run that exists to catch
-  # link rot in a week nobody pushed.
+  # ci.yml. A scheduled run's `github.ref` is refs/heads/main, indistinguishable
+  # from a push to main, so without the event name the Monday-noon run and a
+  # push landing in the same window share a group and `cancel-in-progress` kills
+  # one of them -- usually the scheduled one, which is the run that exists to
+  # catch link rot in a week nobody pushed.
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
@@ -40,14 +39,14 @@ jobs:
       contents: read
     steps:
       # `audit`, not `block`. This is a deliberate deviation from every other
-      # job in this repo, all of which pin an egress allowlist -- do not
-      # "fix" it. An allowlist is structurally impossible for this job: its
-      # entire purpose is to make outbound requests to whatever hosts the repo
-      # happens to link to, so the list would have to be rewritten every time
-      # somebody adds a URL to the README. Worse, a stale allowlist fails the
-      # job in a way indistinguishable from a broken link -- exactly the
-      # verdict this job exists to report. `audit` still records the egress for
-      # review after the fact.
+      # harden-runner step in this repo, all of which pin an egress allowlist
+      # -- do not "fix" it. An allowlist is structurally impossible for this
+      # job: its entire purpose is to make outbound requests to whatever hosts
+      # the repo happens to link to, so the list would have to be rewritten
+      # every time somebody adds a URL to the README. Worse, a stale allowlist
+      # fails the job in a way indistinguishable from a broken link -- exactly
+      # the verdict this job exists to report. `audit` still records the egress
+      # for review after the fact.
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit

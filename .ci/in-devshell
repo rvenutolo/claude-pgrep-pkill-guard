@@ -38,8 +38,10 @@ if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); 
     "${0##*/}" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" >&2
   exit 1
 fi
-# Without this, errexit is off inside every $(...) subshell, so a failed command
-# inside `repo_dir="$(git ...)"` would not stop the script.
+# Errexit is otherwise off inside every $(...) subshell. The one substitution
+# assigned here, `repo_dir="$(git ...)"`, is tested by its own `if !` and does
+# not depend on this; the option is set so a substitution holding more than one
+# command would still stop at the first failure.
 shopt -s inherit_errexit
 IFS=$'\n\t'
 

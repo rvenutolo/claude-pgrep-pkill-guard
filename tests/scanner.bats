@@ -1,11 +1,11 @@
-# Seven single-quoted strings in this file hold literal `$(...)` and `$((...))`
+# Single-quoted strings in this file hold literal `$(...)` and `$((...))`
 # text that is the SUBJECT of the test rather than something to expand:
 # the scanner's whole job is deciding which of those the shell would have
 # expanded, so the fixtures have to reach it byte for byte. Double-quoting any
 # of them would make bash expand it here and the test would assert on whatever
-# the developer's environment happened to contain. Seven sites in one file is
-# over the threshold at which per-site disables become noise, so the disable is
-# file-level here and per-site in tests/manifest.bats, which holds exactly one.
+# the developer's environment happened to contain. This file holds enough such
+# sites that per-site disables would be noise, so the disable is file-level
+# here; tests/manifest.bats, where they are rare, disables per site.
 #
 # The directive is honoured despite the file having no shebang (bats sources
 # these, so .ci/check-bats-no-shebang forbids one): shellcheck scopes a
@@ -24,7 +24,8 @@ function setup() {
 #              the scanner reads lines, and the one guaranteed final newline is
 #              how it tells `foo` from `foo\n` without depending on RS.
 # @arg $1 command the command string to tokenize
-# @stdout the token stream, one "<offset>\t<token>" record per line
+# @stdout the token stream, one "<offset>\t<token>" record per line, then the
+#         "\t<SCAN:n>" integrity trailer with no newline after it
 function scan() {
   printf '%s\n' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
@@ -72,9 +73,9 @@ function tab() {
 }
 
 @test "scanner: a line continuation separates the words it joins" {
-  # A `\`-newline is a line continuation, which bash removes outright, so the
-  # words on either side must come out separate. Masked as filler they fuse into
-  # one token and the invocation stops being recognised.
+  # A `\`-newline is a line continuation, which bash removes outright. The
+  # scanner must emit it as a token delimiter: masked as filler it fuses onto
+  # the word after it and the invocation stops being recognised.
   local out
   out="$(scan "$(printf 'sudo \\\npkill --full java')")"
   run awk -F'\t' 'NR==2 {print $2}' <<< "${out}"
@@ -303,9 +304,10 @@ function tab() {
 }
 
 @test "scanner: a body line ending in a backslash does not swallow the terminator" {
-  # A body line ending in a backslash is literal text, not a continuation:
-  # masking the backslash together with the newline it precedes would swallow
-  # the terminator's own newline and mask to end of input.
+  # The scanner does not treat a body line ending in a backslash as a
+  # continuation, although bash does in an unquoted body: masking the
+  # backslash together with the newline it precedes would swallow the newline
+  # that starts the terminator check and mask to end of input.
   local out
   out="$(scan "$(printf 'cat <<EOF\nfoo \\\nEOF\npkill --full x')")"
   run grep --count "$(tab)pkill\$" <<< "${out}"
@@ -317,8 +319,8 @@ function tab() {
 # @description Run a copy of the hook end to end under a stripped environment and
 #              report whether it announced that the guard is inactive, rather
 #              than dying into the ERR trap's silent allow. The probe command
-#              must contain `pgrep`, `pkill` or `.output`, or
-#              classify::classify_command short-circuits before the scanner is
+#              must contain `pgrep`, `kill` or `.output`, or the entry script's
+#              prefilter short-circuits before the awk and scanner checks are
 #              ever reached and a dead scanner looks healthy. The child runs
 #              under `env -i`: a plain PATH prefix assignment is not enough,
 #              because a BASH_ENV inherited from the caller re-sources the
@@ -335,15 +337,16 @@ function inactive_probe() {
   local output
   output="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}' \
     | env -i "PATH=${path}" "${script}" 2> /dev/null || true)" # the probe asserts on the JSON, not the exit status
-  if [[ "${output}" == *INACTIVE* ]]; then
+  if [[ "${output}" == *'INACTIVE'* ]]; then
     printf 'inactive\n'
   else
     printf 'active\n'
   fi
 }
 
-# @description Build a throwaway hook copy plus a stub PATH holding only what the
-#              hook needs before it reaches the awk check.
+# @description Build a throwaway hook copy plus a stub PATH holding what the hook
+#              needs before it reaches the awk check, and `cat`, which nothing
+#              on that path runs.
 # @noargs
 # @set probe_dir the throwaway directory holding the hook copy
 # @set stub_dir the stub PATH directory inside it
@@ -352,7 +355,7 @@ function build_inactive_fixture() {
   probe_dir="${BATS_TEST_TMPDIR}/probe"
   stub_dir="${probe_dir}/bin"
   mkdir -p "${stub_dir}"
-  for binary in bash jq dirname cat; do
+  for binary in 'bash' 'jq' 'dirname' 'cat'; do
     target="$(command -v "${binary}" || printf '/nonexistent')" # a missing binary becomes a dangling stub, on purpose
     ln -s "${target}" "${stub_dir}/${binary}" || true           # a failed link leaves the stub PATH short, by design
   done
@@ -407,8 +410,8 @@ function orphan_probe() {
   local out
   out="$(orphan_probe)"
   [[ "${out}" == *'INACTIVE'* ]]
-  # Pinned to the branch under test: without this the sibling-fails-to-load case
-  # below would still pass if its broken file never got written.
+  # Pinned to the branch under test: without this the case would also pass on
+  # the entry script's other message, the one for a sibling that fails to load.
   [[ "${out}" == *'is missing'* ]]
 }
 
@@ -438,8 +441,9 @@ function loader_probe() {
   [[ "${out}" == *'INACTIVE'* ]]
   [[ "${out}" == *'lib/tokens.sh'* ]]
   # Pinned to the branch under test. The loader has two messages here, and this
-  # is the one for a part that is not there at all; the two cases below take the
-  # other branch, and without this assertion all three would pass on either.
+  # is the one for a part that is not there at all; the cases below whose part
+  # is present take the other branch, and without this assertion this case would
+  # pass on either.
   [[ "${out}" == *'is missing or unreadable'* ]]
   # Exactly one JSON line: the loader exits rather than returning, so the entry
   # script's own fail-open branch must not fire a second message.
@@ -539,12 +543,12 @@ function loader_probe() {
 @test "scanner: zero-byte stdin yields the trailer and nothing else" {
   # Not a duplicate of the test above. `scan ''` sends ONE newline, so the read
   # loop runs once and the reassembled command is "\n"; here stdin is zero
-  # bytes, the loop never runs, and the command is "". That is the only input
-  # that reaches the empty branch of the trailing-newline strip, and it is
-  # unreachable through the hook, which always newline-terminates what it sends
-  # the scanner. Invariant 3 in docs/architecture.md permits driving
-  # pgrep-scan.awk directly, under LC_ALL=C, because it has a public interface
-  # of its own.
+  # bytes, the loop never runs, and the command is "". Both take the empty
+  # branch of the trailing-newline strip, but this is the only input that
+  # reaches it with a zero-length command, and it is unreachable through the
+  # hook, which always newline-terminates what it sends the scanner. Invariant 3
+  # in docs/architecture.md permits driving pgrep-scan.awk directly, under
+  # LC_ALL=C, because it has a public interface of its own.
   #
   # It is also the input the `gawk --lint=fatal --posix` step in
   # .ci/run-lint-checks feeds the scanner, so this test and that gate cover the

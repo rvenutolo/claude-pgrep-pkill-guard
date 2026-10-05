@@ -78,7 +78,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 
 # Every positional below is optional, so a surplus argument is a typo -- a
 # misplaced flag, a stray path -- not input. Silently ignoring it would run the
-# default check and report success on something nobody asked for. Exit 2 rather
+# check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
 # ERR trap is dropped first only for symmetry with the verdict returns (#43,
@@ -212,10 +212,10 @@ function host_platform() {
   # A short flag only where macOS has no long form, deliberately, in a file
   # that otherwise uses GNU long options. This line is reachable from
   # tests/devshell-provides.bats, which carries no devShell skip and therefore
-  # runs on the ambient `compat (macos, ...)` legs against BSD coreutils, where
-  # `uname --kernel-name` dies with "illegal option". Same trap as the
-  # `mkdir -p` in run-tests' --report path.
-  # bash-style allow=long-options: runs on the ambient macOS legs; BSD uname has no long form
+  # runs on the ambient `compat (macos, homebrew bash)` leg against BSD
+  # coreutils, where `uname --kernel-name` dies with "illegal option". Same trap
+  # as the `mkdir -p` in run-tests' --report path.
+  # bash-style allow=long-options: runs on the ambient macOS leg; BSD uname has no long form
   uname -s
 }
 
@@ -228,10 +228,9 @@ function devshell_packages() {
     cat "${FIXTURE_DIR}/packages.tsv"
     return
   fi
-  # Bare `return`, never `return 0`: a trailing `return 0` would swallow a
-  # failed `nix eval` and hand back an empty inventory, which the caller would
-  # then report as "the devShell declares no packages" -- a wrong verdict
-  # dressed up as a real one.
+  # No trailing `return 0` after this: it would swallow a failed `nix eval` and
+  # hand back an empty inventory, which the caller would then report as "the
+  # devShell declares no packages" -- a wrong verdict dressed up as a real one.
   nix eval --raw --impure --no-eval-cache \
     --expr "${PACKAGES_EXPR//REPO_PLACEHOLDER/${REPO_DIR}}"
 }
@@ -264,8 +263,9 @@ function formatter_commands() {
 #              platform", the check would pass on Linux, and the macOS gate
 #              would break at some later, unrelated commit.
 # @arg $@ entries tool<TAB>annotation, one per declared entry
-# @stderr one FAIL line per entry that does not resolve, and one SKIP line
-#         per entry the platform legitimately excuses
+# @stderr one FAIL line per entry that does not resolve, one FAIL line plus a
+#         hint per entry with an unrecognised annotation, and one SKIP line per
+#         entry the platform legitimately excuses
 # @exitcode 0 every entry resolves or was legitimately skipped
 # @exitcode 1 an entry does not resolve, or carries an unknown annotation
 function forward_check() {
@@ -304,7 +304,8 @@ function forward_check() {
 # @description Assert every devShell package is justified -- it ships a declared
 #              tool, or it backs a formatter .treefmt.nix enables.
 # @arg $@ tools the declared tools
-# @stderr one FAIL line per unjustified package, or per failed inventory read
+# @stderr one FAIL line plus a hint per unjustified package, or one FAIL line
+#         for a failed inventory read or an empty inventory
 # @exitcode 0 every package is justified
 # @exitcode 1 at least one package justifies nothing, the inventory is empty, or
 #             an inventory read failed
@@ -422,8 +423,9 @@ function main() {
   local rc=0
   if ((${#tools[@]} == 0)); then
     printf 'FAIL: no tools declared in %s\n' "${TOOLS_FILE}" >&2
-    # Every later pass needs this list; with it empty they would each report a
-    # second, derived failure. Stop here so the real cause is the only output.
+    # With the list empty the forward pass would check nothing and pass, and the
+    # reverse pass would report every package as unjustified. Stop here so the
+    # real cause is the only output.
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
     # diagnostics above are the last thing the reader sees (#43, invariant 6).
     trap - ERR

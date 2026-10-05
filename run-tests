@@ -109,7 +109,7 @@ function use_bwk_awk() {
   # a trap string that parses when it fires.
   local cleanup
   printf -v cleanup 'rm --recursive --force -- %q' "${shim}"
-  # shellcheck disable=SC2064 # expand shim NOW, not when the trap fires
+  # shellcheck disable=SC2064 # expand cleanup NOW, not when the trap fires
   trap "${cleanup}" EXIT
   ln --symbolic "${nawk}" "${shim}/awk"
   export PATH="${shim}:${PATH}"
@@ -196,7 +196,7 @@ function main() {
     # this feature died here with `mkdir: illegal option -- -` before a single
     # test ran, which is also why the upload step it exists to feed found
     # nothing to upload.
-    # bash-style allow=long-options: runs on the ambient macOS legs; BSD mkdir has no long form
+    # bash-style allow=long-options: runs on the ambient macOS leg; BSD mkdir has no long form
     mkdir -p "${report_dir}"
     # --report-formatter, NOT --formatter: the first writes JUnit to a file and
     # leaves the terminal formatter alone, the second REPLACES terminal output.
@@ -211,7 +211,7 @@ function main() {
     if ! command -v kcov > /dev/null 2>&1; then
       # Two genuinely different failures, and the wrong message sends a reader
       # off to install something that does not exist for their platform.
-      # bash-style allow=long-options: runs on the ambient macOS legs; BSD uname has no long form
+      # bash-style allow=long-options: runs on the ambient macOS leg; BSD uname has no long form
       case "$(uname -s)" in
         'Darwin')
           die 'kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only (#91)'
@@ -226,7 +226,7 @@ function main() {
     # a CI path is safe to name before the tool runs. A short flag only where
     # macOS has no long form, for the reason spelled out on --report's
     # `mkdir -p` above -- this line is on the ambient-tool path too.
-    # bash-style allow=long-options: runs on the ambient macOS legs; BSD mkdir has no long form
+    # bash-style allow=long-options: runs on the ambient macOS leg; BSD mkdir has no long form
     mkdir -p "${coverage_dir}"
     # The one caller of COVERAGE. tests/test_helper/common.bash unsets BASH_ENV
     # for fixture hygiene unless it sees this, and BASH_ENV is the channel kcov

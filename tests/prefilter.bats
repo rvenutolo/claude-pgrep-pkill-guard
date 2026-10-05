@@ -25,7 +25,7 @@ readonly TRIGGER_RE
     [[ -z "${cmd_json}" ]] && continue
     [[ "${expected}" == 'allow' ]] && continue
     checked="$((checked + 1))"
-    command="$(jq --raw-output . <<< "${cmd_json}")"
+    command="$(jq --raw-output '.' <<< "${cmd_json}")"
     if [[ ! "${command}" =~ ${TRIGGER_RE} ]]; then
       printf 'row would be dropped by the prefilter: %s\n' "${command}" >&2
       printf 'verdict: %s\n' "${expected}" >&2
@@ -39,9 +39,10 @@ readonly TRIGGER_RE
 }
 
 @test "prefilter: the token set is minimal" {
-  # Each token must earn its place: dropping any one of the three must leave at
+  # Each token must earn its place: dropping any one of them must leave at
   # least one non-allow row uncovered. This is what stops the set from growing
-  # into an always-true filter that quietly restores the old cost.
+  # into an always-true filter that makes every Bash call pay for loading the
+  # body.
   local -ar tokens=("${TRIGGER_TOKENS[@]}")
   local i j reduced cmd_json expected command uncovered
   for i in "${!tokens[@]}"; do
@@ -54,7 +55,7 @@ readonly TRIGGER_RE
     while IFS=$'\t' read -r cmd_json expected; do
       [[ -z "${cmd_json}" ]] && continue
       [[ "${expected}" == 'allow' ]] && continue
-      command="$(jq --raw-output . <<< "${cmd_json}")"
+      command="$(jq --raw-output '.' <<< "${cmd_json}")"
       [[ "${command}" =~ ${reduced} ]] || uncovered="$((uncovered + 1))"
     done < "${CASES}"
     printf "without '%s': %s rows uncovered\n" "${tokens[i]}" "${uncovered}" >&3

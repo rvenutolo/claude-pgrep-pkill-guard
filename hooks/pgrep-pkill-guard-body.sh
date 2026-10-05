@@ -35,13 +35,13 @@
 # .version, with no BOOTSTRAP_VERSION escape hatch -- that exemption is scoped to
 # .release-please-manifest.json, because a WRONG version in a bug report is worse
 # than a missing one.
-# shellcheck disable=SC2034 # read inline by human::human_mode in lib/human.sh, sourced below
+# shellcheck disable=SC2034 # read inline by human::human_mode in hooks/lib/human.sh, sourced below
 readonly HOOK_VERSION='1.1.0' # x-release-please-version
 
-# Resolved by scanner::resolve_scanner in lib/scanner.sh, which classify::inspect_command calls
-# once, and read from there and from lib/classify.sh. Declared here so `set -u`
+# Resolved by scanner::resolve_scanner in hooks/lib/scanner.sh, which classify::inspect_command
+# calls once, and read from there and from hooks/lib/classify.sh. Declared here so `set -u`
 # has a definition to see on any path that never resolves it.
-# shellcheck disable=SC2034 # set by lib/scanner.sh, read there and in lib/classify.sh
+# shellcheck disable=SC2034 # set by hooks/lib/scanner.sh, read there and in hooks/lib/classify.sh
 SCANNER=''
 
 # The parts, in load order, each paired with one function it must define. An
@@ -79,11 +79,11 @@ for guard_part in "${GUARD_PARTS[@]}"; do
   # the ERR trap, so a missing or corrupt part reaches the check below rather
   # than the trap's bare `{}`. The status itself is discarded on purpose -- see
   # the list above for why it cannot be trusted -- and `declare -F` is the
-  # verdict. Both are builtins: no fork on a path that is about to pay for jq anyway.
+  # verdict. Both are builtins, so the check adds no fork.
   # `exit 0`, not `return 1`: the entry script's own `|| { ... }` around its
   # source of this file would otherwise print a second JSON line, and an exit
-  # from a sourced file is what the ERR trap itself does. Fail open, loudly --
-  # the same INACTIVE wording as every other precondition in the guard.
+  # from a sourced file is what the ERR trap itself does. Fail open, loudly,
+  # with an INACTIVE notice like every other precondition in the guard.
   # shellcheck source=/dev/null # each part is linted on its own as hooks/lib/*.sh
   source "${HOOK_DIR}/lib/${guard_part%%:*}" || : # source yields the part's last command status, not load success
   declare -F "${guard_part#*:}" > /dev/null || {

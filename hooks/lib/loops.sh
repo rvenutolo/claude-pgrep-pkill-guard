@@ -13,9 +13,11 @@
 #              body, or outside every loop. A for/select head reports "none": it is evaluated once,
 #              so a self-matching pgrep there pins no termination test. `$(`, a backtick, and a plain
 #              `(` each push a scope-barrier marker so that a loop entirely inside one cannot pop, or
-#              be popped by, a loop spanning the enclosing command: a stray `do`/`done` inside a
+#              be popped by, a loop spanning the enclosing command: a stray `done` inside a
 #              substitution (whether from a real nested loop or just literal text, such as an echoed
-#              "done") is bounded by its own barrier and can never reach past it. The marker is
+#              "done") finds the barrier on top and pops nothing beyond it. An unmatched
+#              command-position `do` there is not bounded: it pushes `body` above the marker, the
+#              closing `)` then pops nothing, and the tokens after it read as `body`. The marker is
 #              transparent when reading the context AT the target index, though: an invocation that is
 #              simply inside a substitution with no loop of its own still belongs to whatever cond/body
 #              span encloses that substitution, which is why `until [ -z "$(pgrep --full x)" ]; do ...`
@@ -33,15 +35,15 @@ function loops::loop_context() {
       local i="$((${#stack[@]} - 1))" found='none'
       while ((i >= 0)); do
         case "${stack[i]}" in
-          cond)
+          'cond')
             found='cond'
             break
             ;;
-          body)
+          'body')
             found='body'
             break
             ;;
-          head)
+          'head')
             found='none'
             break
             ;;
@@ -78,12 +80,14 @@ function loops::loop_context() {
         fi
         ;;
       ')')
-        # Only a `)` that actually closes something pops. A case-pattern `)`
+        # Only a `)` with a paren marker on top pops. A case-pattern `)`
         # terminates a pattern list and has no opener, so popping on it would
         # discard whatever span encloses the `case` -- the loop body itself,
-        # for a `case` written inside one. Requiring a paren
-        # marker on top makes the distinction without parsing `case`/`esac`:
-        # a pattern's `)` finds a body/cond/head marker there, or nothing.
+        # for a `case` written inside one. Requiring a paren marker on top
+        # makes the distinction without parsing `case`/`esac` wherever a
+        # body/cond/head or backtick marker, or nothing, is on top. A `case`
+        # written directly inside `$( )` or `( )` is not told apart: its
+        # pattern `)` finds the paren marker and pops it.
         if ((${#stack[@]} > 0)) && [[ "${stack[${#stack[@]} - 1]}" == 'subshell' ||
           "${stack[${#stack[@]} - 1]}" == 'capture' ]]; then
           unset 'stack[${#stack[@]}-1]'

@@ -29,11 +29,11 @@ fi
 # surfaces an error on every Bash call; exit 2 would block the tool outright.
 trap 'emit_allow; exit 0' ERR
 
-# The scanner emits BYTE offsets, and this script slices the raw command back out
-# with ${command:offset:length}. Bash string operations are locale-aware, so under
-# a UTF-8 locale a single multibyte character earlier in the command shifts every
-# later slice and silently voids the bracket mitigation. Force the C locale so the
-# two index bases agree.
+# The scanner emits BYTE offsets, and the parts under hooks/lib/ slice the raw
+# command back out with ${command:offset:length}. Bash string operations are
+# locale-aware, so under a UTF-8 locale a single multibyte character earlier in
+# the command shifts every later slice and silently voids the bracket mitigation.
+# Force the C locale so the two index bases agree.
 export LC_ALL=C
 
 # Resolved lazily by resolve_hook_dir, via load_body: only the human-mode
@@ -188,7 +188,9 @@ function main() {
 
   # Past the short-circuit the guard is going to look at the command, so bring in
   # the machinery that does it. Everything below this point lives in the sibling
-  # file, which is why an ordinary Bash call parses under 200 lines, not 2200 (#55).
+  # loader and the parts under hooks/lib/ it sources, which is why an ordinary
+  # Bash call parses under 200 lines (.ci/check-fast-path-size), not the whole
+  # guard (#55).
   load_body || return 0
 
   classify::inspect_command "${input}"

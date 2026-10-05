@@ -2,7 +2,7 @@
 
 # @description Run the full local verification gate: the formatting check, the
 #              governance lints, the benchmark smoke run, the lint suite, and
-#              the BATS suite -- the last twice, under gawk and under
+#              the BATS suite -- the last under gawk and again under
 #              one-true-awk, because the hook must behave identically on both
 #              (#7). Verify-only
 #              — it never rewrites the tree, which is why `nix fmt` is a separate
@@ -10,14 +10,14 @@
 #              fast, so a single run surfaces every failing category instead of
 #              only the first.
 #
-#              `--report DIR` is forwarded to the two suite runs as
+#              `--report DIR` is forwarded to the suite runs as
 #              `--report DIR/gawk` and `--report DIR/bwk`, so each gets its own
 #              JUnit report rather than the second overwriting the first (#83).
 #              Nothing else in the gate emits a report; the flag exists so CI
 #              can upload the suite's results as an artifact when a leg fails.
 # @arg $1 --report optional literal `--report`; must be followed by exactly one
 #         non-empty directory, or the call is rejected
-# @arg $2 dir directory to write the two per-awk report subdirectories under
+# @arg $2 dir directory to write the per-awk report subdirectories under
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
 # @exitcode 2 any arguments other than none or `--report DIR`
@@ -64,7 +64,7 @@ function warn_untracked() {
 
 function main() {
   # Anything but no arguments or exactly `--report DIR` is a typo -- a bare
-  # --report, a misspelt flag, a stray third argument -- and silently running
+  # --report, a misspelt flag, a stray extra argument -- and silently running
   # the gate with no report would hand a caller who asked for one a green run
   # and nothing to upload. Exit 2 rather than 1: 1 is the gate's verdict, and
   # "you called it wrong" must stay distinguishable from it (#216). The ERR trap
@@ -146,7 +146,7 @@ function main() {
   # BENCH_FRESH_STRICT, which ci.yml sets on release-please's branch alone:
   # everywhere else the gate warns, because a wall-clock benchmark is a
   # release-time cost, not a per-PR one.
-  # check-bats-libs-in-sync ties the two independent places bats-support and
+  # check-bats-libs-in-sync ties the independent places bats-support and
   # bats-assert are pinned: the flake inputs the hermetic gate loads them from,
   # and the SHAs .github/actions/bats-ambient/action.yml clones them at for the
   # compat legs. Nothing connected the two, so they agreed only by coincidence,

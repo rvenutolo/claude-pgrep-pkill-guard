@@ -40,6 +40,10 @@
 # @arg $@ args optional `--awk=bwk`, `--report DIR` and `--coverage DIR` in any
 #         order, then bats arguments and test paths; give neither to run all
 #         of tests/
+# @stdout the bats terminal output (and kcov's, under --coverage)
+# @stderr a `[<script>] <message>` line naming the awk in use under --awk=bwk,
+#         a `[<script>] FATAL: <message>` line on each exit-1 cause this script
+#         detects, or the bash-version message
 # @exitcode 0 all tests passed and the repo was left untouched
 # @exitcode 1 bats missing, nawk missing or not one-true-awk under --awk=bwk,
 #             kcov missing under --coverage, --report or --coverage given
@@ -80,7 +84,7 @@ function die() {
 #              index hash. Used before and after the suite to detect fixture
 #              escapes onto the real repo.
 # @noargs
-# @stdout three KEY=value lines
+# @stdout one KEY=value line per watched artifact
 function repo_state() {
   local head_ref config_hash index_hash config_path index_path
   head_ref="$(git -C "${REPO_DIR}" rev-parse --quiet --verify HEAD || printf 'NO-HEAD')"
@@ -209,7 +213,7 @@ function main() {
   local -a kcov_args=()
   if [[ -n "${coverage_dir}" ]]; then
     if ! command -v kcov > /dev/null 2>&1; then
-      # Two genuinely different failures, and the wrong message sends a reader
+      # Genuinely different failures, and the wrong message sends a reader
       # off to install something that does not exist for their platform.
       # bash-style allow=long-options: runs on the ambient macOS leg; BSD uname has no long form
       case "$(uname -s)" in
@@ -222,8 +226,9 @@ function main() {
       esac
     fi
     # kcov creates its output directory itself, so this is not load-bearing the
-    # way --report's mkdir is; it is here so the two flags behave identically and
-    # a CI path is safe to name before the tool runs. A short flag only where
+    # way --report's mkdir is; it is here so --report and --coverage behave
+    # identically and a CI path is safe to name before the tool runs. A short
+    # flag only where
     # macOS has no long form, for the reason spelled out on --report's
     # `mkdir -p` above -- this line is on the ambient-tool path too.
     # bash-style allow=long-options: runs on the ambient macOS leg; BSD mkdir has no long form
@@ -243,8 +248,8 @@ function main() {
   local before after status=0
   before="$(repo_state)"
   # `kcov_args` is expanded as a command PREFIX: empty it vanishes and `bats` is
-  # still the command, so the two flags compose without a second copy of the
-  # invocation.
+  # still the command, so --coverage and --report compose without a second copy
+  # of the invocation.
   if (($# == 0)); then
     "${kcov_args[@]}" bats --recursive --print-output-on-failure \
       "${report_args[@]}" "${REPO_DIR}/tests" || status=$?

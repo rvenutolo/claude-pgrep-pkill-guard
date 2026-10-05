@@ -4,6 +4,7 @@
 #              against Conventional Commits via commitlint, inside the devShell
 #              so the same commitlint runs locally and in CI.
 # @arg $1 msg_file path to the file holding the prospective commit message
+# @stderr the usage line when the argument count is wrong
 # @exitcode 0 the message is conventional
 # @exitcode 1 it is not, or the devShell wrapper could not start; the commit is
 #             aborted

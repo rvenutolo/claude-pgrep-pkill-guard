@@ -21,7 +21,9 @@
 # @arg $@ args optional --reps N, --output PATH, --smoke, --help or -h
 # @exitcode 0 the run completed (or --help was printed)
 # @exitcode 1 a bad argument, an unreadable or empty corpus, a non-executable
-#             hook, or (under --smoke) a hook response that is not valid JSON
+#             hook, a scratch directory that cannot be created, an --output path
+#             that cannot be written, or (under --smoke) a hook response that is
+#             not valid JSON
 # @exitcode * otherwise the failing git status, when the repository root cannot
 #             be resolved
 
@@ -42,12 +44,12 @@ REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR
 readonly HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"
 readonly CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
-# 45 rather than 15. `typical` is only six commands, so at 15 reps it carries 90
-# samples and its p50 swung 10.3-13.5 ms across two back-to-back runs -- too
-# noisy for the figure the README quotes as what a session actually pays. 45
-# puts `typical` at 270 samples. The whole run costs a few minutes and nothing
-# in CI calls it: run-all-checks uses --smoke, which is one repetition of one
-# payload per cohort.
+# 45 rather than 15. `typical` is only the short TYPICAL_COMMANDS list, so at 15
+# reps it carries too few samples: its p50 swung 10.3-13.5 ms across two
+# back-to-back runs -- too noisy for the figure the README quotes as what a
+# session actually pays. 45 triples its sample count. The whole run costs a few
+# minutes and nothing in CI calls it: run-all-checks uses --smoke, which is one
+# repetition of one payload per cohort.
 readonly DEFAULT_REPS=45
 
 # Report order, and the only cohort names recognised anywhere in this script.
@@ -210,6 +212,7 @@ function time_one() {
 # @arg $1 payload the hook JSON to feed on stdin
 # @exitcode 0 the response parsed
 # @exitcode 1 it did not (via die)
+# @exitcode * the hook's own non-zero status, when the hook itself fails
 function validate_one() {
   local -r payload="$1"
   local response
@@ -398,11 +401,11 @@ function write_report() {
   printf '| bash | %s |\n' "${BASH_VERSION}"
   printf '| awk | %s (`%s`) |\n' "$(tool_version awk)" "$(command -v awk)"
   printf '| jq | %s |\n' "$(tool_version jq)"
-  # Machine state, not toolchain. These four rows exist because a run whose
-  # p50 doubles while its min holds is describing the machine, not the code,
-  # and without them a later reader cannot tell those two cases apart.
-  # load_at_start and temp_at_start are read before the measurement loop, in
-  # main, not here.
+  # Machine state, not toolchain. The governor, power, load and package-temp
+  # rows exist because a run whose p50 doubles while its min holds is describing
+  # the machine, not the code, and without them a later reader cannot tell those
+  # cases apart. load_at_start and temp_at_start are read before the
+  # measurement loop, in main, not here.
   printf '| governor | %s |\n' "$(cpu_governor)"
   printf '| power | %s |\n' "$(power_source)"
   printf '| load at start | %s |\n' "${load_at_start}"

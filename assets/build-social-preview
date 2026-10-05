@@ -141,7 +141,7 @@ function main() {
   # a trap string that parses when it fires.
   local cleanup=''
   printf -v cleanup 'rm --recursive --force -- %q' "${work}"
-  # shellcheck disable=SC2064 # expand work NOW, not when the trap fires
+  # shellcheck disable=SC2064 # expand cleanup NOW: it is a local of main, gone when the trap fires
   trap "${cleanup}" EXIT
 
   local source_w=''

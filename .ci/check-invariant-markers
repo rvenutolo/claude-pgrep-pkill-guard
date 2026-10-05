@@ -40,9 +40,9 @@
 #              match would duplicate a strong gate with a weak one, and the weak
 #              one would be the one people edited around.
 #
-#              The table lives here rather than in the (untracked) CLAUDE.md
-#              that also records these rules, so a coworker who clones the repo
-#              gets the check even though they never see that file.
+#              The table lives in this tracked script, beside the numbered
+#              invariants in docs/architecture.md, so every clone of the repo
+#              carries the check.
 # @arg $1 dir optional fixture directory, treated as the repo root: every path
 #         in the table is resolved against it. It exists so the bats suite can
 #         drive the real matcher over a fabricated tree -- one where a phrase
@@ -100,8 +100,8 @@ fi
 # The table. Each row is `<phrase>::<space-separated files>`, and the separator
 # is `::` rather than a tab because a tab in a source line is invisible in a
 # diff and this file is meant to be edited by hand. No phrase may contain `::`
-# and no path may contain a space -- both hold today and neither is a constraint
-# worth engineering around for four rows.
+# and no path may contain a space -- both hold, and neither is a constraint
+# worth engineering around for a table this small.
 #
 # Adding a row is the cheap half of adding an invariant. The expensive half is
 # deciding it is one: a phrase here is a promise that the comment stays, so
@@ -114,8 +114,8 @@ readonly MARKERS=(
 )
 
 # @description Print a file's text with every line break and comment marker
-#              collapsed away, so a phrase that a comment wrapped across two
-#              lines reads as one run of words.
+#              collapsed away, so a phrase that a comment wrapped across a
+#              line break reads as one run of words.
 #
 #              Leading whitespace goes first, then any run of leading `#`, then
 #              the whitespace behind it -- in that order, because a wrapped

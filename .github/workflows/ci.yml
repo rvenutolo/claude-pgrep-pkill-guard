@@ -90,8 +90,9 @@ jobs:
       # Here, and at the compat legs below and in links.yml, the checkout
       # immediately above is this workflow's own commit, so `./` and `$/`
       # resolve to the same tree and the audit has nothing to bite on.
-      # The one site in this repo where the two forms genuinely differ is
-      # release.yml's reformat job; the rationale lives there, next to it.
+      # The one site in this repo where the forms genuinely differ is
+      # release.yml's `release-please` job; the rationale lives there, next to
+      # it.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
       - name: Run the full gate
         # The gate is run under a bash from the repo's own flake, not the host's.
@@ -100,16 +101,16 @@ jobs:
         # has no `shopt -s inherit_errexit`. That option is load-bearing for
         # every gate script (without it errexit never reaches inside $(...), so
         # a failing helper is silently swallowed and the gate exits 0), so the
-        # job must not drop it; on a stock runner it dies with a bare
-        # "shopt: inherit_errexit: invalid shell option name" instead.
+        # job must not drop it; on a stock runner .ci/in-devshell's version guard
+        # exits 1 before that `shopt` line is ever reached.
         #
         # `nix develop --command bash` rather than `brew install bash`: Homebrew
         # would add an unpinned dependency and a second network path (it already
         # failed here once on a transient pkg-containers DNS error), whereas the
-        # flake is pinned by flake.lock and ./setup has just installed it. The
-        # INNER in-devshell run is --ignore-environment all the same, so the
-        # hermetic boundary is unaffected -- this only chooses the interpreter
-        # that reads the entrypoint script.
+        # flake is pinned by flake.lock and ./.github/actions/setup has just
+        # installed Nix. The INNER in-devshell run is --ignore-environment all
+        # the same, so the hermetic boundary is unaffected -- this only chooses
+        # the interpreter that reads the entrypoint script.
         #
         # .ci/in-devshell carries an explicit `bash >= 4.4` guard, so a
         # coworker running `just check` on a stock Mac gets an actionable
@@ -138,7 +139,7 @@ jobs:
         # devShell does not carry it on macos-latest and `run-tests --coverage`
         # would die there by design (#91).
         #
-        # A SECOND run of the suite rather than wrapping the gate's own: the
+        # A SEPARATE run of the suite rather than wrapping the gate's own: the
         # gate's authoritative pass/fail must not depend on kcov working, or a
         # kcov regression -- or a nixpkgs bump that breaks its bash support --
         # reads as a test failure and sends the next reader into hooks/. It

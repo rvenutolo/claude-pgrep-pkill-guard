@@ -2,6 +2,8 @@
 # `$((...))` there are what the gate scans, never something to expand here.
 # Double-quoting them would expand them in the test. Too many sites for per-site
 # disables, so the directive is file-level, as in tests/scanner.bats.
+#
+# setup sets CHECK, the gate under test.
 # shellcheck disable=SC2016 # file-level: the fixtures below are scanned source, not substitutions
 
 function setup() {

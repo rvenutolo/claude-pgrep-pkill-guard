@@ -1,3 +1,9 @@
+# The payload prefilter's token set, graded against the recorded verdicts:
+# every row of tests/cases/verdicts.tsv the guard does not allow has to carry
+# a trigger token, and every token has to be needed by some row.
+#
+# setup sets CASES, the path of that table.
+
 function setup() {
   load 'test_helper/common'
   CASES="${REPO_DIR}/tests/cases/verdicts.tsv"

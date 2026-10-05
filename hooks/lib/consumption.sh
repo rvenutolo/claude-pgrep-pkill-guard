@@ -4,15 +4,15 @@
 # hooks/pgrep-pkill-guard-body.sh whenever the entry script loads the body --
 # in human mode, or once the prefilter has let a payload through. Never
 # executed: no shebang, no exec bit, and it must not set `set -Eeuo pipefail`,
-# `IFS`, or the ERR trap -- the entry script owns all three, and a sourced file
+# `IFS`, or the ERR trap -- the entry script owns them all, and a sourced file
 # that sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
 
 # xargs options that take their value as a SEPARATE word, so that word is data
 # rather than the command xargs will run. Only options whose argument is
-# mandatory belong here. GNU spells three of these with an OPTIONAL argument
-# (`-e`, `-i`, `-l`), which the shell can only attach (`-i%`), never separate --
+# mandatory belong here. GNU spells `-e`, `-i` and `-l` with an OPTIONAL
+# argument, which the shell can only attach (`-i%`), never separate --
 # so `xargs -i kill {}` runs kill, and listing them would swallow the very
 # command word this scan exists to find. Over-consuming hides a kill; under-
 # consuming only costs a warn, so the doubtful cases stay out.
@@ -124,7 +124,7 @@ function consumption::feeds_a_kill_forward() {
 #              an operator or keyword there means command position. `(` restores command position
 #              for a real subshell or grouping construct, but `name=(...)` is an array literal: the
 #              `(` merely opens a list of words, and a `kill` immediately inside it is never invoked.
-#              The token right before the `(` ending in `=` is what tells the two apart.
+#              The token right before the `(` ending in `=` is what tells them apart.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 index index of the token immediately before the `kill` word
 # @exitcode 0 the kill is in command position
@@ -204,7 +204,7 @@ function consumption::feeds_a_kill_backward() {
 
 # @description True when the invocation's output feeds a kill, either forward (`pgrep ... | xargs
 #              kill`, `... | while read p; do kill "$p"; done`) or backward (`kill $(pgrep ...)`).
-#              The two scans are independent; see consumption::feeds_a_kill_forward and
+#              The scans are independent; see consumption::feeds_a_kill_forward and
 #              consumption::feeds_a_kill_backward.
 # @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
 #         invocation in the same command reuses it rather than re-parsing the token stream)
@@ -317,7 +317,7 @@ function consumption::next_command_reads_status() {
 
 # @description True when an invocation's result is read as a boolean, a count, or captured into a
 #              variable, rather than merely displayed. Only then can the silent off-by-one produce a
-#              wrong conclusion. Five shapes count: pgrep's own `--count` / `-c`; an enclosing `if`
+#              wrong conclusion. These shapes count: pgrep's own `--count` / `-c`; an enclosing `if`
 #              or `elif`, or a leading `!`, which read the exit status as a boolean; a following
 #              `&&`, `||`, `| wc` or `| xargs`; sitting inside a command substitution; and the next
 #              command in the list reading `$?`, which consumption::next_command_reads_status handles. A

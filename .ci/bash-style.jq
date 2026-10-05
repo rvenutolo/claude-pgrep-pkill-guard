@@ -76,8 +76,9 @@ def quote_expansions:
   | .[];
 
 # A double-quoted string holding only literal text. One that contains an
-# apostrophe or a backslash is left alone: single quotes cannot hold the first
-# and change the meaning of the second. A bats test name is not an argument.
+# apostrophe or a backslash is left alone: single quotes cannot hold an
+# apostrophe and change the meaning of a backslash. A bats test name is not an
+# argument.
 def single_quote_literals:
   [nodes | select(.Type == "TestDecl") | .Description.Pos.Line] as $test_lines
   | nodes
@@ -600,8 +601,8 @@ def no_default_wellknown_env:
   | {line: .Pos.Line, rule: "no-default-wellknown-env", message: ("no default for " + .Param.Value + "; let set -u catch it")};
 
 # A line over 120 characters. A line is excused when exactly one quoted string
-# or unbroken word on it is 100 characters or more: that literal would overflow
-# even alone on a continuation line, so wrapping cannot help. A quoted string
+# or unbroken word on it is 100 characters or more: that literal nearly fills a
+# continuation line by itself, so wrapping gains little. A quoted string
 # counts wherever it starts in a word, so name='...' and --opt='...' are one
 # literal. Two such literals can each take a line, so those lines are reported.
 # A comment line has no quoted strings, only words: one URL it cannot wrap

@@ -32,7 +32,7 @@ accept = [200, 206, 429]
 # NOT retry a rejected HTTP status. A connection reset -- the direnv.net
 # failure in #100 -- is attempted max_retries + 1 times; a 503 from github.com
 # is attempted exactly ONCE regardless of what this is set to. So this key
-# addresses one of the two flakes in #100 and provably cannot address the
+# addresses one of the flakes in #100 and provably cannot address the
 # other; the concurrency keys below are what address that one.
 max_retries = 5
 
@@ -46,11 +46,11 @@ max_retries = 5
 # links job's 15-minute budget on every genuinely dead link.
 retry_wait_time = 2
 
-# 16, down from the default 128. The default is larger than the number of URLs
-# in the tracked tree, so it fans the entire check out in a single burst. That
-# burst is the most plausible cause of the 503s in #100: a 503 is what a host
-# returns when it sheds load, not when a page is missing. Retries cannot help
-# there (see max_retries), opening fewer sockets can.
+# 16, down from the default 128. The default is high enough to fan the check
+# out in a single burst. That burst is the most plausible cause of the 503s in
+# #100: a 503 is what a host returns when it sheds load, not when a page is
+# missing. Retries cannot help there (see max_retries), opening fewer sockets
+# can.
 max_concurrency = 16
 
 # 4 per host, down from the default 10, and the key that actually bites here:

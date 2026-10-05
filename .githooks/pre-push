@@ -7,7 +7,8 @@
 # @arg $@ args the remote name and URL git passes (the ref/sha pairs arrive on
 #         stdin); this hook uses neither
 # @exitcode 0 the gate passed
-# @exitcode 1 the gate failed; the push is aborted
+# @exitcode 1 the gate failed, or the devShell wrapper could not start; the push
+#             is aborted
 # @exitcode * otherwise the failing git status; the push is aborted
 
 set -Eeuo pipefail

@@ -1,6 +1,8 @@
 # `run --separate-stderr` is a bats 1.5.0 flag, and the linux-only skip case
 # needs stdout and stderr apart: the SKIP line is a diagnostic, so it must land
 # on stderr, which a merged capture cannot tell apart from stdout.
+#
+# setup sets CHECK, the gate under test.
 bats_require_minimum_version 1.5.0
 
 function setup() {
@@ -16,8 +18,8 @@ readonly ABSENT_TOOL='pgpk-guard-no-such-tool'
 # @description Build a minimal, VALID fixture inventory: one package justified
 #              by a declared tool and one justified only by being a treefmt
 #              formatter, so each negative case can corrupt exactly one thing.
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_devshell_fixture() {
@@ -214,8 +216,9 @@ function use_fixture_path() {
 
 @test "devshell provides: an unreadable inventory fails rather than reading empty" {
   # The inventory is fetched through a command substitution precisely so this
-  # cannot pass: an unreadable source must surface as a failure, never as an
-  # empty package list that the reverse pass would find nothing wrong with.
+  # is reported for what it is: an unreadable source must surface as a read
+  # failure, never as an empty package list that the reverse pass would
+  # report as "the devShell declares no packages".
   local -r root="${BATS_TEST_TMPDIR}/no-inventory"
   make_devshell_fixture "${root}"
   rm -f -- "${root}/packages.tsv"

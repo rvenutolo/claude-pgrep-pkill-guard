@@ -1,3 +1,9 @@
+# .ci/check-bats-libs-in-sync, against the real action.yml and flake.lock and
+# against copies of them that a case has corrupted.
+#
+# setup sets CHECK, the gate under test, and ACTION_YML and LOCK_JSON, the real
+# files it compares.
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-bats-libs-in-sync"
@@ -11,7 +17,7 @@ function setup() {
 #              synthesising is deliberate: a hand-written fixture would pin the
 #              file SHAPE this checker reads, and the shape is exactly what a
 #              future edit to action.yml might change. A short flag only where
-#              macOS has no long form, on purpose -- the compat CI legs run this
+#              macOS has no long form, on purpose -- a compat CI leg runs this
 #              suite against macOS BSD coreutils, whose mkdir has no --parents.
 # @arg $1 root directory to populate
 # @set FIXTURE_ACTION path to the fixture action.yml

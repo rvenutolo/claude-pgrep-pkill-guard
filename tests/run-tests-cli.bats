@@ -1,3 +1,8 @@
+# run-tests' argument handling: --report, --coverage and --awk=bwk, graded
+# against a trivial fixture suite rather than the real one.
+#
+# setup sets RUN_TESTS, the path of the runner under test.
+
 function setup() {
   load 'test_helper/common'
   RUN_TESTS="${REPO_DIR}/run-tests"
@@ -21,14 +26,14 @@ BATS
 }
 
 # @description Skip a case that drives `run-tests --awk=bwk`. That path is
-#              devShell-only by construction and the two ambient compat legs run
+#              devShell-only by construction and the ambient compat legs run
 #              this suite against whatever the runner ships, so it has to be
 #              probed rather than assumed. Skipping there is honest: the
 #              hermetic gate leg is the one that grades the flag, and a test
 #              that quietly rewrote the invocation to something ambient tools
 #              accept would be grading a command run-tests never runs.
 #
-#              Three separate things have to hold, and each of them has already
+#              Separate things have to hold, and each of them has already
 #              been observed NOT to on some leg:
 #
 #              1. `nawk` on PATH at all.
@@ -58,9 +63,9 @@ function require_bwk_awk() {
 
 # @description Skip a case that needs kcov to actually run. `--coverage` is
 #              Linux-only by construction -- nixpkgs declares no darwin kcov, so
-#              the devShell does not carry it on macOS -- and the two ambient
+#              the devShell does not carry it on macOS -- and the ambient
 #              compat legs run this suite against whatever the runner ships,
-#              where kcov is absent on both. Skipping there is honest for the
+#              where kcov is absent. Skipping there is honest for the
 #              same reason require_bwk_awk skips: the hermetic Linux gate leg is
 #              the one that grades this flag, and a case that quietly degraded to
 #              "run without kcov" would be grading a command run-tests never

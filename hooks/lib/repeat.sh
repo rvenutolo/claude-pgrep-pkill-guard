@@ -4,7 +4,7 @@
 # hooks/pgrep-pkill-guard-body.sh whenever the entry script loads the body --
 # in human mode, or once the prefilter has let a payload through. Never
 # executed: no shebang, no exec bit, and it must not set `set -Eeuo pipefail`,
-# `IFS`, or the ERR trap -- the entry script owns all three, and a sourced file
+# `IFS`, or the ERR trap -- the entry script owns them all, and a sourced file
 # that sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).

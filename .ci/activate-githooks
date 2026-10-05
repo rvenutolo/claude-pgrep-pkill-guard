@@ -9,11 +9,15 @@
 #              Standalone, like .ci/in-devshell: it runs during shell startup,
 #              before any repo tooling is guaranteed available.
 # @noargs
+# @stderr the reason the script cannot run, or one line saying core.hooksPath
+#         was set
 # @exitcode 0 hooks path is set (or was already correct)
 # @exitcode 1 not a git repo
+# @exitcode * otherwise the failing git status; core.hooksPath is not set
 
 set -Eeuo pipefail
-# No inherit_errexit: this runs under the host bash, 3.2 on stock macOS, where the option does not exist.
+# No inherit_errexit: each command substitution in main is tested where it is
+# assigned (`if !`, `||`), so there is no errexit for the option to carry in.
 IFS=$'\n\t'
 
 function main() {

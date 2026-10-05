@@ -40,6 +40,9 @@
 # @exitcode 0 the payload is on stdout
 # @exitcode 1 wrong argument count, not inside a git repo, nothing staged, or a
 #             staged change carries a status letter this script does not model
+# @exitcode * otherwise the failing status of git, mktemp, base64 or jq, when HEAD
+#             cannot be resolved, the scratch directory cannot be created, or a
+#             staged blob cannot be read or encoded
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -131,7 +134,7 @@ function main() {
   # no path through this script leaks it -- including the `die` paths, which
   # exit rather than return.
   #
-  # The EXIT trap is a SECOND trap, not a replacement for the ERR trap installed
+  # The EXIT trap is an EXTRA trap, not a replacement for the ERR trap installed
   # at the top of this file: they are different signals and both stay armed.
   #
   # The trap writes NOTHING to stdout: this script's contract is that stdout

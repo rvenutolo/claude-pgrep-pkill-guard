@@ -10,7 +10,7 @@
 #      n == len(B) - 1 when B ends with a newline, and n == len(B) when it does
 #      not.
 #
-# Rule 1 is not decoration. A non-zero exit fails scanner::scan_command, and
+# The exit-status rule is not decoration. A non-zero exit fails scanner::scan_command, and
 # the hook then reports the guard INACTIVE and allows the command, so a scanner
 # that died on some odd input would switch the guard off for it. An exit code
 # also says nothing about an awk that mangles the stream and still exits 0,
@@ -58,11 +58,11 @@
 # the WHOLE corpus -- partitioning it between tests would leave each property
 # checked on a slice of the inputs, which is the wrong trade.
 #
-# The corpus is scanned exactly TWICE, once newline-terminated and once raw, and
-# all three properties are asserted from each single `awk` run per case. That
-# matters more than it looks: the gate runs the whole suite twice, under gawk and
-# under one-true-awk, so every spawn here is paid for twice. Two costs that are
-# NOT the awk spawns dominated the first cut of this file and are worth knowing
+# The corpus is scanned once newline-terminated and once raw, and every
+# property is asserted from each single `awk` run per case. That matters more
+# than it looks: the gate runs the whole suite under gawk and again under
+# one-true-awk, so every spawn here is paid for under each. Costs that are NOT
+# the awk spawns dominate a naive version of this file and are worth knowing
 # about before changing anything here -- bats traps DEBUG to track line numbers,
 # so a simple command inside a test costs ~200us, and setup() runs once per test.
 # Hence: the corpus is generated once in setup_file and read back from a file,
@@ -88,9 +88,9 @@
 #
 # A find becomes a HAND-WRITTEN CASE IN tests/scanner.bats -- not a row in
 # tests/cases/. The issue's wording points at the tables, but verdicts.tsv and
-# messages.tsv are HOOK-level tables read by tests/classify.bats, and a scanner
-# input put there would be interpreted as a command to classify. The fuzzer's job
-# is to find them; tests/scanner.bats' job is to keep them.
+# messages.tsv are HOOK-level tables read by tests/classify.bats and
+# tests/messages.bats, and a scanner input put there would be interpreted as a
+# command to classify. The fuzzer's job is to find them; tests/scanner.bats' job is to keep them.
 #
 # The fix lands as a separate `fix:` commit naming the surfacing test, never
 # folded into the `test:` commit, so `git log --grep='^fix:'` keeps the defect
@@ -141,7 +141,7 @@ function setup_file() {
   # The banner carries a checksum of the corpus, not just the seed. The seed
   # alone is a weak identity -- bash makes no promise that a given seed yields
   # the same RANDOM sequence on another bash version, so "seed 42" on a Linux
-  # runner and "seed 42" on macOS may be two different corpora. The checksum
+  # runner and "seed 42" on macOS may be different corpora. The checksum
   # makes that visible instead of leaving it to be inferred, and it is what turns
   # "reproduce it with FUZZ_SEED=42" into a claim a reader can check. `cksum` is
   # POSIX, so it is there on the compat legs' ambient userland too.
@@ -153,13 +153,13 @@ function setup_file() {
 
 function setup() {
   load 'test_helper/common'
-  # LC_ALL=C twice over, and both are load-bearing. For `awk` it is the same
+  # LC_ALL=C for `awk` and for bash, and both are load-bearing. For `awk` it is the same
   # requirement tests/scanner.bats documents: the scanner emits BYTE offsets and
   # the hook slices the raw command back out with them, so a UTF-8 locale would
-  # make the two index bases disagree. For BASH it is what makes
+  # make the index bases disagree. For BASH it is what makes
   # `${#FUZZ_CORPUS[i]}` a byte count rather than a character count, which is
-  # the number every assertion in this file compares against. Today's catalogue
-  # is pure ASCII so the two agree, but a single non-ASCII fragment added later
+  # the number every assertion in this file compares against. The catalogue
+  # is pure ASCII so the counts agree, but a single non-ASCII fragment added later
   # would silently turn every byte-count assertion into a character-count
   # assertion, and it would still pass.
   export LC_ALL=C
@@ -260,7 +260,7 @@ function fuzz_catalogue() {
   for ch in 'a' "'" '$' '<'; do
     FUZZ_FRAGMENTS+=("${pad// /${ch}}")
   done
-  # What goes BETWEEN two fragments. An array rather than a `case` so a
+  # What goes BETWEEN fragments. An array rather than a `case` so a
   # fragment and its glue are one append, see fuzz_case.
   FUZZ_GLUE=(' ' $'\n' '')
 }
@@ -285,12 +285,12 @@ function fuzz_alphabet() {
 # @description Assemble ONE fuzz input. Result lands in the global FUZZ_CASE
 #              rather than on stdout, and that is not a style choice: `$(...)`
 #              strips trailing newlines, and whether the input ends with a
-#              newline is precisely what selects between the two halves of the
+#              newline is precisely what selects between the halves of the
 #              byte-count rule. A generator that returned through stdout could
-#              not produce a case for the second half at all.
+#              not produce a case that ends with a newline at all.
 #
-#              At least three fragments per case, never zero: the catalogue
-#              holds no empty fragment, so a floor of three is what guarantees
+#              A floor on the fragments per case, never zero: the catalogue
+#              holds no empty fragment, so the floor is what guarantees
 #              the "non-empty" half of the anti-vacuity test can never be
 #              satisfied by accident.
 # @noargs
@@ -305,7 +305,7 @@ function fuzz_case() {
     # a `case` picking the glue. Same corpus, half the simple commands, and
     # under bats' DEBUG trap the command count is what this loop costs.
     #
-    # Glue: a space keeps two fragments separate words, a newline puts them on
+    # Glue: a space keeps neighbouring fragments separate words, a newline puts them on
     # separate lines (which is what heredoc bodies and comments need), and the
     # empty string fuses them into one word.
     FUZZ_CASE+="${FUZZ_FRAGMENTS[RANDOM % count]}${FUZZ_GLUE[RANDOM % 3]}"
@@ -345,8 +345,8 @@ function fuzz_corpus() {
   done
 }
 
-# @description Read the corpus setup_file generated back into FUZZ_CORPUS. Two
-#              commands per case instead of the dozen a rebuild costs, which
+# @description Read the corpus setup_file generated back into FUZZ_CORPUS. A
+#              read and an append per case instead of what a rebuild costs, which
 #              matters because setup() runs once per test. `read -d ''` splits
 #              on NUL and is a bash builtin present since 3.2, so it needs
 #              nothing from the ambient userland the compat legs run against.
@@ -376,7 +376,7 @@ function scan_terminated() {
 # @description Run the scanner on EXACTLY the given bytes, with no newline
 #              appended -- the calling convention VIOLATED. The scanner still
 #              has to answer correctly, and this is the only way to reach the
-#              second half of the byte-count rule.
+#              unterminated half of the byte-count rule.
 # @arg $1 command the command string to tokenize
 # @stdout the token stream
 # @exitcode * awk's own status
@@ -388,11 +388,12 @@ function scan_raw() {
 
 # @description Verify a scanner stream ends in a well-formed integrity trailer
 #              carrying the expected byte count. This is the single comparison
-#              every property in this file rests on, which is why the second
-#              anti-vacuity test feeds it a known-bad trailer: a comparison that
-#              always held would make every property green forever.
+#              every property in this file rests on, which is why the
+#              "trailer comparison rejects a known-bad trailer" test feeds it
+#              one: a comparison that always held would make every property
+#              green forever.
 #
-#              Two failures, distinguished by the reason text -- "not a
+#              The failures are distinguished by the reason text -- "not a
 #              well-formed trailer" means the STREAM was mangled, "expected"
 #              means the stream was intact and the COUNT was wrong. That is why
 #              they do not need to be separate tests: one awk spawn produces the
@@ -456,16 +457,17 @@ function fuzz_fail() {
 
 # --- One pass over the corpus -----------------------------------------------
 
-# @description Scan the whole corpus once and assert all three properties from
+# @description Scan the whole corpus once and assert every property from
 #              that single `awk` invocation per case: exit status 0, a
 #              well-formed trailer, and the right byte count in it.
 #
-#              ONE spawn, not three. The three properties are not independent
-#              observations -- they all fall out of the same run, and
-#              TRAILER_REASON already says which of them broke -- so splitting
-#              them across three tests would triple the corpus's cost for no
-#              extra diagnostic. The gate runs the whole suite twice (gawk and
-#              one-true-awk), so every spawn here is paid for twice.
+#              ONE spawn for all of them. The properties are not independent
+#              observations -- they all fall out of the same run, and the
+#              detail handed to fuzz_fail already says which of them broke
+#              (TRAILER_REASON for the trailer properties) -- so a test per
+#              property would multiply the corpus's cost for no extra
+#              diagnostic. The gate runs the whole suite under gawk and again
+#              under one-true-awk, so every spawn here is paid for under each.
 #
 #              Records its own elapsed seconds so the budget test can assert
 #              against the REAL loops rather than adding a pass of its own.
@@ -492,12 +494,10 @@ function fuzz_scan_pass() {
     status=0
     out="$("${scan}" "${FUZZ_CORPUS[i]}")" || status=$?
     # Explicit `return 1` after each report, NOT a bare `x || fuzz_fail ...`
-    # leaning on bats' `set -e` to unwind. This function was written the short
-    # way first and it was WRONG: `fuzz_fail`'s non-zero return ends an `||`
-    # list, the loop carries on to the next case, and the final `printf` hands
-    # back 0 -- so a corpus full of failures reported itself as a pass anywhere
-    # errexit was not in force. Caught by driving this same function against a
-    # scanner mutated to emit `n+1`, which it then declared clean.
+    # leaning on bats' `set -e` to unwind. The short form is WRONG:
+    # `fuzz_fail`'s non-zero return ends an `||` list, the loop carries on to
+    # the next case, and the final `printf` hands back 0 -- so a corpus full of
+    # failures reports itself as a pass anywhere errexit is not in force.
     if ((status != 0)); then
       fuzz_fail "${i}" "${FUZZ_CORPUS[i]}" "scanner exited ${status}; a non-zero exit is a silent allow"
       return 1
@@ -514,7 +514,7 @@ function fuzz_scan_pass() {
 
 @test "scanner-fuzz: the generator yields a non-empty, varied, stable corpus" {
   # A generator that silently produced empty strings, or the same string every
-  # time, would make every property below green forever. Three claims:
+  # time, would make every property below green forever. The claims:
   # non-empty, varied, and reproducible from the seed.
   local i
   for ((i = 0; i < FUZZ_N; i++)); do
@@ -527,7 +527,7 @@ function fuzz_scan_pass() {
   done
 
   # Varied, but deliberately NOT "all distinct". The generator draws from a
-  # finite catalogue and a case can be as short as three fragments, so exact
+  # finite catalogue and a case can be only a few fragments long, so exact
   # collisions are expected at any interesting N, and demanding uniqueness would
   # make this red for a reason that has nothing to do with what it guards. The
   # measured rate is 100% distinct at FUZZ_N=200, 5000 and 10000 across seeds,
@@ -552,12 +552,12 @@ function fuzz_scan_pass() {
   # Stable: regenerating from the same seed reproduces the corpus byte for byte
   # -- in a DIFFERENT PROCESS from the one setup_file generated it in, since
   # FUZZ_CORPUS here was read back from the file setup_file wrote -- and a
-  # different seed does not. Without the second half "stable" would be satisfied
+  # different seed does not. Without the latter "stable" would be satisfied
   # by a generator that ignored the seed entirely.
   #
   # Bounded to the first 64 cases rather than all FUZZ_N. Generation is
   # sequential, so the first 64 of a corpus are the same 64 at any N, and this
-  # is the one test that has to run the generator itself -- twice -- under
+  # is the one test that has to run the generator itself, once per seed, under
   # bats' DEBUG trap, where a full regeneration at `just fuzz`'s N would cost
   # more than every awk spawn in the file put together.
   local -r sample="$((FUZZ_N < 64 ? FUZZ_N : 64))"
@@ -630,12 +630,12 @@ function fuzz_scan_pass() {
   # newline of its own.
   #
   # Exit status, trailer well-formedness and byte count are asserted from one
-  # `awk` run per case; see fuzz_scan_pass for why they are not three tests.
+  # `awk` run per case; see fuzz_scan_pass for why they are not a test each.
   fuzz_scan_pass 'terminated'
 }
 
 @test "scanner-fuzz: unterminated input exits 0 with a correct trailer" {
-  # A SEPARATE test from the one above, deliberately, so the two halves of the
+  # A SEPARATE test from the one above, deliberately, so the halves of the
   # byte-count rule fail independently and a reader can tell which precondition
   # broke. Here the caller violates the convention and sends the bytes raw, so
   # the scanner's one-newline drop applies only when the input supplied that
@@ -651,14 +651,14 @@ function fuzz_scan_pass() {
   # the pathological-but-finite input, one the scanner degrades on badly enough
   # to drag the whole corpus past its allowance.
   #
-  # It measures the two REAL passes rather than making a third of its own: each
+  # It measures the REAL passes rather than making another of its own: each
   # records its elapsed seconds in BATS_FILE_TMPDIR, and bats runs the tests of
   # a file in file order, so both recordings exist by the time this runs. Run
   # this test on its own with --filter and the recording is missing, so it does
   # the pass itself rather than passing vacuously on no evidence.
   #
-  # The allowance is 10s of fixed slack plus 50ms per case per pass, roughly
-  # twenty times the measured cost. It is deliberately loose: this is a hang
+  # The allowance is 10s of fixed slack plus 50ms per case per pass, several
+  # times the measured cost. It is deliberately loose: this is a hang
   # detector on shared CI hardware, not a performance assertion, and a red
   # budget on a slow runner would teach everyone to ignore it.
   local -r budget="$((10 + FUZZ_N / 10))"

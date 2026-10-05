@@ -14,7 +14,7 @@
 #              assets/build-social-preview),
 #              every one of which .ci/run-lint-checks nonetheless shellchecks and
 #              shfmt-diffs. treefmt knows nothing about .justfile, markdown prose
-#              or spelling either. Those gaps are exactly the four fixers below,
+#              or spelling either. Those gaps are exactly the fixers below,
 #              and each one is the writing twin of a step in
 #              .ci/run-lint-checks:
 #
@@ -33,14 +33,14 @@
 #              the trap #46 fixed for `typos`. .ci/run-lint-checks solves it
 #              with the same `git ls-files` / `git grep -I` incantations, and
 #              they are repeated rather than shared because .ci/ has no sourced
-#              library and inventing one for two callers would cost more than it
-#              saves.
+#              library and inventing one for these scripts alone would cost
+#              more than it saves.
 #
 #              Exit codes AGGREGATE rather than fail fast, matching
 #              .ci/run-lint-checks: one run should apply every fix it can, not
 #              stop at the first tool that has something left over.
 #
-#              A non-zero exit does NOT mean nothing was written. Two of these
+#              A non-zero exit does NOT mean nothing was written. Some of these
 #              fixers report what they could not fix: markdownlint-cli2 --fix
 #              exits non-zero when an unfixable rule violation remains, and
 #              `typos --write-changes` leaves any word with more than one
@@ -76,7 +76,8 @@ function log() {
 }
 
 # @description Collect tracked shell scripts: *.sh, *.bash and *.bats, plus
-#              extensionless files whose first line is a bash shebang. Kept
+#              any other file, outside a skip list of non-shell extensions,
+#              whose first line is exactly `#!/usr/bin/env bash`. Kept
 #              byte-for-byte in step with `shell_files` in .ci/run-lint-checks:
 #              a file this script rewrites but that one does not check, or the
 #              reverse, is a gate that disagrees with its own fixer.

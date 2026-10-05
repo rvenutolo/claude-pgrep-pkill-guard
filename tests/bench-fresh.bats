@@ -1,3 +1,8 @@
+# .ci/check-bench-fresh, against the real repo and against fixture repositories
+# holding a hooks/ history and a report that records a commit of it.
+#
+# setup sets CHECK, the gate under test.
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-bench-fresh"
@@ -9,8 +14,8 @@ function setup() {
 #              `just bench` on a branch produces, and therefore the state the
 #              check must call fresh. Each case below then moves one thing.
 #
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 #
 #              Identity is passed with `-c` rather than written with
@@ -32,7 +37,8 @@ function make_bench_fixture() {
 }
 
 # @description Write the fixture's hook file, carrying the same annotated
-#              version line release-please rewrites in the real one. The seed
+#              version line release-please rewrites in
+#              hooks/pgrep-pkill-guard-body.sh. The seed
 #              carries it so a case can bump it the way a release PR does --
 #              a one-line edit inside hooks/ -- rather than by rewriting the
 #              file, which would prove nothing about the exemption.
@@ -65,7 +71,7 @@ function short_head() {
 }
 
 # @description Write a bench/RESULTS.md whose provenance table records one sha.
-#              The table carries a second row and a paragraph that both contain
+#              The table carries another row and a paragraph that both contain
 #              the word "commit", so a check that matched on that word alone
 #              rather than on the row's structure would read the wrong cell.
 # @arg $1 root the fixture repo
@@ -102,15 +108,15 @@ function record_commit() {
   write_results "${root}" "${sha}"
 }
 
-# The first case points the script at the real repo, and the last passes the
-# real repo only to be rejected on its argument count before anything is read;
-# every case between them drives FIXTURE mode. None of that needs a devShell --
+# The real-repo case points the script at the real repo, and the
+# surplus-argument case passes the real repo only to be rejected on its argument
+# count before anything is read; every other case drives FIXTURE mode. None of that needs a devShell --
 # only git -- so this suite carries no skip and runs on the ambient compat legs
 # too, the same as tests/devshell-provides.bats and tests/invariant-markers.bats.
 
 @test "bench fresh: the real repo is accepted" {
-  # Only the exit code is asserted, deliberately. The two ambient compat legs
-  # check out at actions/checkout's default depth of 1, where the recorded
+  # Only the exit code is asserted, deliberately. The ambient compat legs that
+  # run this suite check out at actions/checkout's default depth of 1, where the recorded
   # commit is not in the object store and the honest verdict is the skip -- so
   # asserting on the `OK:` line here would redden those legs for a property of
   # the checkout rather than of the tree. Both accepted verdicts exit 0, which
@@ -212,8 +218,8 @@ HOOK
 }
 
 @test "bench fresh: a hooks/ change reverted before HEAD is not stale" {
-  # The verdict is a property of two trees, not of the path between them. Two
-  # commits touched hooks/, so `git log` is not empty -- but the tree HEAD
+  # The verdict is a property of two trees, not of the path between them.
+  # Commits touched hooks/, so `git log` is not empty -- but the tree HEAD
   # carries is the one the report was measured against.
   local -r root="${BATS_TEST_TMPDIR}/reverted"
   make_bench_fixture "${root}"
@@ -233,7 +239,7 @@ HOOK
 
 @test "bench fresh: a new file in hooks/ is stale even with the version line" {
   # The allowlist walk must reject `new file mode`, not skip past it as
-  # unrecognised metadata: a second hook file is new code on every call.
+  # unrecognised metadata: another hook file is new code on every call.
   local -r root="${BATS_TEST_TMPDIR}/new-file"
   make_bench_fixture "${root}"
   printf 'helper
@@ -340,8 +346,8 @@ RESULTS
 # --- Advisory versus strict ---------------------------------------------------
 #
 # Freshness is a release-time property (see the header of .ci/check-bench-fresh).
-# Without BENCH_FRESH_STRICT the two stale verdicts warn and exit 0; the CI gate
-# job sets the variable only on release-please's branch. The malformed-report
+# Without BENCH_FRESH_STRICT the stale and unreachable verdicts warn and exit 0;
+# the CI gate job sets the variable only on release-please's branch. The malformed-report
 # verdicts above are a broken FILE rather than stale numbers, and fail either way.
 
 @test "bench fresh: a stale report only warns without BENCH_FRESH_STRICT" {

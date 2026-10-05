@@ -1,10 +1,15 @@
+# .ci/check-bats-no-shebang, against the real repo and against fixture
+# repositories of tracked .bats files.
+#
+# setup sets CHECK, the gate under test.
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-bats-no-shebang"
 }
 
 # @description Build a minimal tracked tree in the shape the gate scans: a git
-#              repo holding two shebang-less .bats files. The cases below that
+#              repo holding shebang-less .bats files. The cases below that
 #              use it then rewrite those files or add one beside them.
 #
 #              A real `git init` rather than a path walk, because the gate reads
@@ -16,8 +21,8 @@ function setup() {
 #              The fixture files are data the gate only reads; nothing here ever
 #              executes them.
 #
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_bats_fixture() {
@@ -44,7 +49,7 @@ function gate_in() {
 # skipping it. Hence no devShell skip here, the same as
 # tests/shell-shebangs.bats.
 #
-# The first case is the exception that keeps the rest honest: it runs the gate
+# The real-repo case is the exception that keeps the rest honest: it runs the gate
 # in the real repo, so a fixture that has drifted away from the shape the
 # tracked suites actually have cannot hide behind a green suite.
 

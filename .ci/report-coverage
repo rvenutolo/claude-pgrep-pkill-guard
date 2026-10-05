@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 # @description Print the line-coverage percentage from a kcov report directory,
-#              and append a one-line summary to ${GITHUB_STEP_SUMMARY} when that
+#              and append a summary section -- a heading, the percentage and
+#              a caveat on how to read it -- to ${GITHUB_STEP_SUMMARY} when that
 #              variable is set.
 #
 #              Exists because locating kcov's report is not obvious and getting
@@ -36,11 +37,14 @@
 #              docs/architecture.md, "Line coverage".
 # @arg $1 dir the directory passed to `run-tests --coverage`
 # @stdout the percentage, e.g. `76.42`
+# @stderr the usage line, or one `[<script>] FATAL: <message>` line naming what
+#         was wrong
 # @exitcode 0 exactly one complete report was found and its percentage printed
 # @exitcode 1 not exactly one argument given, the directory is missing, the
-#             number of reports found was not exactly one, or the one report
+#             number of reports found was not exactly one, the one report
 #             found is missing a hooks/ file, records zero covered lines for
-#             one, or has no percent_covered field
+#             one, or has no percent_covered field, or ${GITHUB_STEP_SUMMARY}
+#             is set and cannot be appended to
 # @exitcode * otherwise the failing jq status, when the one report found is not
 #             valid JSON or holds a files[] entry jq cannot process
 

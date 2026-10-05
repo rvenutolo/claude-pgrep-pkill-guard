@@ -27,7 +27,7 @@
 #              the devShell correctly fails. A hardcoded list would have to be
 #              remembered at exactly the moment it is easiest to forget.
 #
-#              Two traps shape the reverse pass, both found the hard way:
+#              The traps that shape the reverse pass:
 #
 #              1. Justification is decided by where a tool RESOLVES ON PATH, not
 #                 by scanning each output's bin/. An output the shell does not
@@ -53,14 +53,16 @@
 #         tools through PATH, so a fixture that puts its own bin directories on
 #         PATH exercises exactly the code the real run takes.
 #
-#         `platform` is the fourth of those files and stands in for `uname -s`,
-#         defaulting to the real `uname -s` when it is absent. It is a fixture
+#         `platform` stands in for `uname -s`, defaulting to the real `uname -s`
+#         when it is absent. It is a fixture
 #         file rather than an environment variable on purpose: the `linux-only`
 #         annotation needs both a Linux and a non-Linux case, and routing the
 #         platform through the one mechanism the script already has for
 #         test-only inventories keeps that axis out of the real run entirely.
 #         The alternative -- skipping the Darwin case on a Linux runner -- would
 #         mean the branch is never executed by anything at all.
+# @stderr the usage line, one FAIL line (with indented hints) per failure, and
+#         one SKIP line per linux-only entry not checked off Linux
 # @exitcode 0 every declared tool resolves and every package is justified
 # @exitcode 1 the tools file is missing, the list is empty, a declared tool is
 #             missing or carries an unknown annotation, the package inventory
@@ -120,8 +122,8 @@ builtins.concatStringsSep "\n" (map line flake.devShells.${system}.default.nativ
 
 # .treefmt.nix is read through flake.outPath, not as a bare path literal, so the
 # formatters and the packages come from ONE tree. Reading it directly off disk
-# would let the two halves of the reverse pass disagree whenever the working
-# tree and the flake source differ.
+# would let the formatters and the packages disagree whenever the working tree
+# and the flake source differ.
 #
 # shellcheck disable=SC2016 # every `${...}` below is Nix syntax, not a shell expansion
 readonly FORMATTERS_EXPR='
@@ -177,7 +179,7 @@ function declared_tools_annotated() {
 #              in nativeBuildInputs at all, so there is no package to justify,
 #              and reverse_check's tool_paths loop already ignores a declared
 #              tool that does not resolve. Derived from the annotated form, not
-#              a second copy of the parser, so the two cannot drift.
+#              a second copy of the parser, so they cannot drift.
 # @noargs
 # @stdout one declared tool per line
 function declared_tools() {
@@ -305,10 +307,11 @@ function forward_check() {
 #              tool, or it backs a formatter .treefmt.nix enables.
 # @arg $@ tools the declared tools
 # @stderr one FAIL line plus a hint per unjustified package, or one FAIL line
-#         for a failed inventory read or an empty inventory
+#         for a failed read of the package inventory or the formatter list, or
+#         for an empty inventory
 # @exitcode 0 every package is justified
 # @exitcode 1 at least one package justifies nothing, the inventory is empty, or
-#             an inventory read failed
+#             the package inventory or the formatter list could not be read
 function reverse_check() {
   local -ra tools=("$@")
   # Both statuses are tested explicitly rather than left to errexit. main calls
@@ -412,8 +415,8 @@ function main() {
     return 1
   fi
 
-  # Two views of the same list, deliberately. forward_check needs the
-  # annotations to honour `linux-only`; reverse_check takes bare names.
+  # The same list in an annotated and a bare view, deliberately. forward_check
+  # needs the annotations to honour `linux-only`; reverse_check takes bare names.
   # tools rows are bare names; annotated rows are `tool<TAB>annotation`
   # (annotation may be empty).
   local -a tools=() annotated=()
@@ -424,8 +427,8 @@ function main() {
   if ((${#tools[@]} == 0)); then
     printf 'FAIL: no tools declared in %s\n' "${TOOLS_FILE}" >&2
     # With the list empty the forward pass would check nothing and pass, and the
-    # reverse pass would report every package as unjustified. Stop here so the
-    # real cause is the only output.
+    # reverse pass would report every package no formatter backs as unjustified.
+    # Stop here so the real cause is the only output.
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
     # diagnostics above are the last thing the reader sees (#43, invariant 6).
     trap - ERR

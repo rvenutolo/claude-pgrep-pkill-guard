@@ -66,14 +66,14 @@
               # zizmor audits the workflows for SECURITY where actionlint audits
               # them for syntax and expression validity -- injection sinks,
               # over-broad permissions, credential persistence, environment-file
-              # writes. The two overlap nowhere, which is why both are here.
+              # writes. They overlap nowhere, which is why both are here.
               #
               # Unlike `renovate` below, which lists no x86_64-darwin in
               # meta.platforms and so keeps this devShell off Intel Macs, zizmor
               # evaluates on every system in the `systems` input, aarch64-darwin
               # included: it costs this devShell no platform.
               zizmor
-              # the two standard nix linters, both invoked by
+              # the standard nix linters, both invoked by
               # .ci/run-lint-checks. nixfmt formats these files but says nothing
               # about what they contain: statix catches antipatterns (a repeated
               # `programs.` key, for one) and deadnix catches unused bindings and

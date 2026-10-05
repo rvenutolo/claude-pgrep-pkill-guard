@@ -22,7 +22,7 @@
 #   mere presence: a package shipping a binary that another package shadows is
 #   contributing nothing to the shell, and the lint says so.
 #
-# That second escape is why prettier, yamlfmt, nixfmt and taplo are absent:
+# The formatter escape is why prettier, yamlfmt, nixfmt and taplo are absent:
 # treefmt runs them from the Nix store, never through PATH, and the lint derives
 # their exemption from .treefmt.nix rather than from a list kept here.
 

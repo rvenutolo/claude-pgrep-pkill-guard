@@ -7,7 +7,7 @@
 #              This gate exists because .ci/run-lint-checks decides which
 #              extensionless files reach shellcheck and shfmt by comparing
 #              their first line against that exact string. Every bash file it
-#              admits today spells it that way, so the lint gate is sound — but
+#              admits spells it that way, so the lint gate is sound — but
 #              a script written `#!/bin/bash` or `#!/usr/bin/env -S bash` would
 #              be dropped from BOTH linters with no diagnostic, and the
 #              empty-scan guard in run-lint-checks' `main` fires only when the
@@ -25,7 +25,7 @@
 #
 #              *.bats is skipped outright, because check-bats-no-shebang
 #              forbids a shebang there. Judging those files here as well would
-#              mean two gates giving one file contradictory orders: "make the
+#              mean gates giving one file contradictory orders: "make the
 #              shebang canonical" and "remove the shebang".
 #
 #              The exemption table pins the path AND the spelling. An exemption
@@ -85,7 +85,7 @@ readonly CANONICAL='#!/usr/bin/env bash'
 # and the separator is `::` rather than a tab because a tab in a source line is
 # invisible in a diff and this file is meant to be edited by hand.
 #
-# One row today. .ci/check-inactive-on-old-bash is POSIX sh on purpose: it is
+# .ci/check-inactive-on-old-bash is POSIX sh on purpose: it is
 # the stock-bash-3.2 compat leg's entry point, so it must run on a shell that
 # predates everything the rest of this repo assumes. Its own header explains
 # that, and docs/architecture.md records it in both its `--help` on bash below

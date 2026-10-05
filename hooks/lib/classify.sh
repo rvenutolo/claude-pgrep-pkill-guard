@@ -4,7 +4,7 @@
 # hooks/pgrep-pkill-guard-body.sh whenever the entry script loads the body --
 # in human mode, or once the prefilter has let a payload through. Never
 # executed: no shebang, no exec bit, and it must not set `set -Eeuo pipefail`,
-# `IFS`, or the ERR trap -- the entry script owns all three, and a sourced file
+# `IFS`, or the ERR trap -- the entry script owns them all, and a sourced file
 # that sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
@@ -224,19 +224,21 @@ function classify::classify_command() {
   fi
   local tokens
   # The scanner produced an untrustworthy stream (see the trailer comment in
-  # pgrep-scan.awk). Return a verdict rather than printing: this function runs
-  # inside a command substitution, so a printf here would be captured, not
-  # emitted, and the guard would go silently dead.
+  # pgrep-scan.awk). Hand the condition up as an `inactive` verdict rather than
+  # printing the systemMessage: this function runs inside a command
+  # substitution, so a message printed here would be captured, not emitted, and
+  # the guard would go silently dead.
   tokens="$(scanner::scan_command "${command}")" || {
     printf 'inactive\n'
     return 0
   }
 
-  # Parsed once and shared by every invocation in this command, instead of
-  # each of consumption::feeds_a_kill / consumption::result_is_consumed / consumption::invocation_is_captured
-  # re-parsing the full token stream from scratch per invocation. A command
-  # with many invocations (a long chain of pgrep calls) made that rescan
-  # quadratic; array indexing does not.
+  # Parsed once and shared by every invocation in this command, so that
+  # consumption::feeds_a_kill, consumption::result_is_consumed and
+  # consumption::invocation_is_captured index one array instead of each
+  # re-splitting the token stream for every invocation. Each still walks the
+  # array per invocation, and consumption::next_command_reads_status still reads
+  # the stream itself; what the array saves is the repeated split.
   local -a cmd_tokens=()
   local _ raw_token
   while IFS=$'\t' read -r _ raw_token; do
@@ -337,7 +339,7 @@ function classify::repeat_tier_reason() {
   [[ "${session_id}" =~ ^[A-Za-z0-9._-]+$ && "${session_id}" != '.' && "${session_id}" != '..' ]] || return 1
   [[ "${command}" == *pgrep* || "${command}" == *.output* ]] || return 1
   local keys rt_tokens reason
-  # Split out of the nested substitution deliberately: with the scan inlined
+  # Kept out of the nested substitution deliberately: with the scan inlined
   # into classify::probe_keys' arguments, a scanner failure would be swallowed by the
   # `|| keys=''` below and read as "this command carries no probe key".
   rt_tokens="$(scanner::scan_command "${command}")" || return 2
@@ -355,17 +357,17 @@ function classify::repeat_tier_reason() {
 
 # @description Everything the guard does once the prefilter has decided the payload is worth
 #              looking at: the preconditions, the jq extraction, the stateless tiers, the
-#              stateful repeat tier, and emission. Split out of `main` so the entry script can
-#              stay small enough to parse cheaply -- see the header of
-#              hooks/pgrep-pkill-guard-body.sh.
+#              stateful repeat tier, and emission. It lives here, not in the entry script's
+#              `main`, so the entry script stays small enough to parse cheaply -- see the header
+#              of hooks/pgrep-pkill-guard-body.sh.
 # @arg $1 input the raw hook JSON payload, exactly as read from stdin
 # @stdout the hook's JSON response
 function classify::inspect_command() {
   local -r input="$1"
 
-  # Past the short-circuit the scanner is about to be needed, so resolve it now.
-  # This is the first thing below the prefilter because the scanner readability
-  # guard a few lines down reads the path this resolves.
+  # The scanner is about to be needed, so resolve it now. This is the first
+  # statement here because the scanner readability guard in
+  # classify::inspect_preconditions, called next, reads the path this resolves.
   scanner::resolve_scanner
 
   # Below here the guard is actually going to look at the command, so the

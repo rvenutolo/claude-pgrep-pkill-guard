@@ -4,7 +4,7 @@
 # reaches. hooks/pgrep-pkill-guard.sh sources this file from load_body -- for
 # human mode, or AFTER the prefilter has decided the payload is worth looking
 # at -- and then calls classify::inspect_command or human::human_mode. This
-# file is the loader -- it declares the two globals the parts share
+# file is the loader -- it declares the globals the parts share
 # and sources the parts themselves.
 #
 # The split exists for one reason: bash parses ~1.2 us per line before it runs
@@ -16,12 +16,12 @@
 # sourced from the list below.
 #
 # This file is SOURCED, never executed: no shebang, not executable, and it must
-# set none of four things. The entry script sets three of them --
-# `set -Eeuo pipefail`, `IFS` and the ERR trap -- and re-setting them here would
-# change the caller's shell. The fourth, `shopt -s inherit_errexit`, is set
-# nowhere in hooks/ (invariant 2). Invariant 1 applies unchanged too -- a
-# short flag only where macOS has no long form, deliberately, here and in every
-# part under lib/.
+# not set `set -Eeuo pipefail`, `IFS` or the ERR trap -- the entry script sets
+# those, and re-setting them here would change the caller's shell -- nor
+# `shopt -s inherit_errexit`, which is set nowhere in hooks/ (invariant 2).
+# Invariant 1 applies unchanged too -- a
+# short flag only where macOS has no long form, deliberately, here and in
+# every part under lib/.
 
 # The version `--version` reports. A literal rather than a runtime read of
 # .claude-plugin/plugin.json: that would need path resolution up out of hooks/, a
@@ -74,12 +74,14 @@ readonly -a GUARD_PARTS=(
 
 # HOOK_DIR and HOOK_NAME are the entry script's: this file runs in its shell.
 for guard_part in "${GUARD_PARTS[@]}"; do
-  # The `||` is load-bearing beyond the obvious fallback, exactly as it is on
-  # the entry script's source of this file: it keeps a failing `source` off
-  # the ERR trap, so a missing or corrupt part reaches the check below rather
-  # than the trap's bare `{}`. The status itself is discarded on purpose -- see
-  # the list above for why it cannot be trusted -- and `declare -F` is the
-  # verdict. Both are builtins, so the check adds no fork.
+  # The `||` is load-bearing beyond the obvious fallback only for a caller that
+  # sources this file outside a `||` list. The entry script sources it as the
+  # left side of one, which already keeps every command in here, a failing
+  # `source` included, off errexit and the ERR trap; the `||` here keeps that
+  # true whoever the caller is, so a missing or corrupt part reaches the check
+  # below rather than the trap's bare `{}`. The status itself is discarded on
+  # purpose -- see the list above for why it cannot be trusted -- and
+  # `declare -F` is the verdict. Both are builtins, so the check adds no fork.
   # `exit 0`, not `return 1`: the entry script's own `|| { ... }` around its
   # source of this file would otherwise print a second JSON line, and an exit
   # from a sourced file is what the ERR trap itself does. Fail open, loudly,
@@ -87,7 +89,7 @@ for guard_part in "${GUARD_PARTS[@]}"; do
   # shellcheck source=/dev/null # each part is linted on its own as hooks/lib/*.sh
   source "${HOOK_DIR}/lib/${guard_part%%:*}" || : # source yields the part's last command status, not load success
   declare -F "${guard_part#*:}" > /dev/null || {
-    # Two messages, because the two causes send a reader to different places
+    # A message per cause, because the causes send a reader to different places
     # and the file's own readability is the only thing that separates them.
     # An unreadable part is an install problem. A part that IS there but did
     # not define its paired name is either a parse error inside it or a

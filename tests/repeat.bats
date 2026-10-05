@@ -1,3 +1,12 @@
+# The stateful repeat tier: repeated probes of one target within a session are
+# denied, and a missing, corrupt, oversized or unwritable state store fails
+# open. Driven only through the hook as a subprocess (invariant 3), with a
+# session id in the payload.
+#
+# setup sets STATE_DIR, a per-test state directory exported to the hook as
+# PGREP_PKILL_GUARD_STATE_DIR, and TASK_BASE and TASK_PATH, a harness
+# task-output directory and a file in it for the cases to probe.
+
 function setup() {
   load 'test_helper/common'
   # Every repeat-tier case is redirected into a per-test temp dir. This export

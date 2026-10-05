@@ -1,3 +1,9 @@
+# The deny rows of tests/cases/verdicts.tsv: each is run through the hook as a
+# subprocess (invariant 3), and its reason must name the mitigation of its own
+# deny kind.
+#
+# setup sets CASES, the path of that table.
+
 function setup() {
   load 'test_helper/common'
   CASES="${REPO_DIR}/tests/cases/verdicts.tsv"

@@ -20,7 +20,7 @@ function setup() {
 # @description Run the scanner exactly the way the hook does. LC_ALL=C is
 #              MANDATORY: the scanner emits BYTE offsets and the hook slices the
 #              raw command back out with them, so a UTF-8 locale here would make
-#              the two index bases disagree. The input is newline-TERMINATED:
+#              the index bases disagree. The input is newline-TERMINATED:
 #              the scanner reads lines, and the one guaranteed final newline is
 #              how it tells `foo` from `foo\n` without depending on RS.
 # @arg $1 command the command string to tokenize
@@ -31,7 +31,7 @@ function scan() {
 }
 
 # @description A literal tab, for anchoring greps at the token field. `\b` is a
-#              GNU grep extension and the compat CI legs run BSD grep, so every
+#              GNU grep extension and a compat CI leg runs BSD grep, so every
 #              "is this token in the stream" check anchors on <tab>token<eol>
 #              instead of a word boundary.
 # @noargs
@@ -440,7 +440,7 @@ function loader_probe() {
   out="$(loader_probe)"
   [[ "${out}" == *'INACTIVE'* ]]
   [[ "${out}" == *'lib/tokens.sh'* ]]
-  # Pinned to the branch under test. The loader has two messages here, and this
+  # Pinned to the branch under test. The loader has a message per cause here, and this
   # is the one for a part that is not there at all; the cases below whose part
   # is present take the other branch, and without this assertion this case would
   # pass on either.
@@ -552,7 +552,7 @@ function loader_probe() {
   #
   # It is also the input the `gawk --lint=fatal --posix` step in
   # .ci/run-lint-checks feeds the scanner, so this test and that gate cover the
-  # same call from the two opposite sides: the gate asserts no diagnostic, this
+  # same call from opposite sides: the gate asserts no diagnostic, this
   # asserts the answer is still right.
   local out
   out="$(LC_ALL=C awk -f "${SCANNER}" < /dev/null)"

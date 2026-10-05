@@ -7,7 +7,7 @@
 # issue and pull request carrying it, which re-creating the label does not undo.
 # Add before you remove.
 #
-# The two `autorelease:` labels are release-please's, not ours. They are listed
+# The `autorelease:` labels are release-please's, not ours. They are listed
 # so the labeler does not delete what release-please immediately recreates,
 # which would flip-flop them on every release. Their descriptions are empty
 # because that is what release-please creates them with; the empty string is

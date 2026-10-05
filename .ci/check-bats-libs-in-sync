@@ -3,15 +3,15 @@
 # @description Assert the bats library SHAs pinned in the ambient compat action
 #              match the ones flake.lock pins for the hermetic gate. The gate
 #              legs load bats-support and bats-assert from flake inputs; the
-#              two bats-running compat legs clone them by SHA from
-#              .github/actions/bats-ambient/action.yml. Nothing tied the two
+#              bats-running compat legs clone them by SHA from
+#              .github/actions/bats-ambient/action.yml. Nothing tied them
 #              together, and they agreed only by coincidence (#101).
 #
 #              The coincidence became able to break in #102. Renovate moves the
 #              ambient SHAs one dependency at a time through a git-refs custom
 #              manager, and moves flake.lock as one unit through
 #              lockFileMaintenance -- its nix manager has no per-input update,
-#              so the two sides cannot be grouped into a single PR. main will
+#              so the sides cannot be grouped into a single PR. main will
 #              therefore sit transiently drifted after any single-sided bump,
 #              and a single-sided Renovate PR goes red here until its
 #              counterpart lands. That cost was accepted deliberately: a green
@@ -32,9 +32,9 @@
 #         real repo", which a script that always returned 0 would also pass.
 # @arg $2 lock optional path to the flake lock; defaults to flake.lock under the
 #         repo root.
-# @exitcode 0 every checked library SHA agrees across the two files
+# @exitcode 0 every checked library SHA agrees across both files
 # @exitcode 1 a file is missing or unparsable, a SHA is absent or malformed, or
-#             the two sides disagree
+#             the sides disagree
 # @exitcode 2 more arguments were given than the script accepts
 # @exitcode * otherwise the failing git status, when the repository root cannot
 #             be resolved
@@ -142,8 +142,9 @@ function main() {
     return "${rc}"
   fi
 
-  # Aggregated, not fail-fast: a lock-file bump moves both libraries at once, so
-  # reporting only the first mismatch would hide half the work of fixing it.
+  # Aggregated, not fail-fast: a lock-file bump moves every library at once, so
+  # reporting only the first mismatch would hide the rest of the work of fixing
+  # it.
   for entry in "${LIBRARIES[@]}"; do
     library="${entry%%:*}"
     var="${entry##*:}"

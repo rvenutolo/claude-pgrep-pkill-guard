@@ -4,7 +4,7 @@
 # hooks/pgrep-pkill-guard-body.sh whenever the entry script loads the body --
 # in human mode, or once the prefilter has let a payload through. Never
 # executed: no shebang, no exec bit, and it must not set `set -Eeuo pipefail`,
-# `IFS`, or the ERR trap -- the entry script owns all three, and a sourced file
+# `IFS`, or the ERR trap -- the entry script owns them all, and a sourced file
 # that sets them reconfigures its caller. Never add `shopt -s inherit_errexit`
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
@@ -43,11 +43,10 @@ function tokens::is_prefix_command() {
 #
 #              An option missing from this table leaks -- with no operand budget to absorb it, its
 #              value is read as the command word itself, which ends the chain and hides the real
-#              command behind it. The eleven `sudo` entries are its whole synopsis, checked
-#              against the man page rather than recalled. That leak is the fail-open
-#              direction, and it is the deliberate trade: an operand budget generous enough to
-#              swallow an unknown option's value would read the `pkill` of `sudo deploy.sh pkill x`
-#              as a command and deny one bash never runs.
+#              command behind it. The `sudo` entries are its whole synopsis. That leak is the
+#              fail-open direction, and it is the deliberate trade: an operand budget generous
+#              enough to swallow an unknown option's value would read the `pkill` of
+#              `sudo deploy.sh pkill x` as a command and deny one bash never runs.
 # @arg $1 prefix the prefix command, already reduced to its basename
 # @arg $2 word the option word to test
 # @exitcode 0 the option consumes the next word
@@ -200,7 +199,7 @@ function tokens::prefix_chain_step() {
     # `sudo -u bob time`) or an assignment (`FOO=1 time`) the word is one those
     # resolve through PATH, which is GNU time and does understand `-o` -- hence
     # the empty-chain test, the assignment sentinel below being what makes the
-    # second case work. A path spelling (`/usr/bin/time`) is never the reserved
+    # assignment case work. A path spelling (`/usr/bin/time`) is never the reserved
     # word either. The sentinel keeps the reserved word's own `-p` in command
     # position while matching no arm of either table.
     if [[ "${token}" == 'time' && -z "${chain_ref}" ]]; then

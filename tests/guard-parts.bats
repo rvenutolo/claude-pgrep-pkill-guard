@@ -1,10 +1,15 @@
+# .ci/check-guard-parts, against the real repo and against fixture trees
+# holding a loader table and the parts it names.
+#
+# setup sets CHECK, the gate under test.
+
 function setup() {
   load 'test_helper/common'
   CHECK="${REPO_DIR}/.ci/check-guard-parts"
 }
 
 # @description Build a minimal tracked tree in the shape the gate reads: a
-#              loader carrying a two-row GUARD_PARTS table, and the two parts it
+#              loader carrying a small GUARD_PARTS table, and the parts it
 #              names, each defining its paired function. The negative cases
 #              below then corrupt, add or remove files in it.
 #
@@ -18,8 +23,8 @@ function setup() {
 #              part. common.bash's fixture-escape hardening is what keeps this
 #              `git` from resolving to the author's own checkout.
 #
-#              A short flag only where macOS has no long form, on purpose: the
-#              compat CI legs run this suite against macOS BSD coreutils, whose
+#              A short flag only where macOS has no long form, on purpose: a
+#              compat CI leg runs this suite against macOS BSD coreutils, whose
 #              mkdir has no --parents.
 # @arg $1 root directory to populate
 function make_parts_fixture() {
@@ -39,11 +44,12 @@ BODY
 }
 
 # Every case drives FIXTURE mode, which needs nothing but bash, git and grep --
-# deliberately no coreutils long options and no Nix -- so the ambient macOS
-# compat legs run this suite for real rather than skipping it. Hence no devShell
-# skip here, the same as tests/invariant-markers.bats and tests/issue-forms.bats.
+# deliberately no coreutils long options and no Nix -- so the ambient
+# `compat (macos, homebrew bash)` leg runs this suite for real rather than
+# skipping it. Hence no devShell skip here, the same as
+# tests/invariant-markers.bats and tests/issue-forms.bats.
 #
-# The first case is the exception that keeps the rest honest: it points the gate
+# The real-repo case is the exception that keeps the rest honest: it points the gate
 # at the real repo, so a fixture that has drifted away from the shape the
 # tracked loader actually has cannot hide behind a green suite.
 

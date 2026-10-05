@@ -23,7 +23,7 @@ runs:
         mkdir -p "${libdir}"
         # Pinned to commit SHAs, same policy as the actions themselves. Renovate
         # tracks these through .github/renovate.json, on datasource=git-refs and
-        # not github-tags: all three pins follow a default-branch head, and
+        # not github-tags: every pin follows a default-branch head, and
         # github-tags resolves tag names only, so it failed every lookup with
         # "Tag master not found" and left the SHAs silently frozen.
         clone_at() {

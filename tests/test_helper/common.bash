@@ -68,7 +68,7 @@ fi
 #              stateful repeat tier out of the stateless verdict cases.
 # @arg $1 command the command string to classify
 # @arg $2 session_id optional session id; omit for stateless cases
-# @stdout one line of JSON
+# @stdout the payload as one JSON object, pretty-printed over several lines
 function hook_json() {
   local -r command="$1"
   local -r session_id="${2:-}"

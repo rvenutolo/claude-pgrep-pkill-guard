@@ -47,7 +47,7 @@ function setup() {
   # this assertion must compare against the unexpanded string. Double quotes
   # here would expand it in the test's own shell -- to the empty string, since
   # nothing sets it -- and the glob would then match any command at all.
-  # Per-site rather than file-level: this is the only SC2016 site in the file.
+  # Per-site rather than file-level: SC2016 sites are rare in this file.
   # shellcheck disable=SC2016 # `${CLAUDE_PLUGIN_ROOT}` must stay unexpanded here
   [[ "${command}" == *'${CLAUDE_PLUGIN_ROOT}'* ]]
   [[ "${command}" == *'pgrep-pkill-guard.sh' ]]

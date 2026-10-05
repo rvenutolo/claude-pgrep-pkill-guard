@@ -57,7 +57,7 @@ function make_repo() {
 }
 
 # @description Run the payload builder with the fixture repo as the working
-#              directory. The script takes no repo argument by design -- it
+#              directory. The script takes no repository path by design -- it
 #              reads the index of wherever it is invoked -- so the cd is the
 #              fixture selection.
 # @arg $1 root the fixture repo
@@ -80,9 +80,9 @@ function b64() {
   base64 | tr -d '\n'
 }
 
-# @description Read one jq path out of the payload last produced by `run`.
-# @arg $1 filter a jq path expression
-# @stdout the raw value
+# @description Run one jq filter over the payload last produced by `run`.
+# @arg $1 filter a jq filter
+# @stdout the raw result
 function field() {
   jq --raw-output "$1" <<< "${output}"
 }

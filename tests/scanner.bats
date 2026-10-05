@@ -1,11 +1,11 @@
-# Seven single-quoted strings in this file hold literal `$(...)`, `$((...))` and
+# Single-quoted strings in this file hold literal `$(...)`, `$((...))` and
 # `${...}` text that is the SUBJECT of the test rather than something to expand:
 # the scanner's whole job is deciding which of those the shell would have
 # expanded, so the fixtures have to reach it byte for byte. Double-quoting any
 # of them would make bash expand it here and the test would assert on whatever
-# the developer's environment happened to contain. Seven sites in one file is
-# over the threshold at which per-site disables become noise, so the disable is
-# file-level here and per-site in tests/manifest.bats, which holds exactly one.
+# the developer's environment happened to contain. This file holds enough such
+# sites that per-site disables would be noise, so the disable is file-level
+# here; tests/manifest.bats, where they are rare, disables per site.
 #
 # The directive is honoured despite the file having no shebang (bats sources
 # these, so .ci/check-bats-no-shebang forbids one): shellcheck scopes a
@@ -24,7 +24,8 @@ function setup() {
 #              the scanner reads lines, and the one guaranteed final newline is
 #              how it tells `foo` from `foo\n` without depending on RS.
 # @arg $1 command the command string to tokenize
-# @stdout the token stream, one "<offset>\t<token>" record per line
+# @stdout the token stream, one "<offset>\t<token>" record per line, then the
+#         "\t<SCAN:n>" integrity trailer with no newline after it
 function scan() {
   printf '%s\n' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
@@ -317,8 +318,8 @@ function tab() {
 # @description Run a copy of the hook end to end under a stripped environment and
 #              report whether it announced that the guard is inactive, rather
 #              than dying into the ERR trap's silent allow. The probe command
-#              must contain `pgrep`, `pkill` or `.output`, or
-#              classify::classify_command short-circuits before the scanner is
+#              must contain `pgrep`, `kill` or `.output`, or the entry script's
+#              prefilter short-circuits before the awk and scanner checks are
 #              ever reached and a dead scanner looks healthy. The child runs
 #              under `env -i`: a plain PATH prefix assignment is not enough,
 #              because a BASH_ENV inherited from the caller re-sources the
@@ -342,8 +343,9 @@ function inactive_probe() {
   fi
 }
 
-# @description Build a throwaway hook copy plus a stub PATH holding only what the
-#              hook needs before it reaches the awk check.
+# @description Build a throwaway hook copy plus a stub PATH holding what the hook
+#              needs before it reaches the awk check, and `cat`, which nothing
+#              on that path runs.
 # @noargs
 # @set probe_dir the throwaway directory holding the hook copy
 # @set stub_dir the stub PATH directory inside it

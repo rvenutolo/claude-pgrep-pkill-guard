@@ -162,20 +162,22 @@ function setup() {
   # turn every byte-count assertion into a character-count assertion, and it
   # would still pass.
   export LC_ALL=C
-  # The catalogue is cheap and the two anti-vacuity tests regenerate from it;
-  # the corpus itself is read back from the file setup_file wrote.
+  # The catalogue is cheap and the generator's anti-vacuity test regenerates
+  # from it; the corpus itself is read back from the file setup_file wrote.
   fuzz_catalogue
   fuzz_read_corpus
 }
 
 # --- The fragment catalogue -------------------------------------------------
 
-# @description Populate FUZZ_FRAGMENTS with one entry per trouble spot the
-#              scanner's header names. Built in a function rather than at file
-#              scope because bats sources this file once per test to discover
-#              it, and top-level work runs on every one of those passes.
+# @description Populate FUZZ_FRAGMENTS with short strings drawn from the trouble
+#              spots the scanner's header names, several per spot, plus near
+#              misses and long single-character runs. Built in a function rather
+#              than at file scope because bats sources this file once per test
+#              to discover it, and top-level work runs on every one of those
+#              passes.
 # @noargs
-# @set FUZZ_FRAGMENTS one entry per trouble spot the scanner's header names
+# @set FUZZ_FRAGMENTS the fragment strings a case is assembled from
 # @set FUZZ_GLUE the separators a case is assembled with
 function fuzz_catalogue() {
   FUZZ_FRAGMENTS=(
@@ -317,8 +319,9 @@ function fuzz_case() {
 
 # @description Build a corpus into FUZZ_CORPUS, deterministically from
 #              FUZZ_SEED. setup_file calls this once and writes the result out;
-#              only the two anti-vacuity tests call it again, to show that a
-#              seed reproduces its corpus and that a different seed does not.
+#              only the generator's anti-vacuity test calls it again, to show
+#              that a seed reproduces its corpus and that a different seed does
+#              not. Reseeds bash's RANDOM from the seed as a side effect.
 # @arg $1 wanted how many cases to generate; defaults to FUZZ_N
 # @arg $2 seed  which seed to generate from; defaults to FUZZ_SEED. Taken as an
 #         argument rather than by reassigning FUZZ_SEED, because a test that
@@ -463,6 +466,7 @@ function fuzz_fail() {
 #
 #              Records its own elapsed seconds so the budget test can assert
 #              against the REAL loops rather than adding a pass of its own.
+#              Resets the shell's SECONDS to 0 to time the pass.
 # @arg $1 mode `terminated` for the documented calling convention (exactly one
 #         newline appended), `raw` for the convention violated
 # @stdout nothing; writes elapsed seconds to BATS_FILE_TMPDIR

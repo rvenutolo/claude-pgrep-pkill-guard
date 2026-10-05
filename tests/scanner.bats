@@ -1,5 +1,5 @@
-# Single-quoted strings in this file hold literal `$(...)`, `$((...))` and
-# `${...}` text that is the SUBJECT of the test rather than something to expand:
+# Single-quoted strings in this file hold literal `$(...)` and `$((...))`
+# text that is the SUBJECT of the test rather than something to expand:
 # the scanner's whole job is deciding which of those the shell would have
 # expanded, so the fixtures have to reach it byte for byte. Double-quoting any
 # of them would make bash expand it here and the test would assert on whatever

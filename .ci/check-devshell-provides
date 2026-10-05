@@ -40,7 +40,9 @@
 #                 an inventory three packages stale while the tree on disk had
 #                 already moved. --no-eval-cache is mandatory, not tidiness.
 #
-#              Must be run INSIDE the devShell (run-all-checks always is).
+#              Real mode must be run INSIDE the devShell (run-all-checks always
+#              is). Fixture mode never asks Nix and needs no devShell: the bats
+#              suite drives it on the ambient compat legs too.
 # @arg $1 dir optional fixture directory, which makes the script read
 #         `required-tools`, `packages.tsv`, `formatters.txt` and an optional
 #         `platform` from there instead of asking Nix and `uname`. It exists so
@@ -65,6 +67,8 @@
 #             or formatter list is unreadable, the inventory is empty, or a
 #             package justifies nothing
 # @exitcode 2 more arguments were given than the script accepts
+# @exitcode * otherwise the failing git status, when no fixture directory is
+#             given and the repository root cannot be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

@@ -39,6 +39,8 @@
 # @noargs
 # @exitcode 0 every link in the tracked tree resolves
 # @exitcode 1 a link failed, or the file list came up empty
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

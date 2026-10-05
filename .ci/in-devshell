@@ -12,13 +12,18 @@
 #              environment is wiped, the few variables the gates genuinely need
 #              are re-admitted through the fixed KEEP_VARS allowlist below.
 #
+#              When IN_DEVSHELL is already set the command is run directly, with
+#              no second nix evaluation: the caller is inside the boundary.
+#
 #              Standalone on purpose: it runs before the environment it creates,
 #              so it cannot source a function library. It needs only bash, git
 #              and nix from the host.
 # @arg $@ command the command to run inside the devShell, plus its arguments
+# @stderr the usage line, or the reason the script cannot run
 # @exitcode 0 the wrapped command succeeded
 # @exitcode 1 no command given, not inside a git repo, or the host bash is too old
-# @exitcode * otherwise the wrapped command's exit status
+# @exitcode * otherwise the wrapped command's exit status, or nix's own when the
+#             devShell cannot be entered
 
 set -Eeuo pipefail
 # This script runs under the HOST bash, before the devShell it creates exists,

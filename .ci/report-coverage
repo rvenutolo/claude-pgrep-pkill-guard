@@ -41,6 +41,8 @@
 #             number of reports found was not exactly one, or the one report
 #             found is missing a hooks/ file, records zero covered lines for
 #             one, or has no percent_covered field
+# @exitcode * otherwise the failing jq status, when the one report found is not
+#             valid JSON or holds a files[] entry jq cannot process
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

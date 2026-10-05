@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
+
+# @description The pgrep/pkill PreToolUse guard for the Bash tool: reads the hook JSON on stdin, prints a decision.
+# @arg $@ args human-mode options (--help, --version); Claude Code passes none
+# @stdout the decision or an INACTIVE notice as one JSON line, or the help text or version line
+# @stderr one error line plus a `--help` hint, on a human-mode usage error
+# @exitcode 0 a decision, a notice, the help or the version was printed; any unexpected failure fails open
+# @exitcode 2 a human-mode usage error
+
 set -Eeuo pipefail
+# No inherit_errexit: forbidden in hooks/, where `||` fallbacks keep substitutions off the ERR trap (invariant 2).
 IFS=$'\n\t'
 
 # Defined above the version guard below, which needs it: everything else in this

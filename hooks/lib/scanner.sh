@@ -29,6 +29,7 @@ function scanner::resolve_scanner() {
   # reassigned once resolved.
   readonly SCANNER
 }
+
 # @description Tokenize a command, masking quoted regions, and verify the
 #              scanner's integrity trailer before handing the stream back. See
 #              the trailer comment at the foot of pgrep-scan.awk for what the

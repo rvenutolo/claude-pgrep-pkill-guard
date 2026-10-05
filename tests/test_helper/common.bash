@@ -9,6 +9,12 @@
 #   BODY     — absolute path to the sibling the entry script sources
 #   LIB_DIR  — the directory of parts the body sources
 #   SCANNER  — absolute path to the awk scanner
+#   GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM — /dev/null
+#   GIT_CEILING_DIRECTORIES — the repo root
+#
+# Globals unset:
+#   every repo-local GIT_* variable `git rev-parse --local-env-vars` names
+#   BASH_ENV — unless COVERAGE is set
 
 REPO_DIR="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 HOOK="${REPO_DIR}/hooks/pgrep-pkill-guard.sh"

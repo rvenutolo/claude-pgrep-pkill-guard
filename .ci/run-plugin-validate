@@ -19,6 +19,8 @@
 # @exitcode 0 both manifests validate, or the CLI is not installed
 # @exitcode 1 at least one manifest failed validation, or the host bash is
 #             older than 4.4
+# @exitcode * otherwise the failing git status, when the repository root cannot
+#             be resolved
 
 set -Eeuo pipefail
 # This script runs under the HOST bash -- the `claude` CLI lives on the ambient

@@ -24,22 +24,25 @@ The entry script, and the only file `hooks/hooks.json` names. It holds the work
 an ordinary Bash tool call has to pay for, and nothing else. Bash parses a whole
 script before it executes a line of it, at roughly 1.2 us per line, and this
 hook runs on every Bash call in every session — so the file's length is a
-latency tax paid even by the commands the guard has no opinion about. At 2203
-lines that was ~2.4 ms of pure parse per call, four fifths of what the guard
-cost, almost all of it spent on code the call would never reach. Everything past
-the prefilter therefore lives in the sibling below (#55), and invariant 5 is the
-ceiling that keeps it there.
+latency tax paid even by the commands the guard has no opinion about. A guard
+parsed whole at 2203 lines pays ~2.4 ms of pure parse per call, almost all of it
+on code the call never reaches. Everything past the prefilter therefore lives in
+the sibling below, and invariant 5 is the ceiling that keeps it there.
 
 In execution order:
 
 1. `readonly HOOK_NAME`, which sits this high only because the version guard
-   below names it. Every other constant is past the prefilter: `HOOK_VERSION`
-   and `SCANNER` in the loader, the rest in the parts under `hooks/lib/`.
+   below names it. `HOOK_DIR` is declared empty here too and frozen by
+   `resolve_hook_dir` when `load_body` runs. Every other constant is past the
+   prefilter: `HOOK_VERSION`, `SCANNER` and `GUARD_PARTS` in the loader, the
+   rest in the parts under `hooks/lib/`.
 2. The bash-version guard: bash older than 4.4 prints the INACTIVE
    `systemMessage` and exits immediately. It runs before everything else
    because it is the one guard that has to: the rest of the guard leans on
    4.4+ behaviour, so nothing after this point is safe to run on an older
-   shell. It is also the only loud failure that fires ahead of the prefilter.
+   shell. On a hook call it is also the only loud failure that fires ahead of
+   the prefilter; the human-mode dispatch at step 5 can print `load_body`'s
+   INACTIVE message first, but never on a hook call.
 3. `trap 'emit_allow; exit 0' ERR`. A hook that dies non-zero surfaces an error
    on every Bash call, and exit 2 would block the tool outright. The trap is
    installed once, here; the body is sourced into this same shell and inherits
@@ -53,22 +56,21 @@ In execution order:
    `hooks/lib/`, and the awk they spawn.
 5. The human-mode dispatch, `main`'s first act: `if (($# > 0)) || [[ -t 0 ]]`,
    which loads the body and hands the arguments to `human::human_mode` — `--help`,
-   `--version` and the usage errors, none of which live here, because fifty
-   lines of help text on the fast path is fifty lines of parse on every call
-   that will never read them. Both tests are builtins, so an ordinary call pays
+   `--version` and the usage errors, none of which live here, because help
+   text on the fast path is parse on every call that will never read it. Both
+   tests are builtins, so an ordinary call pays
    no fork and nothing measurable to ask them, and neither can fire on a real
    hook call: `hooks/hooks.json` passes no arguments and Claude Code hands the
    hook stdin on a pipe, so anything reaching `human::human_mode` came from a person.
    Without the dispatch, running the script by hand hangs on the `read` at
    step 6, waiting for an EOF a terminal does not send until the user finds
-   Ctrl-D (#34).
+   Ctrl-D.
 
    The call is written `human::human_mode "$@" || exit "$?"`, not as a bare call
    followed by `return`. `human::human_mode` returns 2 on a usage error, and a bare
-   non-zero command is exactly what the `ERR` trap at step 3 catches: probed
-   with a reduced copy of this script, the bare form turned that 2 into
-   `emit_allow; exit 0`, so the guard answered a mistyped flag with `{}` and a
-   success. The `||` keeps `human::human_mode` off errexit's radar for its whole
+   non-zero command is exactly what the `ERR` trap at step 3 catches: the bare
+   form turns that 2 into `emit_allow; exit 0`, so the guard answers a mistyped
+   flag with `{}` and a success. The `||` keeps `human::human_mode` off errexit's radar for its whole
    dynamic extent — the same construct invariant 2 protects on the
    `repeat::repeat_check` call — and the `exit` is what carries the status out to the
    shell.
@@ -77,12 +79,12 @@ In execution order:
    `--help` on bash below 4.4; see **Known limitations** below.
 
 6. `main` reads the hook JSON from stdin into `input` with the `read` builtin —
-   `IFS= read -r -d '' input || :` — rather than the `input="$(cat)"` it used
-   to, which was a fork and an exec on every Bash tool call before the guard
-   had looked at anything. The empty delimiter reads to EOF, so `read` returns
+   `IFS= read -r -d '' input || :` — rather than `input="$(cat)"`, which is a
+   fork and an exec on every Bash tool call before the guard has looked at
+   anything. The empty delimiter reads to EOF, so `read` returns
    1 having stored the whole payload; the `|| :` is what makes that normal case
    a success rather than an `ERR` trip. Two differences from `$(cat)`, both
-   inert: a trailing newline now survives, which neither the prefilter's
+   inert: a trailing newline survives, which neither the prefilter's
    substring test nor `jq` cares about, and a raw NUL would truncate the
    payload — which Claude Code's payloads, serialized by Node's
    `JSON.stringify`, cannot contain.
@@ -100,13 +102,12 @@ In execution order:
    precondition guards inside the body do: the sibling missing or unreadable,
    and the `source` itself failing. The sibling's own source loop adds one
    branch per part, naming the part, judged by a `declare -F` check on a
-   function the part must define rather than by `source`'s status (#147; see
+   function the part must define rather than by `source`'s status (see
    the loader section below). The `||` on the `source` is what
    keeps a corrupt sibling off the `ERR` trap, which would otherwise answer a
-   broken install with a bare `{}`. It is a function rather than the inline
-   block it was before #34 because two call sites now need it, and a second
-   copy of ~15 lines would spend the fast-path budget invariant 5 exists to
-   protect.
+   broken install with a bare `{}`. It is a function rather than an inline
+   block because two call sites need it, and a second copy would spend the
+   fast-path budget invariant 5 exists to protect.
    Both callers read it as `load_body || return 0`: the `systemMessage` is
    already on stdout by then, so the caller's only remaining job is to stop.
    With the body loaded, `main` calls `classify::inspect_command "${input}"`.
@@ -128,14 +129,15 @@ never sourced at all. The check
 is by definition rather than by `source`'s exit status because `source`
 yields the status of the sourced file's _last top-level command_: a part that
 happened to end in a `[[ … ]]` returning non-zero would otherwise look exactly
-like a missing one and stand the guard down on every call (#147). A function
+like a missing one and stand the guard down on every call. A function
 that was defined proves the file was found, parsed to the end, and ran.
 Between them those parts
-are the rest of the guard: every constant except `HOOK_NAME`, `HOOK_VERSION` and
-`SCANNER`, and every function except `emit_allow`, `resolve_hook_dir`,
-`load_body` and `main` — `classify::inspect_command` among them, which is what used to be
-the second half of `main`. A call the prefilter short-circuits never parses a
-line of any of it, which is the entire reason the split exists.
+are the rest of the guard: every constant except `HOOK_NAME`, `HOOK_DIR`,
+`HOOK_VERSION`, `SCANNER` and `GUARD_PARTS`, and every function except
+`emit_allow`, `resolve_hook_dir`, `load_body` and `main` —
+`classify::inspect_command` among them, which `main` calls once the body is
+loaded. A call the prefilter short-circuits never parses a line of any of it,
+which is the entire reason the split exists.
 
 The list is explicit rather than a glob: a glob's order depends on the locale, a
 stray file dropped into `lib/` would be sourced unasked, and the fail-open
@@ -149,7 +151,7 @@ low-level helpers first. That is the order below.
 | `lib/tokens.sh`      | `COMMAND_POSITION_KEYWORDS`, `PREFIX_COMMANDS`, `tokens::is_prefix_command`, `tokens::prefix_value_option`, `tokens::prefix_operand_budget`, `tokens::prefix_breaks_chain`, `tokens::prefix_chain_step`, `tokens::is_assignment_word`, `tokens::is_keyword`, `tokens::is_operator`                                               |
 | `lib/scanner.sh`     | `scanner::resolve_scanner`, `scanner::scan_command`, `scanner::find_invocations`, `scanner::invocation_args`, `scanner::has_flag`, `PGREP_VALUE_OPTIONS`, `scanner::pattern_operand`, `scanner::bracket_mitigation_holds`                                                                                                        |
 | `lib/loops.sh`       | `loops::loop_context`, `loops::body_has_terminator`, `loops::loop_body_has_kill`                                                                                                                                                                                                                                                 |
-| `lib/messages.sh`    | `messages::emit_warn`, `messages::emit_deny`, `WARN_MESSAGE`, `WRITE_TOOL_LEAD`, `messages::deny_message`, `messages::repeat_message`                                                                                                                                                                                            |
+| `lib/messages.sh`    | `messages::emit_warn`, `messages::emit_deny`, `WARN_MESSAGE`, `SCANNER_INACTIVE_MESSAGE`, `WRITE_TOOL_LEAD`, `messages::deny_message`, `messages::repeat_message`                                                                                                                                                                |
 | `lib/consumption.sh` | `XARGS_VALUE_OPTIONS`, `consumption::is_xargs_value_option`, `consumption::feeds_a_kill_forward`, `consumption::kill_in_command_position`, `consumption::feeds_a_kill_backward`, `consumption::feeds_a_kill`, `consumption::invocation_is_captured`, `consumption::next_command_reads_status`, `consumption::result_is_consumed` |
 | `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrappers::wrapper_operand_budget`, `wrappers::pipe_producer_payload`, `wrappers::pipe_carry_clear`, `wrappers::segment_pipe_carry`, `wrappers::shell_wrapper_payloads`                                                                               |
 | `lib/repeat.sh`      | `REPEAT_THRESHOLD`, `REPEAT_WINDOW_SECONDS`, `REPEAT_MAX_ENTRIES`, `repeat::repeat_check`                                                                                                                                                                                                                                        |
@@ -241,7 +243,9 @@ before returning the stream. The check catches any awk that strips, splits or
 reshapes bytes on the way through and would otherwise desync every offset while
 still producing plausible output. It is in-band rather than an `exit 1` because
 an awk that reshapes bytes still exits 0: an exit status cannot report it, and
-only a count carried in the stream gives the hook something to compare. The scanner
+only the hook knows the length of the command it sent, so only a count carried
+in the stream gives it something to compare. A non-zero exit needs no trailer:
+`scanner::scan_command` fails on it exactly as it fails on a bad count. The scanner
 depends on nothing awk-specific: it reads with `getline` under the default `RS`
 so gawk, mawk and one-true-awk all behave identically, and the caller
 terminates its input with exactly one newline because POSIX awk cannot
@@ -260,7 +264,7 @@ otherwise tell `foo` from `foo\n` at end of input.
 | `allow`          | everything else                                                                                          |
 | `inactive`       | the scanner failed its integrity trailer; `classify::inspect_command` emits the INACTIVE `systemMessage` |
 
-`repeat` is the fifth deny kind and is not one of these: it is decided after
+`repeat` is the fourth deny kind and is not one of these: it is decided after
 classification, in `classify::inspect_command`, because it is the only stateful rule.
 
 ### The per-session state file
@@ -273,8 +277,9 @@ else `/tmp/pgrep-pkill-guard`, and keeps one file per session named for the
 never a shared fallback). The file holds `<epoch>\t<key>` lines; entries older
 than the 300 s window are pruned on every write, the threshold is 3 probes per
 key per window, and the rewrite goes through `mktemp` plus `mv` rather than a
-predictable `${file}.$$` name. The directory and the file must both be owned by
-the caller and not symlinks. Every one of those checks `return 0` — see below.
+predictable `${file}.$$` name. The directory must be owned by the caller and
+not a symlink, and the file must be a regular file the caller owns. Every one
+of those checks `return 0` — see below.
 
 ### `tests/cases/`
 
@@ -318,8 +323,10 @@ printed on every run, not only on failure, and `FUZZ_SEED` reproduces a corpus;
 deliberately not part of `just check`.
 
 Anything it finds becomes a hand-written case in `tests/scanner.bats` — not a row
-in `tests/cases/`, whose tables are hook-level and read by `tests/classify.bats`.
-The fuzzer's job is to find them; the suite's job is to keep them. Twelve more are unrelated to the guard entirely, each
+in `tests/cases/`, whose tables are hook-level and read by hook-level suites
+such as `tests/classify.bats` and `tests/messages.bats`.
+The fuzzer's job is to find them; the suite's job is to keep them. Other suites
+are unrelated to the guard entirely, each
 driving a `.ci/` script rather than anything in `hooks/`:
 `tests/issue-forms.bats` (`.ci/check-issue-forms`, against fixture issue
 templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-commit-payload`),
@@ -339,14 +346,14 @@ fabricated tree of tracked modes), `tests/guard-parts.bats`
 `tests/bats-no-shebang.bats` (`.ci/check-bats-no-shebang`,
 against throwaway repos of fixture `.bats` files) and `tests/bash-style.bats`
 (`.ci/check-bash-style`, against fixture scripts written per case). Every one of them drives its
-script over a fabricated input — eight through optional fixture-path arguments,
+script over a fabricated input — most through optional fixture-path arguments,
 `build-commit-payload` and `check-bats-no-shebang` by being invoked inside a
 throwaway repo, `check-bash-style` by being handed fixture paths, and `report-coverage` by being pointed at a directory a case
 built — for the same reason: a suite that only asserted "exits 0 on the real
 repo" would pass just as well against a script that unconditionally returned 0.
 
-Two more drive neither the guard nor a `.ci/` script.
-`tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
+`tests/run-tests-cli.bats` and `tests/run-all-checks.bats` drive neither the
+guard nor a `.ci/` script. `tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
 `--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — against a
 trivial always-passing fixture suite rather than against the real one, so the
 cases measure argument parsing and not the suite's runtime. It is the only bats
@@ -372,8 +379,8 @@ plugin that quietly does nothing. The part branch names the part it could not
 load, and `exit 0`s from inside the sourced loader rather than returning, so the
 entry script's own `|| { … }` does not print a second JSON line after it.
 
-The bash-version guard is the only one of those that runs before the payload
-prefilter. Every other loud warning fires only for commands that carry a
+On a hook call, the bash-version guard is the only one of those that runs
+before the payload prefilter. Every other loud warning fires only for commands that carry a
 trigger token. A command mentioning neither `pgrep`, nor `kill`, nor a
 task-output file returns `{}` whether or not `jq` is installed, so warning
 about an inactive guard on that call describes a decision the guard was never
@@ -382,7 +389,7 @@ time they type something the guard would have looked at, which is the moment
 the warning is worth anything.
 
 The silent path covers
-the `repeat` rule's state: no directory, unreadable, not a regular file, not
+the `repeat` rule's state: a directory that cannot be created, unreadable, not a regular file, not
 owned by the caller, a symlinked directory, an oversized file — each returns
 quietly and the command proceeds, because the state is a heuristic and is never
 allowed to become a way to fail closed.
@@ -405,7 +412,7 @@ next to the stderr line explaining it. Someone who hand-edited
 `hooks/hooks.json` to pass an argument would have every Bash call blocked with
 a loud message rather than silently unguarded — the right answer for a broken
 configuration, and the reason the exception is acceptable rather than merely
-tolerated (#34).
+tolerated.
 
 ## Known limitations
 
@@ -446,8 +453,6 @@ in a payload containing no `kill` substring, so teaching it to unquote means
 revisiting the prefilter's token set in the same change.
 `tests/prefilter.bats` is what would catch that being forgotten.
 
-Filed as #52.
-
 ### `--help` and `--version` are unavailable on bash below 4.4
 
 The human-mode dispatch sits after the bash-version guard, so on stock macOS
@@ -467,24 +472,23 @@ names their exact problem and its exact fix, `brew install bash`, which beats
 both help for a guard that is not running and a version number for one.
 Declined on that trade, deliberately.
 
-Recorded as part of #34.
-
 ## Repository automation
 
-Four workflows, and one piece of repository configuration that lives outside the
-tree.
+The workflows under `.github/workflows/`, and one piece of repository
+configuration that lives outside the tree.
 
 `ci.yml` runs the gate and the compat legs and is the only workflow whose
 contexts are required for a merge. `links.yml` checks link rot on every pull
 request and again weekly, and is deliberately advisory. `release.yml` drives
-release-please. `labels.yml` is the fourth, added by #89, and is the odd one
-out: it changes the repository rather than reporting on it.
+release-please. `labels.yml` is the odd one out: it changes the repository
+rather than reporting on it.
 
 ### Labels are code
 
 `.github/labels.yml` is the authoritative label set. `labels.yml` (the
 workflow) applies it with `skip-delete: false`, so **a label absent from that
-file is deleted on the next push to `main`** — and deleting a label strips it
+file is deleted on the next push to `main` that changes that file or the
+workflow** — and deleting a label strips it
 from every issue and pull request carrying it, which re-creating the label does
 not undo. That is the whole reason the workflow also runs on `pull_request`
 with `dry-run: true`: the job log on a PR is the only review a deletion ever
@@ -527,7 +531,7 @@ gh api repos/rvenutolo/claude-pgrep-pkill-guard/actions/permissions/selected-act
 A workflow using an owner outside the list is rejected by policy before it runs,
 which looks like a workflow failure rather than a settings problem. Adding one
 means reading the current value and merging into it — never writing the list
-from memory or from a design document, which is how the other five entries would
+from memory or from a design document, which is how the other entries would
 get dropped.
 
 ### The bash style gate
@@ -609,19 +613,20 @@ runs it on the Linux leg only, uploads the report as an artifact and prints the
 percentage in the job summary. There is no threshold and no badge: the number is
 something to look at, not something to pass.
 
-Three things about it are not obvious, and all three cost a day to find (#91).
+Three things about it are not obvious.
 
 **kcov instruments bash through `BASH_ENV`.** It exports
 `BASH_ENV=<outdir>/bash-helper.sh` into the traced environment; every child bash
 sources that helper on startup, which sets `PS4` and turns on `set -x`.
 `tests/test_helper/common.bash` unsets `BASH_ENV` — deliberately, to stop child
 shells re-sourcing the user's interactive `~/.bashrc` — and because every test
-drives the guard as a subprocess (invariant 3), that unset meant kcov
-instrumented the bats parent and nothing else. The first probe therefore reported
+drives the guard as a subprocess (invariant 3), an unconditional unset leaves
+kcov instrumenting the bats parent and nothing else. Such a run reports
 0% _with no files at all_, which reads like a path or filter problem and is not
-one. The unset is now conditional on `COVERAGE`, which `run-tests --coverage`
-sets and nothing else does, so an ordinary run is byte-identical to what it was
-and the fixture-escape hardening around it is never relaxed by accident.
+one. The unset is therefore conditional on `COVERAGE`, which
+`run-tests --coverage` sets and nothing else does, so an ordinary run still
+unsets the variable and the fixture-escape hardening around it is never relaxed
+by accident.
 
 `run-tests` unsets `BASH_ENV` too, in `main`, and that one is deliberately _not_
 guarded: it runs before the `kcov` process starts, and kcov exports the variable
@@ -630,10 +635,11 @@ The comment there says so, because the symmetry invites a reader to
 "fix" it.
 
 **kcov is Linux-only in nixpkgs.** Its `meta.platforms` names no darwin system at
-all, so it enters the devShell behind `lib.optionals stdenv.isLinux` — an
+all, so it enters the devShell behind
+`lib.optionals stdenv.hostPlatform.isLinux` — an
 unconditional entry would break evaluation on `aarch64-darwin` and take the
 hermetic macOS gate with it, the same trap the `flock`/util-linux note in
-`flake.nix` avoids. That is why `.ci/required-tools` grew a `linux-only`
+`flake.nix` avoids. That is why `.ci/required-tools` carries a `linux-only`
 annotation: `check-devshell-provides`' forward pass skips such an entry off
 Linux, and says out loud that it skipped it, while the reverse pass is unaffected
 because the package is not in `nativeBuildInputs` there in the first place. An
@@ -642,13 +648,12 @@ annotation the parser does not recognise is a failure, not a silent pass.
 **The run is loud, and the quiet alternative does not work.** kcov forwards every
 line of the trace stream it cannot parse — which is every continuation line of a
 multi-line traced command, and the suite's JSON payloads produce a great many —
-to its own stderr: roughly 1,200 lines for one `.bats` file and 12,000 for the
-suite. bats writes its TAP to stdout, so the test results are unaffected; the
+to its own stderr: thousands of lines for the suite. bats writes its TAP to stdout, so the test results are unaffected; the
 gate's coverage step redirects stderr to a file and prints it only when the step
 fails. kcov's `--bash-method=DEBUG`, which traces through a `DEBUG` trap writing
-to a private fd, is silent — and reports **0.00%**. It is the knob #91 expected to
-need, and it is the wrong one; the noisy default method is the only one that
-produces numbers here.
+to a private fd, is silent — and reports **0.00%**. It looks like the right knob
+and is the wrong one; the noisy default method is the only one that produces
+numbers here.
 
 **Read the percentage as a floor.** kcov's parser marks lines coverable that
 bash's xtrace can never report a hit on, so they sit in the uncovered column
@@ -666,15 +671,15 @@ permanently and drag the figure down. Two shapes do it here:
   line below it — the arm actually taken — reads as covered. An arm written on a
   single line (`'do') depth="$((depth + 1))" ;;`) does not have the problem.
 
-Together these were **51 of the body file's 76 uncovered lines** at the tip that
-closed #132 — including all thirty of `messages::deny_message`'s, which is the function
-this caveat exists to explain.
+Together these account for a large share of the uncovered lines in `hooks/`,
+among them the continuation lines of the messages in
+`messages::deny_message`, which is the function this caveat exists to explain.
 
 **An apostrophe in a traced command eats the rest of the trace.** This is a
 second, unrelated kind of wrongness in the same report, and it is the more
 dangerous one because it is invisible: the floor caveat only makes the number
 too small, while this one makes the report describe a codebase that was not
-measured (#128).
+measured.
 
 The trigger is one byte. kcov instruments bash by exporting
 `PS4='kcov@${BASH_SOURCE}@${LINENO}@'`, `set -x` and a shared `BASH_XTRACEFD`
@@ -691,24 +696,23 @@ apostrophe.
 
 Bash's own quoting is safe (`payload='a'\''b'` escapes its quotes); what is not
 safe is a construct that prints a word raw, such as `[[ a'b != *x* ]]`. The
-suite hits this because two rows of `tests/cases/verdicts.tsv` legitimately carry
-`# don't do it` — and those rows stay, because they are real verdict cases and
+suite hits this because rows of `tests/cases/verdicts.tsv` legitimately carry a
+comment with an apostrophe in it, such as `# don't do it` — and those rows stay, because they are real verdict cases and
 deleting them to flatter a measurement would be the wrong trade.
 
 What the loss looks like, measured on this suite:
 
-| shape                                | report                                                                                            |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| odd number of apostrophes            | `hooks/pgrep-pkill-guard-body.sh` **absent**; entry script at 4 of 33                             |
-| even number, unbalanced across lines | `"files": []` and `0.00%` — nothing at all                                                        |
-| poison late in a `.bats` file        | everything after it in that file uncounted                                                        |
-| poison early, suite continues        | collection **resyncs** at later trace lines, so both files reappear and the number looks ordinary |
+| shape                                | report                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| odd number of apostrophes            | `hooks/pgrep-pkill-guard-body.sh` **absent**; the entry script at a fraction of its lines        |
+| even number, unbalanced across lines | `"files": []` and `0.00%` — nothing at all                                                       |
+| poison late in a `.bats` file        | everything after it in that file uncounted                                                       |
+| poison early, suite continues        | collection **resyncs** at later trace lines, so all files reappear and the number looks ordinary |
 
-That last row is why the failure went unnoticed for a release: the full-suite
-report lists both files with plausible counts and is still missing data. It cost
-an issue — #126 was filed against `consumption::is_xargs_value_option` and `loops::loop_body_has_kill`
-as functions "nothing enters", and both are in fact driven by rows that had been
-in `verdicts.tsv` for months.
+That last row is what makes the failure easy to miss: the full-suite report
+lists every file with plausible counts and is still missing data, so a function
+it shows as one "nothing enters" may in fact be driven by rows of
+`tests/cases/verdicts.tsv`.
 
 **No kcov knob avoids it.** `--bash-parse-files-in-dir`, `--bash-parser`,
 `--configure=bash-use-basic-parser=1` and an externally set `BASH_XTRACEFD` all
@@ -722,21 +726,18 @@ carries no kcov patch or overlay by decision.
 hook's bash files — the entry script, the loader, and every part under
 `hooks/lib/` — must appear in the report's `files[]` with a non-zero
 covered-line count, or the step dies naming the file. That catches the
-odd-count shape exactly, and the
-`"files": []` shape was already caught by the older refuse-to-report-nothing
-rule. It does **not** catch the resync shape, where both files are present and
-some windows are missing, and no gate here does: a canary suite ordered last was
-tried and rejected, because it records hits both in a healthy run and in the
-full-suite run that is known to be lossy — a check with no discriminating power
-is worse than none.
+odd-count shape exactly, and the `"files": []` shape with it. It does **not**
+catch the resync shape, where every file is present and some windows are
+missing, and no gate here does: a canary suite ordered last records hits both in
+a healthy run and in a full-suite run that is known to be lossy, and a check
+with no discriminating power is worse than none.
 
 **Debugging recipe for a suspicious zero.** Before believing that a function is
 unreached, append a throwaway `tests/zz-probe.bats` that drives the shape you
 think should reach it and run `just coverage` again. bats runs files in order, so
-a canary at the end sits outside most swallow windows. That is how the 76.42%
-run was shown to be missing at least eight body-file lines: with such a probe
-appended the body file reads 395 of 514 rather than 387, and
-`consumption::is_xargs_value_option` goes from 0 hits to 5.
+a canary at the end sits outside most swallow windows: if the function's hit
+count rises with the probe appended, the zero was a collection artifact and not
+a gap in the suite.
 
 **Two zeros past the prefilter are neither artifact nor gap: they are
 unreachable.** `loops::loop_context`'s closing `printf 'none\n'` in
@@ -747,7 +748,7 @@ idx++))` and returns unconditionally at `idx == target`, so the loop cannot run
 past it; `loops::loop_context` reads the same token stream that produced `target`,
 counts indices the same way, and likewise returns there. Falling off either loop
 would need a `target` beyond the end of the stream it came from. Both guards
-stay — this is a redundancy, not a defect, the same finding #131 recorded for
+stay — this is a redundancy, not a defect, the same one as
 `loops::loop_body_has_kill`'s `((found_do == 1)) || return 1` — and neither gets a test
 row, because a row that cannot be written is not a coverage gap.
 
@@ -764,16 +765,12 @@ here, change the comment too. Invariants 5 and 6 additionally have a gate
 behind them (`.ci/check-fast-path-size`, `.ci/check-err-trap-hygiene`); the
 other four rest on the comments and on review.
 
-That last sentence used to be the whole story, and it was too generous: nothing
-checked that the comments were still there, and one of them had already stopped
-being findable — the marker in `hooks/pgrep-pkill-guard.sh` was wrapped across
-two lines, so the phrase this document tells you to grep for matched only the
-body file. `.ci/check-invariant-markers` now asserts that each marker phrase
-below is present in every file named alongside it, collapsing line breaks and
-`#` continuations first so rewrapping a comment is still allowed. It is a
-presence check, not a semantic one: it cannot tell you the comment is still
-true, only that the rule has not lost its footprint in the code while this
-document went on describing it.
+`.ci/check-invariant-markers` asserts that each marker phrase below is present
+in every file named alongside it, collapsing line breaks and `#` continuations
+first so rewrapping a comment is still allowed. It is a presence check, not a
+semantic one: it cannot tell you the comment is still true, only that the rule
+has not lost its footprint in the code while this document goes on describing
+it.
 
 ### 1. `hooks/` uses a short flag only where macOS has no long form
 
@@ -790,12 +787,15 @@ the same shell.
 ships BSD coreutils, whose `mkdir` has no long options at all — no `--parents`,
 no `--mode=` — and whose `rm` has no `--force`. A long option there is not a
 style preference; it is a runtime failure on half the supported platforms.
-Everything else in the repo — `.ci/`, `run-all-checks`, `run-tests`,
-`.githooks/`, `.justfile`, the workflows — keeps long options, because those run
-only inside the hermetic Nix devShell where GNU coreutils is guaranteed.
+Everything else in the repo — `.ci/`, `run-all-checks`, `.githooks/`,
+`.justfile`, the workflows — keeps long options on every line that runs only
+inside the hermetic Nix devShell, where GNU coreutils is guaranteed. A line the
+ambient compat legs reach is the exception: `run-tests`' main path, described
+below, and the `.ci/` gates whose bats suites run on those legs.
 
 **Tracked comments:** three files carry the `short flag only where macOS has no
-long form, deliberately` phrase, and `.ci/check-invariant-markers` lists exactly those three. The first
+long form, deliberately` phrase, and `.ci/check-invariant-markers` lists exactly
+those three beside this document. The first
 is `hooks/lib/repeat.sh`, in `repeat::repeat_check`, which is the one rule in the guard
 that touches the filesystem — its write path a few lines below carries the same
 rationale in its own words, for the `rm` and `mv` calls there:
@@ -834,23 +834,25 @@ is the `short flag only where macOS has no long form, on purpose` comment above
 `run-tests` itself mostly keeps long options, but **not because it is safe to**
 — the first two of those legs invoke `./run-tests` directly against ambient
 tools, exactly like a `.bats` file. It gets away with it only because every
-long option in it sits on a devShell-only path: `use_bwk_awk`'s
+GNU long option in it sits on a devShell-only path: `use_bwk_awk`'s
 `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
 under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
-them. The one line that is _not_ devShell-only — the `mkdir -p` that creates
-`--report`'s output directory — carries a POSIX short flag and a comment saying
-why. #83's first CI probe added that line with `--parents` and the macOS leg
-died at it with `mkdir: illegal option -- -` before a single test ran. A new
-long option anywhere else in `run-tests`' main path is the same bug again.
+them. The lines that are _not_ devShell-only — the `mkdir -p` that creates
+`--report`'s output directory, and the `uname -s` and `mkdir -p` on the
+`--coverage` path — carry a POSIX short flag and a comment saying why: BSD
+`mkdir` rejects `--parents` with `mkdir: illegal option -- -` before a single
+test runs. A new long option anywhere else in `run-tests`' main path is that
+bug.
 
 ### 2. `hooks/` never sets `shopt -s inherit_errexit`
 
-Every gate script in the repo sets it. None of the hook's bash files may — the
-entry script, the loader, or any part under `hooks/lib/` — and no one may turn
-the assignment below into a plain one.
+Every gate script that runs inside the devShell sets it; the few that run under
+the host's own shell leave it out. None of the hook's bash files may set it —
+the entry script, the loader, or any part under `hooks/lib/` — and no one may
+turn the assignment below into a plain one.
 
 ```bash
-repeat_reason="$(repeat::repeat_check "${session_id}" "${keys}")" || repeat_reason=''
+reason="$(repeat::repeat_check "${session_id}" "${keys}")" || reason=''
 ```
 
 **Why:** the trailing `||` is what keeps that entire command substitution off
@@ -876,7 +878,7 @@ them carries a shebang or an executable bit — they are not scripts that can be
 run.
 
 **Tracked comment:** `The || is load-bearing beyond the obvious fallback`, which
-now appears three times. In `hooks/lib/classify.sh`, in `classify::repeat_tier_reason`
+appears three times. In `hooks/lib/classify.sh`, in `classify::repeat_tier_reason`
 directly above that assignment:
 
 ```text
@@ -909,9 +911,7 @@ whole interface: `hook_json`, `run_hook`, then `decision_of`, `reason_of` and
 any other internal directly.
 
 **Why:** the JSON contract is the only thing Claude Code actually depends on. A
-test that reaches inside pins an implementation detail and blocks refactoring —
-and the roughly 1450 lines of embedded self-test that this suite replaced did
-exactly that.
+test that reaches inside pins an implementation detail and blocks refactoring.
 
 `hooks/pgrep-pkill-guard-body.sh` is not a loophole in this, and neither are the
 parts under `hooks/lib/`. They exist to be sourced, but that is the entry
@@ -940,8 +940,8 @@ COMMAND contains `pgrep`, `pkill`, or `.output`, and every stateless `deny`,
 `warn`, or `inactive` verdict has to pass through that gate on its way out.
 `classify::repeat_tier_reason` separately restricts the stateful repeat tier to commands
 containing `pgrep` or `.output`, so no verdict can arise from the per-session
-state file alone either. The guard, in other words, already prefilters on the parsed
-command before this prefilter ever runs. The new check applies the identical
+state file alone either. The guard, in other words, applies the same filter to
+the parsed command. The prefilter applies the identical
 predicate to the raw payload, with `pkill` widened to `kill`. Since `kill` is
 a substring of `pkill`, and the command is itself a substring of the payload it
 was extracted from, this prefilter is provably weaker than a gate the hook
@@ -959,7 +959,7 @@ inside the hook, so invariant 3 still holds.
 **The assumptions it rests on.** The proof needs every token the scanner
 recognises to be a literal substring of the payload. That is true only because
 the scanner does not unquote — see **Quote-split command names are not
-recognised** above for the seven forms this allows and why that is intended. If
+recognised** above for the forms this allows and why that is intended. If
 that limitation is ever closed by teaching the scanner to unquote, this token
 set must be revisited in the same change — an unquoting scanner could
 recognise `pk\ill` in a payload containing no `kill` substring.
@@ -969,15 +969,15 @@ A second assumption sits alongside the first: the prefilter matches raw
 payload bytes, so it also assumes the payload spells the command's characters
 out literally. A serializer that `\u`-escaped ASCII letters could hide a
 trigger token from it — a payload spelling `pgrep` as `\u0070grep` would
-return `{}` where the pre-change hook still denied. This is not reachable in
+return `{}` for a command the guard denies. This is not reachable in
 practice: Claude Code's payloads come from Node's `JSON.stringify`, which
 never escapes ASCII letters, and reaching it would additionally require the
 model to obfuscate its own command. It is recorded here because it is an
 assumption the prefilter makes, not because it is a live risk.
 
 **Why not Claude Code's own `if:` handler filter.** Because it matches a
-parsed command tree. Measured against this corpus, an `if:` of `Bash(pgrep *)`
-plus `Bash(pkill *)` misses 39 of 180 non-`allow` rows: `sudo` is not in
+parsed command tree. Against this corpus, an `if:` of `Bash(pgrep *)`
+plus `Bash(pkill *)` misses non-`allow` rows of three kinds: `sudo` is not in
 Claude Code's stripped-wrapper list, `bash -c '…'` is not descended into, and
 the `deny:task-poll` shapes contain no matchable command name at all. A
 substring test over the raw payload sees all three. See issue #29 for the
@@ -985,33 +985,35 @@ probe matrix.
 
 Tracked counterpart: the prefilter comment block in `main`.
 
-### 5. The entry script stays under 200 lines
+### 5. The entry script stays at or under 200 lines
 
-`hooks/pgrep-pkill-guard.sh` must stay under 200 lines.
+`hooks/pgrep-pkill-guard.sh` must stay at or under 200 lines.
 `.ci/check-fast-path-size` enforces it, and `run-all-checks` runs that gate
 with the rest.
 
 **Why:** bash parses a whole script before it executes any of it, at roughly
 1.2 us per line, and this hook runs on every Bash tool call in every session —
 including the overwhelming majority the guard has no opinion about. Measured
-with `bash -n` over valid prefixes of the pre-split 2203-line guard (400 reps,
+with `bash -n` over valid prefixes of a 2203-line script (400 reps,
 `env -u BASH_ENV`): 4426 us for an empty script, 4559 at 120 lines, 5096 at
-300, 5807 at 1100, and 7099 at 2203. That last figure is ~2.4 ms of pure parse
-on every call, four fifths of what the guard cost, and it is why #55 split the
-file in two.
+300, 5807 at 1100, and 7099 at 2203. A guard parsed whole at that length pays
+~2.4 ms of pure parse on every call. Every line
+the entry script carries is parse time paid by a call that never reaches it,
+which is why the guard is split in two and everything past the prefilter lives
+where the fast path does not read it.
 
 **The ceiling is the point, not an obstacle to it.** A new helper belongs in the
 matching part under `hooks/lib/`, which the fast path never parses; raising the
-number spends those milliseconds again, a few dozen microseconds at a time. #34
-is the worked example: the dispatch and the `load_body` extraction cost the
-entry script 33 lines because they have to sit there, and the 140 lines of help
-text, version constant and usage handling they dispatch to went to the body. The
+number spends that parse time again, a few dozen microseconds at a time. The
+entry script holds only what has to sit there, the human-mode dispatch and
+`load_body` among it; the help text, version constant and usage handling they
+dispatch to live in the body. The
 win is invisible to every other check in this repo, so without the gate it would
 regress one helper at a time and nobody would notice. The gate also fails on a
 zero-line count: an empty read is a broken measurement, not a very fast hook.
 
 **Tracked comments:** the header of `.ci/check-fast-path-size`, which carries
-the measurement above, and the header of `hooks/pgrep-pkill-guard-body.sh`,
+the measurement behind the ceiling, and the header of `hooks/pgrep-pkill-guard-body.sh`,
 which points back to this invariant.
 
 ### 6. A deliberate non-zero `return` is preceded by `trap - ERR`
@@ -1021,8 +1023,8 @@ In every gate script that installs the `ERR` trap, a deliberate non-zero
 `.ci/check-err-trap-hygiene` enforces it, and `run-all-checks` runs that gate
 with the rest. The rule concerns `return`: `exit` never fires the `ERR` trap,
 so a `trap - ERR` ahead of an `exit` is kept for symmetry only, and its absence
-is not a finding. #43 fixed **19 such returns across 12 files**; the gate prints
-the current count on every green run.
+is not a finding. The gate prints the current count of such returns on every
+green run.
 
 **Why:** the trap is there to report _unexpected_ failure, and a gate
 announcing its own verdict is the one thing it must not report as a crash.
@@ -1059,35 +1061,37 @@ gives up exactly one report, the one nobody wanted; the `||` gives up every
 report `main` could ever have produced.
 
 **The same construct, wanted, one directory over.** Invariant 2 depends on that
-suppression deliberately: `repeat_reason="$(repeat::repeat_check …)" || repeat_reason=''`
+suppression deliberately: `reason="$(repeat::repeat_check …)" || reason=''`
 is what keeps the guard's one stateful, filesystem-touching rule off the trap's
 radar, so a transient filesystem condition cannot surface as a trapped error.
 Load-bearing there, silent gate failure here. The mechanic is identical and only
 the intent differs — whether the suppression is the thing you want. That is the
 contrast to hold on to before copying either line into the other place.
 
-**Scope.** The rule binds the gate family: `run-all-checks`, `run-tests` and the
-`.ci/check-*` and `.ci/run-*` scripts. The scripts below sit outside it,
-verified rather than assumed:
+**Scope.** The rule binds every tracked script that installs a reporting `ERR`
+trap: `run-all-checks`, `run-tests`, the `.ci/check-*` and `.ci/run-*` scripts,
+and any other script that installs one, such as `.ci/report-coverage`,
+`.ci/build-commit-payload` and `assets/build-social-preview`. The scripts below
+have nothing for it to police, verified rather than assumed:
 
 - `bench/run` — its `main` never returns non-zero. Bad input goes through
-  `die`, and `exit` does not fire an `ERR` trap. It also swaps the `ERR` trap
-  for an `EXIT` cleanup trap partway through `main`.
+  `die`, and `exit` does not fire an `ERR` trap. It also installs an `EXIT`
+  cleanup trap partway through `main`, alongside the `ERR` trap.
 - `.ci/in-devshell` — `main` ends in `exec`, and its failure paths call
   `exit 1`.
 - `.ci/activate-githooks` — installs no `ERR` trap.
 - `.ci/check-inactive-on-old-bash` — POSIX `sh` with `set -eu`, no trap.
 
 `return 0` sites are exempt, because a zero return never fires the trap. So are
-returns in helper functions: every helper is called as `helper || rc=1`, and the
-`||` already keeps it off the trap's radar.
+returns in helper functions: the gate reads only `main`, and a helper that
+returns non-zero is called under a `||` or as an `if` condition
+(`helper || rc=1`, `if ! helper; then`), which already keeps it off the trap's
+radar.
 
-**Why a gate and not a convention.** #43's own file list was wrong in both
-directions. It predicted `bench/run` as an eleventh affected file, and it missed
-`run-tests`, `.ci/check-fast-path-size` and `.ci/check-issue-forms` — all three
-of which joined the family after the issue was filed, and every one of which
-reintroduced the pattern without anyone noticing. That drift is the argument for
-enforcing this from the tree rather than trusting a list: a new `.ci/check-*` is
+**Why a gate and not a convention.** A hand-kept list of affected files drifts:
+a script that joins the family after the list is written reintroduces the
+pattern without anyone noticing. `.ci/check-err-trap-hygiene` derives its
+candidate set from the tree rather than from a list, so a new `.ci/check-*` is
 covered the day it lands.
 
 **The one `ERR` trap this rule must never touch.** `.ci/check-err-trap-hygiene`
@@ -1109,8 +1113,8 @@ OK: 1 fail-open ERR trap(s) not policed by this rule: hooks/pgrep-pkill-guard.sh
 ```
 
 **Tracked comments:** the `A gate reporting its own verdict is not a crash`
-comment at each deliberate non-zero return (19 when #43 landed), worded to the
-diagnostics it follows:
+comment at each deliberate non-zero return, worded to the diagnostics it
+follows:
 
 ```text
 # A gate reporting its own verdict is not a crash: drop the ERR trap so the

@@ -123,7 +123,7 @@ jobs:
         # resolves to the same path inside and outside the hermetic boundary.
         run: ./.ci/in-devshell ./run-all-checks --report "${RUNNER_TEMP}/bats-junit"
       # if: failure() -- the report is only interesting when something went red,
-      # and uploading green XML on every push is noise. run-all-checks
+      # and uploading ~22 KB of green XML on every push is noise. run-all-checks
       # writes gawk/ and bwk/ subdirectories, so both suite runs survive (#83).
       # The name must be unique across the whole workflow run, hence the matrix
       # OS: two legs uploading `bats-junit-gate` would collide.
@@ -179,9 +179,9 @@ jobs:
         # in KEEP_VARS, so it survives --ignore-environment.
         run: ./.ci/in-devshell ./.ci/report-coverage "${RUNNER_TEMP}/coverage"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        # Unconditional on this leg, and only this leg: the HTML is the part of
-        # the coverage run actually worth reading -- the per-line hit counts,
-        # which the job summary's single percentage cannot carry.
+        # Unconditional on this leg, and only this leg: the HTML is ~1.4 MB and
+        # is the part of the coverage run actually worth reading -- the per-line
+        # hit counts, which the job summary's single percentage cannot carry.
         if: runner.os == 'Linux'
         with:
           name: coverage-html

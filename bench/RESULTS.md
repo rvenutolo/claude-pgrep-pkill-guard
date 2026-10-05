@@ -25,14 +25,14 @@ hook that runs on every Bash tool call.
 
 ## Per-call cost
 
-| cohort     | path exercised                                                         |    n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
-| ---------- | ---------------------------------------------------------------------- | ---: | -------: | -------: | -------: | -------: |
-| `baseline` | process spawn and pipe only, no hook -- the floor                      |  585 |     0.95 |     2.04 |     2.50 |     3.38 |
-| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                |  585 |     1.57 |     3.33 |     3.87 |     8.28 |
-| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus |  270 |     1.53 |     3.17 |     4.11 |     5.53 |
-| `quiet`    | bash startup, one `jq` spawn, one scanner pass                         | 2745 |    10.30 |    35.12 |    43.24 |    57.93 |
-| `inspect`  | the above, plus a second scanner pass, `probe_keys` and `repeat_check` | 4500 |    19.53 |    66.04 |    89.82 |   118.40 |
-| `deny`     | the stateless tiers plus `deny_message`; no state                      | 7875 |    16.96 |    38.19 |    55.69 |    74.00 |
+| cohort     | path exercised                                                                           |    n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
+| ---------- | ---------------------------------------------------------------------------------------- | ---: | -------: | -------: | -------: | -------: |
+| `baseline` | process spawn and pipe only, no hook -- the floor                                        |  585 |     0.95 |     2.04 |     2.50 |     3.38 |
+| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                                  |  585 |     1.57 |     3.33 |     3.87 |     8.28 |
+| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus                   |  270 |     1.53 |     3.17 |     4.11 |     5.53 |
+| `quiet`    | bash startup, one `jq` spawn, one scanner pass                                           | 2745 |    10.30 |    35.12 |    43.24 |    57.93 |
+| `inspect`  | the above, plus a second scanner pass, `classify::probe_keys` and `repeat::repeat_check` | 4500 |    19.53 |    66.04 |    89.82 |   118.40 |
+| `deny`     | the stateless tiers plus `messages::deny_message`; no state                              | 7875 |    16.96 |    38.19 |    55.69 |    74.00 |
 
 ## How to read this
 
@@ -64,5 +64,5 @@ the machine, not this code: the floor is what the CPU can still do, and a
 median that drifts away from it means the run could not hold that clock.
 That is what the governor, power, load and package-temperature rows are
 for — a report generated at 96 C on battery is not comparable with one
-taken cold on AC, and before those rows existed there was no way to tell.
+taken cold on AC.
 Only distances measured WITHIN one report describe the guard itself.

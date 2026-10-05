@@ -14,8 +14,8 @@ session, then lists three fixes: kill by PID, `--ignore-ancestors`, or the
 `"[p]attern"` bracket trick.](assets/deny-message.png)
 
 The reason leads with the Write tool on purpose: quoting a denied command in
-prose is the one legitimate way that shape reaches the Bash tool, and when that
-line trailed the fixes instead of opening the message it went unread.
+prose is the one legitimate way that shape reaches the Bash tool, and a line
+that trails the fixes instead of opening the message goes unread.
 
 ## Why this exists
 
@@ -96,10 +96,10 @@ stateful rule:
 - Entries older than the 300 s window are pruned on every write.
 - A denied command is not recorded, and a request with no `session_id` is never
   recorded at all.
-- **Every state failure allows.** No directory, unreadable, not a regular file,
-  not owned by us, a symlinked directory, an oversized file — each returns
-  quietly and the command proceeds. The state is a heuristic; it is never
-  allowed to become a way to fail closed.
+- **Every state failure allows.** A directory that cannot be created,
+  unreadable, not a regular file, not owned by us, a symlinked directory, an
+  oversized file — each returns quietly and the command proceeds. The state is
+  a heuristic; it is never allowed to become a way to fail closed.
 
 ## Install
 
@@ -157,7 +157,9 @@ stock bash 3.2)` does not run the suite at all; it asserts the property that
 matters on a machine below the floor — that the guard says so out loud rather
 than quietly doing nothing.
 
-One CI job is deliberately absent from that table:
+The table lists only the jobs that exercise a platform, bash or awk, so some CI
+jobs are deliberately absent from it. `commitlint` and `validate` sit in
+`ci.yml` and exercise none of the three.
 [`links.yml`](.github/workflows/links.yml) checks every link in the tracked tree
 on each pull request and again every Monday, but it lives outside `ci.yml`,
 exercises no platform, bash or awk, and is advisory rather than required — link
@@ -173,7 +175,7 @@ What that reduces to, for the machine you are installing on:
 - **Claude Code** — any version with plugin marketplaces and `PreToolUse`
   `permissionDecision` support. There is no verified numeric floor to quote, so
   this README does not invent one; CI validates both plugin manifests against a
-  pinned CLI (`2.1.251`, in the `validate` job).
+  pinned CLI (`CLAUDE_CODE_VERSION`, in the `validate` job).
 
 **Linux works out of the box.** Current distro bash is 4.4+.
 
@@ -220,8 +222,9 @@ learn you were unprotected.
   the guard inactive for that command and says so. Any other unexpected failure
   inside the hook is caught by an `ERR` trap that emits a bare allow. No
   precondition failure ever produces a deny.
-- **The state rule is best-effort.** `repeat` needs two things it cannot create:
-  a `session_id` on the request, and a state directory it owns. Without either
+- **The state rule is best-effort.** `repeat` needs two things it cannot
+  guarantee: a `session_id` on the request, and a state directory it owns,
+  created if it is absent. Without either
   it returns without a word, and the command proceeds. Unlike the precondition
   failures above, this stand-down is silent — nothing tells you the third probe
   went uncounted.
@@ -246,66 +249,58 @@ the pair as the range that one path spans rather than as a single number. The
 empty-hook baseline on that same run is 2.04 ms, so the guard costs about
 **1.1 ms** above the bare process-spawn floor.
 
-Every absolute figure here sits above the run of 2026-08-31, and the empty-hook
-baseline — the control, which runs no hook at all — moved with them, 1.57 ms to
-2.04 ms. Nothing in `hooks/` explains that, and the **min** column is how you
-can tell: it is near-unchanged across every run (`inspect` 19.18 ms in
-2026-08-31, 19.53 ms now), so the machine still reaches the same peak and simply
-cannot hold it for tens of thousands of consecutive process spawns. The report
-records the governor, power source, load average and package temperature for
-exactly this reason.
+Absolute figures move with the state of the machine from one run to the next,
+and the empty-hook baseline — the control, which runs no hook at all — moves
+with them. The **min** column is how you can tell a machine effect from a change
+in `hooks/`: when the mins hold and the medians rise, the machine still reaches
+the same peak and simply cannot hold it for tens of thousands of consecutive
+process spawns. The report records the governor, power source, load average and
+package temperature for exactly this reason.
 
 The fast path's **distance** from the control is the figure worth watching, and
-it has not held still either: 0.91 ms in 2026-08-31, 0.63 ms in 2026-09-04,
-1.13 ms now — with the control itself flat across the last pair, 2.01 to
-2.04 ms. That last move is not this guard's code. `hooks/pgrep-pkill-guard.sh`
-is byte-identical between the two runs, and `typical` exercises the prefilter
-short-circuit, which never sources the body file where the only intervening
-change landed; the kernel went 6.8.0-138 to 6.8.0-139 between them. The cause
-was not isolated further, and the honest statement is the one this section
-already makes: compare rows within one run. Comparing a figure here against one
-in an older run compares two machine states, and even a within-run difference
-travels less well across them than it looks like it should.
+it does not hold still from one run to the next either, even when
+`hooks/pgrep-pkill-guard.sh` is byte-identical between them: `typical`
+exercises the prefilter short-circuit, which never sources the body file, so a
+move in it is the machine and not this guard's code. Compare rows within one
+run. Comparing a figure here against one in an older run compares two machine
+states, and even a within-run difference travels less well across them than it
+looks like it should.
 
-Getting there took three changes. The prefilter came first and moved an ordinary
-command from about 19 ms to somewhere in the 9-12 ms range. Next went the two
-helper processes the hook ran before it had looked at anything — a `cat` to read
-the payload, a `dirname` to locate the scanner — which took it from about 9 ms
-to about 5. What was left in front of it was the script's own parse: bash reads
-a script whole before it executes a line of it, at roughly 1.2 us per line, so
-2203 lines cost about 2.4 ms of every Bash tool call — four fifths of what
-remained. Splitting the file took an ordinary command from about 5.6 ms to about
-2.5.
+Three things keep an ordinary command that cheap. The prefilter answers it
+before `jq` or the scanner is spawned. No helper process runs ahead of the
+prefilter: the payload is read with the `read` builtin rather than a `cat`, and
+the `dirname` that locates the scanner runs only for a command the prefilter
+lets through. And the script the fast path parses is short, because bash reads
+a script whole before it executes a line of it, at roughly 1.2 us per line — a
+guard parsed whole at 2203 lines pays about 2.4 ms of that on every Bash tool
+call.
 
-The split is the reason `hooks/` holds an entry script and a body at all.
-`hooks/pgrep-pkill-guard.sh` is the entry script — 152 lines when the split
-landed, and held under 200 by `.ci/check-fast-path-size` — carrying only what an
-ordinary call actually executes: the
-locale, the bash-version guard, the `ERR` trap, `emit_allow`, the
+The parse cost is the reason `hooks/` holds an entry script and a body at all.
+`hooks/pgrep-pkill-guard.sh` is the entry script — held at or under 200 lines by
+`.ci/check-fast-path-size` — carrying only what an ordinary call actually
+executes: the locale, the bash-version guard, the `ERR` trap, `emit_allow`, the
 `--help`/`--version` dispatch, the builtin read of stdin, and the prefilter.
 Everything the prefilter short-circuits past lives in
-`hooks/pgrep-pkill-guard-body.sh`, which the entry script sources only after the
-prefilter has failed to decide, and which an ordinary command never reads. That
-file is itself a loader for the parts under `hooks/lib/`, one per concern; none
-of them is parsed on the fast path either. Parse cost alone, measured with
-`bash -n` over 400 repetitions: an empty script costs 4.12 ms, the entry script
-4.25 ms (+0.13), the old single file 6.49 ms (+2.38). A smaller split was measured and
-rejected — moving only `messages::deny_message`, the wrapper recursion and `repeat::repeat_check`
-leaves about 1700 lines on the fast path and recovers about 0.6 ms.
+`hooks/pgrep-pkill-guard-body.sh`, which the entry script sources only for the
+`--help`/`--version` dispatch or after the prefilter has failed to decide, and
+which an ordinary command never reads. That file is itself a loader for the
+parts under `hooks/lib/`, one per concern; none of them is parsed on the fast
+path either. Parse cost alone, measured with `bash -n` over 400 repetitions: an
+empty script costs 4.12 ms, the entry script 4.25 ms (+0.13), and a single-file
+guard of 2203 lines 6.49 ms (+2.38). A smaller split — moving only
+`messages::deny_message`, the wrapper recursion and `repeat::repeat_check` off
+the fast path — recovers only about 0.6 ms of that.
 
-Like the spawn removal before it, the split was measured as an interleaved
-alternation rather than as two runs minutes apart: before, after, before, after,
-two rounds each, one machine, `bench/run --reps 15` every time. An ordinary
-command went 5.79 to 2.52 ms, then 5.36 to 2.54 — about a 54% cut — and the
-corpus-driven variant of the same path moved with it, 5.61 to 2.58 and then 5.48
-to 2.49. The control is `baseline`, the empty hook, which sat at 1.67, 1.57,
-1.56 and 1.55 ms across the four runs and moved in no direction; that it did not
-move is why the comparison is worth quoting.
+A change to the fast path is measured as an interleaved alternation rather than
+as two runs minutes apart: before, after, before, after, on one machine, with
+`bench/run --reps 15` every time. The control is `baseline`, the empty hook,
+and a comparison is worth quoting only when the control moves in no direction
+across the runs.
 
-What is left is not `jq`, not the scanner, not a helper process, and no longer
-two thousand lines of parse. About 2.04 ms of the 3.33 is process spawn, which
-any hook at all would pay, and the 0.13 ms of parse named above is most of what
-the entry script adds on top of it.
+What an ordinary command pays is not `jq`, not the scanner, not a helper
+process, and not the parse of the whole guard. About 2.04 ms of the 3.33 is
+process spawn, which any hook at all would pay, and the 0.13 ms of parse named
+above is most of what the entry script adds on top of it.
 
 Commands that reach the deeper paths cost more, and only they pay it: one the
 guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
@@ -351,8 +346,12 @@ hides the needle from its own regex. It is accepted, but only when the bare
 literal appears nowhere else in the same command — a second copy silently
 defeats it, and the guard checks for that.
 
-There is no environment variable or config flag that disables the guard
-wholesale. [Uninstall](#uninstall) the plugin if you want it off.
+There is no supported environment variable or config flag that disables the
+guard wholesale. [Uninstall](#uninstall) the plugin if you want it off. The
+suite's test seam, `PGREP_GUARD_SCANNER_OVERRIDE`, points the hook at another
+scanner file and is not an off switch: aimed at a missing or broken scanner it
+makes the guard report itself INACTIVE, loudly, on every command that passes
+the prefilter.
 
 ## `PGREP_PKILL_GUARD_STATE_DIR`
 

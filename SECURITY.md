@@ -38,9 +38,9 @@ the guard is inactive for that command:
 - `jq` or `awk` missing from `PATH`, or the scanner file itself unreadable
 
 The `repeat` rule — the one stateful rule — stands down **silently** whenever
-its state directory is unusable: missing, unreadable, not a directory, not
-owned by the calling user, a symlink, or holding an oversized file. It emits
-nothing, and the command proceeds.
+its state directory is unusable: missing and impossible to create, unreadable,
+not a directory, not owned by the calling user, a symlink, or holding an
+oversized file. It emits nothing, and the command proceeds.
 
 Every one of these paths allows the command. Fail-open is deliberate: a hook
 that blocked on its own breakage would be worse than no hook, and the loud

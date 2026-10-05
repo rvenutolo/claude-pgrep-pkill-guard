@@ -4,8 +4,8 @@
 held **64 `assert_equals` calls**. They were not uniform: roughly half drove the
 awk scanner's token stream, and the rest reached into bash internals
 (`scanner::has_flag`, `scanner::pattern_operand`, `scanner::bracket_mitigation_holds`, `loops::loop_context`,
-`loops::body_has_terminator`, `main`'s private jq decode) through probe helpers that no
-subprocess-only test can call.
+`loops::body_has_terminator`, the jq decode in `classify::inspect_command`) through probe
+helpers that no subprocess-only test can call.
 
 This table records the disposition of every one of the 64, per spec amendment
 **A1**. It is the audit trail that makes "we did not silently drop assertions"
@@ -16,7 +16,7 @@ embedded test code was deleted.
 
 | Bucket                                                                                               | Count  | Disposition                                                                                                    |
 | ---------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| Token stream                                                                                         | 31     | `tests/scanner.bats`, driving `printf '%s' cmd \| LC_ALL=C awk -f hooks/pgrep-scan.awk` directly               |
+| Token stream                                                                                         | 31     | `tests/scanner.bats`, driving `printf '%s\n' cmd \| LC_ALL=C awk -f hooks/pgrep-scan.awk` directly             |
 | Bash internals (`flag_probe`, `pattern_probe`, `bracket_probe`, `context_probe`, `terminator_probe`) | 30     | Re-encoded as end-to-end rows in `tests/cases/verdicts.tsv`, consumed by `classify.bats` and `deny-sweep.bats` |
 | `tsv_roundtrip_probe`                                                                                | 1      | One end-to-end `@test` in `tests/scanner.bats`                                                                 |
 | `inactive_probe`                                                                                     | 2      | `tests/scanner.bats`, PATH stub dir rebuilt in bats                                                            |
@@ -68,9 +68,10 @@ below — that granularity loss is the cost A1 accepted.
 | 30  | 2916      | a parenthesised shift inside arithmetic is not a heredoc          | `scanner: a parenthesised shift inside arithmetic is not a heredoc`          |
 | 31  | 2919      | a shift inside an arithmetic command is not a heredoc             | `scanner: a shift inside an arithmetic command is not a heredoc`             |
 
-Every one of these greps for a token anchored on a literal tab
-(`grep --count "$(tab)pkill\$"`) rather than `\b`, because `\b` is a GNU
-extension and the compat CI legs run BSD grep.
+Every "is this token in the stream" check among these greps for a token
+anchored on a literal tab (`grep --count "$(tab)pkill\$"`) rather than `\b`,
+because `\b` is a GNU extension and the compat CI legs run BSD grep. The rest
+read a field with `awk`, match a `<HD:` marker or count `<<` tokens.
 
 Assertion 8 asserts that the pkill inside `$( )` in an **unquoted** heredoc body
 **is** seen (offset 12) — re-entering code context means the invocation is
@@ -91,9 +92,10 @@ without `--full`, and that `--ignore-ancestors` clears a kill.
 
 ## `pattern_probe` → `scanner::pattern_operand` (6) → `tests/cases/verdicts.tsv`
 
-The end-to-end lever is `scanner::bracket_mitigation_holds`, the only consumer of the
-operand: a correctly extracted `[x]`-class operand clears a `pkill` to `allow`,
-while any wrong slice leaves the mitigation unproven and the command denies.
+The end-to-end lever is `scanner::bracket_mitigation_holds`, which
+`classify::classify_invocation` hands the operand: a correctly extracted
+`[x]`-class operand clears a `pkill` to `allow`, while any wrong slice leaves
+the mitigation unproven and the command denies.
 
 | #   | Hook line | Original label                                     | Appended verdict row                                                                                              | Verdict | Kind                                                                                                                                                                             |
 | --- | --------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -106,19 +108,19 @@ while any wrong slice leaves the mitigation unproven and the command denies.
 
 ## `bracket_probe` → `scanner::bracket_mitigation_holds` (7) → `tests/cases/verdicts.tsv`
 
-| #   | Hook line | Original label                          | Verdict row                                                                               | Verdict     | Kind           |
-| --- | --------- | --------------------------------------- | ----------------------------------------------------------------------------------------- | ----------- | -------------- |
-| 43  | 2727      | bracket alone holds                     | `pkill --full "[z]zbracketalone"` (appended)                                              | `allow`     | discriminating |
-| 44  | 2729      | bracket voided by a bare copy           | `echo "unittest discover"; pkill --full "[u]nittest discover"` (appended)                 | `deny:kill` | discriminating |
-| 45  | 2732      | no bracket, no mitigation               | `pkill --full "unittest discover"` — **already row 15** of `verdicts.tsv`; not duplicated | `deny:kill` | discriminating |
-| 46  | 2734      | bracket later in the pattern holds      | `pkill --full "probe[.]py"` (appended)                                                    | `allow`     | discriminating |
-| 47  | 2737      | multi-char class is not the idiom       | `pkill --full "[abc]needle[d]"` (appended)                                                | `deny:kill` | discriminating |
-| 48  | 2739      | single then multi-char class            | `pkill --full "[d]needle[abc]"` (appended)                                                | `deny:kill` | discriminating |
-| 49  | 2742      | stray class opener is unreconstructable | `pkill --full "abc[def[g]hij"` (appended)                                                 | `deny:kill` | discriminating |
+| #   | Hook line | Original label                          | Verdict row                                                                              | Verdict     | Kind           |
+| --- | --------- | --------------------------------------- | ---------------------------------------------------------------------------------------- | ----------- | -------------- |
+| 43  | 2727      | bracket alone holds                     | `pkill --full "[z]zbracketalone"` (appended)                                             | `allow`     | discriminating |
+| 44  | 2729      | bracket voided by a bare copy           | `echo "unittest discover"; pkill --full "[u]nittest discover"` (appended)                | `deny:kill` | discriminating |
+| 45  | 2732      | no bracket, no mitigation               | `pkill --full "unittest discover"` — **already a row** of `verdicts.tsv`; not duplicated | `deny:kill` | discriminating |
+| 46  | 2734      | bracket later in the pattern holds      | `pkill --full "probe[.]py"` (appended)                                                   | `allow`     | discriminating |
+| 47  | 2737      | multi-char class is not the idiom       | `pkill --full "[abc]needle[d]"` (appended)                                               | `deny:kill` | discriminating |
+| 48  | 2739      | single then multi-char class            | `pkill --full "[d]needle[abc]"` (appended)                                               | `deny:kill` | discriminating |
+| 49  | 2742      | stray class opener is unreconstructable | `pkill --full "abc[def[g]hij"` (appended)                                                | `deny:kill` | discriminating |
 
 ## `context_probe` → `loops::loop_context` (9) → `tests/cases/verdicts.tsv`
 
-The end-to-end lever is the `case "${context}"` switch in `classify::classify_command`:
+The end-to-end lever is the `case "${context}"` switch in `classify::classify_invocation`:
 `cond` denies outright, `body` denies when the result is consumed **and** the
 body carries a terminator, and `none` can only ever reach `warn`.
 
@@ -170,8 +172,9 @@ Re-encoded end to end rather than as a decode probe: the command
 
 ## Pins — assertions whose discriminating power did not survive
 
-Three rows are pins rather than discriminators. All three were checked against
-the real code rather than assumed.
+Two rows (#52, #57) are pins rather than discriminators. The third (#58)
+discriminates only because both loop readers carry a scope barrier. All three
+were checked against the real code rather than assumed.
 
 - **#52 (2750), "outside every loop".** `while read -r line; do :; done < f; pgrep -af zzctxnone`.
   The plausible failure here is the trailing `done` failing to pop, which yields
@@ -181,8 +184,10 @@ the real code rather than assumed.
 - **#57 (2769), "a subshell close still pops".** In `loops::loop_context` the context
   lookup walks **down** the stack past barrier markers, so a `subshell` marker
   left un-popped on top of the enclosing `body` is skipped and the answer is
-  `body` either way. There is no command shape where the missing pop changes the
-  JSON verdict.
+  `body` either way. For this row's shape the missing pop cannot change the
+  JSON verdict. It can for a subshell in a loop condition, where the un-popped
+  marker keeps `do` from replacing `cond`:
+  `until (true); do sleep 1; done; pgrep --full x` would answer `cond` and deny.
 - **#58 (2777), "a `done` inside a substitution cannot pop the enclosing body
   span".** Pinned as `warn` at extraction time, because `loops::body_has_terminator`
   had no scope barrier of its own: the stray `done` zeroed its depth counter
@@ -191,7 +196,7 @@ the real code rather than assumed.
   assertion could not discriminate. Issue #8 gave `loops::body_has_terminator` the
   same barrier, the row's verdict moved to `deny:loop`, and the assertion
   discriminates again: with both barriers removed the row (and its sibling
-  `zzsubdone` rows) flip back to `warn`. That flip was checked once by hand
+  `zzsubdone` `deny:loop` row) flips back to `warn`. That flip was checked once by hand
   when #8 landed; it is not a permanent test, since it needs the hook's
   internals.
 

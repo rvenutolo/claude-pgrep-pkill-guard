@@ -7,7 +7,7 @@ that produced it — it becomes a row in `tests/cases/verdicts.tsv` and a
 permanent regression test.
 
 [`docs/architecture.md`](docs/architecture.md) explains how the guard works and
-why three of its rules are written the way they are.
+why its design invariants are written the way they are.
 [`SECURITY.md`](SECURITY.md) covers what the guard can and cannot see, and what
 belongs in a private report.
 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) is the Contributor Covenant 2.1
@@ -45,7 +45,9 @@ just hooks
 the ambient `PATH`.** That wrapper runs `nix develop --ignore-environment`, so
 the devShell cannot inherit the caller's `PATH` and no gate step can silently
 resolve a tool from the machine it happens to be running on. Local runs and CI
-runs therefore cannot drift. The `just` recipes all go through it:
+runs therefore cannot drift. The `just` recipes that run a gate tool go through
+it. `validate`, `hooks` and `install` run on the host, and so does the `nix`
+command behind `format`, `format-check` and the first half of `fix`:
 
 | Recipe              | What it does                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------- |
@@ -67,10 +69,10 @@ once under one-true-awk, because the hook must behave identically on both.
 
 **When `just check` goes red on formatting, spelling or markdown style, run
 `just fix` first.** `just format` is only treefmt, and treefmt leaves four
-gaps: it never reindents the twenty-two extensionless bash scripts this repo is
-mostly built out of (`run-all-checks`, `run-tests`, everything under `.ci/` and
-`.githooks/`, `bench/run`), never touches `.justfile`, and knows nothing about
-prose or spelling. `just fix` runs treefmt and then `.ci/run-fixers`, which
+gaps: it never reindents the extensionless bash scripts this repo is mostly
+built out of (`run-all-checks`, `run-tests`, every bash script under `.ci/` and
+`.githooks/`, `bench/run`, `assets/build-social-preview`), never touches
+`.justfile`, and knows nothing about prose or spelling. `just fix` runs treefmt and then `.ci/run-fixers`, which
 applies `shfmt --write`, `just --fmt`, `markdownlint-cli2 --fix` and
 `typos --write-changes` over exactly the file lists the lint gate checks. It can
 still exit non-zero, and that is not a bug: `markdownlint-cli2 --fix` reports
@@ -117,9 +119,10 @@ Allowed types are `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`,
 `perf`, `style`, `build` and `revert`. An optional body after a blank line
 explains _why_, not _what_.
 
-commitlint enforces this through the tracked `commit-msg` hook that `just
-hooks` activates, running inside the devShell so the same commitlint runs
-locally and in CI.
+commitlint enforces the `type: subject` form and the allowed types through the
+tracked `commit-msg` hook that `just hooks` activates, running inside the
+devShell so the same commitlint runs locally and in CI. The 72-character
+subject and the imperative mood are conventions it does not check.
 
 release-please consumes that history to cut releases and to write
 `CHANGELOG.md`. **Never hand-edit `CHANGELOG.md`.** The next release run
@@ -165,10 +168,12 @@ Shellcheck-clean, shfmt-formatted bash throughout, with one deliberate split:
   form** (`mkdir -p -m 0700`, `rm -f`, `mv -f`); where the BSD tool accepts the
   long form (`grep --quiet`, `sort --unique`) they use it. Everything else —
   `.ci/`, `run-all-checks`, `run-tests`, `.githooks/`, `.justfile`, the
-  workflows — uses GNU long options.
+  workflows — uses GNU long options, except on a line the ambient CI legs
+  execute outside the devShell, which takes the same short flag and says why
+  (the `mkdir -p` in `run-tests`, `uname -s` in `.ci/check-devshell-provides`).
 - **`hooks/` must never set `shopt -s inherit_errexit`**, and the
-  `repeat_reason="$(repeat::repeat_check ...)" || repeat_reason=''` assignment in `main`
-  must never become a plain one.
+  `reason="$(repeat::repeat_check ...)" || reason=''` assignment in
+  `classify::repeat_tier_reason` must never become a plain one.
 
 Both look like inconsistencies and are not; the reasons are invariants 1 and 2
 in [`docs/architecture.md`](docs/architecture.md#design-invariants). Read that

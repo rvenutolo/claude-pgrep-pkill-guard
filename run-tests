@@ -88,8 +88,8 @@ function die() {
 function repo_state() {
   local head_ref config_hash index_hash config_path index_path
   head_ref="$(git -C "${REPO_DIR}" rev-parse --quiet --verify HEAD || printf 'NO-HEAD')"
-  config_path="$(git -C "${REPO_DIR}" rev-parse --path-format=absolute --git-path config)"
-  index_path="$(git -C "${REPO_DIR}" rev-parse --path-format=absolute --git-path index)"
+  config_path="$(git -C "${REPO_DIR}" rev-parse --path-format=absolute --git-path 'config')"
+  index_path="$(git -C "${REPO_DIR}" rev-parse --path-format=absolute --git-path 'index')"
   config_hash="$([[ -f "${config_path}" ]] && git hash-object "${config_path}" || printf 'ABSENT')"
   index_hash="$([[ -f "${index_path}" ]] && git hash-object "${index_path}" || printf 'ABSENT')"
   printf 'HEAD=%s\nconfig=%s\nindex=%s\n' "${head_ref}" "${config_hash}" "${index_hash}"

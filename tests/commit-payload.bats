@@ -7,23 +7,20 @@ function setup() {
   load 'test_helper/common'
   BUILD="${REPO_DIR}/.ci/build-commit-payload"
 
-  # Every .ci/ script is devShell-only by contract -- run-all-checks, the
-  # .justfile recipes and the workflows all reach them through .ci/in-devshell
-  # -- and this one needs GNU coreutils in four places: `base64 --wrap=0`,
-  # `mktemp --directory`, `rm --recursive --force` and `tr --delete`. The two
-  # ambient compat legs run this suite against whatever the runner ships.
-  # Skipping there is honest: the hermetic leg is the one that grades this
-  # script, and a test that quietly rewrote an invocation to something BSD
-  # accepts would be grading a command the script never runs.
+  # .ci/build-commit-payload is devShell-only by contract -- the release
+  # workflow reaches it through .ci/in-devshell -- and it needs GNU coreutils
+  # for `base64 --wrap=0`, `mktemp --directory`, `rm --recursive --force` and
+  # `tr --delete`. The ambient compat legs that run bats run this suite
+  # against whatever the runner ships. Skipping there is honest: the hermetic
+  # leg is the one that grades this script, and a test that quietly rewrote an
+  # invocation to something BSD accepts would be grading a command the script
+  # never runs.
   #
-  # The guard used to be `printf '' | base64 --wrap=0`, on the belief that
-  # macOS ships BSD base64 with no --wrap at all. That belief is wrong, and
-  # this suite has therefore been running -- not skipping -- on
-  # `compat (macos, homebrew bash)` all along. That runner's base64 ACCEPTS
-  # --wrap=0 and then appends a trailing newline, which the old argv channel
-  # hid because `$(...)` strips one (#94). So probe each flag the script
-  # actually uses, and probe base64 for the PROPERTY rather than for the
-  # exit status: `printf 'x' | base64` is `eA==`, four bytes and no more.
+  # Probing `base64 --wrap=0` for its exit status is not enough: the
+  # `compat (macos, homebrew bash)` runner's base64 ACCEPTS --wrap=0 and then
+  # appends a trailing newline (#94). So probe each flag the script actually
+  # uses, and probe base64 for the PROPERTY rather than for the exit status:
+  # `printf 'x' | base64` is `eA==`, four bytes and no more.
   # A short flag only where macOS has no long form, on purpose, in the probes
   # -- `wc -c` pads on BSD, hence the tr.
   if [[ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ]] \
@@ -57,7 +54,7 @@ function make_repo() {
 }
 
 # @description Run the payload builder with the fixture repo as the working
-#              directory. The script takes no repo argument by design -- it
+#              directory. The script takes no repository path by design -- it
 #              reads the index of wherever it is invoked -- so the cd is the
 #              fixture selection.
 # @arg $1 root the fixture repo
@@ -80,9 +77,9 @@ function b64() {
   base64 | tr -d '\n'
 }
 
-# @description Read one jq path out of the payload last produced by `run`.
-# @arg $1 filter a jq path expression
-# @stdout the raw value
+# @description Run one jq filter over the payload last produced by `run`.
+# @arg $1 filter a jq filter
+# @stdout the raw result
 function field() {
   jq --raw-output "$1" <<< "${output}"
 }
@@ -165,8 +162,9 @@ function field() {
 @test "commit payload: non-ASCII content round-trips byte for byte" {
   local -r root="${BATS_TEST_TMPDIR}/utf8"
   make_repo "${root}"
-  # No trailing newline, so a base64 that quietly picked up one from the
-  # command substitution would show up here rather than pass by luck.
+  # No trailing newline, so a builder that read the blob through a command
+  # substitution, which strips trailing newlines, and then put one back would
+  # show up here rather than pass by luck.
   printf 'héllo wörld — ünïcode' > "${root}/alpha.txt"
   git -C "${root}" add 'alpha.txt'
 
@@ -236,9 +234,9 @@ function field() {
   # must not receive a half-formed document alongside the failure.
   assert_equal "${output}" ''
   # The `[build-commit-payload] FATAL:` prefix, not just the message body, is
-  # what makes this non-vacuous: every fatal diagnostic in the repo carries the
-  # script name and the level, so a reader piping several tools together can
-  # tell which one gave up.
+  # what makes this non-vacuous: the script's `die` puts the script name and
+  # the level on every diagnostic it prints, so a reader piping several tools
+  # together can tell which one gave up.
   [[ "${stderr}" == '[build-commit-payload] FATAL: '*'nothing staged'* ]]
 }
 

@@ -7,7 +7,8 @@ bench/RESULTS.md              linguist-generated
 
 # export-ignore keeps `git archive` -- and so the release tarball -- to what a
 # user actually installs. flake.nix and flake.lock stay IN: a user can
-# `nix develop` the plugin. assets/*.png stay IN: README.md renders them.
+# `nix develop` the plugin. assets/*.png stay IN: README.md renders
+# deny-message.png.
 .ci/                          export-ignore
 .githooks/                    export-ignore
 .github/                      export-ignore

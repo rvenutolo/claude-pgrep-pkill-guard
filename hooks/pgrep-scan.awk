@@ -103,11 +103,14 @@ BEGIN {
           if (depth > 0 && opener[depth] == "B") { depth-- } else { depth++; ctx[depth] = "N"; opener[depth] = "B" }
           continue
         }
-        # A body line ending in a backslash is not a continuation here -- the
-        # heredoc body is literal text, so the backslash is an ordinary byte.
-        # Masking it together with a following newline would swallow that
-        # newline, which is what starts the terminator check on the next
-        # line; leave the newline for the ch == "\n" branch above to see.
+        # A body line ending in a backslash is not treated as a continuation
+        # here, although bash joins it to the next line in an unquoted body and
+        # so does not end the heredoc at a delimiter on that next line. The
+        # scanner ends the body there anyway, which exposes more text as code
+        # rather than less. Masking the backslash together with a following
+        # newline would swallow that newline, which is what starts the
+        # terminator check on the next line; leave the newline for the
+        # ch == "\n" branch above to see.
         if (ch == "\\" && substr(cmd, i + 1, 1) != "\n") { masked = masked "\001\001"; i += 2; continue }
       }
       masked = masked "\001"; i++
@@ -152,13 +155,14 @@ BEGIN {
       if (ch == ")" && depth > 0 && (opener[depth] == "P" || opener[depth] == "A")) {
         masked = masked ")"; i++; depth--; continue
       }
-      # A bare `(` nests one more arithmetic level whenever it is the second
-      # paren of a `((` open (the arithmetic command form, or the inner one
-      # of `$((`) or it appears anywhere inside an already-open arithmetic
-      # level -- an explicit grouping paren like `(1)` inside `$(( (1)<<2 ))`
-      # must push and pop in step with the surrounding `))`, or its `)`
-      # closes the outer level early and strands the rest of the arithmetic
-      # at depth 0, where a `<<` in it reads as a heredoc operator.
+      # A bare `(` nests one more arithmetic level whenever it is the first
+      # paren of a `((` open (the arithmetic command form) or it appears
+      # anywhere inside an already-open arithmetic level: the second paren of
+      # `((`, the inner one of `$((`, and an explicit grouping paren like `(1)`
+      # inside `$(( (1)<<2 ))`, which must push and pop in step with the
+      # surrounding `))`, or its `)` closes the outer level early and strands
+      # the rest of the arithmetic at depth 0, where a `<<` in it reads as a
+      # heredoc operator.
       if (ch == "(" && (substr(cmd, i + 1, 1) == "(" || (depth > 0 && opener[depth] == "A"))) {
         masked = masked "("; i++; depth++; ctx[depth] = "N"; opener[depth] = "A"; continue
       }
@@ -193,10 +197,11 @@ BEGIN {
             if (c == "'") {
               quoted = 1; j++
               while (j <= n && substr(cmd, j, 1) != "'" && substr(cmd, j, 1) != "\n") { delim = delim substr(cmd, j, 1); j++ }
-              # An unterminated quote ends the delimiter word at end of input.
-              # Without the break the word loop runs on past the newline and
-              # glues the next line's bytes onto the delimiter, so `cat <<E'`
-              # would look for a terminator named `Ex` rather than `E`.
+              # An unterminated quote ends the delimiter word at the end of its
+              # line, or at end of input. Without the break the word loop runs
+              # on past the newline and glues the next line's bytes onto the
+              # delimiter, so `cat <<E'` would look for a terminator named `Ex`
+              # rather than `E`.
               if (j > n || substr(cmd, j, 1) == "\n") break
               j++
             } else if (c == "\"") {
@@ -214,11 +219,12 @@ BEGIN {
           }
           # A quoted empty delimiter (`<<''`, `<<""`) is legal bash: the body
           # runs to the first blank line. It is enqueued like any other, and
-          # the terminator check below handles a zero-length delimiter on its
-          # own -- `substr(cmd, j, 0)` is "", so the suffix clause is what
-          # decides, and it demands a newline right there. Left unqueued the
-          # body was scanned as code, and an apostrophe in it ("it's") flipped
-          # quote parity for everything after, hiding a real command.
+          # the terminator check in the heredoc-body branch above handles a
+          # zero-length delimiter on its own -- `substr(cmd, j, 0)` is "", so
+          # the suffix clause is what decides, and it demands a newline or end
+          # of input right there. Left unqueued the body is scanned as code,
+          # and an apostrophe in it ("it's") flips quote parity for everything
+          # after, hiding a real command.
           # No delimiter word at all (`cat <<`, `cat <<;`) is a bash syntax
           # error, so nothing is enqueued for it and the rest stays code.
           if (delim != "" || quoted) {
@@ -232,10 +238,14 @@ BEGIN {
       if (ch == "'") { ctx[depth] = "S"; out = "\001" }
       else if (ch == "\"") { ctx[depth] = "D"; out = "\001" }
       else if (ch == "\\") {
-        # A backslash-newline is a line continuation: bash removes it outright,
-        # so the words on either side are separate. Two spaces keep the byte
-        # offsets aligned -- the bracket mitigation slices the raw command by
-        # them -- while making it a real token delimiter, which filler is not.
+        # A backslash-newline is a line continuation: bash removes it outright
+        # and joins the text on either side. Masked as filler it would fuse
+        # onto the word after it (`sudo \`, then `pkill` on the next line) and
+        # hide that command name, so it becomes two spaces instead: they keep
+        # the byte offsets aligned -- the bracket mitigation slices the raw
+        # command by them -- and are a real token delimiter, which filler is
+        # not. The price is that a word split across a continuation reads as
+        # two tokens.
         # Every other escaped character keeps its masking, so an escaped quote
         # still cannot flip parity for the rest of the command.
         if (substr(cmd, i + 1, 1) == "\n") { masked = masked "  " }
@@ -278,10 +288,8 @@ BEGIN {
   # reassembled byte count must equal the length of the command it sent, which
   # catches any awk that strips, splits or reshapes bytes on the way through
   # and would otherwise desync every offset while still producing plausible
-  # output. Do NOT replace this with `exit 1`: the hook calls the scanner
-  # inside a command substitution, so a non-zero exit is swallowed by the ERR
-  # trap and turns into a silent allow. `n+0` is not decoration either -- an
-  # unset awk variable concatenates as the empty string, and n is only ever
-  # assigned once the loop above has run.
+  # output. An exit status cannot stand in for it: an awk that reshapes bytes
+  # still exits 0, and only a count carried in-band gives the hook something
+  # to compare. `n+0` forces the numeric form of the count.
   print "\t<SCAN:" n+0 ">"
 }

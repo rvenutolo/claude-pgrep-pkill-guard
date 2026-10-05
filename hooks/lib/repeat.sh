@@ -51,8 +51,8 @@ function repeat::repeat_check() {
   # `mode=`). hooks/ takes a long option only where the BSD tool has one, and
   # mkdir has none -- the guard has to run on whatever userland ships.
   # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
-  # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR /
-  # TMPDIR, which the caller owns the mode of.
+  # intermediate ever missing here is a hand-set PGREP_PKILL_GUARD_STATE_DIR,
+  # XDG_RUNTIME_DIR or TMPDIR, which the caller owns the mode of.
   if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then
     return 0
   fi
@@ -79,14 +79,15 @@ function repeat::repeat_check() {
       return 0
     fi
     # Read via `cat`, not a `<` redirect (and deliberately not the `$(< file)`
-    # builtin fast path): a failed open inside `$(< file)` is a word-expansion
-    # error that bash treats as fatal to the shell that hits it, NOT as an
-    # ordinary nonzero exit status -- `if !`/`||` cannot absorb it, so it
-    # still reaches the ERR trap despite looking guarded (confirmed empirically:
-    # `bash -c 'set -Eeuo pipefail; trap "echo TRAP" ERR; f=/nonexistent;
+    # builtin fast path): on bash 5.2 a failed open inside `$(< file)` is a
+    # word-expansion error that is fatal to the shell that hits it, NOT an
+    # ordinary nonzero exit status -- `if !`/`||` cannot absorb it, and the
+    # shell exits 1 without even running the ERR trap
+    # (`bash -c 'set -Eeuo pipefail; trap "echo TRAP" ERR; f=/nonexistent;
     # if ! c="$(< "$f")" 2>/dev/null; then echo guarded; fi; echo after'`
-    # prints only the open-failure diagnostic and exits 1 -- neither "guarded"
-    # nor "after" is reached). `cat` forks its own process, so its failure is
+    # prints only the open-failure diagnostic there and exits 1; bash 5.3
+    # absorbs the failure and prints "guarded" and "after", but still prints
+    # the diagnostic). `cat` forks its own process, so its failure is
     # an ordinary exit status the `if !` below can absorb, and `2> /dev/null`
     # on the `cat` invocation itself (not tacked onto the assignment) applies
     # before that process's own open() attempt, so a TOCTOU race (the file
@@ -142,7 +143,7 @@ function repeat::repeat_check() {
   if [[ -z "${kept}" ]]; then
     # `|| true` so a bare rm failure (e.g. the directory lost write permission
     # after the mkdir check above) can never trip errexit here. `--` guards a
-    # session id that happens to start with `-`.
+    # relative state dir that starts with `-`: `file` begins with `dir`.
     rm -f -- "${file}" 2> /dev/null || true # unguarded rm: a failure must never trip errexit
     return 0
   fi
@@ -162,10 +163,9 @@ function repeat::repeat_check() {
     return 0
   fi
   if ! mv -f -- "${tmp}" "${file}" 2> /dev/null; then
-    # Last command of this if-body, so unlike the sibling rm above its exit
-    # status would otherwise become the if's status -- `|| true` for the
-    # same reason.
-    rm -f -- "${tmp}" 2> /dev/null || true # last command of the if-body; its status must not leak out
+    # `|| true` for the same reason as the rm in the empty-`kept` branch
+    # above: a failed rm must never trip errexit.
+    rm -f -- "${tmp}" 2> /dev/null || true # a failed rm must never trip errexit
   fi
   return 0
 }

@@ -79,7 +79,7 @@ EOF
 #              caveat is worth stating where a maintainer will read it. A PreToolUse hook exiting
 #              2 means "block the tool call". Arguments can only reach this script from a person,
 #              because hooks/hooks.json passes none, so in practice the 2 lands in a terminal. If
-#              someone hand-edited hooks/hooks.json to pass an argument, every Bash call would be
+#              someone hand-edited hooks/hooks.json to pass an unrecognized argument, every Bash call would be
 #              blocked with a loud stderr message rather than failing open -- the right outcome
 #              for a broken configuration, but the one place here that does not fail open.
 # @arg $@ args the script's arguments, forwarded verbatim

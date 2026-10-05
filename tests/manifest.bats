@@ -38,7 +38,7 @@ function setup() {
   command="$(jq --raw-output '.hooks.PreToolUse[0].hooks[0].command' "${HOOKS_JSON}")"
   # Direct invocation is load-bearing on macOS: `bash <path>` would resolve to
   # /bin/bash 3.2 and the version guard would deactivate the hook.
-  # Not `refute [ ... ]`: bats-assert runs its argument as a simple command, so
+  # Not `refute [[ ... ]]`: bats-assert runs its argument as a simple command, so
   # `[[` is not a keyword there -- it would fail to execute and `refute` would
   # pass vacuously. A plain negated `[[ ]]` keeps the assertion live.
   [[ "${command:0:5}" != 'bash ' ]]
@@ -47,7 +47,7 @@ function setup() {
   # this assertion must compare against the unexpanded string. Double quotes
   # here would expand it in the test's own shell -- to the empty string, since
   # nothing sets it -- and the glob would then match any command at all.
-  # Per-site rather than file-level: this is the only SC2016 site in the file.
+  # Per-site rather than file-level: SC2016 sites are rare in this file.
   # shellcheck disable=SC2016 # `${CLAUDE_PLUGIN_ROOT}` must stay unexpanded here
   [[ "${command}" == *'${CLAUDE_PLUGIN_ROOT}'* ]]
   [[ "${command}" == *'pgrep-pkill-guard.sh' ]]
@@ -66,9 +66,8 @@ function setup() {
   # BASH_VERSINFO is read-only, so the branch cannot be driven in-process. The
   # real behaviour is covered by the stock-macOS compat CI leg; this pins the
   # source-level invariant so the branch can never silently regress to `{}`.
-  # --after-context=6, not 3: the version guard carries a three-line comment
-  # between the condition and the printf, which pushes INACTIVE outside a
-  # 3-line window.
+  # --after-context=6, not 3: the version guard carries a comment between the
+  # condition and the printf, which pushes INACTIVE outside a 3-line window.
   run grep --after-context=6 'BASH_VERSINFO\[0\] < 4' "${HOOK}"
   assert_success
   assert_output --partial 'systemMessage'
@@ -289,9 +288,9 @@ function fixture_jq() {
   assert_failure
   # The I9 message quotes the offending value, so PAYLOAD_RAN appears in the
   # output BY DESIGN -- a diagnostic that does not name the bad string is
-  # useless. What the marker proves is that it was only ever printed: it is an
-  # echo, so if the string had been evaluated anywhere the suite would still be
-  # green while the check was worthless.
+  # useless. The assertion below matches the whole quoted source, `echo`
+  # included, which is the form the message prints; it cannot tell a printed
+  # string from an evaluated one, which is why the payload is an inert echo.
   assert_output --partial 'I9'
   assert_output --partial './; echo PAYLOAD_RAN'
 }
@@ -358,8 +357,8 @@ function fixture_jq() {
 
 @test "invariants: a surplus argument is rejected, not ignored" {
   # Every positional is optional, so an extra argument can only be a typo -- a
-  # misplaced flag, a stray path. Swallowing it silently would run the default
-  # check and report success on something nobody asked for. Exit 2 rather than
+  # misplaced flag, a stray path. Swallowing it silently would run the check
+  # anyway and report success on something nobody asked for. Exit 2 rather than
   # 1 keeps the misuse distinct from this script's own failure verdict.
   run "${REPO_DIR}/.ci/check-manifest-invariants" "${REPO_DIR}" 'extra'
   assert_failure 2

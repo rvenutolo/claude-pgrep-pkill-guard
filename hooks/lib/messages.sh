@@ -10,7 +10,7 @@
 # tool has them: this runs on BSD userland too (invariant 1).
 
 # shellcheck disable=SC2016 # backticks are markdown spans in the emitted text
-# shellcheck disable=SC2034 # read by lib/classify.sh
+# shellcheck disable=SC2034 # read by hooks/lib/classify.sh
 readonly WARN_MESSAGE='Note: this `pgrep --full` also matches the process running this very command.
 The Bash tool executes commands as `bash -c ...`, so the search pattern appears in an ancestor
 process command line and is always found. The result is therefore inflated by one, and an exit status
@@ -18,12 +18,12 @@ of 0 does not mean the target process is running. Add `--ignore-ancestors` if th
 status is being used for anything.'
 
 # The tail of the INACTIVE notice for a scanner that tokenized the command
-# wrongly, emitted from two places in lib/classify.sh (the classify verdict and
-# the repeat-check rescan). One constant, because two copies of the same
-# 127-char sentence drift. Appended rather than written on one line: the
+# wrongly, emitted from two places in hooks/lib/classify.sh (the classify
+# verdict and the repeat-check rescan). One constant, because two copies of
+# the same sentence drift. Appended rather than written on one line: the
 # sentence is over the 120-column maximum, and shfmt collapses a backslash
 # continuation between two quoted halves back onto a single long line.
-# shellcheck disable=SC2034 # read by lib/classify.sh
+# shellcheck disable=SC2034 # read by hooks/lib/classify.sh
 SCANNER_INACTIVE_MESSAGE='the command scanner tokenized this command incorrectly (incompatible awk?); '
 SCANNER_INACTIVE_MESSAGE+='the pgrep/pkill guard is INACTIVE for this command.'
 readonly SCANNER_INACTIVE_MESSAGE

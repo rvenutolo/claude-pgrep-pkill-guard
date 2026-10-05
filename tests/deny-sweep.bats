@@ -16,8 +16,9 @@ function setup() {
       'loop') needle='kill -0' ;;
       'task-poll') needle='TaskOutput' ;;
       *)
-        # Without this arm an unknown kind leaves needle empty, and
-        # [[ "$reason" != *""* ]] can never fire — a silent pass.
+        # Without this arm an unknown kind leaves needle empty or holding the
+        # previous row's value: [[ "$reason" != *""* ]] can never fire, and a
+        # stale needle grades the row against another kind's mitigation.
         printf 'unknown deny kind: %s\n' "${expected}" >&2
         failures="$((failures + 1))"
         continue

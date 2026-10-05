@@ -6,13 +6,13 @@
 #
 #              The hook is a PreToolUse hook on the Bash tool, so it runs on
 #              EVERY Bash call and its cost is paid by every command the model
-#              runs. `main` in the hook takes three materially different paths,
-#              and this script reports them separately rather than averaging
-#              over unlike things -- an aggregate number would describe none of
-#              them. It also reports a `typical` cohort of ordinary commands,
-#              because the corpus below is adversarial and its medians are not
-#              what a real session pays. See bench/RESULTS.md for the published
-#              run.
+#              runs. The hook takes materially different paths depending on
+#              the command, and this script reports each as its own cohort
+#              rather than averaging over unlike things -- an aggregate number
+#              would describe none of them. It also reports a `typical` cohort
+#              of ordinary commands, because the corpus below is adversarial and
+#              its medians are not what a real session pays. See
+#              bench/RESULTS.md for the published run.
 #
 #              Corpus is tests/cases/verdicts.tsv, the same rows the bats
 #              suite asserts on, so the benchmark cannot drift from the tests
@@ -29,10 +29,11 @@ IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
-# EPOCHREALTIME renders its fractional part with the LOCALE's decimal
-# separator. Under a comma locale every delta below would fail to parse and the
-# whole report would be zeros. Forced here for the same reason the hook forces
-# it: the arithmetic and the string form have to agree.
+# EPOCHREALTIME renders its fractional part with the locale's decimal
+# separator. Under a comma locale the `${end/./}` in time_one would delete
+# nothing and its arithmetic would read the comma as an operator, so every
+# sample would be garbage. The C locale makes the separator the `.` that
+# time_one deletes.
 export LC_ALL=C
 
 REPO_DIR="$(git rev-parse --show-toplevel)"
@@ -42,9 +43,9 @@ readonly CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
 # 45 rather than 15. `typical` is only six commands, so at 15 reps it carries 90
 # samples and its p50 swung 10.3-13.5 ms across two back-to-back runs -- too
 # noisy for the figure the README quotes as what a session actually pays. 45
-# puts `typical` at 270 samples and `skipped`, the cohort it shares a code path
-# with, at 585. The whole run costs a few minutes and nothing in CI calls it:
-# run-all-checks uses --smoke, which is one repetition of one payload per cohort.
+# puts `typical` at 270 samples. The whole run costs a few minutes and nothing
+# in CI calls it: run-all-checks uses --smoke, which is one repetition of one
+# payload per cohort.
 readonly DEFAULT_REPS=45
 
 # Report order, and the only cohort names recognised anywhere in this script.
@@ -152,15 +153,16 @@ function die() {
 #              escaped every control character, so the payload can contain
 #              neither a tab nor a newline.
 #
-#              The split mirrors the hook's prefilter rather than a
-#              quiet/inspect branch. `inspect` is a command containing `pgrep`
-#              or `.output`, which also runs the stateful tier. `quiet` is a
-#              command containing `kill` but neither of those -- for example
-#              `pkill --ignore-ancestors --full java` -- which passes the
-#              prefilter and reaches the scanner but never the stateful tier.
-#              `skipped` is everything else: it matches none of `pgrep`,
-#              `kill`, `.output` and short-circuits in `main` before `jq` or
-#              the scanner ever run.
+#              A row whose verdict starts `deny:` is cohort `deny`, whatever its
+#              command contains. The split of the remaining rows mirrors the
+#              hook's prefilter rather than a quiet/inspect branch. `inspect`
+#              is a command containing `pgrep` or `.output`, which also runs the
+#              stateful tier. `quiet` is a command containing `kill` but neither
+#              of those -- for example `pkill --ignore-ancestors --full java` --
+#              which passes the prefilter and reaches the scanner but never the
+#              stateful tier. `skipped` is everything else: it matches none of
+#              `pgrep`, `kill`, `.output` and short-circuits in `main` before
+#              `jq` or the scanner ever run.
 # @arg $1 session_id the session id embedded in every payload
 # @stdout one `<cohort>\t<compact JSON>` line per corpus row
 function load_payloads() {
@@ -254,7 +256,7 @@ function cpu_model() {
   local model=''
   if [[ -r '/proc/cpuinfo' ]]; then
     model="$(awk --field-separator=': ' '/^model name/ { print $2; exit }' \
-      '/proc/cpuinfo' || true)" # awk exits 1 only if the read fails; best effort
+      '/proc/cpuinfo' || true)" # awk exits non-zero only if the read fails; best effort
   fi
   if [[ -z "${model}" ]] && command -v sysctl > /dev/null 2>&1; then
     model="$(sysctl -n 'machdep.cpu.brand_string' 2> /dev/null || true)" # absent on Linux; the probe is best effort
@@ -301,7 +303,7 @@ function cpu_governor() {
 #              That helper lives in powermgmt-base, which this repo's devShell
 #              does not ship, and the devShell runs --ignore-environment -- so a
 #              command-based probe would report `unknown` on exactly the runs
-#              this file is generated from. sysfs needs no tool at all.
+#              bench/RESULTS.md is generated from. sysfs needs no tool at all.
 # @noargs
 # @stdout one line
 function power_source() {
@@ -322,9 +324,10 @@ function power_source() {
 
 # @description Print the 1/5/15-minute load average, best effort. Captured
 #              BEFORE the measurement loop by its caller, never at report time:
-#              the run itself spawns ~15k processes, so a load figure read at
-#              the end describes the benchmark rather than the machine it ran
-#              on, which is the opposite of what a reader needs.
+#              the run itself spawns a process for every payload of every
+#              repetition, so a load figure read at the end describes the
+#              benchmark rather than the machine it ran on, which is the
+#              opposite of what a reader needs.
 # @noargs
 # @stdout one line
 function load_average() {
@@ -340,8 +343,9 @@ function load_average() {
 # @description Print the CPU package temperature in degrees Celsius, best
 #              effort. Recorded because a hot package is the one machine
 #              condition that moves p50 while leaving min alone: a lucky sample
-#              still lands at full clock, but a sustained 15k-spawn run cannot
-#              hold it. Without this row that signature is unattributable.
+#              still lands at full clock, but a sustained run of thousands of
+#              spawns cannot hold it. Without this row that signature is
+#              unattributable.
 # @noargs
 # @stdout one line
 function package_temp() {
@@ -394,8 +398,7 @@ function write_report() {
   printf '| jq | %s |\n' "$(tool_version jq)"
   # Machine state, not toolchain. These four rows exist because a run whose
   # p50 doubles while its min holds is describing the machine, not the code,
-  # and without them a later reader cannot tell those two cases apart -- which
-  # is exactly the question a regenerated report raised on 2026-09-03.
+  # and without them a later reader cannot tell those two cases apart.
   # load_at_start and temp_at_start are read before the measurement loop, in
   # main, not here.
   printf '| governor | %s |\n' "$(cpu_governor)"
@@ -502,10 +505,11 @@ function main() {
   export PGREP_PKILL_GUARD_STATE_DIR="${state_dir}"
 
   # Captured HERE, before a single payload is timed, and handed to write_report
-  # as arguments: the run spawns ~15k processes, so a load average sampled at
-  # report time measures the benchmark rather than the machine that hosted it.
-  # The package temperature has the same problem in reverse -- it is the
-  # pre-run thermal headroom that shapes the whole distribution.
+  # as arguments: the run spawns a process for every payload of every
+  # repetition, so a load average sampled at report time measures the benchmark
+  # rather than the machine that hosted it. The package temperature has the
+  # same problem in reverse -- it is the pre-run thermal headroom that shapes
+  # the whole distribution.
   local load_at_start temp_at_start
   load_at_start="$(load_average)"
   temp_at_start="$(package_temp)"
@@ -562,9 +566,11 @@ function main() {
     ((rep == 0)) && recording=0
 
     # Wiped between repetitions, OUTSIDE the timed region. The repeat rule
-    # denies at 3 probes per key per 300 s window and one pass touches each key
-    # once, so without this, repetition 3 onward would silently stop timing the
-    # `inspect` path and start timing `deny:repeat`. Wiping per COMMAND was
+    # denies a probe key once it has been probed often enough inside its
+    # window, so without this the state file would carry every earlier pass's
+    # probes into the next one. The wipe does not keep a pass clear of the
+    # rule: corpus rows share probe keys, so within one pass the later rows of
+    # a shared key are answered by the repeat denial. Wiping per COMMAND was
     # rejected instead: it would never exercise the read-and-prune half of
     # repeat::repeat_check, which is most of that function's cost.
     rm --recursive --force -- "${state_dir}"

@@ -26,7 +26,7 @@ readonly -a LOCAL_USER_SWITCH_WRAPPERS=('su' 'runuser')
 
 # How many wrapper payloads deep to follow. `bash -c 'bash -c "..."'` resolves at
 # 2; the limit is a runaway backstop, not a judgement about nesting.
-# shellcheck disable=SC2034 # read by lib/classify.sh
+# shellcheck disable=SC2034 # read by hooks/lib/classify.sh
 readonly MAX_PAYLOAD_DEPTH=4
 
 # @description How many non-flag operands may precede a wrapper's `-c` before the wrapper stops
@@ -185,8 +185,8 @@ function wrappers::segment_pipe_carry() {
 #              feeds the wrapper's stdin, so `bash 3<<EOF` is skipped: it redirects a different fd,
 #              not the one the wrapper reads its script from. A heredoc counts when its operator is
 #              seen in the wrapper's simple command with no `-c` before it and the simple command
-#              then ends without an operand spending the budget -- an operand makes the body that
-#              script's stdin instead, unless a `-s` in a short flag cluster already said stdin IS
+#              then ends without an operand the budget does not cover -- such an operand makes the
+#              body that script's stdin instead, unless a `-s` in a short flag cluster already said stdin IS
 #              the script, in which case the operands are its positional parameters and the body
 #              still runs here -- and, once `-s` has taken an operand, so is a later `-c`, which is
 #              then just another positional word and starts no payload.
@@ -262,9 +262,9 @@ function wrappers::shell_wrapper_payloads() {
   # than `>f`), in which case the next token is the target and is not an
   # operand either.
   local -r redir_re='^[0-9]*(&?[<>]|[<>]{2})' redir_bare_re='^[0-9]*[<>&|]+$'
-  # The rest of this loop stays inline on purpose: each block reads and writes
-  # eight or more of the locals above, and a helper with that many namerefs is
-  # harder to read than the block.
+  # The rest of this loop stays inline on purpose: the blocks share most of
+  # the locals above, and a helper with that many namerefs is harder to read
+  # than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     word="${token##*/}"

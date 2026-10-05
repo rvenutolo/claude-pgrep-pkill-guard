@@ -36,8 +36,9 @@ function scanner::resolve_scanner() {
 # @arg $1 command the command string
 # @stdout offset and token pairs, separated by tab, trailer stripped
 # @exitcode 0 the stream is trustworthy
-# @exitcode 1 the scanner tokenized the command incorrectly; the caller must
-#             deactivate the guard rather than trust the stream
+# @exitcode 1 the scanner failed to run or exited non-zero, or it tokenized the
+#             command incorrectly; the caller must deactivate the guard rather
+#             than trust the stream
 function scanner::scan_command() {
   local -r command="$1"
   local raw expected
@@ -128,11 +129,12 @@ function scanner::has_flag() {
   return 1
 }
 
-# @description Extract the search pattern: the last argument that is neither a flag, a flag's value,
-#              nor a redirection. Once a bare -- end-of-options terminator is seen, every later token
-#              is a pattern candidate regardless of a leading dash -- only an exact redirection
-#              operator is still excluded. Sliced out of the raw command by offset so the original
-#              quoting survives, then one surrounding quote pair is stripped.
+# @description Extract the search pattern: the last argument that is neither a flag, the separate value of
+#              a long option in PGREP_VALUE_OPTIONS, nor a redirection. A short flag's separate value is
+#              not recognised and counts as a candidate. Once a bare -- end-of-options terminator is
+#              seen, every later token is a pattern candidate regardless of a leading dash -- only an
+#              exact redirection operator is still excluded. Sliced out of the raw command by offset so
+#              the original quoting survives, then one surrounding quote pair is stripped.
 # @arg $1 command the raw command string
 # @arg $2 args newline-separated "<offset>\t<token>" lines
 # @stdout the operand with surrounding quotes removed, or empty

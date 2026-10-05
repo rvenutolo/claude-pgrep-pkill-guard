@@ -4,7 +4,7 @@ function setup() {
 }
 
 # A files[] array in which every required hooks/ file -- the entry script, the
-# loader, and the nine parts under hooks/lib/ -- is present and non-empty, i.e.
+# loader, and every part under hooks/lib/ -- is present and non-empty, i.e.
 # the shape a healthy kcov run produces. The absolute paths are deliberately
 # from a machine that is not this one: kcov records whatever path existed where
 # the report was produced -- a Nix build sandbox, a CI runner checkout, someone
@@ -52,13 +52,9 @@ readonly HEALTHY_FILES
 #              --parents.
 #
 #              The healthy fixture carries a files[] array because the
-#              INTEGRITY rule requires one. A fixture with no files[] describes
-#              exactly the broken report the reporter must refuse. The fix is
-#              for the healthy fixture to carry what a healthy report carries,
-#              NOT for the reporter to tolerate a report with no files[]
-#              -- a report that has lost every file is the loudest instance of
-#              the loss #128 is about, and grandfathering it in to keep an old
-#              fixture green would gut the check on its first day.
+#              INTEGRITY rule requires one: a report with no files[] is
+#              exactly the broken report the reporter must refuse (#128), so a
+#              fixture meant to pass carries what a healthy report carries.
 # @arg $1 root directory to populate
 # @arg $2 percent the percent_covered value to record, or the empty string to
 #         write a report with no such field
@@ -224,7 +220,7 @@ function make_report() {
 }
 
 @test "report-coverage: a healthy report with all required files still prints the number" {
-  # The counterweight to the three cases above: the integrity rule must reject a
+  # The counterweight to the failing cases above: the integrity rule must reject a
   # lossy report without rejecting a good one. Passed explicitly rather than
   # relying on make_report's default so this case keeps grading the healthy shape
   # even if that default is ever narrowed.

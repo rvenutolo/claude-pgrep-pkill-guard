@@ -9,7 +9,9 @@
 # (invariant 2). Long options only where the BSD tool has them: this runs on
 # BSD userland too (invariant 1).
 
-# Keywords after which the next word is in command position.
+# Keywords after which the guard treats the next word as being in command
+# position. For `for` and `select` that word is the loop variable's name,
+# not a command.
 readonly -a COMMAND_POSITION_KEYWORDS=(
   'do' 'then' 'else' 'elif' 'while' 'until' 'if' 'for' 'select' '!' 'time'
 )
@@ -141,17 +143,21 @@ function tokens::prefix_breaks_chain() {
 #              scanner::find_invocations and wrappers::shell_wrapper_payloads both need it and a second copy would
 #              drift -- the bare-word version was already duplicated when it was wrong.
 #
-#              An operator or keyword restores command position and clears the chain. A prefix word
-#              opens one. Inside a chain, the prefix's own flags keep command position for what
-#              follows, a flag's value is skipped without ever being in command position itself
-#              (`env -u pkill cmd` unsets a variable, it does not run one), `--` ends the flags, and
-#              the operands the prefix is entitled to are spent one per word. The first word that is
-#              none of those IS the command, so the chain ends there. An option that makes the
-#              prefix run nothing ends it too.
+#              An operator or keyword restores command position and clears the chain, except that a
+#              `|` leaves the sentinel `pipe` in it, because `time` is the reserved word only in a
+#              pipeline's first command. An assignment word in command position leaves the sentinel
+#              `assignment` for the same reason, and the reserved word itself leaves
+#              `time-builtin`. A prefix word opens a chain. Inside a chain, the prefix's own flags
+#              keep command position for what follows, a flag's value is skipped without ever being
+#              in command position itself (`env -u pkill cmd` unsets a variable, it does not run
+#              one), `--` ends the flags, and the operands the prefix is entitled to are spent one
+#              per word. The first word that is none of those IS the command, so the chain ends
+#              there. An option that makes the prefix run nothing ends it too.
 # @arg $1 token the raw token
 # @arg $2 word the token reduced to its basename
 # @arg $3 at_cmd 1 when this token is itself in command position
-# @arg $4 chain name of the caller's variable holding the prefix in effect, empty when none
+# @arg $4 chain name of the caller's variable holding the prefix in effect, or one of the sentinels
+#         `pipe`, `assignment`, `time-builtin` and `--`, which match no prefix; empty when neither
 # @arg $5 skip name of the caller's variable marking the next word as a flag's value
 # @arg $6 operands name of the caller's variable holding the chain's remaining operand budget
 # @exitcode 0 the next word is in command position
@@ -168,7 +174,9 @@ function tokens::prefix_chain_step() {
     # behind: `time` may prefix only the FIRST command of a pipeline, so past a
     # `|` it is an ordinary word PATH resolves to GNU time. The `&` arm keeps
     # that sentinel so `|&` reads like the `|` it extends, while a `&` on its
-    # own still starts a command where the reserved word is legal.
+    # own still starts a command where the reserved word is legal. The scanner
+    # emits `||` as two `|` tokens, so the sentinel follows `||` as well, even
+    # though `time` is the reserved word there.
     if [[ "${token}" == '|' ]] || [[ "${token}" == '&' && "${chain_ref}" == 'pipe' ]]; then
       chain_ref='pipe'
     else
@@ -226,9 +234,9 @@ function tokens::prefix_chain_step() {
   fi
   if [[ "${token}" == '--' ]]; then
     # Past the terminator nothing is a flag any more, so `timeout -- -k 5 cmd`
-    # runs `-k`, not a kill-after option. The chain stays open because the
-    # operands the prefix is entitled to still come first: `timeout -- 5 cmd`
-    # runs cmd. The sentinel matches no arm of either table.
+    # takes `-k` as its duration, not as a kill-after option. The chain stays
+    # open because the operands the prefix is entitled to still come first:
+    # `timeout -- 5 cmd` runs cmd. The sentinel matches no arm of either table.
     chain_ref='--'
     return 0
   fi

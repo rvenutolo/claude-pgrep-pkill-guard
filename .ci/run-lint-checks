@@ -187,22 +187,22 @@ function main() {
   fi
 
   log 'running zizmor'
-  # zizmor is to the workflows what shellcheck is to the scripts, and it sits
-  # here rather than beside actionlint by accident of alphabet: actionlint reads
-  # a workflow as YAML and as bash and asks whether it is VALID; zizmor asks
-  # whether it is SAFE -- template injection into a `run:` block, over-broad
-  # `permissions:`, credentials left persisted in .git/config, environment-file
-  # writes a later step will trust. Neither tool reports what the other does.
+  # zizmor is to the workflows what shellcheck is to the scripts. actionlint,
+  # the step above, reads a workflow as YAML and as bash and asks whether it is
+  # VALID; zizmor asks whether it is SAFE -- template injection into a `run:`
+  # block, over-broad `permissions:`, credentials left persisted in
+  # .git/config, environment-file writes a later step will trust. Neither tool
+  # reports what the other does.
   #
   # --no-online-audits so the hermetic gate needs no network. The online audits
   # add only "is this `uses:` ref a tag or an immutable commit" checks, and
   # .ci/check-uses-sha-pinned already answers that offline, from the tree.
   #
   # --persona=pedantic, probed rather than assumed: against this tree it reports
-  # exactly what the default persona does, so it costs nothing today and catches
-  # the next pedantic-only finding for free. `auditor` is deliberately NOT used
-  # -- it adds three findings here (`misfeature`, two `secrets-outside-env`)
-  # that would each need a suppression to say nothing useful.
+  # exactly what the default persona does, so it costs nothing and catches the
+  # next pedantic-only finding for free. `auditor` is deliberately NOT used --
+  # its extra findings here (`misfeature`, `secrets-outside-env`) would each
+  # need a suppression to say nothing useful.
   #
   # Every finding this tree suppresses is suppressed INLINE, next to the code,
   # never in a config file: a suppression a reader cannot see from the line it
@@ -213,15 +213,13 @@ function main() {
   # zizmor reads YAML comments, and a `#` inside a block scalar is shell source
   # it never sees.
   #
-  # Two of them are `github-env` and `adhoc-packages`, one apiece. The other
-  # five are `self-repository`, the audit zizmor 1.30.0 added, on the five
-  # `uses: ./.github/actions/...` call sites. No released actionlint parses the
-  # `$/` form that audit asks for, and actionlint runs above, so converting the
-  # call sites would trade the audit for a parse error on every one -- see #137
-  # and the rationale beside ci.yml's gate job. The author's linPEAS-flake repo
-  # answers the identical audit through a zizmor.yml ignore list; that is the
-  # right shape at its 66 call sites across 21 workflows and the wrong one at
-  # five, so the two repos diverge here deliberately.
+  # The suppressed audits are `github-env`, `adhoc-packages` and
+  # `self-repository`, the last on every `uses: ./.github/actions/...` call
+  # site. No released actionlint parses the `$/` form that audit asks for, and
+  # actionlint runs above, so converting the call sites would trade the audit
+  # for a parse error on every one -- see #137 and the rationale beside ci.yml's
+  # gate job. A zizmor.yml ignore list is the right shape for a repo with many
+  # such call sites and the wrong one for the handful here.
   #
   # .github/ and not `.` : zizmor's own discovery walks for workflows, and a
   # bare `.` would descend into the author's untracked docs/superpowers/ tree
@@ -257,16 +255,15 @@ function main() {
 
   log 'running typos'
   # Explicit file list, not a bare `typos`. Bare `typos` walks the tree and
-  # SKIPS HIDDEN PATHS, so it silently covered 22 of ~50 tracked files: none of
-  # .ci/, .github/, .claude-plugin/ or .githooks/ was ever spell-checked, and
-  # the gate reported a clean pass regardless (#46). `--hidden` is the wrong fix
-  # -- it also picks up UNTRACKED hidden paths, which here means the author's
-  # docs/superpowers/ and .claude/ trees.
+  # SKIPS HIDDEN PATHS, so it silently leaves out .ci/, .github/,
+  # .claude-plugin/ and .githooks/ and reports a clean pass regardless (#46).
+  # `--hidden` is the wrong fix -- it also picks up UNTRACKED hidden paths,
+  # which here means the author's docs/superpowers/ and .claude/ trees.
   #
   # `git grep -I --files-with-matches ''` is every tracked file git considers
   # text: it matches every line, so it names every file, and -I drops the
   # binaries. Passing assets/deny-message.png explicitly would make typos read
-  # compressed bytes as prose and report a dozen findings from them.
+  # compressed bytes as prose and report findings from them.
   local -a typo_files=()
   mapfile -t typo_files < <(git -C "${REPO_DIR}" grep -I --files-with-matches '')
   if ((${#typo_files[@]} > 0)); then

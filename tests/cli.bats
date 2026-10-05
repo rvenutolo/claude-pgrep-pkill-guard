@@ -81,7 +81,7 @@ function run_cli() {
   run_cli 'contract' --help
   [[ "${CLI_STATUS}" -eq 0 ]]
   # The three things a person running this by hand actually came for: what the
-  # script reads, the one environment variable that changes its behaviour, and
+  # script reads, the environment variable that says where its state lives, and
   # the copy-pasteable recipe the README's "Reporting a false verdict" tells
   # them to use. Help that omits any of them is help in name only.
   grep --quiet --fixed-strings 'stdin' "${CLI_STDOUT}"

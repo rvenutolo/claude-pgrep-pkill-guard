@@ -89,10 +89,7 @@ function main() {
   # kcov that decides to populate it.
   local -a reports=()
   mapfile -t reports < <(
-    find "${coverage_dir}" -mindepth 2 -maxdepth 2 \
-      -path '*/kcov-merged/*' -prune -o \
-      -name 'coverage.json' -print \
-      | sort
+    find "${coverage_dir}" -mindepth 2 -maxdepth 2 -path '*/kcov-merged/*' -prune -o -name 'coverage.json' -print | sort
   )
 
   if ((${#reports[@]} == 0)); then

@@ -345,10 +345,12 @@ function classify::repeat_tier_reason() {
   rt_tokens="$(scanner::scan_command "${command}")" || return 2
   keys="$(classify::probe_keys "${command}" "${rt_tokens}")" || keys='' # a failed classify::probe_keys reads as no key
   [[ -n "${keys}" ]] || return 1
-  # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
-  # whole command substitution off errexit's radar for its entire dynamic
-  # extent, so nothing inside repeat::repeat_check can trip the top-level ERR trap. Do
-  # not turn this into a plain assignment.
+  # The `||` is load-bearing beyond the obvious fallback only for a caller that
+  # runs this function outside a `||` list. classify::inspect_command calls it
+  # inside a substitution on the left side of one, which already keeps every
+  # command in here, repeat::repeat_check included, off errexit and the
+  # top-level ERR trap; the `||` here keeps that true whoever the caller is.
+  # Do not turn this into a plain assignment.
   reason="$(repeat::repeat_check "${session_id}" "${keys}")" || reason='' # a failed check is no repeat; see above
   [[ -n "${reason}" ]] || return 1
   printf '%s\n' "${reason}"

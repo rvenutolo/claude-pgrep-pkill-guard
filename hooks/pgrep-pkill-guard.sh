@@ -61,7 +61,7 @@ function resolve_hook_dir() {
   # Resolved relative to this script rather than via CLAUDE_CONFIG_DIR, which is not guaranteed
   # to be exported into the hook's environment. BSD `dirname` has no long options, so the bare
   # `--` is all it takes: a short flag only where macOS has no long form, deliberately. The phrase
-  # is kept on one line on purpose -- docs/architecture.md tells a reader to grep for it, and
+  # is kept on one line on purpose -- docs/architecture.md names it, so a grep for it lands here, and
   # .ci/check-invariant-markers checks it is here (invariant 1).
   HOOK_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
   readonly HOOK_DIR
@@ -80,15 +80,16 @@ function load_body() {
 
   # Fail open, loudly, the same way the jq/awk/scanner branches inside the body
   # do. A missing or broken sibling would otherwise leave an installed plugin
-  # that silently does nothing -- the exact failure this hook exists to prevent.
+  # that silently does nothing.
   if [[ ! -r "${body}" ]]; then
     printf '{"systemMessage":"%s"}\n' \
       "${HOOK_NAME}: pgrep-pkill-guard-body.sh is missing; the pgrep/pkill guard is INACTIVE for this command."
     return 1
   fi
-  # The `||` is load-bearing beyond the obvious fallback, exactly as it is on the
-  # repeat::repeat_check call inside the body: it keeps a failing `source` off the ERR
-  # trap, so a corrupt sibling produces this message rather than a bare `{}`.
+  # The `||` is load-bearing beyond the obvious fallback only for a caller that runs load_body outside a
+  # `||` list. Both callers in main run it as the left side of one, which already keeps a failing `source`
+  # off errexit and the ERR trap; the `||` here keeps that true whoever the caller is, so a corrupt
+  # sibling produces this message rather than a bare `{}`.
   # shellcheck source=/dev/null # the loader and the parts it sources are linted on their own as
   # hooks/**/*.sh; following it from here would lint them against a context they never see alone.
   source "${body}" || {
@@ -96,8 +97,7 @@ function load_body() {
       "${HOOK_NAME}: pgrep-pkill-guard-body.sh failed to load; the pgrep/pkill guard is INACTIVE for this command."
     return 1
   }
-  # Explicit, because `source` yields the sourced file's last status, and this
-  # function's status is a decision its callers act on.
+  # Explicit, because this function's status is a decision its callers act on.
   return 0
 }
 

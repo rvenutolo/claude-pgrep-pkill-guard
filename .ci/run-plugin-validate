@@ -53,8 +53,8 @@ function log() {
 
 function main() {
   if ! command -v claude > /dev/null 2>&1; then
-    log 'claude is not on PATH; skipping.'
-    log 'the validate job in .github/workflows/ci.yml enforces this on every PR.'
+    printf 'SKIP: claude is not on PATH; the manifests are not validated\n' >&2
+    printf '      the validate job in .github/workflows/ci.yml enforces this on every PR.\n' >&2
     return 0
   fi
 

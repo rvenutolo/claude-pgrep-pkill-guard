@@ -54,7 +54,7 @@ jobs:
           client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           # Without these the minted token carries every permission the App
-          # installation holds (zizmor github-app, High). These two are the set
+          # installation holds (zizmor github-app, High). These are the set
           # release-please documents, and they are exactly what this workflow
           # spends:
           #   contents      release-please's branch, tag and release writes,
@@ -73,9 +73,9 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # release-please re-serialises every file it touches, and two of this
-      # repo's own gates then reject the result: prettier collapses the
-      # `keywords` array it expands in the plugin and marketplace manifests, and
+      # release-please re-serialises every file it touches, and this repo's
+      # own gates then reject the result: prettier collapses the `keywords`
+      # array it expands in the plugin and marketplace manifests, and
       # markdownlint's MD012 rejects the double blank lines it writes into the
       # changelog. Left alone, merging the release PR turns main red. So the
       # release branch is reformatted in place before anyone can merge it.
@@ -172,7 +172,7 @@ jobs:
           fi
           git status --short
           # Through .ci/in-devshell, so neither tool resolves from the ambient
-          # PATH. Two evaluations rather than one nested `bash -c` -- the Nix
+          # PATH. Separate evaluations rather than one nested `bash -c` -- the Nix
           # store is warm by this point and readability wins.
           #
           # The payload pins expectedHeadOid to the HEAD just checked out. If

@@ -108,15 +108,15 @@ the mitigation unproven and the command denies.
 
 ## `bracket_probe` → `scanner::bracket_mitigation_holds` (7) → `tests/cases/verdicts.tsv`
 
-| #   | Hook line | Original label                          | Verdict row                                                                               | Verdict     | Kind           |
-| --- | --------- | --------------------------------------- | ----------------------------------------------------------------------------------------- | ----------- | -------------- |
-| 43  | 2727      | bracket alone holds                     | `pkill --full "[z]zbracketalone"` (appended)                                              | `allow`     | discriminating |
-| 44  | 2729      | bracket voided by a bare copy           | `echo "unittest discover"; pkill --full "[u]nittest discover"` (appended)                 | `deny:kill` | discriminating |
-| 45  | 2732      | no bracket, no mitigation               | `pkill --full "unittest discover"` — **already a row** of `verdicts.tsv`; not duplicated  | `deny:kill` | discriminating |
-| 46  | 2734      | bracket later in the pattern holds      | `pkill --full "probe[.]py"` (appended)                                                    | `allow`     | discriminating |
-| 47  | 2737      | multi-char class is not the idiom       | `pkill --full "[abc]needle[d]"` (appended)                                                | `deny:kill` | discriminating |
-| 48  | 2739      | single then multi-char class            | `pkill --full "[d]needle[abc]"` (appended)                                                | `deny:kill` | discriminating |
-| 49  | 2742      | stray class opener is unreconstructable | `pkill --full "abc[def[g]hij"` (appended)                                                 | `deny:kill` | discriminating |
+| #   | Hook line | Original label                          | Verdict row                                                                              | Verdict     | Kind           |
+| --- | --------- | --------------------------------------- | ---------------------------------------------------------------------------------------- | ----------- | -------------- |
+| 43  | 2727      | bracket alone holds                     | `pkill --full "[z]zbracketalone"` (appended)                                             | `allow`     | discriminating |
+| 44  | 2729      | bracket voided by a bare copy           | `echo "unittest discover"; pkill --full "[u]nittest discover"` (appended)                | `deny:kill` | discriminating |
+| 45  | 2732      | no bracket, no mitigation               | `pkill --full "unittest discover"` — **already a row** of `verdicts.tsv`; not duplicated | `deny:kill` | discriminating |
+| 46  | 2734      | bracket later in the pattern holds      | `pkill --full "probe[.]py"` (appended)                                                   | `allow`     | discriminating |
+| 47  | 2737      | multi-char class is not the idiom       | `pkill --full "[abc]needle[d]"` (appended)                                               | `deny:kill` | discriminating |
+| 48  | 2739      | single then multi-char class            | `pkill --full "[d]needle[abc]"` (appended)                                               | `deny:kill` | discriminating |
+| 49  | 2742      | stray class opener is unreconstructable | `pkill --full "abc[def[g]hij"` (appended)                                                | `deny:kill` | discriminating |
 
 ## `context_probe` → `loops::loop_context` (9) → `tests/cases/verdicts.tsv`
 

@@ -4,7 +4,7 @@
 # for a body or part that will not load and for a mangled trailer, and the jq
 # @tsv round trip.
 #
-# setup sets nothing; it only loads test_helper/common.
+# setup only loads test_helper/common.
 #
 # Single-quoted strings in this file hold literal `$(...)` and `$((...))`
 # text that is the SUBJECT of the test rather than something to expand:
@@ -425,8 +425,8 @@ function orphan_probe() {
 
 @test "scanner: a sibling body that fails to load announces the guard inactive" {
   # Syntactically broken on purpose, so `source` returns non-zero. The `||` on
-  # the source call is what keeps that off the ERR trap, turning a corrupt
-  # sibling into this message rather than the trap's silent allow.
+  # the source call is what turns a corrupt sibling into this message rather
+  # than the trap's silent allow.
   printf 'function {{{\n' > "${BATS_TEST_TMPDIR}/pgrep-pkill-guard-body.sh"
   local out
   out="$(orphan_probe)"

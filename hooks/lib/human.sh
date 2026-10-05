@@ -86,8 +86,8 @@ EOF
 # @stdout the help text, or the version line
 # @stderr one error line plus a `--help` hint, on a usage error
 # @exitcode 0 --help or --version was handled
-# @exitcode 2 an unrecognized argument, `--version` beside any other argument, or a bare run with stdin on a
-#             terminal
+# @exitcode 2 an unrecognized argument, `--version` beside another argument that is not -h or --help, or a bare
+#             run with stdin on a terminal
 function human::human_mode() {
   # --help wins over everything, including arguments this script does not know:
   # `--help --bogus` and `--bogus --help` both print help and succeed (clig.dev).

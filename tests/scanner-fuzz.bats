@@ -162,7 +162,7 @@ function setup() {
   # the hook slices the raw command back out with them, so a UTF-8 locale would
   # make the index bases disagree. For BASH it is what makes
   # `${#FUZZ_CORPUS[i]}` a byte count rather than a character count, which is
-  # the number fuzz_scan_pass expects in every trailer. The catalogue
+  # the number fuzz_scan_pass derives every expected trailer count from. The catalogue
   # is pure ASCII so the counts agree, but a single non-ASCII fragment added later
   # would silently turn every byte-count assertion into a character-count
   # assertion, and it would still pass.
@@ -388,7 +388,7 @@ function scan_raw() {
   printf '%s' "$1" | LC_ALL=C awk -f "${SCANNER}"
 }
 
-# --- The one comparison every property test rests on ------------------------
+# --- The one comparison both trailer properties rest on ---------------------
 
 # @description Verify a scanner stream ends in a well-formed integrity trailer
 #              carrying the expected byte count. This is the single comparison
@@ -587,7 +587,7 @@ function fuzz_scan_pass() {
 @test "scanner-fuzz: the trailer comparison rejects a known-bad trailer" {
   # Exercise the assertion path with inputs that are SUPPOSED to fail, through
   # the very function the corpus loop calls. A comparison that always held would
-  # make every property in this file green forever, and nothing else here would
+  # make both trailer properties green forever, and nothing else here would
   # notice.
   #
   # Called directly rather than through bats' `run`, because the reason text

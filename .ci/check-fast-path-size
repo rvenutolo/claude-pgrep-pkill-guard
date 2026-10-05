@@ -11,7 +11,7 @@
 #              2203. A guard parsed whole at that length pays ~2.4 ms of pure
 #              parse on every call.
 #
-#              The guard is therefore split in two (#55): a small entry script
+#              The guard is therefore split (#55): a small entry script
 #              that runs the payload prefilter, and
 #              hooks/pgrep-pkill-guard-body.sh, a loader for the parts under
 #              hooks/lib/, none of it with a shebang or exec bit -- which

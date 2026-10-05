@@ -90,7 +90,7 @@ jobs:
       # Here, and at the compat legs below and in links.yml, the checkout
       # immediately above is this workflow's own commit, so `./` and `$/`
       # resolve to the same tree and the audit has nothing to bite on.
-      # The one site in this repo where the two forms genuinely differ is
+      # The one site in this repo where the forms genuinely differ is
       # release.yml's `release-please` job; the rationale lives there, next to
       # it.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
@@ -139,7 +139,7 @@ jobs:
         # devShell does not carry it on macos-latest and `run-tests --coverage`
         # would die there by design (#91).
         #
-        # A SECOND run of the suite rather than wrapping the gate's own: the
+        # A SEPARATE run of the suite rather than wrapping the gate's own: the
         # gate's authoritative pass/fail must not depend on kcov working, or a
         # kcov regression -- or a nixpkgs bump that breaks its bash support --
         # reads as a test failure and sends the next reader into hooks/. It

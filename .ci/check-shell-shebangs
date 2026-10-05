@@ -25,7 +25,7 @@
 #
 #              *.bats is skipped outright, because check-bats-no-shebang
 #              forbids a shebang there. Judging those files here as well would
-#              mean two gates giving one file contradictory orders: "make the
+#              mean gates giving one file contradictory orders: "make the
 #              shebang canonical" and "remove the shebang".
 #
 #              The exemption table pins the path AND the spelling. An exemption

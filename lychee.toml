@@ -32,7 +32,7 @@ accept = [200, 206, 429]
 # NOT retry a rejected HTTP status. A connection reset -- the direnv.net
 # failure in #100 -- is attempted max_retries + 1 times; a 503 from github.com
 # is attempted exactly ONCE regardless of what this is set to. So this key
-# addresses one of the two flakes in #100 and provably cannot address the
+# addresses one of the flakes in #100 and provably cannot address the
 # other; the concurrency keys below are what address that one.
 max_retries = 5
 

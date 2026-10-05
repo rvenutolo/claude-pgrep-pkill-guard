@@ -76,8 +76,9 @@ def quote_expansions:
   | .[];
 
 # A double-quoted string holding only literal text. One that contains an
-# apostrophe or a backslash is left alone: single quotes cannot hold the first
-# and change the meaning of the second. A bats test name is not an argument.
+# apostrophe or a backslash is left alone: single quotes cannot hold an
+# apostrophe and change the meaning of a backslash. A bats test name is not an
+# argument.
 def single_quote_literals:
   [nodes | select(.Type == "TestDecl") | .Description.Pos.Line] as $test_lines
   | nodes

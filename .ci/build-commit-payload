@@ -134,7 +134,7 @@ function main() {
   # no path through this script leaks it -- including the `die` paths, which
   # exit rather than return.
   #
-  # The EXIT trap is a SECOND trap, not a replacement for the ERR trap installed
+  # The EXIT trap is an EXTRA trap, not a replacement for the ERR trap installed
   # at the top of this file: they are different signals and both stay armed.
   #
   # The trap writes NOTHING to stdout: this script's contract is that stdout

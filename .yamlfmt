@@ -1,8 +1,8 @@
 # yamlfmt configuration, read from the repo root by the treefmt-driven yamlfmt.
 #
-# The first two settings reconcile yamlfmt with `yamllint --strict`, which the
-# gate also runs. Neither relaxes a lint; they make the formatter emit what the
-# linter already demands.
+# max_line_length and pad_line_comments reconcile yamlfmt with
+# `yamllint --strict`, which the gate also runs. Neither relaxes a lint; they
+# make the formatter emit what the linter already demands.
 #
 # max_line_length keeps folded scalars folded. Without it yamlfmt re-emits
 # `allowed-endpoints: >-` as a single 300-character line, tripping yamllint's

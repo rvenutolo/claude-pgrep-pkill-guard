@@ -5,7 +5,7 @@
 #              executable because hooks.json invokes it directly through its
 #              shebang, and pgrep-scan.awk MUST NOT be, because it is only ever
 #              read by `awk -f`. A heuristic that keys on extension or shebang
-#              would get one of those two wrong.
+#              would get one of them wrong.
 # @arg $1 dir optional fixture directory, treated as the repo root: the tracked
 #         file list and modes are read from it rather than from the real
 #         checkout. It exists so the bats suite can drive the real matcher over

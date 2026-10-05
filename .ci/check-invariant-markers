@@ -114,8 +114,8 @@ readonly MARKERS=(
 )
 
 # @description Print a file's text with every line break and comment marker
-#              collapsed away, so a phrase that a comment wrapped across two
-#              lines reads as one run of words.
+#              collapsed away, so a phrase that a comment wrapped across a
+#              line break reads as one run of words.
 #
 #              Leading whitespace goes first, then any run of leading `#`, then
 #              the whitespace behind it -- in that order, because a wrapped

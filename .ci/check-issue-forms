@@ -31,7 +31,7 @@
 #              One rule lives outside those programs, in bash: every label a
 #              form declares must exist in .github/labels.yml. It cannot live in
 #              a yq program because the existing ones are single-quoted
-#              expressions over ONE file and the labels are in a second, and
+#              expressions over ONE file and the labels are in another, and
 #              restructuring them to reach it would trade a real rule against
 #              the traps above. A form referencing a label that does not
 #              exist does not error either -- GitHub files the issue without it

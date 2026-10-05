@@ -33,10 +33,10 @@
   # parser or printer flag. Style lives in .editorconfig; keep it there.
   #
   # That rule is why "*.bats" appears in includes with no accompanying
-  # `-ln bats`. The bats dialect is the SECOND thing that must come from
-  # .editorconfig rather than from argv: `-ln` is a parser flag, so adding it
-  # here would switch .editorconfig off wholesale and reindent all eleven bats
-  # files to tabs, along with every other file this entry formats. The
+  # `-ln bats`. The bats dialect must come from .editorconfig too, rather
+  # than from argv: `-ln` is a parser flag, so adding it here would switch
+  # .editorconfig off wholesale and reindent every bats file to tabs, along
+  # with every other file this entry formats. The
   # `[*.bats]` section in .editorconfig carries the dialect instead.
   settings.formatter.shfmt = {
     command = "${pkgs.shfmt}/bin/shfmt";

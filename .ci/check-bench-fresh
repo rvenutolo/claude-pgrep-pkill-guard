@@ -5,7 +5,7 @@
 #
 #              The report records the commit it was generated from in its
 #              provenance table, and the README's Performance section quotes its
-#              figures as fact. Nothing connected the two until #84: the file
+#              figures as fact. Nothing connected them until #84: the file
 #              then said `4c189fb`, and hooks/ had moved twice since --
 #              including `perf: split the guard`, the single change the
 #              benchmark exists to measure. A published number that no longer
@@ -40,7 +40,7 @@
 #              remedy is re-running the wall-clock benchmark, and the release
 #              cannot merge until someone pays it -- for a string the hook
 #              prints and never branches on. A change that was reverted before
-#              HEAD passes the same way: the two trees are byte-identical. See
+#              HEAD passes the same way: both trees are byte-identical. See
 #              exempt_reason.
 #
 #              Strict only on a release. Every verdict is computed the same

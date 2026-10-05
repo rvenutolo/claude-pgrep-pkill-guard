@@ -144,7 +144,7 @@ function check_row() {
 
   # The row separator is the FIRST colon, not the only one: the parts are
   # namespaced, so a function half reads `tokens::is_keyword` and a row carries
-  # three colons. Counting them -- which this used to do -- would reject every
+  # extra colons. Counting them -- which this used to do -- would reject every
   # row in the table. The remainder after the first colon is graded as a
   # function name instead, which is the check that was actually wanted.
   if [[ ! "${function_name}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z_][a-zA-Z0-9_]*)*$ ]]; then

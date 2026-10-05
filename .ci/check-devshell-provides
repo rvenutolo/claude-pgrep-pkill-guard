@@ -179,7 +179,7 @@ function declared_tools_annotated() {
 #              in nativeBuildInputs at all, so there is no package to justify,
 #              and reverse_check's tool_paths loop already ignores a declared
 #              tool that does not resolve. Derived from the annotated form, not
-#              a second copy of the parser, so the two cannot drift.
+#              a second copy of the parser, so they cannot drift.
 # @noargs
 # @stdout one declared tool per line
 function declared_tools() {

@@ -112,7 +112,7 @@ function main() {
   "${REPO_DIR}/.ci/check-bash-style" "${files[@]}" || rc=1
 
   log 'running gawk --lint over the awk programs'
-  # The scanner is the repo's second language and, until #74, the only source
+  # The scanner is the repo's other language and, until #74, the only source
   # file no linter looked at -- .treefmt.nix excludes *.awk outright, because
   # no formatter in the flake understands it.
   #
@@ -131,7 +131,7 @@ function main() {
   # --lint=fatal alone gives `fatal: 'gensub' is a gawk extension`, which is a
   # lint verdict on a function that still exists; under --posix it is
   # `fatal: function 'gensub' called but never defined`, because in POSIX mode
-  # there is no such function to call. The second is the stronger statement --
+  # there is no such function to call. That is the stronger statement --
   # it is what the other awks would say -- and --posix also aligns the
   # regex and escape semantics gawk otherwise extends, which no lint level
   # does.

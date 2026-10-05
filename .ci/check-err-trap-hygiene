@@ -14,11 +14,11 @@
 #                FAIL: I8: marketplace plugins[0] source "../../etc" has no vendored .../plugin.json
 #                [check-manifest-invariants] ERROR: line 225 (exit 1): return "${rc}"
 #
-#              The first two lines are the answer. The third sends the reader
+#              The FAIL lines are the answer. The ERROR line sends the reader
 #              hunting for a bug at line 225, where there is none -- and 225 is
 #              not even the `return` it quotes, because LINENO in that report is
-#              the `main "$@"` call at the bottom of the file. The one line of
-#              the three that looks like a stack pointer points nowhere.
+#              the `main "$@"` call at the bottom of the file. The only line
+#              that looks like a stack pointer points nowhere.
 #
 #              `trap - ERR` at the return gives up exactly that one report. The
 #              trap stays installed for everything before it, so a typo-d
@@ -36,9 +36,9 @@
 #              filtered to files whose text installs an `ERR` trap -- and never
 #              from a list. #43 shipped a list and it was wrong in both
 #              directions: it predicted bench/run, and it missed run-tests,
-#              check-fast-path-size and check-issue-forms, all three of which
-#              joined the family after the issue was filed and every one of
-#              which reintroduced the pattern. A new .ci/check-* is covered the
+#              check-fast-path-size and check-issue-forms, each of which
+#              joined the family after the issue was filed and reintroduced
+#              the pattern. A new .ci/check-* is covered the
 #              day it lands.
 #
 #              One kind of `ERR` trap is deliberately NOT policed: a fail-open

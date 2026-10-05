@@ -196,14 +196,14 @@ function main() {
     # only under `--awk=bwk`, which needs the devShell's nawk anyway. This line
     # is not: `compat (ubuntu, ambient)` and `compat (macos, homebrew bash)`
     # both invoke ./run-tests directly against the tools the runner ships, and
-    # BSD mkdir has no --parents. That was not theory -- the first CI probe of
-    # this feature died here with `mkdir: illegal option -- -` before a single
-    # test ran, which is also why the upload step it exists to feed found
-    # nothing to upload.
+    # BSD mkdir has no --parents: there `mkdir --parents` dies with
+    # `mkdir: illegal option -- -` before a single test runs, and the upload
+    # step this directory exists to feed finds nothing to upload.
     # bash-style allow=long-options: runs on the ambient macOS leg; BSD mkdir has no long form
     mkdir -p "${report_dir}"
-    # --report-formatter, NOT --formatter: the first writes JUnit to a file and
-    # leaves the terminal formatter alone, the second REPLACES terminal output.
+    # --report-formatter, NOT --formatter: --report-formatter writes JUnit to a
+    # file and leaves the terminal formatter alone, --formatter REPLACES
+    # terminal output.
     # The compat legs' job logs are the first thing a reader looks at when a
     # macOS-only failure appears, and swapping them for XML would trade the
     # artifact against the thing it exists to supplement (#83).

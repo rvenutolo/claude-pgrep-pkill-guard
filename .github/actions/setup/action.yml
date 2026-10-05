@@ -20,7 +20,7 @@ runs:
         # union of every store the runner ever restored: a flake.lock bump
         # restores the previous lock's store through the prefix match, adds
         # the new closures next to the old ones, and saves the lot. By #288
-        # five lock bumps had grown the macOS store to 12.1 GB nar for a
+        # successive lock bumps had grown the macOS store to 12.1 GB nar for a
         # devShell whose runtime closure is 3.2 GB, and the 2.9 GB tarball
         # took `gtar` 8m51s to extract on every run of every PR -- two thirds
         # of the leg.

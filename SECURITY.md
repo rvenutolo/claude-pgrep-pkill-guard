@@ -3,8 +3,11 @@
 ## What this is
 
 `pgrep-pkill-guard` is a Claude Code `PreToolUse` hook. It denies a small set of
-`pgrep`/`pkill` command shapes that make an agent kill its own session or spin
-forever on a process that can never exit. That is its entire remit.
+command shapes that make an agent kill its own session or spin forever: a
+`pgrep`/`pkill` pattern that matches the agent's own shell, and a poll, looped
+or repeated by hand, of a process that can never exit or of a harness
+task-output file.
+That is its entire remit.
 
 It is **not a sandbox**, **not a privilege boundary**, and **not a defence
 against a hostile operator or a hostile prompt author**. Anyone who can run the
@@ -23,7 +26,7 @@ tool. Anything outside that string is invisible to it:
 - **`bash script.sh`.** The hook sees the invocation, not the file. A
   `pkill --full java` on line 40 of the script is never examined.
 - **Write-then-run.** Code written to a file in one tool call and executed in
-  the next is two commands, and neither one carries the dangerous shape.
+  the next spans separate commands, and neither one carries the dangerous shape.
 - **Other tools.** The matcher covers the Bash tool. Nothing reaches the guard
   from any other tool, or from a process spawned outside it.
 

@@ -2,7 +2,7 @@
 
 This document is for contributors. It traces the path a command takes through
 the guard and records the decisions that the code cannot explain on its own —
-in particular the six design invariants — three of them defined by absence,
+in particular the design invariants, some of them defined by absence,
 where a reasonable-looking cleanup breaks the plugin on half the platforms it
 supports. The user-facing
 documentation is [the README](../README.md); nothing here is needed to install
@@ -32,10 +32,10 @@ the sibling below, and invariant 5 is the ceiling that keeps it there.
 In execution order:
 
 1. `readonly HOOK_NAME`, which sits this high only because the version guard
-   below names it. `HOOK_DIR` is declared empty here too and frozen by
-   `resolve_hook_dir` when `load_body` runs. Every other constant is past the
-   prefilter: `HOOK_VERSION`, `SCANNER` and `GUARD_PARTS` in the loader, the
-   rest in the parts under `hooks/lib/`.
+   below names it. `HOOK_DIR` is declared empty in this file too, after step 4,
+   and frozen by `resolve_hook_dir` when `load_body` runs. Every other constant
+   is past the prefilter: `HOOK_VERSION`, `SCANNER` and `GUARD_PARTS` in the
+   loader, the rest in the parts under `hooks/lib/`.
 2. The bash-version guard: bash older than 4.4 prints the INACTIVE
    `systemMessage` and exits immediately. It runs before everything else
    because it is the one guard that has to: the rest of the guard leans on
@@ -83,7 +83,7 @@ In execution order:
    fork and an exec on every Bash tool call before the guard has looked at
    anything. The empty delimiter reads to EOF, so `read` returns
    1 having stored the whole payload; the `|| :` is what makes that normal case
-   a success rather than an `ERR` trip. Two differences from `$(cat)`, both
+   a success rather than an `ERR` trip. The differences from `$(cat)` are both
    inert: a trailing newline survives, which neither the prefilter's
    substring test nor `jq` cares about, and a raw NUL would truncate the
    payload — which Claude Code's payloads, serialized by Node's
@@ -97,17 +97,18 @@ In execution order:
 8. Past the prefilter, `main` calls `load_body` — the same function step 5
    calls. It runs `resolve_hook_dir` to freeze `HOOK_DIR`: one `dirname` fork
    and exec, which locates both the sibling and — through the sibling's
-   `scanner::resolve_scanner` — the awk scanner, so no path pays a second process for
-   the second lookup. Two branches then stand down loudly, exactly as the
-   precondition guards inside the body do: the sibling missing or unreadable,
+   `scanner::resolve_scanner` — the awk scanner, so no path pays another
+   process to find the scanner. Its failure branches then stand down loudly,
+   exactly as the precondition guards inside the body do: the sibling missing
+   or unreadable,
    and the `source` itself failing. The sibling's own source loop adds one
    branch per part, naming the part, judged by a `declare -F` check on a
    function the part must define rather than by `source`'s status (see
    the loader section below). The `||` on the `source` is what
    keeps a corrupt sibling off the `ERR` trap, which would otherwise answer a
    broken install with a bare `{}`. It is a function rather than an inline
-   block because two call sites need it, and a second copy would spend the
-   fast-path budget invariant 5 exists to protect.
+   block because step 5 and this one both call it, and a copy at each would
+   spend the fast-path budget invariant 5 exists to protect.
    Both callers read it as `load_body || return 0`: the `systemMessage` is
    already on stdout by then, so the caller's only remaining job is to stop.
    With the body loaded, `main` calls `classify::inspect_command "${input}"`.
@@ -117,12 +118,12 @@ In execution order:
 The loader. It holds `HOOK_VERSION`, `SCANNER`, and an explicit ordered list of
 the parts under `hooks/lib/`, each paired with one function it must
 define. The loader sources each part and then checks for that function with
-`declare -F`, failing open (INACTIVE, naming the part) if it is absent. It says
-so in one of two ways, because the two causes send a reader to different places:
+`declare -F`, failing open (INACTIVE, naming the part) if it is absent. It words
+the message by cause, because the causes send a reader to different places:
 a part that is not readable is an install problem, while a part that is present
 but defined nothing either failed to parse or has a `GUARD_PARTS` row naming a
-function that no longer exists. Calling the second one "missing" would be false.
-`.ci/check-guard-parts` catches that second case at lint time, in both
+function that no longer exists. Calling the latter "missing" would be false.
+`.ci/check-guard-parts` catches the latter case at lint time, in both
 directions — every row resolves to a part that defines its paired function, and
 every tracked part is named by exactly one row, since a part no row names is
 never sourced at all. The check
@@ -163,8 +164,9 @@ bit — and none of them sets `set -Eeuo pipefail`, `IFS` or an `ERR` trap,
 because they run in the entry script's shell and would be reconfiguring their
 caller rather than themselves (invariant 2).
 
-Three members sit off the hook's path entirely, reached only from the dispatch
-at step 5, and two of them are all of `lib/human.sh`. `human::print_help` holds the
+`human::print_help`, `human::human_mode` and `HOOK_VERSION` sit off the hook's
+path entirely, reached only from the dispatch at step 5, and the functions
+among them are all of `lib/human.sh`. `human::print_help` holds the
 help text as a single quoted heredoc — usage, the stdin/stdout contract, the
 options, the `jq --null-input` probe recipe the README also carries,
 `PGREP_PKILL_GUARD_STATE_DIR` and its resolution order, the exit codes, and the
@@ -181,13 +183,13 @@ report.
 A literal rather than a runtime read of `.claude-plugin/plugin.json`: reading
 it would need path resolution up out of `hooks/`, a `jq` spawn and its own
 fail-open story for an unparsable manifest, all to print a string fixed at
-release time. Two things outside this file keep the literal honest. Its
+release time. The literal is kept honest from outside this file. Its
 `# x-release-please-version` comment must stay on the same line as the value —
 that is the form release-please's generic updater rewrites, not the
 `x-release-please-start-version` block syntax — and `release-please-config.json`
-names the body as a third `extra-files` entry of `type: "generic"`, so a release
+names the body as an `extra-files` entry of `type: "generic"`, so a release
 bumps it alongside `plugin.json` and `marketplace.json`.
-`.ci/check-versions-in-sync` then reads it as a fourth version source, failing
+`.ci/check-versions-in-sync` then reads it as one more version source, failing
 loudly if the line is missing, unannotated or not semver-shaped, and asserts it
 equals `plugin.json`'s `.version`. That assertion has **no `BOOTSTRAP_VERSION`
 exemption**, unlike the `.release-please-manifest.json` arm beside it: the
@@ -221,7 +223,8 @@ Picking up where step 8 above left off, `classify::inspect_command`:
    prefilter needs it there — prints a bare `{}`; `messages::emit_warn` prints an `allow`
    decision carrying `additionalContext`; `messages::emit_deny` prints a `deny`
    decision carrying `permissionDecisionReason`, built by `messages::deny_message` from
-   the kind and its detail. `additionalContext` is the only `PreToolUse`
+   the kind and its detail, or by `messages::repeat_message` for a `repeat`
+   denial. `additionalContext` is the only `PreToolUse`
    field verified to reach the model on an allowed call — `systemMessage`
    renders to the user only, and `permissionDecisionReason` is fed back under
    deny alone.
@@ -264,7 +267,7 @@ otherwise tell `foo` from `foo\n` at end of input.
 | `allow`          | everything else                                                                                          |
 | `inactive`       | the scanner failed its integrity trailer; `classify::inspect_command` emits the INACTIVE `systemMessage` |
 
-`repeat` is the fourth deny kind and is not one of these: it is decided after
+`repeat` is a deny kind too and is not one of these: it is decided after
 classification, in `classify::inspect_command`, because it is the only stateful rule.
 
 ### The per-session state file
@@ -283,14 +286,14 @@ of those checks `return 0` — see below.
 
 ### `tests/cases/`
 
-Two tab-separated tables drive most of the suite, both with shell-visible
+The tab-separated tables below drive most of the suite, each with shell-visible
 strings stored as JSON so quoting and whitespace survive:
 
 - `verdicts.tsv` — `<command>\t<verdict>`, read by `tests/classify.bats` (which
   asserts the decision plus the mitigation needle that identifies the kind),
   by `tests/deny-sweep.bats`, and by `tests/prefilter.bats`, which asserts that
   every non-`allow` row carries one of the prefilter's trigger tokens and that
-  the three-token set is minimal (dropping any one leaves some row uncovered).
+  the token set is minimal (dropping any one leaves some row uncovered).
 - `messages.tsv` — `<command>\t<field>\t<mode>\t<needle>`, read by
   `tests/messages.bats`, where `field` is `reason`, `context` or `decision` and
   `mode` is `contains`, `lacks` or `equals`. `lacks` asserts absence, which is
@@ -307,7 +310,8 @@ no table can express: `tests/scanner.bats` (the awk scanner directly),
 suite in the tree. The scanner's contract is narrow enough to state without
 running it — for any input it exits 0 and its last line is the integrity trailer,
 whose count is the byte length of the reassembled command — so a generator can
-supply the inputs and the suite asserts only that. It asserts nothing about which
+supply the inputs and the suite asserts that, plus one loose time budget over
+the whole corpus as a hang detector. It asserts nothing about which
 tokens appear or at what offsets: a random input has no expected token stream, and
 inventing one would mean reimplementing the scanner inside the test.
 
@@ -334,7 +338,7 @@ templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-comm
 fabricated package inventory), `tests/invariant-markers.bats`
 (`.ci/check-invariant-markers`, against a fabricated source tree),
 `tests/bench-fresh.bats` (`.ci/check-bench-fresh`, against a purpose-built
-two-commit repository), `tests/bats-libs-in-sync.bats`
+throwaway repository), `tests/bats-libs-in-sync.bats`
 (`.ci/check-bats-libs-in-sync`, against copied fixtures of
 `.github/actions/bats-ambient/action.yml` and `flake.lock` carrying planted SHA
 mismatches), `tests/report-coverage.bats` (`.ci/report-coverage`, against a
@@ -399,7 +403,7 @@ turn an installed plugin into an outage on every Bash call. A hook that went
 quiet on its own breakage would be worse still, because the user would never
 learn they were unprotected. That trade-off is why the `ERR` trap allows, why
 the scanner's integrity check is in-band, and why `repeat::repeat_check` is written as
-a long sequence of `|| return 0` guards rather than as assertions.
+a long sequence of guards that each `return 0` rather than as assertions.
 
 **There is exactly one exception, and it is on argv.** `human::human_mode` returns 2
 for an unrecognized argument and for a bare run with stdin on a terminal, and
@@ -409,10 +413,10 @@ hook exiting 2 means _block the tool call_, so this is the one path in the repo
 that does not fail open. It is safe because arguments cannot reach the script
 from Claude Code: `hooks/hooks.json` passes none, so the 2 lands in a terminal
 next to the stderr line explaining it. Someone who hand-edited
-`hooks/hooks.json` to pass an argument would have every Bash call blocked with
-a loud message rather than silently unguarded — the right answer for a broken
-configuration, and the reason the exception is acceptable rather than merely
-tolerated.
+`hooks/hooks.json` to pass an unrecognized argument would have every Bash call
+blocked with a loud message rather than silently unguarded — the right answer
+for a broken configuration, and the reason the exception is acceptable rather
+than merely tolerated.
 
 ## Known limitations
 
@@ -465,7 +469,7 @@ called.
 
 Answering the asked question would mean one more file in `hooks/`, written
 bash-3.2-safe, sourced ahead of the version guard, carrying its own codemap
-entry here and its own two fail-open branches for being missing or unloadable —
+entry here and its own fail-open branches for being missing or unloadable —
 a large structural price on the one file whose length is a per-call latency tax
 (invariant 5). And it would buy little: the message that reader already gets
 names their exact problem and its exact fix, `brew install bash`, which beats
@@ -494,7 +498,7 @@ not undo. That is the whole reason the workflow also runs on `pull_request`
 with `dry-run: true`: the job log on a PR is the only review a deletion ever
 gets, and it must be read before merging.
 
-Two consequences worth knowing before editing either file:
+Consequences worth knowing before editing either file:
 
 - release-please's `autorelease: pending` and `autorelease: tagged` are listed
   even though nothing in this repo creates them. Omitting them would have the
@@ -515,7 +519,7 @@ action's own `action.yml` at the pinned SHA whenever that pin moves.
 
 Repository settings restrict Actions to GitHub-owned actions plus an explicit
 list of owner patterns (`verified_allowed` is off, so Marketplace verification
-buys nothing here). As of #89 that list is:
+buys nothing here). That list is:
 
 ```text
 googleapis/*  step-security/*  nix-community/*  wagoid/*  DeterminateSystems/*  crazy-max/*
@@ -558,7 +562,7 @@ function list also covers the scanned files themselves. A comment that cites a
 path under an untracked directory (`.claude/`, `docs/superpowers/`) is a
 violation, because a clone cannot follow it.
 
-`long-options` gets a third list from the same repository: the functions
+`long-options` gets one more list from the same repository: the functions
 defined under `tests/test_helper/`. A flag handed to one of them, like a flag
 handed to a function the scanned file defines, is input for the thing under
 test, not an option of a tool that has a long form.
@@ -586,9 +590,10 @@ has, or has nothing to excuse is itself a violation, so an exception cannot
 outlive the code it excused. A pattern that recurs belongs in the rule, not in
 markers.
 
-Every rule walks the whole tree, so a scan costs time in proportion to the
-file, and the gate scans the files concurrently, as many at a time as the
-machine has processors. Each scan writes to its own log, and the gate prints
+Every rule walks the whole tree or the whole source text, so a scan costs time
+in proportion to the file, and the gate scans the files concurrently, as many
+at a time as the machine has processors. Each scan writes to its own log, and
+the gate prints
 the logs in argument order once every scan has ended, so the output is the same
 whichever scan finishes first. A scan that dies without a verdict is reported
 as a file that could not be scanned, never as a pass. A file that fails is a
@@ -613,7 +618,7 @@ runs it on the Linux leg only, uploads the report as an artifact and prints the
 percentage in the job summary. There is no threshold and no badge: the number is
 something to look at, not something to pass.
 
-Three things about it are not obvious.
+Several things about it are not obvious.
 
 **kcov instruments bash through `BASH_ENV`.** It exports
 `BASH_ENV=<outdir>/bash-helper.sh` into the traced environment; every child bash
@@ -657,7 +662,7 @@ numbers here.
 
 **Read the percentage as a floor.** kcov's parser marks lines coverable that
 bash's xtrace can never report a hit on, so they sit in the uncovered column
-permanently and drag the figure down. Two shapes do it here:
+permanently and drag the figure down. These shapes do it here:
 
 - **Continuation lines of a multi-line quoted assignment or array literal.** The
   trace records one line of the assignment and nothing else, so every other line
@@ -675,8 +680,8 @@ Together these account for a large share of the uncovered lines in `hooks/`,
 among them the continuation lines of the messages in
 `messages::deny_message`, which is the function this caveat exists to explain.
 
-**An apostrophe in a traced command eats the rest of the trace.** This is a
-second, unrelated kind of wrongness in the same report, and it is the more
+**An apostrophe in a traced command eats the rest of the trace.** This is
+another, unrelated kind of wrongness in the same report, and it is the more
 dangerous one because it is invisible: the floor caveat only makes the number
 too small, while this one makes the report describe a codebase that was not
 measured.
@@ -739,7 +744,7 @@ a canary at the end sits outside most swallow windows: if the function's hit
 count rises with the probe appended, the zero was a collection artifact and not
 a gap in the suite.
 
-**Two zeros past the prefilter are neither artifact nor gap: they are
+**Some zeros past the prefilter are neither artifact nor gap: they are
 unreachable.** `loops::loop_context`'s closing `printf 'none\n'` in
 `hooks/lib/loops.sh` and `consumption::invocation_is_captured`'s closing `return 1` in
 `hooks/lib/consumption.sh` are defensive returns that no input reaches.
@@ -759,11 +764,11 @@ above in mind. A zero is a question, not a finding.
 
 ## Design invariants
 
-Six rules the code depends on that are not evident from reading any single
+Rules the code depends on that are not evident from reading any single
 file. Each is repeated as a comment in the source it constrains; if one changes
 here, change the comment too. Invariants 5 and 6 additionally have a gate
 behind them (`.ci/check-fast-path-size`, `.ci/check-err-trap-hygiene`); the
-other four rest on the comments and on review.
+others rest on the comments and on review.
 
 `.ci/check-invariant-markers` asserts that each marker phrase below is present
 in every file named alongside it, collapsing line breaks and `#` continuations
@@ -793,9 +798,9 @@ inside the hermetic Nix devShell, where GNU coreutils is guaranteed. A line the
 ambient compat legs reach is the exception: `run-tests`' main path, described
 below, and the `.ci/` gates whose bats suites run on those legs.
 
-**Tracked comments:** three files carry the `short flag only where macOS has no
-long form, deliberately` phrase, and `.ci/check-invariant-markers` lists exactly
-those three beside this document. The first
+**Tracked comments:** the files under `hooks/` that carry the `short flag only
+where macOS has no long form, deliberately` phrase are the ones
+`.ci/check-invariant-markers` lists beside this document. One
 is `hooks/lib/repeat.sh`, in `repeat::repeat_check`, which is the one rule in the guard
 that touches the filesystem — its write path a few lines below carries the same
 rationale in its own words, for the `rm` and `mv` calls there:
@@ -807,8 +812,8 @@ rationale in its own words, for the `rm` and `mv` calls there:
 # mkdir has none -- the guard has to run on whatever userland ships.
 ```
 
-The second is the header of `hooks/pgrep-pkill-guard-body.sh`, which extends the
-rule to every part it loads. The third is in `resolve_hook_dir` in
+Another is the header of `hooks/pgrep-pkill-guard-body.sh`, which extends the
+rule to every part it loads. The last is in `resolve_hook_dir` in
 `hooks/pgrep-pkill-guard.sh`, which is the entry script's one and only external
 command:
 
@@ -821,10 +826,11 @@ command:
 ```
 
 **Same cause, different scope:** `tests/*.bats` and `tests/test_helper/` carry
-the same exemption. The three ambient compat CI legs — `compat (ubuntu,
+the same exemption. The ambient compat CI legs — `compat (ubuntu,
 ambient)`, `compat (macos, homebrew bash)` and `compat (macos, stock bash 3.2)`
 — run against the tools the runner ships rather than against the devShell, and
-the first two of those run the bats suite. A `--parents` in a `.bats` file
+every one of them but the stock-bash leg runs the bats suite. A `--parents` in a
+`.bats` file
 passes locally in the devShell and reddens a macOS job. The rule is the same one:
 a short flag only where the BSD tool has no long form, so `grep --count` and
 `grep --quiet --fixed-strings` are fine there. The tracked counterpart
@@ -832,7 +838,7 @@ is the `short flag only where macOS has no long form, on purpose` comment above
 `make_manifest_fixture` in `tests/manifest.bats`.
 
 `run-tests` itself mostly keeps long options, but **not because it is safe to**
-— the first two of those legs invoke `./run-tests` directly against ambient
+— the legs that run the suite invoke `./run-tests` directly against ambient
 tools, exactly like a `.bats` file. It gets away with it only because every
 GNU long option in it sits on a devShell-only path: `use_bwk_awk`'s
 `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
@@ -846,8 +852,11 @@ bug.
 
 ### 2. `hooks/` never sets `shopt -s inherit_errexit`
 
-Every gate script that runs inside the devShell sets it; the few that run under
-the host's own shell leave it out. None of the hook's bash files may set it —
+Every gate script that runs inside the devShell sets it. Of those that run under
+the host's own shell, `.ci/in-devshell`, `.ci/run-plugin-validate` and
+`run-tests` set it behind a bash 4.4 version guard, and the rest — `.githooks/`
+and `.ci/activate-githooks` — leave it out. None of the hook's bash files may
+set it —
 the entry script, the loader, or any part under `hooks/lib/` — and no one may
 turn the assignment below into a plain one.
 
@@ -865,21 +874,21 @@ filesystem condition becoming a trapped error on an unrelated command. The
 fallback is also why `classify::inspect_command` accepts the result as a deny only when it
 is shaped like `messages::repeat_message`'s output.
 
-**And the body sets none of the four — nor does any part.**
+**And the body sets none of these — nor does any part.**
 `hooks/pgrep-pkill-guard-body.sh` and each `hooks/lib/*.sh` it sources are
 sourced into the entry script's shell rather than run in one of their own, so on
 top of `inherit_errexit` they must never set `set -Eeuo pipefail`, `IFS`, or the
-`ERR` trap either. The entry script sets those three, and they are already in
-force by the time the first `source` runs; a sourced file that sets them is not
-configuring itself, it is reconfiguring its caller. The fourth,
-`shopt -s inherit_errexit`, is set nowhere in `hooks/`, entry script included,
+`ERR` trap either. The entry script sets those, and they are already in
+force by the time the body's `source` runs; a sourced file that sets them is not
+configuring itself, it is reconfiguring its caller. `shopt -s inherit_errexit`
+itself is set nowhere in `hooks/`, entry script included,
 for the reason above. That is also why none of
 them carries a shebang or an executable bit — they are not scripts that can be
 run.
 
-**Tracked comment:** `The || is load-bearing beyond the obvious fallback`, which
-appears three times. In `hooks/lib/classify.sh`, in `classify::repeat_tier_reason`
-directly above that assignment:
+**Tracked comment:** `The || is load-bearing beyond the obvious fallback`, in
+each file named here. In `hooks/lib/classify.sh`, in
+`classify::repeat_tier_reason` directly above that assignment:
 
 ```text
 # The `||` is load-bearing beyond the obvious fallback: it is what keeps this
@@ -888,7 +897,7 @@ directly above that assignment:
 # not turn this into a plain assignment.
 ```
 
-And twice more on a `source`, where the same construct does the same job for a
+And again on each `source`, where the same construct does the same job for a
 file that will not load. In `hooks/pgrep-pkill-guard.sh`, above the `source` of
 the body:
 
@@ -921,10 +930,12 @@ into a temporary directory and run it there with no sibling beside it, then with
 a deliberately broken one, then with the loader present but `lib/` absent, then
 with one part overwritten by a syntax error, then with every part intact but the
 loader's row for one of them naming a function nothing defines, then with one
-intact part that ends in a failing top-level command; the first five assert on
-the INACTIVE JSON the subprocess writes — and the third, fourth and fifth
-distinguish the loader's two messages from each other — while the sixth asserts
-on the ordinary deny it must still produce, and none of them sources anything.
+intact part that ends in a failing top-level command; every case but the last
+asserts on the INACTIVE JSON the subprocess writes — and those that get as far
+as the loader's own source loop distinguish its messages from each other —
+while the
+last asserts on the ordinary deny it must still produce, and none of them
+sources anything.
 
 **The one exception** is `hooks/pgrep-scan.awk`, which has its own public
 interface: a command on stdin, offset/token records and an integrity trailer on
@@ -934,7 +945,7 @@ stdout. `tests/scanner.bats` may drive it directly with `awk -f`, always under
 ### 4. The prefilter's token set is `pgrep`, `kill`, `.output` — and is a proof
 
 `main` returns `{}` without spawning `jq` or `awk` when the raw hook payload
-contains none of those three substrings. The proof is containment, not
+contains none of those substrings. The proof is containment, not
 enumeration. `classify::classify_command` itself opens with an early `allow` unless the
 COMMAND contains `pgrep`, `pkill`, or `.output`, and every stateless `deny`,
 `warn`, or `inactive` verdict has to pass through that gate on its way out.
@@ -949,9 +960,9 @@ already applies — it cannot suppress a verdict the hook would otherwise
 reach.
 
 **Why the test states the list instead of reading it.**
-`tests/prefilter.bats` hardcodes the same three tokens. That duplication is the
+`tests/prefilter.bats` hardcodes the same tokens. That duplication is the
 point: a test that extracted the list from the hook would agree with it by
-construction and assert nothing. Instead two independent assertions close the
+construction and assert nothing. Instead independent assertions close the
 loop — `tests/prefilter.bats` pins corpus against specification, and the
 corpus rows `tests/classify.bats` drives pin the hook against the corpus. Neither reaches
 inside the hook, so invariant 3 still holds.
@@ -965,7 +976,7 @@ set must be revisited in the same change — an unquoting scanner could
 recognise `pk\ill` in a payload containing no `kill` substring.
 `tests/prefilter.bats` is what catches it.
 
-A second assumption sits alongside the first: the prefilter matches raw
+Another assumption sits alongside it: the prefilter matches raw
 payload bytes, so it also assumes the payload spells the command's characters
 out literally. A serializer that `\u`-escaped ASCII letters could hide a
 trigger token from it — a payload spelling `pgrep` as `\u0070grep` would
@@ -977,10 +988,10 @@ assumption the prefilter makes, not because it is a live risk.
 
 **Why not Claude Code's own `if:` handler filter.** Because it matches a
 parsed command tree. Against this corpus, an `if:` of `Bash(pgrep *)`
-plus `Bash(pkill *)` misses non-`allow` rows of three kinds: `sudo` is not in
+plus `Bash(pkill *)` misses non-`allow` rows of these kinds: `sudo` is not in
 Claude Code's stripped-wrapper list, `bash -c '…'` is not descended into, and
 the `deny:task-poll` shapes contain no matchable command name at all. A
-substring test over the raw payload sees all three. See issue #29 for the
+substring test over the raw payload sees them all. See issue #29 for the
 probe matrix.
 
 Tracked counterpart: the prefilter comment block in `main`.
@@ -999,7 +1010,7 @@ with `bash -n` over valid prefixes of a 2203-line script (400 reps,
 300, 5807 at 1100, and 7099 at 2203. A guard parsed whole at that length pays
 ~2.4 ms of pure parse on every call. Every line
 the entry script carries is parse time paid by a call that never reaches it,
-which is why the guard is split in two and everything past the prefilter lives
+which is why the guard is split and everything past the prefilter lives
 where the fast path does not read it.
 
 **The ceiling is the point, not an obstacle to it.** A new helper belongs in the
@@ -1104,7 +1115,7 @@ wrong — a `trap - ERR` before a return in the hook's `main` would hand the use
 a broken guard instead of an open one. The hook has no such return today, so
 the gate would be quiet either way; the exemption is written down so that it
 stays the right answer if one is ever added. It keys off what the handler
-**does** — exits 0 — rather than off a path, so a second fail-open script is
+**does** — exits 0 — rather than off a path, so another fail-open script is
 covered without editing the gate, and the gate says so on every green run:
 
 ```text

@@ -311,13 +311,27 @@ function tab() {
   assert_output '0'
 }
 
-@test "scanner: a body line ending in a backslash does not swallow the terminator" {
-  # The scanner does not treat a body line ending in a backslash as a
-  # continuation, although bash does in an unquoted body: masking the
-  # backslash together with the newline it precedes would swallow the newline
-  # that starts the terminator check and mask to end of input.
+@test "scanner: an unquoted body line ending in a backslash is joined to the next line" {
+  # bash removes the backslash-newline, so a delimiter on the next line does
+  # not end the body; the text after it is still body text.
   local out
-  out="$(scan "$(printf 'cat <<EOF\nfoo \\\nEOF\npkill --full x')")"
+  out="$(scan "$(printf 'cat <<EOF\nfoo \\\nEOF\npkill --full x\nEOF')")"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
+  assert_output '0'
+}
+
+@test "scanner: a quoted body line ending in a backslash does not join the next line" {
+  # In a quoted body the backslash is an ordinary byte, so the next line's
+  # delimiter ends the body and the text after it is code.
+  local out
+  out="$(scan "$(printf 'cat <<'"'"'EOF'"'"'\nfoo \\\nEOF\npkill --full x')")"
+  run grep --count "$(tab)pkill\$" <<< "${out}"
+  assert_output '1'
+}
+
+@test "scanner: an escaped backslash at the end of a body line does not join the next line" {
+  local out
+  out="$(scan "$(printf 'cat <<EOF\nfoo \\\\\nEOF\npkill --full x')")"
   run grep --count "$(tab)pkill\$" <<< "${out}"
   assert_output '1'
 }

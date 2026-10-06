@@ -235,11 +235,12 @@ function fuzz_catalogue() {
     '(( x << 2 ))'
     '<<< x'
     # Line structure: a newline, a blank line, and a line ending in a
-    # backslash, which is a continuation outside a heredoc body and literal
-    # text inside one.
+    # backslash, which is a continuation outside a heredoc body, in an unquoted
+    # one, and literal text in a quoted one.
     $'\n'
     $'\n\n'
     $'x \\\n'
+    $'x \\\nEOF'
     # The parity inverter the scanner's header calls out by name.
     "don't"
     'it'"'"'s fine'

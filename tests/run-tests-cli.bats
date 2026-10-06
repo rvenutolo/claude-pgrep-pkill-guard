@@ -237,3 +237,17 @@ BATS
   assert_success
   [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
 }
+
+@test "run-tests: a repeated --awk=bwk leaves no shim directory behind" {
+  require_bwk_awk
+  # Same leak check again, with the flag given more than once. The EXIT trap
+  # holds a single command, so a shim built per occurrence of the flag would
+  # leave every one but the last behind.
+  local -r suite="${BATS_TEST_TMPDIR}/suite11/ok.bats"
+  local -r tmp="${BATS_TEST_TMPDIR}/tmpdir-repeated"
+  make_trivial_suite "${suite}"
+  mkdir -p "${tmp}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --awk=bwk --awk=bwk "${suite}"
+  assert_success
+  [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
+}

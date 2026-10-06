@@ -361,3 +361,27 @@
 "pkill --full \"[z]zredirdup\" 2>&1"	allow
 "pkill --full 2> /dev/null zzredirlast"	deny:kill
 "pkill --full 2> /dev/null \"[z]zredirafter\""	allow
+"sudo -u root echo 'pkill --full zzpfvshort' | bash"	deny:kill
+"sudo --user root echo 'pkill --full zzpfvlong' | bash"	deny:kill
+"sudo -u root -g wheel echo 'pkill --full zzpfvtwo' | bash"	deny:kill
+"doas -u root echo 'pkill --full zzpfvdoas' | sh"	deny:kill
+"env -u FOO echo 'pkill --full zzpfvenv' | bash"	deny:kill
+"timeout -s KILL 5 echo 'pkill --full zzpfvsignal' | bash"	deny:kill
+"timeout -k 1 5 echo 'pkill --full zzpfvkillafter' | bash"	deny:kill
+"env time -o /tmp/t echo 'pkill --full zzpfvtime' | bash"	deny:kill
+"sudo -u root printf '%s\\n' 'pkill --full zzpfvprintf' | sh"	deny:kill
+"sudo -u root cat <<EOF | bash\npkill --full zzpfvcat\nEOF"	deny:kill
+"echo 'pkill --full zzpfvrshort' | sudo -u root bash"	deny:kill
+"echo 'pkill --full zzpfvrdoas' | doas -u root sh"	deny:kill
+"echo 'pkill --full zzpfvrenv' | env --unset FOO bash"	deny:kill
+"echo 'pkill --full zzpfvrsignal' | timeout -s KILL 5 bash"	deny:kill
+"echo 'pkill --full zzpfvrtime' | env time -o /tmp/t bash"	deny:kill
+"echo 'pkill --full zzpfvrterm' | sudo -u root -- bash"	deny:kill
+"cat <<EOF | sudo -u root bash\nuntil ! pgrep --full zzpfvrloop; do sleep 5; done\nEOF"	deny:loop
+"cat <<EOF | timeout -k 1 5 sh\npkill --full zzpfvrcat\nEOF"	deny:kill
+"sudo -u root echo 'echo PAYLOAD_RAN' | bash"	allow
+"echo 'echo PAYLOAD_RAN' | sudo -u root bash"	allow
+"sudo -u root echo x 'pkill --full zzpfvtwowords' | bash"	allow
+"sudo -u root cat f <<EOF | bash\npkill --full zzpfvcatfile\nEOF"	allow
+"echo 'pkill --full zzpfvvalue' | sudo -u bash cat"	allow
+"echo 'pkill --full zzpfvstage' | sudo -u root cat | bash"	allow

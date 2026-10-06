@@ -5,6 +5,10 @@
 #              version comment. Local actions (`./.github/...`) are exempt: they
 #              are this repo's own tree, already pinned by the checkout.
 # @noargs
+# @stderr one FAIL line per external uses: that is not SHA-pinned with a
+#         version comment, naming the file and line, and one FAIL line for a
+#         scan that finds no external uses:; an OK line when no workflow file
+#         is tracked
 # @exitcode 0 every uses: is SHA-pinned with a version comment, or no workflow
 #             file is tracked
 # @exitcode 1 at least one is not, a tracked workflow file is missing or

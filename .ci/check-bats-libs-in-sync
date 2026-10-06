@@ -32,6 +32,8 @@
 #         real repo", which a script that always returned 0 would also pass.
 # @arg $2 lock optional path to the flake lock; defaults to flake.lock under the
 #         repo root.
+# @stderr the usage line on a surplus argument; one FAIL line per fault; the
+#         OK summary line when every checked SHA agrees
 # @exitcode 0 every checked library SHA agrees across both files
 # @exitcode 1 a file is missing or unparsable, a SHA is absent or malformed, or
 #             the sides disagree

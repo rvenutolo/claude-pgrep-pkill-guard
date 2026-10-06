@@ -9,6 +9,9 @@
 # The hook is invoked DIRECTLY so its #!/usr/bin/env bash shebang resolves the
 # same way Claude Code's plugin runner resolves it — that is the contract being
 # tested.
+# @stdout the OK line when the hook's output carries INACTIVE
+# @stderr a FAIL line when the runner's bash is 4.x or newer (with an indented
+#         note), or when the hook's output carries no INACTIVE
 
 set -eu
 

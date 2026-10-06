@@ -19,14 +19,21 @@
 #              and no second corpus has to be maintained. This script never
 #              asserts a verdict -- that is tests/classify.bats's job.
 # @arg $@ args optional --reps N, --output PATH, --smoke, --help or -h
+# @stdout the markdown report, unless --output PATH is given; the usage text
+#         under --help
+# @stderr a `[<script>] <message>` line naming the file written under --output,
+#         one `[<script>] FATAL: <message>` line when a check this script makes
+#         fails, and the ERR trap's `[<script>] ERROR: ...` report when a
+#         command fails instead
 # @exitcode 0 the run completed (or --help was printed)
 # @exitcode 1 a bad argument, an unreadable or empty corpus, a non-executable
 #             hook, a scratch directory that cannot be created, an --output path
 #             that cannot be written, or (under --smoke) a hook response that is
 #             not valid JSON
 # @exitcode * otherwise the failing git status, when the repository root cannot
-#             be resolved, or the hook's own non-zero status, when the hook
-#             itself fails
+#             be resolved, the failing jq status, when a typical payload cannot
+#             be built, or the hook's own non-zero status, when the hook itself
+#             fails
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

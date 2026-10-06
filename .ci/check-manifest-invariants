@@ -28,6 +28,10 @@
 #         deliberately broken manifest and assert that it fails. Without it the
 #         only possible test would be "exits 0 on the real repo", which a script
 #         that always returned 0 would also pass.
+# @stderr the `usage:` line on a surplus argument, one `FAIL: <message>` line
+#         per missing or unparsable file, per violated invariant and for an
+#         invariant program that fails to run, and an `OK:` line when every
+#         invariant holds
 # @exitcode 0 every invariant holds
 # @exitcode 1 a file is missing or unparsable, the invariant program fails to
 #             run, or an invariant is violated

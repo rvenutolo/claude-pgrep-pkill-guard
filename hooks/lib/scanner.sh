@@ -133,16 +133,19 @@ function scanner::has_flag() {
 # @description Extract the search pattern: the last argument that is neither a flag, the separate value of
 #              a long option in PGREP_VALUE_OPTIONS, nor a redirection. A short flag's separate value is
 #              not recognised and counts as a candidate. Once a bare -- end-of-options terminator is
-#              seen, every later token is a pattern candidate regardless of a leading dash -- only an
-#              exact redirection operator and its target are still excluded. Sliced out of the raw
-#              command by offset so the original quoting survives, then one surrounding quote pair is
-#              stripped.
+#              seen, every later token is a pattern candidate regardless of a leading dash -- only a
+#              redirection operator token (with or without a leading file descriptor) and its target are
+#              still excluded. Sliced out of the raw command by offset so the original quoting survives,
+#              then one surrounding quote pair is stripped.
 # @arg $1 command the raw command string
 # @arg $2 args newline-separated "<offset>\t<token>" lines
 # @stdout the operand with surrounding quotes removed, or empty
 function scanner::pattern_operand() {
   local -r command="$1" args="$2"
   local operand_offset='' operand_length=0 skip=0 past_terminator=0 offset token value_option
+  # An operator token is an optional file descriptor and then only < and > characters (2>, >>, <>, <<<); the
+  # scanner emits it without its target, which is the next token.
+  local -r redirect_operator='^[0-9]*[<>]+$'
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((skip == 1)); then
@@ -150,7 +153,7 @@ function scanner::pattern_operand() {
       continue
     fi
     if ((past_terminator == 1)); then
-      if [[ "${token}" == '>' || "${token}" == '<' || "${token}" == '>>' ]]; then
+      if [[ "${token}" =~ ${redirect_operator} ]]; then
         skip=1
       else
         operand_offset="${offset}"
@@ -170,7 +173,7 @@ function scanner::pattern_operand() {
         ;;
       -*) : ;;
       *[\<\>]*)
-        [[ "${token}" == '>' || "${token}" == '<' || "${token}" == '>>' ]] && skip=1
+        [[ "${token}" =~ ${redirect_operator} ]] && skip=1
         ;;
       *)
         operand_offset="${offset}"

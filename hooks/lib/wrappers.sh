@@ -232,7 +232,7 @@ function wrappers::segment_pipe_carry() {
 function wrappers::shell_wrapper_payloads() {
   local -r command="$1" tokens="$2"
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
-  local offset token word next_at_cmd raw budget
+  local offset token word next_at_cmd is_cmd_word raw budget
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
   local heredoc_seq=0 body_seq=0 pending='' leading_pending='' wanted=' ' expect_delim=0 len fd
@@ -385,7 +385,11 @@ function wrappers::shell_wrapper_payloads() {
     # The segment's operand words, kept in case it turns out to be a producer
     # on the left of a pipe. A word still in command position is the command
     # itself or a prefix's own option, neither of which the producer prints.
-    if ((at_cmd == 0)) && ! tokens::is_operator "${token}" && ! tokens::is_keyword "${token}"; then
+    # Nor does it print the value of a prefix's option (the `root` of `sudo -u
+    # root echo ...`), which is out of command position but still the prefix's:
+    # `chain_skip` is still set from the option when its value arrives here.
+    if ((at_cmd == 0 && chain_skip == 0)) && ! tokens::is_operator "${token}" \
+      && ! tokens::is_keyword "${token}"; then
       raw="${command:offset:${#token}}"
       if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
         seg_words+=("${raw:1:${#raw}-2}")
@@ -423,7 +427,14 @@ function wrappers::shell_wrapper_payloads() {
     else
       next_at_cmd=0
     fi
-    if ((at_cmd == 1 && next_at_cmd == 0)); then
+    # Leaving command position marks the command word, with one exception: a
+    # prefix's value-taking option (`sudo -u`) leaves it only for its value,
+    # and the chain step says so by setting `chain_skip`. Taking that option
+    # for the command would drop the carry a wrapper further along the same
+    # chain is about to claim (`echo '...' | sudo -u root bash`).
+    is_cmd_word=0
+    if ((at_cmd == 1 && next_at_cmd == 0 && chain_skip == 0)); then
+      is_cmd_word=1
       seg_cmd="${word}"
     fi
     if ((at_cmd == 1)) && budget="$(wrappers::wrapper_operand_budget "${word}")"; then
@@ -446,7 +457,7 @@ function wrappers::shell_wrapper_payloads() {
         pending_text_set=1
       fi
       wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
-    elif ((at_cmd == 1 && next_at_cmd == 0)); then
+    elif ((is_cmd_word == 1)); then
       # A command word that is not a local wrapper: whatever the pipe carried is
       # this command's input, and nothing here runs it as a script.
       wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set

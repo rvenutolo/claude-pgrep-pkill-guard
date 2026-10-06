@@ -39,6 +39,11 @@
 #         absent on purpose — in milliseconds. Without it the only possible
 #         test would be "exits 0 on the real repo", which a script that
 #         unconditionally returned 0 would also pass.
+# @stderr the usage line on a surplus argument; a FAIL line with indented
+#         explanation or remedy for each non-canonical, non-bash or
+#         exemption-contradicting shebang and each SHEBANG_EXEMPT row whose
+#         file cannot be read; a FAIL
+#         line for an empty scan; the closing OK line when nothing failed
 # @exitcode 0 every shebang is canonical or a matching exemption
 # @exitcode 1 a shebang is non-canonical or contradicts its exemption, an
 #             exemption is stale, or nothing was scanned

@@ -24,6 +24,8 @@
 #              does not fit, put it in the matching part under hooks/lib/:
 #              raising the number spends the milliseconds again.
 # @noargs
+# @stderr one OK line with the line count and the ceiling, or one FAIL line
+#         (with indented hints when the file is over the ceiling)
 # @exitcode 0 the entry script is within the ceiling
 # @exitcode 1 it is over the ceiling, missing or unreadable, or reads as zero lines
 # @exitcode * otherwise the failing git status, when the repository root cannot

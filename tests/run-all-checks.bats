@@ -21,7 +21,7 @@ function setup() {
 #              `git init` holding a copy of run-all-checks and nothing else,
 #              plus a `nix` stub that only touches a marker.
 #
-#              Never the real script in the real repo. Every case here feeds
+#              Never the real script in the real repo. The rejection cases feed
 #              an argument shape the gate should reject, and the gate used to
 #              run anyway -- including `run-tests`, which runs this very file
 #              again, recursing through the whole gate. In the fixture every

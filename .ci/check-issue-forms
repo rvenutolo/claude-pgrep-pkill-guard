@@ -47,6 +47,8 @@
 #         `labels: [bug]`, and `bug` is in the real file, so a case needs no
 #         labels fixture unless it is testing labels. A path derived from dir
 #         would make a labels fixture mandatory for every case.
+# @stderr the usage line on a surplus argument, one FAIL line per fault, and
+#         the OK line when every rule holds
 # @exitcode 0 every form and config.yml satisfy the schema, and every label a
 #             form references is declared in the labels file
 # @exitcode 1 the directory is missing or holds no form, a file is missing or

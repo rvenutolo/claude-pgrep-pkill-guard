@@ -27,6 +27,10 @@
 #              General -> Social preview.
 # @arg $1 output optional destination path; defaults to
 #         assets/social-preview.png under the repo root
+# @stderr the usage line, the bash-version message, one `[<script>] FATAL:
+#         <message>` line naming what stopped the build, or on success the
+#         `[<script>] <message>` lines naming the file written and where to
+#         upload it
 # @exitcode 0 the card was written
 # @exitcode 1 ImageMagick is missing, the source capture is not readable, or
 #             the host bash is older than 4.4

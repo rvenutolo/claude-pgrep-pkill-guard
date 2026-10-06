@@ -8,8 +8,9 @@
 #              codes rather than failing fast, so one run surfaces every
 #              failing category.
 # @noargs
-# @stderr a `[<script>] <message>` banner before each step, and the reason for
-#         each empty file list or missing directory
+# @stderr a `[<script>] <message>` banner before each step, the reason for
+#         each empty file list or missing directory, and a closing line on a
+#         non-zero verdict
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed, a file list came up empty, or the
 #             .github directory is missing

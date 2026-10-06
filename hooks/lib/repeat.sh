@@ -50,10 +50,10 @@ function repeat::repeat_check() {
   # BSD coreutils, whose mkdir has no long options at all (no `parents`, no
   # `mode=`). hooks/ takes a long option only where the BSD tool has one, and
   # mkdir has none -- the guard has to run on whatever userland ships.
-  # shellcheck disable=SC2174 # -m only binds the deepest dir; the only
-  # intermediate ever missing here is a hand-set XDG_RUNTIME_DIR or TMPDIR, or
-  # a parent of a hand-set PGREP_PKILL_GUARD_STATE_DIR, which the caller owns
-  # the mode of.
+  # shellcheck disable=SC2174 # -m only binds the deepest dir; an
+  # intermediate missing here is a hand-set XDG_RUNTIME_DIR or TMPDIR, an
+  # ancestor of one, or an ancestor of a hand-set PGREP_PKILL_GUARD_STATE_DIR,
+  # which the caller owns the mode of.
   if ! mkdir -p -m 0700 "${dir}" 2> /dev/null; then
     return 0
   fi

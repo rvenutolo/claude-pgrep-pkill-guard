@@ -22,6 +22,8 @@
 #              checked: it versions the marketplace catalogue, not the plugin,
 #              and nothing should couple it to the plugin's release cadence.
 # @noargs
+# @stderr FAIL lines naming each file whose version cannot be read and each
+#         pair of versions that disagree, or one OK line listing the versions
 # @exitcode 0 every version field agrees
 # @exitcode 1 a file is missing or unparsable, a version field is absent,
 #             malformed or unannotated, or the versions disagree

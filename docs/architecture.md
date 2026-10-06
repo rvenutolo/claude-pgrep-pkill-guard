@@ -258,14 +258,14 @@ otherwise tell `foo` from `foo\n` at end of input.
 
 `classify::classify_command` prints one of:
 
-| Verdict          | Meaning                                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------------------------- |
-| `deny:kill`      | a pattern kill whose pattern matches the invoking shell                                                  |
-| `deny:loop`      | a loop whose termination test is a full-command-line pattern search                                      |
-| `deny:task-poll` | a loop whose termination test reads a harness task-output file                                           |
-| `warn`           | a `pgrep --full` whose result is consumed but which is neither a loop nor a kill                         |
-| `allow`          | everything else                                                                                          |
-| `inactive`       | the scanner failed its integrity trailer; `classify::inspect_command` emits the INACTIVE `systemMessage` |
+| Verdict          | Meaning                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `deny:kill`      | a pattern kill whose pattern matches the invoking shell                                                                     |
+| `deny:loop`      | a loop whose termination test is a full-command-line pattern search                                                         |
+| `deny:task-poll` | a loop whose termination test reads a harness task-output file                                                              |
+| `warn`           | a `pgrep --full` whose result is consumed but which is neither a loop nor a kill                                            |
+| `allow`          | everything else                                                                                                             |
+| `inactive`       | the scanner exited non-zero or failed its integrity trailer; `classify::inspect_command` emits the INACTIVE `systemMessage` |
 
 `repeat` is a deny kind too and is not one of these: it is decided after
 classification, in `classify::inspect_command`, because it is the only stateful rule.
@@ -870,9 +870,11 @@ errexit's radar for its whole dynamic extent, so nothing inside `repeat::repeat_
 — the guard's one stateful, filesystem-touching rule — can trip the top-level
 `ERR` trap. `classify::inspect_command` calls `classify::repeat_tier_reason` inside
 such a substitution, which already covers this call; the `||` on this assignment
-keeps that true whoever the caller is. `inherit_errexit` pushes errexit back inside the substitution and
-reintroduces exactly the failure path the guard exists to avoid: a transient
-filesystem condition becoming a trapped error on an unrelated command. For a caller outside a `||` list the
+keeps that true whoever the caller is. The `||` is what protects, with
+`inherit_errexit` off or on: on bash 5.3, a command failing inside such a
+substitution neither stops the function nor fires the trap in either setting,
+and a plain assignment outside a `||` list fires the trap in both. On that
+version the option adds nothing, so `hooks/` leaves it off. For a caller outside a `||` list the
 `||` is load-bearing well beyond its visible role as a fallback, and the
 fallback is also why `classify::inspect_command` accepts the result as a deny only when it
 is shaped like `messages::repeat_message`'s output.

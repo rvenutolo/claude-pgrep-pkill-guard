@@ -33,9 +33,10 @@
 # this scanner's logic actually lives -- so the whole budget would go on
 # confirming that ordinary text round trips. The generator is therefore
 # FRAGMENT-BASED: a fixed catalogue of short strings drawn from the trouble spots
-# the scanner's own header names, assembled in random order and random counts,
-# with a minority of runs of random printable bytes mixed in. The catalogue is
-# the interesting half; randomness only decides the arrangement.
+# the scanner's own header names, plus long single-character runs, assembled in
+# random order and random counts, with a minority of runs of random printable
+# bytes mixed in. The catalogue is the interesting half; randomness only decides
+# the arrangement.
 #
 # SAFETY: the catalogue holds BARE WORDS -- `pgrep`, `pkill`, `.output` -- and
 # never a full invocation. Nothing here runs a shell on generated input, and
@@ -59,9 +60,9 @@
 #
 # --- Size and cost ----------------------------------------------------------
 #
-# FUZZ_N (default 200) is honoured from the environment, and every test covers
-# the WHOLE corpus -- partitioning it between tests would leave each property
-# checked on a slice of the inputs, which is the wrong trade.
+# FUZZ_N (default 200) is honoured from the environment, and each property test
+# covers the WHOLE corpus -- partitioning it between tests would leave each
+# property checked on a slice of the inputs, which is the wrong trade.
 #
 # The corpus is scanned once newline-terminated and once raw, and every
 # property is asserted from each single `awk` run per case. That matters more

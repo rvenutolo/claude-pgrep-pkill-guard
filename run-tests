@@ -15,7 +15,8 @@
 #              The hook and its scanner resolve `awk` from PATH, so a shim dir
 #              holding a single `awk -> nawk` symlink, prepended to PATH, is all
 #              it takes to exercise that platform from Linux. The default run
-#              keeps whatever `awk` the devShell puts first (gawk).
+#              keeps whatever `awk` the devShell puts first (gawk). Repeating
+#              the flag is the same as giving it once.
 #
 #              `--report DIR` adds bats' JUnit reporter, which writes
 #              DIR/report.xml while leaving the terminal formatter alone --
@@ -100,6 +101,9 @@ function repo_state() {
 #              then prove the swap took by version string: BWK prints
 #              `awk version YYYYMMDD`, gawk `GNU Awk`, mawk `mawk`. A suite that
 #              silently ran under gawk would pass for the wrong reason.
+#
+#              Call it at most once per run: the EXIT trap it arms replaces any
+#              earlier one, so it removes only the shim of the latest call.
 # @noargs
 # @set PATH the one-true-awk shim directory, prepended
 # @exitcode 0 `awk` now resolves to one-true-awk
@@ -158,12 +162,17 @@ function main() {
   # one of them silently forward `--awk=bwk` to bats as a test path. `--coverage`
   # joins the same loop for the same reason: it has to compose with both of the
   # others, in either direction.
-  local report_dir='' coverage_dir=''
+  local report_dir='' coverage_dir='' awk_swapped=''
   while (($# > 0)); do
     case "$1" in
       '--awk=bwk')
         shift
-        use_bwk_awk
+        # Once only: use_bwk_awk's EXIT trap removes the one shim directory it
+        # made, so a second call for a repeated flag would orphan the first.
+        if [[ -z "${awk_swapped}" ]]; then
+          use_bwk_awk
+          awk_swapped='y'
+        fi
         ;;
       '--report')
         if (($# < 2)); then

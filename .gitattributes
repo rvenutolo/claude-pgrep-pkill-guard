@@ -16,6 +16,8 @@ bench/RESULTS.md              linguist-generated
 .editorconfig-checker.json    export-ignore
 .commitlintrc.yml             export-ignore
 .markdownlint.json            export-ignore
+.prettierrc.json              export-ignore
+.shellcheckrc                 export-ignore
 .treefmt.nix                  export-ignore
 .typos.toml                   export-ignore
 .yamlfmt                      export-ignore

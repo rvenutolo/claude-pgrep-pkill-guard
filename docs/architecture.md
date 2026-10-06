@@ -871,7 +871,7 @@ errexit's radar for its whole dynamic extent, so nothing inside `repeat::repeat_
 `ERR` trap. `classify::inspect_command` calls `classify::repeat_tier_reason` inside
 such a substitution, which already covers this call; the `||` on this assignment
 keeps that true whoever the caller is. The `||` is what protects, with
-`inherit_errexit` off or on: probed on bash 5.3, a command failing inside such a
+`inherit_errexit` off or on: on bash 5.3, a command failing inside such a
 substitution neither stops the function nor fires the trap in either setting,
 and a plain assignment fires the trap in both. The option adds nothing here and
 is not probed on the older supported versions, so `hooks/` leaves it off. For a caller outside a `||` list the

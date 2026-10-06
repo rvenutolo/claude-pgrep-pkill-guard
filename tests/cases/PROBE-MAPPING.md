@@ -34,39 +34,39 @@ below — that granularity loss is the cost A1 accepted.
 
 ## Token-stream assertions → `tests/scanner.bats`
 
-| #   | Hook line | Original label                                                    | Landed in                                                                    |
-| --- | --------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 1   | 2673      | quoted mention yields no pgrep token                              | `scanner: a quoted mention yields no pgrep token`                            |
-| 2   | 2677      | bare pgrep is tokenized                                           | `scanner: a bare pgrep is tokenized`                                         |
-| 3   | 2682      | command substitution inside double quotes is visible              | `scanner: a command substitution inside double quotes is visible`            |
-| 4   | 2687      | newline survives as a literal token                               | `scanner: a newline survives as a literal token`                             |
-| 5   | 2694      | line continuation separates the words it joins                    | `scanner: a line continuation separates the words it joins`                  |
-| 6   | 2790      | quoted heredoc body is masked                                     | `scanner: a quoted heredoc body is masked`                                   |
-| 7   | 2796      | heredoc body marker carries the body offset and length            | `scanner: a heredoc body marker carries the body offset and length`          |
-| 8   | 2802      | command substitution inside an unquoted heredoc body is visible   | `scanner: a command substitution inside an unquoted heredoc body is visible` |
-| 9   | 2806      | plain text in an unquoted heredoc body is masked                  | `scanner: plain text in an unquoted heredoc body is masked`                  |
-| 10  | 2811      | a double-quoted delimiter masks the body                          | `scanner: a double-quoted delimiter masks the body`                          |
-| 11  | 2817      | a line merely starting with the delimiter is not a terminator     | `scanner: a line merely starting with the delimiter is not a terminator`     |
-| 12  | 2824      | a body at end of input still emits a zero-length marker           | `scanner: a body at end of input still emits a zero-length marker`           |
-| 13  | 2831      | a quoted empty delimiter ends its body at a blank line            | `scanner: a quoted empty delimiter ends its body at a blank line`            |
-| 14  | 2834      | a quoted empty delimiter masks its body until that blank line     | `scanner: a quoted empty delimiter masks its body until that blank line`     |
-| 15  | 2841      | an unterminated quote ends the delimiter word at the newline      | `scanner: an unterminated quote ends the delimiter word at the newline`      |
-| 16  | 2845      | backslash-escaped delimiter is a quoted delimiter                 | `scanner: a backslash-escaped delimiter is a quoted delimiter`               |
-| 17  | 2850      | tab-indented terminator closes a `<<-` body                       | `scanner: a tab-indented terminator closes a <<- body`                       |
-| 18  | 2853      | code after a `<<-` body is tokenized                              | `scanner: code after a <<- body is tokenized`                                |
-| 19  | 2858      | two heredocs on one line yield two bodies                         | `scanner: two heredocs on one line yield two bodies`                         |
-| 20  | 2861      | the first of two bodies is masked                                 | `scanner: the first of two bodies is masked`                                 |
-| 21  | 2864      | the second of two bodies is masked                                | `scanner: the second of two bodies is masked`                                |
-| 22  | 2867      | code after two bodies is tokenized                                | `scanner: code after two bodies is tokenized`                                |
-| 23  | 2872      | a quoted `<<` is not a heredoc                                    | `scanner: a quoted << is not a heredoc`                                      |
-| 24  | 2875      | a here-string is not a heredoc                                    | `scanner: a here-string is not a heredoc`                                    |
-| 25  | 2879      | a shift inside arithmetic is not a heredoc                        | `scanner: a shift inside arithmetic is not a heredoc`                        |
-| 26  | 2887      | an arithmetic shift leaves no `<<` token to count                 | `scanner: an arithmetic shift leaves no << token to count`                   |
-| 27  | 2893      | unterminated heredoc masks to end of input                        | `scanner: an unterminated heredoc masks to end of input`                     |
-| 28  | 2898      | heredoc inside a command substitution is masked                   | `scanner: a heredoc inside a command substitution is masked`                 |
-| 29  | 2909      | a body line ending in a backslash does not swallow the terminator | `scanner: a body line ending in a backslash does not swallow the terminator` |
-| 30  | 2916      | a parenthesised shift inside arithmetic is not a heredoc          | `scanner: a parenthesised shift inside arithmetic is not a heredoc`          |
-| 31  | 2919      | a shift inside an arithmetic command is not a heredoc             | `scanner: a shift inside an arithmetic command is not a heredoc`             |
+| #   | Hook line | Original label                                                  | Landed in                                                                         |
+| --- | --------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | 2673      | quoted mention yields no pgrep token                            | `scanner: a quoted mention yields no pgrep token`                                 |
+| 2   | 2677      | bare pgrep is tokenized                                         | `scanner: a bare pgrep is tokenized`                                              |
+| 3   | 2682      | command substitution inside double quotes is visible            | `scanner: a command substitution inside double quotes is visible`                 |
+| 4   | 2687      | newline survives as a literal token                             | `scanner: a newline survives as a literal token`                                  |
+| 5   | 2694      | line continuation separates the words it joins                  | `scanner: a line continuation separates the words it joins`                       |
+| 6   | 2790      | quoted heredoc body is masked                                   | `scanner: a quoted heredoc body is masked`                                        |
+| 7   | 2796      | heredoc body marker carries the body offset and length          | `scanner: a heredoc body marker carries the body offset and length`               |
+| 8   | 2802      | command substitution inside an unquoted heredoc body is visible | `scanner: a command substitution inside an unquoted heredoc body is visible`      |
+| 9   | 2806      | plain text in an unquoted heredoc body is masked                | `scanner: plain text in an unquoted heredoc body is masked`                       |
+| 10  | 2811      | a double-quoted delimiter masks the body                        | `scanner: a double-quoted delimiter masks the body`                               |
+| 11  | 2817      | a line merely starting with the delimiter is not a terminator   | `scanner: a line merely starting with the delimiter is not a terminator`          |
+| 12  | 2824      | a body at end of input still emits a zero-length marker         | `scanner: a body at end of input still emits a zero-length marker`                |
+| 13  | 2831      | a quoted empty delimiter ends its body at a blank line          | `scanner: a quoted empty delimiter ends its body at a blank line`                 |
+| 14  | 2834      | a quoted empty delimiter masks its body until that blank line   | `scanner: a quoted empty delimiter masks its body until that blank line`          |
+| 15  | 2841      | an unterminated quote ends the delimiter word at the newline    | `scanner: an unterminated quote ends the delimiter word at the newline`           |
+| 16  | 2845      | backslash-escaped delimiter is a quoted delimiter               | `scanner: a backslash-escaped delimiter is a quoted delimiter`                    |
+| 17  | 2850      | tab-indented terminator closes a `<<-` body                     | `scanner: a tab-indented terminator closes a <<- body`                            |
+| 18  | 2853      | code after a `<<-` body is tokenized                            | `scanner: code after a <<- body is tokenized`                                     |
+| 19  | 2858      | two heredocs on one line yield two bodies                       | `scanner: two heredocs on one line yield two bodies`                              |
+| 20  | 2861      | the first of two bodies is masked                               | `scanner: the first of two bodies is masked`                                      |
+| 21  | 2864      | the second of two bodies is masked                              | `scanner: the second of two bodies is masked`                                     |
+| 22  | 2867      | code after two bodies is tokenized                              | `scanner: code after two bodies is tokenized`                                     |
+| 23  | 2872      | a quoted `<<` is not a heredoc                                  | `scanner: a quoted << is not a heredoc`                                           |
+| 24  | 2875      | a here-string is not a heredoc                                  | `scanner: a here-string is not a heredoc`                                         |
+| 25  | 2879      | a shift inside arithmetic is not a heredoc                      | `scanner: a shift inside arithmetic is not a heredoc`                             |
+| 26  | 2887      | an arithmetic shift leaves no `<<` token to count               | `scanner: an arithmetic shift leaves no << token to count`                        |
+| 27  | 2893      | unterminated heredoc masks to end of input                      | `scanner: an unterminated heredoc masks to end of input`                          |
+| 28  | 2898      | heredoc inside a command substitution is masked                 | `scanner: a heredoc inside a command substitution is masked`                      |
+| 29  | 2909      | an unquoted body line ending in a backslash joins the next line | `scanner: an unquoted body line ending in a backslash is joined to the next line` |
+| 30  | 2916      | a parenthesised shift inside arithmetic is not a heredoc        | `scanner: a parenthesised shift inside arithmetic is not a heredoc`               |
+| 31  | 2919      | a shift inside an arithmetic command is not a heredoc           | `scanner: a shift inside an arithmetic command is not a heredoc`                  |
 
 Every "is this token in the stream" check among these greps for a token
 anchored on a literal tab (`grep --count "$(tab)pkill\$"`) rather than `\b`,

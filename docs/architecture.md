@@ -873,8 +873,8 @@ such a substitution, which already covers this call; the `||` on this assignment
 keeps that true whoever the caller is. The `||` is what protects, with
 `inherit_errexit` off or on: on bash 5.3, a command failing inside such a
 substitution neither stops the function nor fires the trap in either setting,
-and a plain assignment fires the trap in both. The option adds nothing here and
-is not probed on the older supported versions, so `hooks/` leaves it off. For a caller outside a `||` list the
+and a plain assignment outside a `||` list fires the trap in both. On that
+version the option adds nothing, so `hooks/` leaves it off. For a caller outside a `||` list the
 `||` is load-bearing well beyond its visible role as a fallback, and the
 fallback is also why `classify::inspect_command` accepts the result as a deny only when it
 is shaped like `messages::repeat_message`'s output.

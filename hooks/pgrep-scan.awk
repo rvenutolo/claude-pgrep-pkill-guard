@@ -103,15 +103,15 @@ BEGIN {
           if (depth > 0 && opener[depth] == "B") { depth-- } else { depth++; ctx[depth] = "N"; opener[depth] = "B" }
           continue
         }
-        # A body line ending in a backslash is not treated as a continuation
-        # here, although bash joins it to the next line in an unquoted body and
-        # so does not end the heredoc at a delimiter on that next line. The
-        # scanner ends the body there anyway, which exposes more text as code
-        # rather than less. Masking the backslash together with a following
-        # newline would swallow that newline, which is what starts the
-        # terminator check on the next line; leave the newline for the
-        # ch == "\n" branch above to see.
-        if (ch == "\\" && substr(cmd, i + 1, 1) != "\n") { masked = masked "\001\001"; i += 2; continue }
+        # bash joins a body line ending in a backslash to the next line, so a
+        # delimiter there does not end the heredoc. The escaped newline is
+        # emitted without setting hd_bol, which is what starts the terminator
+        # check, so the next line is not tested. Ending the body there would
+        # read body text as code, and an apostrophe in it would open a quote
+        # that masks a real command after the terminator. An escaped backslash
+        # is consumed as a pair, so a newline after it takes the ch == "\n"
+        # branch above.
+        if (ch == "\\") { masked = masked ((substr(cmd, i + 1, 1) == "\n") ? "\001\n" : "\001\001"); i += 2; continue }
       }
       masked = masked "\001"; i++
       continue

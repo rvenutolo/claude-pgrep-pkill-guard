@@ -351,3 +351,13 @@
 "cat <<EOF\nfoo \\\nEOF\npkill --full x\nEOF"	allow
 "cat <<EOF\nfoo \\\nEOF\nit's text\nEOF\npkill --full x"	deny:kill
 "cat <<'EOF'\nfoo \\\nEOF\npkill --full x"	deny:kill
+"pkill --full \"[z]zredirfd\" 2> /dev/null"	allow
+"pkill --full \"[z]zredirfdapp\" 2>> /tmp/out"	allow
+"pkill --full \"[z]zredirfdone\" 1> /tmp/out"	allow
+"pkill --full \"[z]zredirfdin\" 0< /tmp/in"	allow
+"pkill --full \"[z]zredirrw\" <> /tmp/out"	allow
+"pkill --full \"[z]zredirhere\" <<< zzhere"	allow
+"pkill --full -- \"[z]zredirterm\" 2> /dev/null"	allow
+"pkill --full \"[z]zredirdup\" 2>&1"	allow
+"pkill --full 2> /dev/null zzredirlast"	deny:kill
+"pkill --full 2> /dev/null \"[z]zredirafter\""	allow

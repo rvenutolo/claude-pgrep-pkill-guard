@@ -235,7 +235,10 @@ BEGIN {
         }
       }
 
-      if (ch == "'") { ctx[depth] = "S"; out = "\001" }
+      # A lone `<` or `>` inside arithmetic is a comparison, not a redirection:
+      # masked like the shift above, so the word it sits in stays whole.
+      if ((ch == "<" || ch == ">") && depth > 0 && opener[depth] == "A") out = "\001"
+      else if (ch == "'") { ctx[depth] = "S"; out = "\001" }
       else if (ch == "\"") { ctx[depth] = "D"; out = "\001" }
       else if (ch == "\\") {
         # A backslash-newline is a line continuation: bash removes it outright
@@ -261,7 +264,7 @@ BEGIN {
   # Tokenize the masked string. Newline is emitted as the literal token <NL>
   # so it survives a line-oriented reader. A heredoc body's marker is emitted
   # at the body's first byte, right after the <NL> that opened it.
-  word = ""; start = 0; m = 0
+  word = ""; start = 0; m = 0; op_end = 0; dup_at = 0
   for (i = 1; i <= n; i++) {
     if (m < hb_n && i == hb_start[m]) {
       if (word != "") { print (start - 1) "\t" word "\n"; word = "" }
@@ -274,6 +277,34 @@ BEGIN {
     } else if (index(";&|(){}`", ch) > 0) {
       if (word != "") { print (start - 1) "\t" word "\n"; word = "" }
       print (i - 1) "\t" ch "\n"
+      # The `&` of `>&` and `<&` is followed by the duplication's target, whose
+      # digits are not a file descriptor even when an operator follows them
+      # (`2>&1<<EOF`).
+      if (ch == "&" && i == op_end) dup_at = i + 1
+    } else if (ch == "<" || ch == ">") {
+      # A redirection operator ends the word before it and is a token of its
+      # own, as bash reads it; its target is the next token, never part of it.
+      # The digits of a word that is nothing but digits are the operator's file
+      # descriptor (`2>`, `10<`) and stay with it. So do digits glued to a
+      # quoted region (`'x'2>`): bash reads those as part of the word, but a
+      # payload is then still the quoted text, and splitting them off is the
+      # reading that keeps it visible. A run of `<` and `>` is one token (`>>`,
+      # `<>`, `<<<`), and `<<` takes a directly following `-`.
+      if (word != "" && start == dup_at) { print (start - 1) "\t" word "\n"; word = "" }
+      else if (word != "" && word !~ /^[0-9]+$/) {
+        k = length(word)
+        while (k > 0 && substr(word, k, 1) ~ /[0-9]/) k--
+        if (k > 0 && k < length(word) && substr(word, k, 1) == "\001") {
+          print (start - 1) "\t" substr(word, 1, k) "\n"
+          start += k; word = substr(word, k + 1)
+        } else { print (start - 1) "\t" word "\n"; word = "" }
+      }
+      if (word == "") start = i
+      word = word ch
+      while (substr(masked, i + 1, 1) == "<" || substr(masked, i + 1, 1) == ">") { i++; word = word substr(masked, i, 1) }
+      if (word ~ /<<$/ && word !~ /<<</ && substr(masked, i + 1, 1) == "-") { i++; word = word "-" }
+      print (start - 1) "\t" word "\n"; word = ""
+      op_end = i + 1
     } else {
       if (word == "") start = i
       word = word ch

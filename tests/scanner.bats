@@ -393,7 +393,7 @@ function words() {
 
 @test "scanner: a comparison inside arithmetic is not split" {
   run words 'echo $((a>b))'
-  assert_output 'echo $ ( ( a>b ) )'
+  assert_output 'echo $ ( ( a_b ) )'
 }
 
 @test "scanner: a process substitution keeps its operator and paren apart" {

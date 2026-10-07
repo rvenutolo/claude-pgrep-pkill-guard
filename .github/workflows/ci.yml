@@ -128,7 +128,7 @@ jobs:
       # writes gawk/ and bwk/ subdirectories, so both suite runs survive (#83).
       # The name must be unique across the whole workflow run, hence the matrix
       # OS: two legs uploading `bats-junit-gate` would collide.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: failure()
         with:
           name: bats-junit-gate-${{ matrix.os }}
@@ -179,7 +179,7 @@ jobs:
         # find exactly one, and writes the summary itself. GITHUB_STEP_SUMMARY is
         # in KEEP_VARS, so it survives --ignore-environment.
         run: ./.ci/in-devshell ./.ci/report-coverage "${RUNNER_TEMP}/coverage"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         # Unconditional on this leg, and only this leg: the HTML is ~1.4 MB and
         # is the part of the coverage run actually worth reading -- the per-line
         # hit counts, which the job summary's single percentage cannot carry.
@@ -247,7 +247,7 @@ jobs:
       - name: Run the suite against ambient tools
         run: ./run-tests --report "${RUNNER_TEMP}/bats-junit"
       # See the gate job's upload step for why this only fires on failure (#83).
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: failure()
         with:
           name: bats-junit-compat-ubuntu
@@ -298,7 +298,7 @@ jobs:
       # See the gate job's upload step for why this only fires on failure (#83).
       # This leg runs no harden-runner -- the action is Linux-only -- so nothing
       # in its egress path needs allowlisting.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: failure()
         with:
           name: bats-junit-compat-macos-brew

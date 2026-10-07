@@ -555,3 +555,6 @@
 "echo 'pkill --full X' | bash 2>&1 script.sh"	allow
 "echo 'pkill --full X' 2>&1 & bash"	allow
 "echo 'pkill --full X' | cat 2>&1 | bash"	allow
+"echo 'pkill --full X' | bash 2>&1&"	deny:kill
+"echo 'pkill --full X' |&>/tmp/f bash"	deny:kill
+"bash 3<&0-<<'EOF'\npkill --full X\nEOF"	deny:kill

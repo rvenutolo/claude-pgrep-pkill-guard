@@ -247,11 +247,11 @@ function wrappers::redirection_replaces_stdin() {
 #
 #              Any other redirection in the same simple command (`bash <<EOF >
 #              /tmp/log`, `bash <<EOF 2>&1`) is neither an operand nor a flag: it leaves both the
-#              budget and the wrapper's own pending heredoc alone. Nor does it end the simple
-#              command, whichever side of the payload it is written on. The `&` of a duplication
+#              budget and the wrapper's own pending heredoc alone. The `&` of a duplication
 #              (`2>&1`, `<&3`, `>&file`) or of `&>`, and the `|` of `>|`, are part of the
-#              redirection operator, so `bash 2>&1 <<EOF` and `bash >| /tmp/log -c '...'` still
-#              own what follows. A background `&` does end it (`bash <<EOF &`).
+#              redirection operator and do not end the simple command, so `bash 2>&1 <<EOF` and
+#              `bash >| /tmp/log -c '...'` still own what follows. A background `&` does end it
+#              (`bash <<EOF &`).
 #
 #              A redirection may precede the command word it attaches to
 #              (`<<EOF bash`, `sudo <<EOF bash`), so a stdin heredoc seen while still hunting for
@@ -336,9 +336,9 @@ function wrappers::shell_wrapper_payloads() {
   # with no fd, or any operator with an explicit `0`.
   local -r redir_re='^[0-9]*(&?[<>]|[<>]{2})' redir_bare_re='^[0-9]*[<>&|]+$'
   local -r stdin_redir_re='^(0?<|0>)'
-  # `redir_single_re` picks out the bare operators a duplication or a clobber
-  # extends (`<&`, `>&`, `>|`); `glue_at` is the offset just past one, where
-  # that `&` or `|` has to sit. `dup_target` says the next token is the target
+  # `redir_single_re` picks out the bare `<` and `>` operators, which an `&` or
+  # a `|` extends to `<&`, `>&` or `>|`; `glue_at` is the offset just past one,
+  # where that `&` or `|` has to sit. `dup_target` says the next token is the target
   # of a duplication, which `glued_target_re` splits from a redirection glued
   # to it.
   local -r redir_single_re='^[0-9]*[<>]$' glued_target_re='^([0-9]+-?|-)([<>].*)$'
@@ -348,10 +348,12 @@ function wrappers::shell_wrapper_payloads() {
   # than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
-    # The target of a duplication can be glued to the redirection after it
-    # (`2>&1<<EOF`, `2>&1>f`, `<&-<f`): bash takes the digits, or the `-`, as
-    # the target and reads what follows as a redirection of its own. Split the
-    # same way, the rest reaches the heredoc and redirection branches below.
+    # A numeric or `-` target of a duplication can be glued to the redirection
+    # after it (`2>&1<<EOF`, `2>&1>f`, `3<&0-<f`, `<&-<f`): bash takes the
+    # digits, with or without the `-`, as the target and reads what follows as
+    # a redirection of its own. Split the same way, the rest reaches the
+    # heredoc and redirection branches below. A word target glued the same way
+    # (`>&f<<EOF`) is not split.
     if ((dup_target == 1)); then
       dup_target=0
       if [[ "${token}" =~ ${glued_target_re} ]]; then

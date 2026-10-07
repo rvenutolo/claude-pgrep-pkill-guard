@@ -247,7 +247,11 @@ function wrappers::redirection_replaces_stdin() {
 #
 #              Any other redirection in the same simple command (`bash <<EOF >
 #              /tmp/log`, `bash <<EOF 2>&1`) is neither an operand nor a flag: it leaves both the
-#              budget and the wrapper's own pending heredoc alone.
+#              budget and the wrapper's own pending heredoc alone. The `&` of a duplication
+#              (`2>&1`, `<&3`, `>&file`) or of `&>`, and the `|` of `>|`, are part of the
+#              redirection operator and do not end the simple command, so `bash 2>&1 <<EOF` and
+#              `bash >| /tmp/log -c '...'` still own what follows. A background `&` does end it
+#              (`bash <<EOF &`).
 #
 #              A redirection may precede the command word it attaches to
 #              (`<<EOF bash`, `sudo <<EOF bash`), so a stdin heredoc seen while still hunting for
@@ -332,11 +336,32 @@ function wrappers::shell_wrapper_payloads() {
   # with no fd, or any operator with an explicit `0`.
   local -r redir_re='^[0-9]*(&?[<>]|[<>]{2})' redir_bare_re='^[0-9]*[<>&|]+$'
   local -r stdin_redir_re='^(0?<|0>)'
+  # `redir_single_re` picks out the bare `<` and `>` operators, which an `&` or
+  # a `|` extends to `<&`, `>&` or `>|`; `glue_at` is the offset just past one,
+  # where that `&` or `|` has to sit. `dup_target` says the next token is the target
+  # of a duplication, which `glued_target_re` splits from a redirection glued
+  # to it.
+  local -r redir_single_re='^[0-9]*[<>]$' glued_target_re='^([0-9]+-?|-)([<>].*)$'
+  local glue_at=-1 dup_target=0
   # The rest of this loop stays inline on purpose: the blocks share most of
   # the locals above, and a helper with that many namerefs is harder to read
   # than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
+    # A numeric or `-` target of a duplication can be glued to the redirection
+    # after it (`2>&1<<EOF`, `2>&1>f`, `3<&0-<f`, `<&-<f`): bash takes the
+    # digits, with or without the `-`, as the target and reads what follows as
+    # a redirection of its own. Split the same way, the rest reaches the
+    # heredoc and redirection branches below. A word target glued the same way
+    # (`>&f<<EOF`) is not split.
+    if ((dup_target == 1)); then
+      dup_target=0
+      if [[ "${token}" =~ ${glued_target_re} ]]; then
+        expect_redir_target=0
+        offset="$((offset + ${#BASH_REMATCH[1]}))"
+        token="${BASH_REMATCH[2]}"
+      fi
+    fi
     word="${token##*/}"
 
     # Heredoc bookkeeping. A bare `<<` / `<<-` token, fd-prefixed or not, is
@@ -385,14 +410,38 @@ function wrappers::shell_wrapper_payloads() {
     # budget on it and drop the payload, and bash would run the body
     # unclassified.
     if ((expect_redir_target == 1)); then
-      # The tokenizer splits `2>&1` into `2>`, `&`, `1`, so the token after a
-      # bare operator can be an operator rather than the target. It ends the
-      # simple command and must reach the flush below like any other.
       expect_redir_target=0
+      # The tokenizer splits `2>&1` into `2>`, `&`, `1` and `>|` into `>`, `|`.
+      # An `&` glued to a bare `<` or `>`, or a `|` glued to a bare `>`, is the
+      # rest of that redirection operator and not the background operator or a
+      # pipe: the simple command goes on, and the target is still to come.
+      if ((offset == glue_at)) \
+        && [[ "${token}" == '&' || ("${token}" == '|' && "${command:offset-1:1}" == '>') ]]; then
+        expect_redir_target=1
+        glue_at=-1
+        if [[ "${token}" == '&' ]]; then
+          dup_target=1
+        fi
+        continue
+      fi
+      # Any other operator here is no target. It ends the simple command and
+      # must reach the flush below like any other.
       tokens::is_operator "${token}" || continue
     fi
+    # `&>` and `&>>` arrive as an `&` and then the `>` token, which the branch
+    # below reads as the redirection it is. A background `&` is never glued to
+    # a `>`.
+    if [[ "${token}" == '&' && "${command:offset+1:1}" == '>' ]]; then
+      continue
+    fi
     if [[ "${token}" != '<NL>' && "${token}" =~ ${redir_re} ]]; then
-      [[ "${token}" =~ ${redir_bare_re} ]] && expect_redir_target=1
+      glue_at=-1
+      if [[ "${token}" =~ ${redir_bare_re} ]]; then
+        expect_redir_target=1
+        if [[ "${token}" =~ ${redir_single_re} ]]; then
+          glue_at="$((offset + ${#token}))"
+        fi
+      fi
       # bash applies the last redirection of fd 0, so each one decides afresh:
       # a later one that may be the pipe again (`< /tmp/f <&3`) withdraws what
       # an earlier one, a heredoc included, established.

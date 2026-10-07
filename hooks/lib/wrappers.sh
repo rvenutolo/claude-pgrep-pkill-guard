@@ -163,6 +163,60 @@ function wrappers::segment_pipe_carry() {
   fi
 }
 
+# @description Say whether the redirection starting at an offset gives its simple command a stdin
+#              that is not the pipe that command sits on, as far as the command text shows.
+#
+#              Read from the raw command text rather than the token stream, because the stream
+#              masks a quoted target's bytes. Only an input redirection of fd 0 (`<`, `<>`, `<<<`,
+#              with or without an explicit `0`) whose target is a complete literal word counts: a
+#              single-quoted word, a double-quoted word with no expansion in it, or a bare word of
+#              plain path characters. A file target must also be absolute or under `~/`, since
+#              what a relative path names depends on a directory the text does not show. `<&-`
+#              counts too, since a closed stdin reads nothing.
+#
+#              Everything else answers no, so that a caller dropping a piped payload on a yes
+#              fails closed. `<&N` duplicates a descriptor that may be the pipe itself (`<&0`). A
+#              target with an expansion (`< "${f}"`, `<<< "$(cat)"`) or a process substitution
+#              (`< <(cat)`) can hand the piped text back. So can a path that names the current
+#              stdin (`/dev/stdin`, `/dev/fd/0`, `/proc/self/fd/0`), so any file target with a
+#              `dev/` or `proc/` component answers no, `/dev/null` excepted. A second redirection
+#              glued to the target (`</tmp/f</dev/stdin`) answers no as well. A symbolic link to
+#              one of those paths is not visible in the text and answers yes. A heredoc is not
+#              asked about here: its operator is matched before any other redirection.
+# @arg $1 command the raw command string
+# @arg $2 offset the offset of the redirection operator's first byte, its fd included
+# @exitcode 0 the redirection replaces stdin with something that is not the pipe
+# @exitcode 1 it does not, or that cannot be told from the text
+function wrappers::redirection_replaces_stdin() {
+  local -r command="$1" offset="$2"
+  local operator target
+  # ERE, evaluated unquoted in [[ =~ ]]. The operator group is followed by the
+  # target group: `&-`, a quoted word, or a bare word. The tail requires the
+  # word to end there, so a literal glued to an expansion (`'a'"${b}"`) or to
+  # another redirection does not pass as a literal.
+  local -r quoted="'[^']*'|\"[^\"\$\`\\\\]*\""
+  local -r literal_re="^0?(<<<|<>|<)[[:blank:]]*(&-|${quoted}|[A-Za-z0-9_./~@%+=:,-]+)([[:space:];|&()]|\$)"
+  [[ "${command:offset}" =~ ${literal_re} ]] || return 1
+  operator="${BASH_REMATCH[1]}"
+  target="${BASH_REMATCH[2]}"
+  # A here-string's word is the stdin itself, not a path to open.
+  if [[ "${operator}" == '<<<' || "${target}" == '&-' ]]; then
+    return 0
+  fi
+  if [[ "${target}" == [\'\"]* ]]; then
+    target="${target:1:${#target}-2}"
+  fi
+  # `dev/` and `proc/` are matched anywhere in the path on purpose: `/dev//stdin`,
+  # `/dev/./fd/0` and `/tmp/../dev/stdin` all reach the same descriptor. The
+  # tilde is bracketed because a bare `~/` in a case pattern is tilde-expanded.
+  case "${target}" in
+    '/dev/null') return 0 ;;
+    *dev/* | *proc/*) return 1 ;;
+    /* | [~]/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # @description Find the payloads of local shell wrappers and print each one's raw text,
 #              NUL-terminated, with any surrounding quotes stripped.
 #
@@ -193,7 +247,7 @@ function wrappers::segment_pipe_carry() {
 #
 #              Any other redirection in the same simple command (`bash <<EOF >
 #              /tmp/log`, `bash <<EOF 2>&1`) is neither an operand nor a flag: it leaves both the
-#              budget and the pending heredoc alone.
+#              budget and the wrapper's own pending heredoc alone.
 #
 #              A redirection may precede the command word it attaches to
 #              (`<<EOF bash`, `sudo <<EOF bash`), so a stdin heredoc seen while still hunting for
@@ -216,6 +270,14 @@ function wrappers::segment_pipe_carry() {
 #              pipe nothing else changes: the payload is handed to the same machinery, so an operand
 #              still displaces stdin, a `-c` still claims the payload instead, `-s` still keeps stdin
 #              as the script, and the prefix chain is still followed.
+#
+#              The pipe supplies the wrapper's stdin only when the wrapper's own simple command
+#              does not give fd 0 something else. A heredoc (`echo '...' | bash <<EOF`), a literal
+#              here-string, a literal file (`< f`, `<> f`) or a closed stdin (`<&-`) there, before
+#              or after the wrapper word, is what bash hands the wrapper, so the piped text is
+#              never read and is not a payload. A redirection of any other fd (`3<<EOF`,
+#              `> /tmp/log`, `2>&1`) leaves the pipe in place, and so does one that may still be
+#              the pipe (see wrappers::redirection_replaces_stdin).
 #
 #              Still not covered: content that is not on the command line at all
 #              (`printf '%s' "${script}" | bash`, `curl ... | bash`), and a here-string fed to a
@@ -241,11 +303,16 @@ function wrappers::shell_wrapper_payloads() {
   # now; `pipe_*` is what an ended segment left behind for the next one, which
   # only the very next command word may claim. `pending_text` is the wrapper's
   # claimed literal payload, held until its simple command ends the same way a
-  # heredoc ordinal is.
-  local seg_cmd='' seg_heredoc='' seg_redir=0
+  # heredoc ordinal is. `seg_stdin` says the segment gives its own fd 0
+  # something that is not the pipe, and `pending_piped` that `pending` holds
+  # the pipe's heredoc rather than one the wrapper wrote itself. At the flush
+  # `seg_stdin` alone drops a claimed literal, and with `pending_piped` it
+  # drops a claimed pipe heredoc: bash hands the wrapper the redirection and
+  # the pipe is never read.
+  local seg_cmd='' seg_heredoc='' seg_redir=0 seg_stdin=0
   local -a seg_words=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
-  local pending_text='' pending_text_set=0
+  local pending_text='' pending_text_set=0 pending_piped=0
   # A `<<` heredoc operator may carry a leading fd (`0<<`, `3<<-`), which is
   # ordinary redirection syntax; only fd 0 (empty or explicit `0`) feeds the
   # wrapper's stdin. `<<<` (and an fd-prefixed `0<<<`) is a here-string, not a
@@ -261,7 +328,10 @@ function wrappers::shell_wrapper_payloads() {
   # `redir_bare_re` says the operator carries no attached target (`> f` rather
   # than `>f`), in which case the next token is the target and is not an
   # operand either.
+  # `stdin_redir_re` picks out the ones that redirect fd 0: an input operator
+  # with no fd, or any operator with an explicit `0`.
   local -r redir_re='^[0-9]*(&?[<>]|[<>]{2})' redir_bare_re='^[0-9]*[<>&|]+$'
+  local -r stdin_redir_re='^(0?<|0>)'
   # The rest of this loop stays inline on purpose: the blocks share most of
   # the locals above, and a helper with that many namerefs is harder to read
   # than the block.
@@ -286,8 +356,10 @@ function wrappers::shell_wrapper_payloads() {
         # Remembered for the pipeline carry whoever owns it: bash applies the
         # LAST stdin heredoc of a simple command, so a later one replaces it.
         seg_heredoc="${heredoc_seq}"
+        seg_stdin=1
         if ((in_wrapper == 1 && saw_c == 0)); then
           pending="${heredoc_seq}"
+          pending_piped=0
         elif ((at_cmd == 1)); then
           # Still hunting for the command word: remember this stdin heredoc
           # in case that word turns out to be a wrapper.
@@ -308,9 +380,10 @@ function wrappers::shell_wrapper_payloads() {
 
     # An ordinary redirection on the wrapper's own simple command (`bash <<EOF
     # > /tmp/log`, `bash <<EOF 2>&1`) is neither an operand nor a flag: it
-    # neither spends the budget nor ends the wrapper, so a heredoc already
-    # pending stays pending. Left to the operand branch below it exhausted a
-    # zero budget and dropped the payload, and bash ran the body unclassified.
+    # neither spends the budget nor ends the wrapper, so a heredoc the wrapper
+    # wrote itself stays pending. The operand branch below would spend a zero
+    # budget on it and drop the payload, and bash would run the body
+    # unclassified.
     if ((expect_redir_target == 1)); then
       # The tokenizer splits `2>&1` into `2>`, `&`, `1`, so the token after a
       # bare operator can be an operator rather than the target. It ends the
@@ -320,6 +393,16 @@ function wrappers::shell_wrapper_payloads() {
     fi
     if [[ "${token}" != '<NL>' && "${token}" =~ ${redir_re} ]]; then
       [[ "${token}" =~ ${redir_bare_re} ]] && expect_redir_target=1
+      # bash applies the last redirection of fd 0, so each one decides afresh:
+      # a later one that may be the pipe again (`< /tmp/f <&3`) withdraws what
+      # an earlier one, a heredoc included, established.
+      if [[ "${token}" =~ ${stdin_redir_re} ]]; then
+        if wrappers::redirection_replaces_stdin "${command}" "${offset}"; then
+          seg_stdin=1
+        else
+          seg_stdin=0
+        fi
+      fi
       # A producer whose own output is redirected sends the wrapper nothing:
       # in `cat > f <<EOF | bash` the body lands in the file and bash reads an
       # empty pipe. Disqualify the segment rather than guess which fd it was.
@@ -335,8 +418,13 @@ function wrappers::shell_wrapper_payloads() {
         saw_s=1
       fi
       if tokens::is_operator "${token}"; then
-        [[ -n "${pending}" ]] && wanted+="${pending} "
-        ((pending_text_set == 1)) && printf '%s\0' "${pending_text}"
+        # A redirection of the wrapper's own stdin replaces the pipe, so what
+        # the pipe carried is never read; a heredoc the wrapper wrote itself
+        # still counts.
+        if [[ -n "${pending}" ]] && ((pending_piped == 0 || seg_stdin == 0)); then
+          wanted+="${pending} "
+        fi
+        ((pending_text_set == 1 && seg_stdin == 0)) && printf '%s\0' "${pending_text}"
         in_wrapper=0
         saw_c=0
         saw_s=0
@@ -417,6 +505,7 @@ function wrappers::shell_wrapper_payloads() {
       seg_cmd=''
       seg_heredoc=''
       seg_redir=0
+      seg_stdin=0
       seg_words=()
       leading_pending=''
     elif tokens::is_keyword "${token}"; then
@@ -447,10 +536,15 @@ function wrappers::shell_wrapper_payloads() {
       leading_pending=''
       pending_text=''
       pending_text_set=0
+      pending_piped=0
       # A heredoc written on the wrapper's own simple command is the one bash
-      # applies; the pipe only supplies stdin when nothing else did.
+      # applies; the pipe only supplies stdin when nothing else did. Whether
+      # anything else does is not known until the simple command ends, so the
+      # pipe's payload is claimed here and dropped at the flush if `seg_stdin`
+      # is set by then.
       if [[ -z "${pending}" && -n "${pipe_heredoc}" ]]; then
         pending="${pipe_heredoc}"
+        pending_piped=1
       fi
       if ((pipe_text_set == 1)); then
         pending_text="${pipe_text}"
@@ -468,7 +562,7 @@ function wrappers::shell_wrapper_payloads() {
   # A wrapper whose simple command runs to the end of the input (`echo 'x' |
   # bash`) meets no operator to flush on. A heredoc payload needs no such
   # flush: its body marker always follows the <NL> that ended that command.
-  if ((pending_text_set == 1)); then
+  if ((pending_text_set == 1 && seg_stdin == 0)); then
     printf '%s\0' "${pending_text}"
   fi
 }

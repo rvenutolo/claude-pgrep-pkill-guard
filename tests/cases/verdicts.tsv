@@ -385,3 +385,106 @@
 "sudo -u root cat f <<EOF | bash\npkill --full zzpfvcatfile\nEOF"	allow
 "echo 'pkill --full zzpfvvalue' | sudo -u bash cat"	allow
 "echo 'pkill --full zzpfvstage' | sudo -u root cat | bash"	allow
+"echo 'pkill --full X' | bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | <<'EOF' bash\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'echo PAYLOAD_RAN' | bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | bash 3<<'EOF'\necho PAYLOAD_RAN\nEOF"	deny:kill
+"printf '%s\\n' 'pkill --full X' | sh <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash <<-'EOF'\n\techo PAYLOAD_RAN\n\tEOF"	allow
+"echo 'pkill --full X' | bash 0<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash << 'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | 0<<'EOF' bash\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | 3<<'EOF' bash\necho PAYLOAD_RAN\nEOF"	deny:kill
+"echo 'pkill --full X' | bash 3<<-'EOF'\n\techo PAYLOAD_RAN\n\tEOF"	deny:kill
+"echo 'pkill --full X' | bash -s <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash -s arg <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash <<'EOF' -s arg\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash <<'EOF' > /tmp/log\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash > /tmp/log <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash 3<<'A' <<'B'\nnote\nA\necho PAYLOAD_RAN\nB"	allow
+"echo 'pkill --full X' | bash <<'A' 3<<'B'\necho PAYLOAD_RAN\nA\nnote\nB"	allow
+"echo 'pkill --full X' | bash <<'EOF'; echo done\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash <<'EOF' && echo 'pkill --full X' | bash\necho PAYLOAD_RAN\nEOF"	deny:kill
+"echo 'pkill --full X' | bash <<'EOF'\necho PAYLOAD_RAN\nEOF\necho 'pkill --full X' | bash"	deny:kill
+"echo 'pkill --full X' | bash <<< 'echo PAYLOAD_RAN'"	allow
+"echo 'pkill --full X' | bash 0<<< 'echo PAYLOAD_RAN'"	allow
+"echo 'pkill --full X' | <<< 'echo PAYLOAD_RAN' bash"	allow
+"echo 'pkill --full X' | bash -s <<< 'echo PAYLOAD_RAN'"	allow
+"echo 'pkill --full X' | bash 3<<< 'echo PAYLOAD_RAN'"	deny:kill
+"echo 'pkill --full X' | bash < /tmp/f"	allow
+"echo 'pkill --full X' | bash </tmp/f"	allow
+"echo 'pkill --full X' | < /tmp/f bash"	allow
+"echo 'pkill --full X' | bash 0< /tmp/f"	allow
+"echo 'pkill --full X' | bash 0</tmp/f"	allow
+"echo 'pkill --full X' | bash <> /tmp/f"	allow
+"echo 'pkill --full X' | bash <&3"	deny:kill
+"echo 'pkill --full X' | bash 0<&3"	deny:kill
+"echo 'pkill --full X' | bash <&-"	allow
+"echo 'pkill --full X' | bash 0> /tmp/f"	deny:kill
+"echo 'pkill --full X' | bash -s < /tmp/f"	allow
+"echo 'pkill --full X' | bash -s arg < /tmp/f"	allow
+"echo 'pkill --full X' | bash 3< /tmp/f"	deny:kill
+"echo 'pkill --full X' | bash 10< /tmp/f"	deny:kill
+"echo 'pkill --full X' | bash 1< /tmp/f"	deny:kill
+"echo 'pkill --full X' | bash > /tmp/log"	deny:kill
+"echo 'pkill --full X' | bash >/tmp/log"	deny:kill
+"echo 'pkill --full X' | bash 2>&1"	deny:kill
+"echo 'pkill --full X' | bash 2> /dev/null"	deny:kill
+"echo 'pkill --full X' | bash &> /tmp/log"	deny:kill
+"echo 'pkill --full X' | bash >&2"	deny:kill
+"echo 'pkill --full X' | bash -s <(echo PAYLOAD_RAN)"	deny:kill
+"cat <<'A' | bash < /tmp/f\npkill --full X\nA"	allow
+"cat <<'A' | < /tmp/f bash\npkill --full X\nA"	allow
+"cat <<'A' | bash <<< 'echo PAYLOAD_RAN'\npkill --full X\nA"	allow
+"cat <<'A' | bash 3< /tmp/f\npkill --full X\nA"	deny:kill
+"cat <<'A' | bash > /tmp/log\npkill --full X\nA"	deny:kill
+"cat <<'A' | bash 3<<'B'\npkill --full X\nA\necho PAYLOAD_RAN\nB"	deny:kill
+"echo 'pkill --full X' | bash < /tmp/f <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash <<'EOF' < /tmp/f\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'echo PAYLOAD_RAN' | bash < /tmp/f <<'EOF'\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | sudo -u root bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | sudo -u root <<'EOF' bash\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | sudo <<'EOF' -u root bash\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | <<'EOF' sudo -u root bash\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | sudo -u root bash 3<<'EOF'\necho PAYLOAD_RAN\nEOF"	deny:kill
+"echo 'echo PAYLOAD_RAN' | sudo -u root bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | sudo -u root bash < /tmp/f"	allow
+"echo 'pkill --full X' | sudo -u root bash <<< 'echo PAYLOAD_RAN'"	allow
+"echo 'pkill --full X' | sudo -u root bash > /tmp/log"	deny:kill
+"echo 'pkill --full X' | env -u FOO bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | timeout -s TERM 5 bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | doas -u root sh <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"sudo -u root echo 'pkill --full X' | bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash <&0"	deny:kill
+"echo 'pkill --full X' | bash 0<&0"	deny:kill
+"echo 'pkill --full X' | bash 0<&-"	allow
+"echo 'pkill --full X' | bash < /dev/stdin"	deny:kill
+"echo 'pkill --full X' | bash 0</dev/fd/0"	deny:kill
+"echo 'pkill --full X' | bash < /proc/self/fd/0"	deny:kill
+"echo 'pkill --full X' | bash < '/dev/stdin'"	deny:kill
+"echo 'pkill --full X' | bash < \"$f\""	deny:kill
+"echo 'pkill --full X' | bash <$f"	deny:kill
+"echo 'pkill --full X' | bash < /tmp/$f"	deny:kill
+"echo 'pkill --full X' | bash < '/tmp/f'\"$g\""	deny:kill
+"echo 'pkill --full X' | bash < `echo /dev/stdin`"	deny:kill
+"echo 'pkill --full X' | bash <<< \"$(cat)\""	deny:kill
+"echo 'pkill --full X' | bash <<< $(cat)"	deny:kill
+"echo 'pkill --full X' | bash < <(cat)"	deny:kill
+"echo 'pkill --full X' | bash < \"/tmp/f\""	allow
+"echo 'pkill --full X' | bash <'/tmp/f'"	allow
+"echo 'pkill --full X' | bash < ~/f"	allow
+"echo 'pkill --full X' | bash < /dev/null"	allow
+"echo 'pkill --full X' | bash <<< \"echo PAYLOAD_RAN\""	allow
+"echo 'pkill --full X' | bash <<<'echo PAYLOAD_RAN'"	allow
+"echo 'pkill --full X' | bash < /dev//stdin"	deny:kill
+"echo 'pkill --full X' | bash < /dev/./fd/0"	deny:kill
+"echo 'pkill --full X' | bash < dev/stdin"	deny:kill
+"echo 'pkill --full X' | bash < \"/dev/stdin\""	deny:kill
+"echo 'pkill --full X' | bash < '/dev/null'"	allow
+"echo 'pkill --full X' | bash < /dev/null/../stdin"	deny:kill
+"cd /dev && echo 'pkill --full X' | bash < stdin"	deny:kill
+"echo 'pkill --full X' | bash 3< /dev/stdin < /tmp/f < /dev/fd/3"	deny:kill
+"echo 'pkill --full X' | bash < /tmp/f <&3"	deny:kill
+"echo 'pkill --full X' | bash </tmp/f</dev/fd/3"	deny:kill
+"echo 'pkill --full X' | bash <<'EOF' < /dev/stdin\necho PAYLOAD_RAN\nEOF"	deny:kill
+"echo 'pkill --full X' | bash <<< '/dev/stdin'"	allow

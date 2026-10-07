@@ -488,3 +488,70 @@
 "echo 'pkill --full X' | bash </tmp/f</dev/fd/3"	deny:kill
 "echo 'pkill --full X' | bash <<'EOF' < /dev/stdin\necho PAYLOAD_RAN\nEOF"	deny:kill
 "echo 'pkill --full X' | bash <<< '/dev/stdin'"	allow
+"bash 2>&1 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash >&2 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 3>&1 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash <&3 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash <&- <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&- <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 3<&0- <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash &> /tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash &>/tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash &>> /tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash >& /tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash >&/tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>& 1 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&'1' <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&1 >&2 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&1 <<EOF\npkill --full X\nEOF"	deny:kill
+"sh 2>&1 <<EOF\npkill --full X\nEOF"	deny:kill
+"sudo bash 2>&1 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"sudo 2>&1 bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"2>&1 <<'EOF' bash\npkill --full X\nEOF"	deny:kill
+"2>&1 bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"<<'EOF' 2>&1 bash\npkill --full X\nEOF"	deny:kill
+"bash <<'EOF' >&2\npkill --full X\nEOF"	deny:kill
+"bash <<'EOF' &\npkill --full X\nEOF"	deny:kill
+"bash 2>&1 <<'EOF' &\npkill --full X\nEOF"	deny:kill
+"bash 2>&1 -s <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&1 -c 'pkill --full X'"	deny:kill
+"bash >&'/tmp/log' -c 'pkill --full X'"	deny:kill
+"bash &>'/tmp/log' -c 'pkill --full X'"	deny:kill
+"su root 2>&1 -c 'pkill --full X'"	deny:kill
+"bash >| /tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash >|/tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>| /tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash >| /tmp/log -c 'pkill --full X'"	deny:kill
+"bash 2>&1<<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&1<<EOF\npkill --full X\nEOF"	deny:kill
+"bash 2>&1>/tmp/log <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&1</tmp/f -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | 2>&1 bash"	deny:kill
+"echo 'pkill --full X' | sudo 2>&1 -u root bash"	deny:kill
+"echo 'pkill --full X' | sudo -u root 2>&1 bash"	deny:kill
+"cat <<'EOF' | 2>&1 bash\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' |& bash 2>&1"	deny:kill
+"echo 'pkill --full X' | bash 2>&1 -s"	deny:kill
+"echo 'pkill --full X' | bash >&2 &"	deny:kill
+"echo 'pkill --full X' | bash >| /tmp/log"	deny:kill
+"echo 'pkill --full X' | bash >& /tmp/log"	deny:kill
+"echo 'pkill --full X' | bash 2>&1<&3"	deny:kill
+"echo 'pkill --full X' | bash <<'EOF' <&3\necho PAYLOAD_RAN\nEOF"	deny:kill
+"echo ok 2>&1 & bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&1 <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"bash 2>&1 script.sh <<'EOF'\npkill --full X\nEOF"	allow
+"echo 'pkill --full X' | bash 2>&1 <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash <&3 < /tmp/f"	allow
+"echo 'pkill --full X' | bash <&3 <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"echo 'pkill --full X' | bash 3>&1 <&-"	allow
+"echo 'pkill --full X' | bash 2>&1 <&-"	allow
+"echo 'pkill --full X' | bash <&- 2>&1"	allow
+"echo 'pkill --full X' | bash 2>&1 < /tmp/f"	allow
+"echo 'pkill --full X' | bash 2>&1</tmp/f"	allow
+"echo 'pkill --full X' | bash 2>&1<&-"	allow
+"echo 'pkill --full X' | bash &>> /tmp/log <&-"	allow
+"echo 'pkill --full X' | bash &> /tmp/log < /tmp/f"	allow
+"echo 'pkill --full X' | bash >| /tmp/log <&-"	allow
+"echo 'pkill --full X' | bash 2>&1 script.sh"	allow
+"echo 'pkill --full X' 2>&1 & bash"	allow
+"echo 'pkill --full X' | cat 2>&1 | bash"	allow

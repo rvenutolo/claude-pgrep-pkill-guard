@@ -343,7 +343,7 @@ function tab() {
 # @arg $1 command the command string to tokenize
 # @stdout the tokens
 function words() {
-  scan "$1" | awk -F'\t' '$2 !~ /^<SCAN:/ {print $2}' | tr '\001' '_' | paste -s -d' ' -
+  scan "$1" | tr '\001' '_' | awk -F'\t' 'BEGIN { ORS = "" } $2 !~ /^<SCAN:/ { print sep $2; sep = " " }'
 }
 
 @test "scanner: a redirection glued after a quoted word is its own token" {

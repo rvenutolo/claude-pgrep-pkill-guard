@@ -17,6 +17,12 @@
 # emitted to the tokenizer as a `<HD:len>` marker at its first byte, which is
 # how the hook slices a body fed to a local shell wrapper.
 #
+# The tokenizer breaks a word at whitespace, at `;&|(){}` and the backtick, and
+# at a redirection operator: a run of `<` and `>` is a token of its own, with the
+# digits of a file descriptor before it (`2>`, `10<`), and its target is the next
+# token (`>f` is `>`, `f`). A `<` or `>` inside arithmetic is a comparison and
+# is masked, so it does not split.
+#
 # Input handling deliberately depends on nothing about RS. The command is read
 # line by line with getline under the default RS and reassembled with "\n", so
 # the scanner behaves identically on gawk, mawk and one-true-awk (BWK, the stock
@@ -301,7 +307,7 @@ BEGIN {
       }
       if (word == "") start = i
       word = word ch
-      while (substr(masked, i + 1, 1) == "<" || substr(masked, i + 1, 1) == ">") { i++; word = word substr(masked, i, 1) }
+      while ((nx = substr(masked, i + 1, 1)) == "<" || nx == ">") { i++; word = word nx }
       if (word ~ /<<$/ && word !~ /<<</ && substr(masked, i + 1, 1) == "-") { i++; word = word "-" }
       print (start - 1) "\t" word "\n"; word = ""
       op_end = i + 1

@@ -336,6 +336,71 @@ function tab() {
   assert_output '1'
 }
 
+# --- A redirection operator breaks the word it touches ----------------------
+
+# @description The tokens of a command on one line, space-separated, with the
+#              masking filler shown as `_` and the integrity trailer dropped.
+# @arg $1 command the command string to tokenize
+# @stdout the tokens
+function words() {
+  scan "$1" | tr '\001' '_' | awk -F'\t' 'BEGIN { ORS = "" } $2 !~ /^<SCAN:/ { print sep $2; sep = " " }'
+}
+
+@test "scanner: a redirection glued after a quoted word is its own token" {
+  run words "bash -c 'x'>/dev/null"
+  assert_output 'bash -c ___ > /dev/null'
+}
+
+@test "scanner: a heredoc operator glued to the command word is its own token" {
+  run words "bash<<'EOF'"
+  assert_output 'bash << _____'
+}
+
+@test "scanner: an operator glued on both sides splits into word, operator, word" {
+  run words 'echo a>b'
+  assert_output 'echo a > b'
+}
+
+@test "scanner: a leading file descriptor stays part of the operator" {
+  run words 'echo hi 2>f 10<g'
+  assert_output 'echo hi 2> f 10< g'
+}
+
+@test "scanner: digits that end a word are not a file descriptor" {
+  run words 'echo a2>f'
+  assert_output 'echo a2 > f'
+}
+
+@test "scanner: doubled and mixed operators stay one token" {
+  run words 'x >>a <>b <<<c'
+  assert_output 'x >> a <> b <<< c'
+}
+
+@test "scanner: a <<- operator keeps its dash" {
+  run words 'cat <<-EOF'
+  assert_output 'cat <<- EOF'
+}
+
+@test "scanner: a duplication target glued to the next operator is split" {
+  run words 'bash 2>&1<<EOF'
+  assert_output 'bash 2> & 1 << EOF'
+}
+
+@test "scanner: an arrow inside a word splits as bash reads it" {
+  run words 'echo a->b'
+  assert_output 'echo a- > b'
+}
+
+@test "scanner: a comparison inside arithmetic is not split" {
+  run words 'echo $((a>b))'
+  assert_output 'echo $ ( ( a_b ) )'
+}
+
+@test "scanner: a process substitution keeps its operator and paren apart" {
+  run words 'x <(y) >(z)'
+  assert_output 'x < ( y ) > ( z )'
+}
+
 # --- The guard must announce itself dead, never die quietly ------------------
 
 # @description Run a copy of the hook end to end under a stripped environment and

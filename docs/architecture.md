@@ -238,6 +238,9 @@ substitution re-enter code context even inside double quotes, which is what
 makes `until [ -z "$(pgrep --full x)" ]` visible. It then emits one
 `<byte offset>\t<token>` record per token, with `<NL>` for a newline and a
 `<HD:len>` marker at the first byte of each heredoc body.
+A redirection operator ends the word before it and is a token of its own, with
+the digits of its file descriptor (`2>`, `<<-`), and its target is the next
+token, so `bash<<'EOF'` and `cmd 'x'>f` read as the spaced spellings do.
 
 The last line is the **integrity trailer**, `\t<SCAN:n>`, where `n` is the byte
 count of the command the scanner reassembled. `scanner::scan_command` requires that to

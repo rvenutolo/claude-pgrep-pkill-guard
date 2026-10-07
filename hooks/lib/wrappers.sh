@@ -323,45 +323,24 @@ function wrappers::shell_wrapper_payloads() {
   # heredoc, so the next byte after `<<` must not itself be `<`. ERE,
   # evaluated unquoted in [[ =~ ]].
   local -r heredoc_re='^([0-9]*)<<([^<]|$)' bare_heredoc_re='^[0-9]*<<-?$'
-  # Any other redirection: an optional fd, then `>`/`<`, `>>`/`<>`, or `&>`.
-  # Other token shapes match it and must therefore stay ABOVE it: a `<<`
-  # heredoc operator, and a `<HD:5>` body marker -- both branches above
-  # `continue`, so neither ever reaches here. The newline token `<NL>` matches
-  # too and cannot be handled that way, since it is an operator that has to
-  # reach the flush below, so it is excluded by name.
-  # `redir_bare_re` says the operator carries no attached target (`> f` rather
-  # than `>f`), in which case the next token is the target and is not an
-  # operand either.
+  # Any other redirection: an optional fd, then a run of `<` and `>` (`>`, `>>`,
+  # `<>`). The scanner emits the operator on its own, so the next token is the
+  # target and is not an operand either. A `<<` heredoc operator also matches
+  # and must stay ABOVE it: that branch `continue`s, so it never reaches here.
   # `stdin_redir_re` picks out the ones that redirect fd 0: an input operator
   # with no fd, or any operator with an explicit `0`.
-  local -r redir_re='^[0-9]*(&?[<>]|[<>]{2})' redir_bare_re='^[0-9]*[<>&|]+$'
+  local -r redir_re='^[0-9]*[<>]+$'
   local -r stdin_redir_re='^(0?<|0>)'
   # `redir_single_re` picks out the bare `<` and `>` operators, which an `&` or
   # a `|` extends to `<&`, `>&` or `>|`; `glue_at` is the offset just past one,
-  # where that `&` or `|` has to sit. `dup_target` says the next token is the target
-  # of a duplication, which `glued_target_re` splits from a redirection glued
-  # to it.
-  local -r redir_single_re='^[0-9]*[<>]$' glued_target_re='^([0-9]+-?|-)([<>].*)$'
-  local glue_at=-1 dup_target=0
+  # where that `&` or `|` has to sit.
+  local -r redir_single_re='^[0-9]*[<>]$'
+  local glue_at=-1
   # The rest of this loop stays inline on purpose: the blocks share most of
   # the locals above, and a helper with that many namerefs is harder to read
   # than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
-    # A numeric or `-` target of a duplication can be glued to the redirection
-    # after it (`2>&1<<EOF`, `2>&1>f`, `3<&0-<f`, `<&-<f`): bash takes the
-    # digits, with or without the `-`, as the target and reads what follows as
-    # a redirection of its own. Split the same way, the rest reaches the
-    # heredoc and redirection branches below. A word target glued the same way
-    # (`>&f<<EOF`) is not split.
-    if ((dup_target == 1)); then
-      dup_target=0
-      if [[ "${token}" =~ ${glued_target_re} ]]; then
-        expect_redir_target=0
-        offset="$((offset + ${#BASH_REMATCH[1]}))"
-        token="${BASH_REMATCH[2]}"
-      fi
-    fi
     word="${token##*/}"
 
     # Heredoc bookkeeping. A bare `<<` / `<<-` token, fd-prefixed or not, is
@@ -419,9 +398,6 @@ function wrappers::shell_wrapper_payloads() {
         && [[ "${token}" == '&' || ("${token}" == '|' && "${command:offset-1:1}" == '>') ]]; then
         expect_redir_target=1
         glue_at=-1
-        if [[ "${token}" == '&' ]]; then
-          dup_target=1
-        fi
         continue
       fi
       # Any other operator here is no target. It ends the simple command and
@@ -434,13 +410,11 @@ function wrappers::shell_wrapper_payloads() {
     if [[ "${token}" == '&' && "${command:offset+1:1}" == '>' ]]; then
       continue
     fi
-    if [[ "${token}" != '<NL>' && "${token}" =~ ${redir_re} ]]; then
+    if [[ "${token}" =~ ${redir_re} ]]; then
+      expect_redir_target=1
       glue_at=-1
-      if [[ "${token}" =~ ${redir_bare_re} ]]; then
-        expect_redir_target=1
-        if [[ "${token}" =~ ${redir_single_re} ]]; then
-          glue_at="$((offset + ${#token}))"
-        fi
+      if [[ "${token}" =~ ${redir_single_re} ]]; then
+        glue_at="$((offset + ${#token}))"
       fi
       # bash applies the last redirection of fd 0, so each one decides afresh:
       # a later one that may be the pipe again (`< /tmp/f <&3`) withdraws what

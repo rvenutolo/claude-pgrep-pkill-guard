@@ -558,3 +558,18 @@
 "echo 'pkill --full X' | bash 2>&1&"	deny:kill
 "echo 'pkill --full X' |&>/tmp/f bash"	deny:kill
 "bash 3<&0-<<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash -c 'pkill --full X'>/dev/null"	deny:kill
+"bash -c 'pkill --full X'2>&1"	deny:kill
+"bash >/dev/null<<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash<<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash -s<<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash >&f<<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>f<<'EOF'\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X'|bash</tmp/f"	allow
+"echo 'pkill --full X' | bash</tmp/f"	allow
+"bash -c 'echo PAYLOAD_RAN'>/dev/null"	allow
+"bash -c 'echo PAYLOAD_RAN'2>&1"	allow
+"bash >/dev/null<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"bash<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"bash -s<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"bash >&f<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow

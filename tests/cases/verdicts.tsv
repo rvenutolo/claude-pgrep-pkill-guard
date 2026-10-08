@@ -673,3 +673,9 @@
 "bash $(true) <<'EOF'\npkill --full X\nEOF"	allow
 "pkill ${x} --full X"	deny:kill
 "pkill ${x} -f X"	deny:kill
+"echo 'pkill --full X' | FOO=$( ((1)) ) bash"	deny:kill
+"echo 'pkill --full X' | FOO=${x:-a b} bash"	deny:kill
+"echo ${x:-a #b}; pkill --full X"	deny:kill
+"echo 'echo PAYLOAD_RAN' | FOO=${x:-a b} bash"	allow
+"echo 'echo PAYLOAD_RAN' | FOO=$( ((1)) ) bash"	allow
+"echo 'pkill --full X' |`foo` bash"	allow

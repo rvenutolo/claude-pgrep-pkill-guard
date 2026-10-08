@@ -423,6 +423,16 @@ function words() {
   assert_output 'echo $_#arr[@]_ b'
 }
 
+@test "scanner: a space inside a parameter expansion does not split its word" {
+  run words 'echo ${x:-a b} c'
+  assert_output 'echo $_x:-a_b_ c'
+}
+
+@test "scanner: a hash inside a parameter expansion opens no comment" {
+  run words 'echo ${x:-a #b}; y'
+  assert_output 'echo $_x:-a_#b_ ; y'
+}
+
 @test "scanner: a brace group stays a brace group" {
   run words '{ x; } ; echo {a,b}>f'
   assert_output '{ x ; } ; echo { a,b } > f'

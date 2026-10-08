@@ -109,7 +109,7 @@ function classify::probe_keys() {
   if [[ "${command}" == *pgrep* ]]; then
     while IFS=$'\t' read -r idx offset name; do
       [[ -z "${idx}" || "${name}" != 'pgrep' ]] && continue
-      args="$(scanner::invocation_args "${tokens}" "${idx}")"
+      args="$(scanner::invocation_args "${command}" "${tokens}" "${idx}")"
       operand="$(scanner::pattern_operand "${command}" "${args}")"
       [[ -z "${operand}" ]] && continue
       key="pgrep:${operand}"
@@ -131,21 +131,22 @@ function classify::probe_keys() {
 #              clears a kill -- the session shell is an ancestor -- and fixes an inflated count, but
 #              it never clears a loop.
 # @arg $1 tokens_var name of the command's token array
-# @arg $2 command the raw command
-# @arg $3 tokens the scanner's token stream for the command
-# @arg $4 idx the invocation's token index
-# @arg $5 name `pgrep` or `pkill`
-# @arg $6 args the invocation's argument tokens (scanner::invocation_args output)
+# @arg $2 openers_var name of the array that maps each region-closing token's index to its opener's
+# @arg $3 command the raw command
+# @arg $4 tokens the scanner's token stream for the command
+# @arg $5 idx the invocation's token index
+# @arg $6 name `pgrep` or `pkill`
+# @arg $7 args the invocation's argument tokens (scanner::invocation_args output)
 # @stdout `deny:kill<TAB>name`, `deny:loop<TAB>name`, or `warn`
 # @exitcode 0 a verdict was printed
 # @exitcode 1 the invocation is clean or exempt; nothing printed
 function classify::classify_invocation() {
-  local -r tokens_var="$1" command="$2" tokens="$3" idx="$4" name="$5" args="$6"
+  local -r tokens_var="$1" openers_var="$2" command="$3" tokens="$4" idx="$5" name="$6" args="$7"
   local operand context ignores_ancestors=0
   scanner::has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
   operand="$(scanner::pattern_operand "${command}" "${args}")"
   scanner::bracket_mitigation_holds "${command}" "${operand}" && return 1
-  if [[ "${name}" == 'pkill' ]] || consumption::feeds_a_kill "${tokens_var}" "${idx}"; then
+  if [[ "${name}" == 'pkill' ]] || consumption::feeds_a_kill "${tokens_var}" "${openers_var}" "${idx}"; then
     ((ignores_ancestors == 1)) && return 1
     printf 'deny:kill\t%s\n' "${name}"
     return 0
@@ -216,6 +217,7 @@ function classify::classify_wrapper_payloads() {
 # @stdout allow, warn, inactive (the scanner stream failed its integrity check, here or in a wrapper
 #         payload), or deny:loop / deny:kill / deny:task-poll followed by a tab and the invoked
 #         tool (or, for task-poll, the polled path)
+# shellcheck disable=SC2034 # region and cmd_openers are written through namerefs, which shellcheck cannot follow
 function classify::classify_command() {
   local -r command="$1" depth="${2:-0}"
   if [[ "${command}" != *pgrep* && "${command}" != *pkill* && "${command}" != *.output* ]]; then
@@ -239,10 +241,24 @@ function classify::classify_command() {
   # re-splitting the token stream for every invocation. Each still walks the
   # array per invocation, and consumption::next_command_reads_status still reads
   # the stream itself; what the array saves is the repeated split.
-  local -a cmd_tokens=()
-  local _ raw_token
-  while IFS=$'\t' read -r _ raw_token; do
+  #
+  # cmd_openers is sparse: the entry at the index of a token that closes a `$(...)`, `$((...))` or
+  # backtick region holds the index of the token that opened it, so that
+  # consumption::feeds_a_kill_backward can step over a whole region.
+  local -a cmd_tokens=() cmd_openers=() open_stack=()
+  local -A region=()
+  local raw_offset raw_token region_kind
+  while IFS=$'\t' read -r raw_offset raw_token; do
     [[ -z "${raw_token}" ]] && continue
+    tokens::region_step "${command}" "${raw_offset}" "${raw_token}" region region_kind
+    case "${region_kind}" in
+      '') ;;
+      'close')
+        cmd_openers["${#cmd_tokens[@]}"]="${open_stack[-1]}"
+        unset 'open_stack[-1]'
+        ;;
+      *) open_stack+=("${#cmd_tokens[@]}") ;;
+    esac
     cmd_tokens+=("${raw_token}")
   done <<< "${tokens}"
 
@@ -256,9 +272,9 @@ function classify::classify_command() {
   fi
   while IFS=$'\t' read -r idx offset name; do
     [[ -z "${idx}" ]] && continue
-    args="$(scanner::invocation_args "${tokens}" "${idx}")"
+    args="$(scanner::invocation_args "${command}" "${tokens}" "${idx}")"
     scanner::has_flag "${args}" '--full' 'f' || continue
-    if invocation_finding="$(classify::classify_invocation cmd_tokens "${command}" "${tokens}" "${idx}" "${name}" \
+    if invocation_finding="$(classify::classify_invocation cmd_tokens cmd_openers "${command}" "${tokens}" "${idx}" "${name}" \
       "${args}")"; then
       case "${invocation_finding}" in
         deny:*)

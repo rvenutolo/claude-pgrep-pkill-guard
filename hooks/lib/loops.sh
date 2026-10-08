@@ -216,6 +216,7 @@ function loops::body_has_terminator() {
 function loops::loop_body_has_kill() {
   local -n toks="$1"
   local -r head_idx="$2"
+  # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
   local idx="$((head_idx + 1))" token found_do=0 body_depth=1 at_cmd=1 redir=''
   local -a pstack=()
 

@@ -364,6 +364,7 @@ function tokens::redirection_span_back() {
   span_ref=0
   ((index >= 1)) || return 0
   tokens::is_operator "${toks[index]}" && return 0
+  # shellcheck disable=SC2034 # the caller reads span_ref through its own variable, which shellcheck cannot follow
   if ((index >= 2)) && [[ "${toks[index - 1]}" == '&' || "${toks[index - 1]}" == '|' ]] \
     && [[ "${toks[index - 2]}" =~ ${REDIRECTION_GLUE_RE} ]]; then
     span_ref=3

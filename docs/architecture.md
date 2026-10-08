@@ -241,11 +241,14 @@ makes `until [ -z "$(pgrep --full x)" ]` visible. It then emits one
 A redirection operator ends the word before it and is a token of its own, with
 the digits of its file descriptor (`2>`, `<<-`), and its target is the next
 token, so `bash<<'EOF'` and `cmd 'x'>f` read as the spaced spellings do.
-Every walk that hunts for a command word skips a redirection (the operator, the
-`&` or `|` that extends `>&` or `>|`, and the target) without leaving command
-position, so `2> /dev/null pkill --full X` and `sudo >f pkill --full X` find
-the `pkill`. The forward walks share `tokens::redirection_step`; the one that
-reads backward from a `kill` uses `tokens::redirection_span_back`.
+The walks that track command position in the token stream skip a redirection
+(the operator, the `&` or `|` that extends `>&` or `>|`, and the target) without
+leaving command position, so `2> /dev/null pkill --full X` and
+`sudo >f pkill --full X` find the `pkill`. The forward walks share
+`tokens::redirection_step`; the ones that read backward from a `kill` or from
+the invocation use `tokens::redirection_span_back`.
+`wrappers::shell_wrapper_payloads` keeps its own redirection handling, because
+it also tracks the heredoc and the pipe a redirection can replace.
 
 The last line is the **integrity trailer**, `\t<SCAN:n>`, where `n` is the byte
 count of the command the scanner reassembled. `scanner::scan_command` requires that to

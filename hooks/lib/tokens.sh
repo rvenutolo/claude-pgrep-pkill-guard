@@ -299,3 +299,76 @@ function tokens::is_operator() {
     *) return 1 ;;
   esac
 }
+
+# A redirection operator token: an optional file descriptor and then a run of
+# `<` and `>` (`>`, `>>`, `<>`, `<<<`, `2>`), or the `<<-` heredoc operator. The
+# scanner emits the operator without its target, which is the next token.
+readonly REDIRECTION_OPERATOR_RE='^[0-9]*([<>]+|<<-)$'
+# The operators an `&` or a `|` can extend (`>&`, `<&`, `>|`): a single `<` or
+# `>` with an optional file descriptor.
+readonly REDIRECTION_GLUE_RE='^[0-9]*[<>]$'
+
+# @description Advance redirection tracking by one token and report whether that token is part of
+#              a redirection -- an operator, the `&` or `|` that extends it, or its target -- and so
+#              neither the command word nor an operand. bash allows a redirection anywhere in a
+#              simple command, the front included, so a walk that hunts for the command word
+#              (`2> /dev/null pkill`) skips what this reports and leaves its command position alone.
+#
+#              The `&` of `>&` and the `|` of `>|` are tokens of their own (`2>&1` is `2>`, `&`,
+#              `1`); this reads one that follows a single `<` or `>` as that operator's tail, even
+#              with space between, because `> &` and `> |` are syntax errors anyway. A token that
+#              follows an operator but is itself an operator is no target: `<(` and `>(` open a
+#              process substitution, so it is reported as not a redirection and the state resets.
+# @arg $1 token the raw token
+# @arg $2 state name of the caller's variable holding the tracking state: empty outside a
+#         redirection, `glue` after a single `<` or `>`, `target` when the target is next. Never
+#         pass a variable called token or redir_state_ref.
+# @exitcode 0 the token belongs to a redirection and is to be skipped
+# @exitcode 1 it does not
+function tokens::redirection_step() {
+  local -r token="$1"
+  local -n redir_state_ref="$2"
+  if [[ -n "${redir_state_ref}" ]]; then
+    if [[ "${redir_state_ref}" == 'glue' && ("${token}" == '&' || "${token}" == '|') ]]; then
+      redir_state_ref='target'
+      return 0
+    fi
+    redir_state_ref=''
+    tokens::is_operator "${token}" && return 1
+    return 0
+  fi
+  if [[ "${token}" =~ ${REDIRECTION_OPERATOR_RE} ]]; then
+    if [[ "${token}" =~ ${REDIRECTION_GLUE_RE} ]]; then
+      redir_state_ref='glue'
+    else
+      redir_state_ref='target'
+    fi
+    return 0
+  fi
+  return 1
+}
+
+# @description The backward counterpart of tokens::redirection_step, for a walk that reads the
+#              tokens before a command word: how many tokens at the end of the stream up to an index
+#              make up one redirection. The token at the index must be a target (not an operator),
+#              preceded by an operator, or by an `&` or `|` that extends a single `<` or `>`.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 index index of the last token of the candidate redirection
+# @arg $3 span name of the caller's variable that receives the token count: 3 for an operator,
+#         its `&` or `|` and a target, 2 for an operator and a target, 0 when the token is no
+#         redirection's target. Never pass a variable called toks or span_ref.
+function tokens::redirection_span_back() {
+  local -n toks="$1"
+  local -r index="$2"
+  local -n span_ref="$3"
+  span_ref=0
+  ((index >= 1)) || return 0
+  tokens::is_operator "${toks[index]}" && return 0
+  # shellcheck disable=SC2034 # the caller reads span_ref through its own variable, which shellcheck cannot follow
+  if ((index >= 2)) && [[ "${toks[index - 1]}" == '&' || "${toks[index - 1]}" == '|' ]] \
+    && [[ "${toks[index - 2]}" =~ ${REDIRECTION_GLUE_RE} ]]; then
+    span_ref=3
+  elif [[ "${toks[index - 1]}" =~ ${REDIRECTION_OPERATOR_RE} ]]; then
+    span_ref=2
+  fi
+}

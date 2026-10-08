@@ -28,7 +28,7 @@
 function loops::loop_context() {
   local -r tokens="$1" target="$2"
   local -a stack=()
-  local idx=0 at_cmd=1 dollar=0 offset token
+  local idx=0 at_cmd=1 dollar=0 offset token redir=''
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((idx == target)); then
@@ -52,6 +52,12 @@ function loops::loop_context() {
       done
       printf '%s\n' "${found}"
       return 0
+    fi
+    # A redirection leaves command position as it was, like the rest of the walkers (see
+    # tokens::redirection_step).
+    if tokens::redirection_step "${token}" redir; then
+      idx="$((idx + 1))"
+      continue
     fi
     if ((at_cmd == 1)); then
       case "${token}" in
@@ -131,12 +137,17 @@ function loops::loop_context() {
 # @exitcode 1 no terminator
 function loops::body_has_terminator() {
   local -r tokens="$1" target="$2"
-  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token
+  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token redir=''
   local -a barrier=()
   # shellcheck disable=SC2034 # offset is the record's first field; only the token matters here
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     ((idx == target)) && seen=1
+    # A redirection in front of a terminator (`>f break`) leaves command position as it was.
+    if tokens::redirection_step "${token}" redir; then
+      idx="$((idx + 1))"
+      continue
+    fi
     if ((at_cmd == 1 && ${#barrier[@]} == 0)); then
       case "${token}" in
         'do') depth="$((depth + 1))" ;;
@@ -205,7 +216,8 @@ function loops::body_has_terminator() {
 function loops::loop_body_has_kill() {
   local -n toks="$1"
   local -r head_idx="$2"
-  local idx="$((head_idx + 1))" token found_do=0 body_depth=1 at_cmd=1
+  # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
+  local idx="$((head_idx + 1))" token found_do=0 body_depth=1 at_cmd=1 redir=''
   local -a pstack=()
 
   # Walk the condition/iterable list to the `do` that opens this loop's body,
@@ -236,6 +248,11 @@ function loops::loop_body_has_kill() {
 
   while ((idx < ${#toks[@]})); do
     token="${toks[idx]}"
+    # A redirection in front of the `kill` (`>f kill "$p"`) leaves command position as it was.
+    if tokens::redirection_step "${token}" redir; then
+      idx="$((idx + 1))"
+      continue
+    fi
     if ((at_cmd == 1)); then
       case "${token}" in
         'do') body_depth="$((body_depth + 1))" ;;

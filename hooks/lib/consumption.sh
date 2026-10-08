@@ -50,8 +50,11 @@ function consumption::is_xargs_value_option() {
 function consumption::feeds_a_kill_forward() {
   local -n toks="$1"
   local -r tokens_var="$1" target="$2"
-  local idx segment='none' word xargs_skip=0 prev='none'
+  # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
+  local idx segment='none' word xargs_skip=0 prev='none' redir=''
   for ((idx = target + 1; idx < ${#toks[@]}; idx++)); do
+    # A redirection (`| >f xargs kill`, `xargs 2>&1 kill`) is neither a command word nor an operand.
+    tokens::redirection_step "${toks[idx]}" redir && continue
     word="${toks[idx]##*/}"
     case "${word}" in
       '|')
@@ -120,7 +123,8 @@ function consumption::feeds_a_kill_forward() {
 }
 
 # @description Whether the `kill` whose predecessor token sits at `index` is in command position.
-#              Walks back past prefix commands (`sudo kill`) and assignment words (`FOO=bar kill`);
+#              Walks back past prefix commands (`sudo kill`), assignment words (`FOO=bar kill`) and
+#              redirections (`>f kill`);
 #              an operator or keyword there means command position. `(` restores command position
 #              for a real subshell or grouping construct, but `name=(...)` is an array literal: the
 #              `(` merely opens a list of words, and a `kill` immediately inside it is never invoked.
@@ -131,8 +135,16 @@ function consumption::feeds_a_kill_forward() {
 # @exitcode 1 it is an argument word, or sits inside an array literal
 function consumption::kill_in_command_position() {
   local -n toks="$1"
-  local index="$2"
+  local -r tokens_var="$1"
+  local index="$2" span
   while ((index >= 0)); do
+    # A redirection in front of the `kill` (`>f kill $(pgrep ...)`) is skipped whole, target
+    # included, before the word it would otherwise stop on.
+    tokens::redirection_span_back "${tokens_var}" "${index}" span
+    if ((span > 0)); then
+      index="$((index - span))"
+      continue
+    fi
     if tokens::is_prefix_command "${toks[index]##*/}" || tokens::is_assignment_word "${toks[index]}"; then
       index="$((index - 1))"
       continue
@@ -167,8 +179,15 @@ function consumption::kill_in_command_position() {
 function consumption::feeds_a_kill_backward() {
   local -n toks="$1"
   local -r tokens_var="$1" target="$2"
-  local word k="$((target - 1))"
+  local word k="$((target - 1))" span
   while ((k >= 0)); do
+    # A redirection between the substitution's opener and the invocation
+    # (`kill $(>f pgrep ...)`) is skipped whole, target included.
+    tokens::redirection_span_back "${tokens_var}" "${k}" span
+    if ((span > 0)); then
+      k="$((k - span))"
+      continue
+    fi
     word="${toks[k]##*/}"
     case "${word}" in
       '$' | '(' | '`') ;;
@@ -353,7 +372,8 @@ function consumption::result_is_consumed() {
   # Anything between the invocation and the operator or keyword that opened its
   # command is prefix material by construction: scanner::find_invocations only reports an
   # invocation in command position, so a word reached here is a prefix command,
-  # one of its flags, that flag's value, or an assignment word. Testing for a
+  # one of its flags, that flag's value, an assignment word, or part of a
+  # redirection. Testing for a
   # prefix COMMAND alone stopped at the value word and hid the enclosing `if` of
   # `if sudo -u bob pgrep --full x`, `if timeout 5 pgrep --full x` and every
   # other prefix carrying an option or an operand (#132). The prefix-command test

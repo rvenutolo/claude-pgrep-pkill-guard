@@ -244,9 +244,11 @@ token, so `bash<<'EOF'` and `cmd 'x'>f` read as the spaced spellings do.
 The walks that track command position in the token stream skip a redirection
 (the operator, the `&` or `|` that extends `>&` or `>|`, and the target) without
 leaving command position, so `2> /dev/null pkill --full X` and
-`sudo >f pkill --full X` find the `pkill`. The forward walks share
-`tokens::redirection_step`; the ones that read backward from a `kill` or from
-the invocation use `tokens::redirection_span_back`.
+`sudo >f pkill --full X` find the `pkill`. The same walk drops a redirection
+from an invocation's arguments, so `pkill 2>&1 -f X` keeps its `-f` and
+`pkill --full "[j]ava" <<-EOF` has no delimiter to be read as the pattern. The
+forward walks share `tokens::redirection_step`; the ones that read backward from
+a `kill` or from the invocation use `tokens::redirection_span_back`.
 `wrappers::shell_wrapper_payloads` keeps its own redirection handling, because
 it also tracks the heredoc and the pipe a redirection can replace.
 

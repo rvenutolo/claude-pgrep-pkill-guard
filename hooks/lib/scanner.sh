@@ -94,18 +94,24 @@ function scanner::find_invocations() {
 }
 
 # @description Collect one invocation's argument tokens: everything after the command name, up to
-#              the operator that ends the simple command.
+#              the operator that ends the simple command. A redirection (operator, the `&` or `|` of
+#              `>&` and `>|`, and target) is not an argument and is dropped, so `2>&1 -f java` keeps
+#              `-f` and `java`, and `<<-EOF` leaves no `EOF` to be read as the pattern. Which tokens
+#              belong to a redirection is tokens::redirection_step's call.
 # @arg $1 tokens the token stream from scanner::scan_command
 # @arg $2 target index of the pgrep/pkill token itself
 # @stdout lines of "<offset>\t<token>"
 function scanner::invocation_args() {
   local -r tokens="$1" target="$2"
-  local idx=0 offset token
+  # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
+  local idx=0 offset token redir=''
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((idx > target)); then
-      tokens::is_operator "${token}" && break
-      printf '%s\t%s\n' "${offset}" "${token}"
+      tokens::redirection_step "${token}" redir || {
+        tokens::is_operator "${token}" && break
+        printf '%s\t%s\n' "${offset}" "${token}"
+      }
     fi
     idx="$((idx + 1))"
   done <<< "${tokens}"
@@ -138,22 +144,19 @@ function scanner::has_flag() {
   return 1
 }
 
-# @description Extract the search pattern: the last argument that is neither a flag, the separate value of
-#              a long option in PGREP_VALUE_OPTIONS, nor a redirection. A short flag's separate value is
-#              not recognised and counts as a candidate. Once a bare -- end-of-options terminator is
-#              seen, every later token is a pattern candidate regardless of a leading dash -- only a
-#              redirection operator token (with or without a leading file descriptor) and its target are
-#              still excluded. Sliced out of the raw command by offset so the original quoting survives,
-#              then one surrounding quote pair is stripped.
+# @description Extract the search pattern: the last argument that is neither a flag nor the separate
+#              value of a long option in PGREP_VALUE_OPTIONS. A short flag's separate value is not
+#              recognised and counts as a candidate. Once a bare -- end-of-options terminator is
+#              seen, every later token is a pattern candidate regardless of a leading dash. The
+#              arguments carry no redirection (scanner::invocation_args drops it). Sliced out of the
+#              raw command by offset so the original quoting survives, then one surrounding quote pair
+#              is stripped.
 # @arg $1 command the raw command string
 # @arg $2 args newline-separated "<offset>\t<token>" lines
 # @stdout the operand with surrounding quotes removed, or empty
 function scanner::pattern_operand() {
   local -r command="$1" args="$2"
   local operand_offset='' operand_length=0 skip=0 past_terminator=0 offset token value_option
-  # An operator token is an optional file descriptor and then only < and > characters (2>, >>, <>, <<<); the
-  # scanner emits it without its target, which is the next token.
-  local -r redirect_operator='^[0-9]*[<>]+$'
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((skip == 1)); then
@@ -161,12 +164,8 @@ function scanner::pattern_operand() {
       continue
     fi
     if ((past_terminator == 1)); then
-      if [[ "${token}" =~ ${redirect_operator} ]]; then
-        skip=1
-      else
-        operand_offset="${offset}"
-        operand_length="${#token}"
-      fi
+      operand_offset="${offset}"
+      operand_length="${#token}"
       continue
     fi
     case "${token}" in
@@ -180,9 +179,6 @@ function scanner::pattern_operand() {
         done
         ;;
       -*) : ;;
-      *[\<\>]*)
-        [[ "${token}" =~ ${redirect_operator} ]] && skip=1
-        ;;
       *)
         operand_offset="${offset}"
         operand_length="${#token}"

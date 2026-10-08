@@ -401,6 +401,33 @@ function words() {
   assert_output 'x < ( y ) > ( z )'
 }
 
+# --- A parameter expansion's braces stay inside its word ---------------------
+
+@test "scanner: an unquoted parameter expansion is one word" {
+  run words 'FOO=${x} bash'
+  assert_output 'FOO=$_x_ bash'
+}
+
+@test "scanner: a parameter expansion between words keeps both neighbours" {
+  run words 'bash > ${log} -c y'
+  assert_output 'bash > $_log_ -c y'
+}
+
+@test "scanner: a command substitution inside a parameter expansion is still code" {
+  run words 'echo ${x:-$(a)} b'
+  assert_output 'echo $_x:-$ ( a ) _ b'
+}
+
+@test "scanner: a parameter expansion's length form is one word" {
+  run words 'echo ${#arr[@]} b'
+  assert_output 'echo $_#arr[@]_ b'
+}
+
+@test "scanner: a brace group and a descriptor brace are not parameter expansions" {
+  run words '{ x; } ; bash {fd}>&1'
+  assert_output '{ x ; } ; bash { fd } > & 1'
+}
+
 # --- The guard must announce itself dead, never die quietly ------------------
 
 # @description Run a copy of the hook end to end under a stripped environment and

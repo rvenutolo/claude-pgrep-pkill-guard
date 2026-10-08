@@ -44,12 +44,14 @@ function consumption::is_xargs_value_option() {
 #              `while`/`until` (`pgrep -f java | while read -r p; do kill "$p"; done`) defers to
 #              loops::loop_body_has_kill rather than being written off as `other`.
 # @arg $1 tokens_var name of the caller's token array
-# @arg $2 target index of the invocation token
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 target index of the invocation token
 # @exitcode 0 a kill consumes the output downstream
 # @exitcode 1 it does not
 function consumption::feeds_a_kill_forward() {
   local -n toks="$1"
-  local -r tokens_var="$1" target="$2"
+  local -r tokens_var="$1" openers_var="$2" target="$3"
   # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
   local idx segment='none' word xargs_skip=0 prev='none' redir=''
   for ((idx = target + 1; idx < ${#toks[@]}; idx++)); do
@@ -80,7 +82,7 @@ function consumption::feeds_a_kill_forward() {
                 xargs_skip=0
                 ;;
               'while' | 'until')
-                loops::loop_body_has_kill "${tokens_var}" "${idx}" && return 0
+                loops::loop_body_has_kill "${tokens_var}" "${openers_var}" "${idx}" && return 0
                 segment='other'
                 ;;
               *)
@@ -183,9 +185,9 @@ function consumption::kill_in_command_position() {
 #              cannot see it. Walk back to the nearest `kill` in the same simple command: the
 #              substitution punctuation, flags and literal operands (`kill -s TERM foo $(pgrep ...)`)
 #              are all arguments of that `kill` and are stepped over, and so is any earlier whole
-#              `$(...)`, `$((...))` or backtick region (`kill $(true) $(pgrep ...)`), which is one
-#              word of it. An operator or a keyword ends the walk. The `kill` must then be in command
-#              position -- otherwise `echo kill $(...)`, where `kill` is merely an argument word,
+#              `$(...)`, `$((...))`, backtick or process-substitution region (`kill $(true) $(pgrep ...)`,
+#              `kill <(true) $(pgrep ...)`), which is one word of it. An operator or a keyword ends
+#              the walk. The `kill` must then be in command position -- otherwise `echo kill $(...)`, where `kill` is merely an argument word,
 #              would be denied -- and one that is not is an argument word like any other, so the walk
 #              goes on to a real `kill` before it (`kill foo kill $(...)`). A bare `in` is only a
 #              for/select head -- and thus worth deferring to loops::loop_body_has_kill -- when the
@@ -226,7 +228,7 @@ function consumption::feeds_a_kill_backward() {
         ;;
       'in')
         if ((k >= 2)) && { [[ "${toks[k - 2]}" == 'for' ]] || [[ "${toks[k - 2]}" == 'select' ]]; }; then
-          loops::loop_body_has_kill "${tokens_var}" "${k}" && return 0
+          loops::loop_body_has_kill "${tokens_var}" "${openers_var}" "${k}" && return 0
         fi
         return 1
         ;;
@@ -253,7 +255,7 @@ function consumption::feeds_a_kill_backward() {
 # @exitcode 1 it does not
 function consumption::feeds_a_kill() {
   local -r tokens_var="$1" openers_var="$2" target="$3"
-  consumption::feeds_a_kill_forward "${tokens_var}" "${target}" \
+  consumption::feeds_a_kill_forward "${tokens_var}" "${openers_var}" "${target}" \
     || consumption::feeds_a_kill_backward "${tokens_var}" "${openers_var}" "${target}"
 }
 

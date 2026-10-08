@@ -217,9 +217,9 @@ function wrappers::redirection_replaces_stdin() {
   esac
 }
 
-# @description Cut every outermost `$(...)`, `$((...))` and backtick region out of a token stream,
-#              so that the simple command around it reads as if the region were one word, and
-#              scan each region's own tokens for wrappers.
+# @description Cut every outermost `$(...)`, `$((...))`, backtick and process-substitution region
+#              (`<(...)`, `>(...)`) out of a token stream, so that the simple command around it
+#              reads as if the region were one word, and scan each region's own tokens for wrappers.
 #
 #              The scanner re-enters code context inside a region, so its tokens (`(`, `)`, the
 #              backtick) look like command boundaries to a reader of the simple command that
@@ -234,6 +234,7 @@ function wrappers::redirection_replaces_stdin() {
 #
 #              What the outer stream keeps of a region: the `$` word it hangs off, or a one-byte
 #              word standing in for a backtick region that follows whitespace or touches an operator,
+#              or for a process substitution, whose `<` or `>` is replaced by it,
 #              and an inert `<HO>` token for each heredoc operator and the body markers inside,
 #              so that the heredoc ordinals of the operators and bodies after the region
 #              still line up. A token glued directly behind the close (the closing quote of
@@ -255,7 +256,7 @@ function wrappers::cut_substitutions() {
   local -r heredoc_re='^[0-9]*<<([^<]|$)'
   local offset token kind depth
   local -A region=()
-  local outer='' inner='' glue_at=-1
+  local outer='' inner='' glue_at=-1 outer_before_token=0
   while IFS=$'\t' read -r offset token; do
     if [[ -z "${token}" ]]; then
       outer+="${offset}"$'\t'$'\n'
@@ -268,6 +269,7 @@ function wrappers::cut_substitutions() {
         if ((depth == 0)); then
           if ((offset != glue_at)) || tokens::is_operator "${token}" \
             || [[ "${token}" == '<'* || "${token}" == *'>'* ]]; then
+            outer_before_token="${#outer}"
             outer+="${offset}"$'\t'"${token}"$'\n'
           fi
         else
@@ -295,6 +297,9 @@ function wrappers::cut_substitutions() {
           if [[ "${kind}" == 'B' ]] \
             && { ((region[prev_end] != offset)) || tokens::is_operator "${region[prev_token]}"; }; then
             outer+="${offset}"$'\t'$'\001'$'\n'
+          elif [[ "${kind}" == 'S' ]]; then
+            # The `<` or `>` just before the `(` is the word's first byte, not a redirection.
+            outer="${outer:0:outer_before_token}$((offset - 1))"$'\t'$'\001'$'\n'
           fi
         else
           inner+="${offset}"$'\t'"${token}"$'\n'
@@ -399,7 +404,8 @@ function wrappers::shell_wrapper_payloads() {
   local tokens="$2"
   # Regions are rare, and cutting them costs a pass over the stream, so the
   # raw text decides whether to look for any.
-  if [[ "${command}" == *\$\(* || "${command}" == *'`'* ]]; then
+  if [[ "${command}" == *\$\(* || "${command}" == *'`'* \
+    || "${command}" == *'<('* || "${command}" == *'>('* ]]; then
     wrappers::cut_substitutions "${command}" "${tokens}" tokens
   fi
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0

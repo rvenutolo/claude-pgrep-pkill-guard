@@ -373,21 +373,44 @@ function tokens::redirection_span_back() {
   fi
 }
 
+# @description True when the token at an index is the `)` that closes a process substitution
+#              (`<(...)`, `>(...)`), which is a word of its simple command and not an operator. For a
+#              walker over the token array, which has no region state of its own: the closer's entry
+#              in the openers array names the `<` or `>` that began the word.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 index index of the token to test
+# @exitcode 0 the token closes a process substitution
+# @exitcode 1 it does not
+function tokens::is_procsub_close() {
+  local -n toks="$1"
+  local -n openers="$2"
+  local -r index="$3"
+  [[ -n "${openers[index]:-}" ]] || return 1
+  [[ "${toks[openers[index]]}" == '<' || "${toks[openers[index]]}" == '>' ]]
+}
+
 # @description Advance region tracking by one token and report whether that token opens or closes
-#              a `$(...)`, `$((...))` or backtick region. This is the scanner's own rule, so a reader
-#              that works from the token stream sees the regions the scanner saw: a `(` glued to a
-#              `$` opens one, and the first `)` closes it, except that inside an arithmetic region
-#              (`$((`) a `(` nests, and so does a `(` directly followed by another `(`; a backtick
-#              closes a backtick region and opens one anywhere else. A `(` that is neither, a
-#              subshell or a process substitution, opens no region, and the first `)` after it
-#              closes the enclosing one, as the scanner reads it.
+#              a `$(...)`, `$((...))`, backtick or process-substitution region. This is the scanner's
+#              own rule, so a reader that works from the token stream sees the regions the scanner
+#              saw: a `(` glued to a `$` opens one, and the first `)` closes it, except that inside an
+#              arithmetic region (`$((`) a `(` nests, and so does a `(` directly followed by another
+#              `(`; a backtick closes a backtick region and opens one anywhere else. A `(` glued to a
+#              bare `<` or `>` token opens a process substitution (`<(...)`, `>(...)`), which is one
+#              word of the enclosing simple command, and the first `)` closes it. A `(` that is
+#              none of those, a subshell, opens no region, and the first `)` after it closes the
+#              enclosing one, as the scanner reads it.
 #
 #              The state is an associative array the caller declares and passes by name, empty at the
 #              start of a stream. `kinds` holds one letter per open region, innermost last (`P`
-#              parenthesis, `A` arithmetic, `B` backtick), so `${#state[kinds]}` is the depth. `end`
-#              and `token` describe the token just stepped, and `prev_end` and `prev_token` the one
-#              before it. Callers pass only non-empty tokens, as the `{ read offset token }` loops
-#              all skip empty ones first.
+#              parenthesis, `A` arithmetic, `B` backtick, `S` process substitution), so
+#              `${#state[kinds]}` is the depth. `closed` holds the letter of the region the token
+#              just closed, empty for any other token, so a reader can tell the `)` of a process
+#              substitution (a word) from the `)` of a subshell (an operator). `end` and `token`
+#              describe the token just stepped, and `prev_end` and `prev_token` the one before it.
+#              Callers pass only non-empty tokens, as the `{ read offset token }` loops all skip
+#              empty ones first.
 # @arg $1 command the raw command string, for the byte after a `(`
 # @arg $2 offset the token's byte offset in the command
 # @arg $3 token the token
@@ -395,7 +418,7 @@ function tokens::redirection_span_back() {
 #         variable called command, offset, token, kinds, depth, top, kind_ref or state_ref.
 # @arg $5 kind name of the caller's variable that receives the result: empty when the token neither
 #         opens nor closes a region, `close` when it closes the innermost one, otherwise the
-#         letter of the region it opens
+#         letter of the region it opens (`P`, `A`, `B` or `S`)
 # @set state updated as described above
 # @set kind the result
 # shellcheck disable=SC2034 # kind_ref is the caller's variable, written through the nameref
@@ -403,8 +426,9 @@ function tokens::region_step() {
   local -r command="$1" offset="$2" token="$3"
   local -n state_ref="$4"
   local -n kind_ref="$5"
-  local -r kinds="${state_ref[kinds]:-}"
+  local -r kinds="${state_ref[kinds]:-}" before="${state_ref[token]:-}"
   local -r depth="${#kinds}"
+  local -r glued="$((${state_ref[end]:--1} == offset))"
   local top=''
   if ((depth > 0)); then
     top="${kinds:depth-1:1}"
@@ -419,12 +443,14 @@ function tokens::region_step() {
       fi
       ;;
     '(')
-      if [[ "${state_ref[token]:-}" == *'$' ]] && ((${state_ref[end]:--1} == offset)); then
+      if [[ "${before}" == *'$' ]] && ((glued == 1)); then
         if [[ "${command:offset+1:1}" == '(' ]]; then
           kind_ref='A'
         else
           kind_ref='P'
         fi
+      elif [[ "${before}" == '<' || "${before}" == '>' ]] && ((glued == 1)); then
+        kind_ref='S'
       elif ((depth > 0)) && [[ "${top}" == 'A' || "${command:offset+1:1}" == '(' ]]; then
         kind_ref='A'
       fi
@@ -435,9 +461,13 @@ function tokens::region_step() {
       fi
       ;;
   esac
+  state_ref['closed']=''
   case "${kind_ref}" in
     '') ;;
-    'close') state_ref[kinds]="${kinds:0:depth-1}" ;;
+    'close')
+      state_ref['closed']="${top}"
+      state_ref[kinds]="${kinds:0:depth-1}"
+      ;;
     *) state_ref[kinds]="${kinds}${kind_ref}" ;;
   esac
   state_ref['prev_end']="${state_ref[end]:--1}"

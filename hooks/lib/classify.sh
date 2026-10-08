@@ -67,9 +67,9 @@ function classify::task_poll_detected() {
       done
     fi
     if ((is_ref == 1)); then
-      context="$(loops::loop_context "${tokens}" "${idx}")"
+      context="$(loops::loop_context "${command}" "${tokens}" "${idx}")"
       if [[ "${context}" == 'cond' ]] \
-        || { [[ "${context}" == 'body' ]] && loops::body_has_terminator "${tokens}" "${idx}"; }; then
+        || { [[ "${context}" == 'body' ]] && loops::body_has_terminator "${command}" "${tokens}" "${idx}"; }; then
         printf '%s\n' "${path}"
         return 0
       fi
@@ -119,7 +119,7 @@ function classify::probe_keys() {
       if [[ $'\n'"${keys}" != *$'\n'"${key}"$'\n'* ]]; then
         keys+="${key}"$'\n'
       fi
-    done <<< "$(scanner::find_invocations "${tokens}")"
+    done <<< "$(scanner::find_invocations "${command}" "${tokens}")"
   fi
   printf '%s' "${keys}"
 }
@@ -151,7 +151,7 @@ function classify::classify_invocation() {
     printf 'deny:kill\t%s\n' "${name}"
     return 0
   fi
-  context="$(loops::loop_context "${tokens}" "${idx}")"
+  context="$(loops::loop_context "${command}" "${tokens}" "${idx}")"
   case "${context}" in
     'cond')
       printf 'deny:loop\t%s\n' "${name}"
@@ -159,7 +159,7 @@ function classify::classify_invocation() {
       ;;
     'body')
       if consumption::result_is_consumed "${tokens_var}" "${idx}" "${args}" "${command}" "${tokens}" \
-        && loops::body_has_terminator "${tokens}" "${idx}"; then
+        && loops::body_has_terminator "${command}" "${tokens}" "${idx}"; then
         printf 'deny:loop\t%s\n' "${name}"
         return 0
       fi
@@ -242,9 +242,10 @@ function classify::classify_command() {
   # array per invocation, and consumption::next_command_reads_status still reads
   # the stream itself; what the array saves is the repeated split.
   #
-  # cmd_openers is sparse: the entry at the index of a token that closes a `$(...)`, `$((...))` or
-  # backtick region holds the index of the token that opened it, so that
-  # consumption::feeds_a_kill_backward can step over a whole region.
+  # cmd_openers is sparse: the entry at the index of a token that closes a `$(...)`, `$((...))`,
+  # backtick or process-substitution region holds the index of the token that opened it, so that
+  # consumption::feeds_a_kill_backward can step over a whole region. For a process substitution
+  # that is the `<` or `>` before the `(`, which belongs to the same word.
   local -a cmd_tokens=() cmd_openers=() open_stack=()
   local -A region=()
   local raw_offset raw_token region_kind
@@ -257,6 +258,7 @@ function classify::classify_command() {
         cmd_openers["${#cmd_tokens[@]}"]="${open_stack[-1]}"
         unset 'open_stack[-1]'
         ;;
+      'S') open_stack+=("$((${#cmd_tokens[@]} - 1))") ;;
       *) open_stack+=("${#cmd_tokens[@]}") ;;
     esac
     cmd_tokens+=("${raw_token}")
@@ -268,7 +270,7 @@ function classify::classify_command() {
   # stream is still needed below for the task-poll tier.
   local invocations=''
   if [[ "${command}" == *pgrep* || "${command}" == *pkill* ]]; then
-    invocations="$(scanner::find_invocations "${tokens}")"
+    invocations="$(scanner::find_invocations "${command}" "${tokens}")"
   fi
   while IFS=$'\t' read -r idx offset name; do
     [[ -z "${idx}" ]] && continue

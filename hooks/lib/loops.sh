@@ -22,13 +22,18 @@
 #              simply inside a substitution with no loop of its own still belongs to whatever cond/body
 #              span encloses that substitution, which is why `until [ -z "$(pgrep --full x)" ]; do ...`
 #              still reports `cond` -- the lookup skips barrier markers to find the nearest real span.
-# @arg $1 tokens the token stream from scanner::scan_command
-# @arg $2 target index of the invocation token
+#              The `)` of a process substitution (`<(...)`, `>(...)`) ends a word of its command and
+#              not the command itself, so a loop keyword right after it is an argument
+#              (`cat <(echo x) done`).
+# @arg $1 command the raw command string
+# @arg $2 tokens the token stream from scanner::scan_command
+# @arg $3 target index of the invocation token
 # @stdout none, cond, or body
 function loops::loop_context() {
-  local -r tokens="$1" target="$2"
+  local -r command="$1" tokens="$2" target="$3"
   local -a stack=()
-  local idx=0 at_cmd=1 dollar=0 offset token redir=''
+  local idx=0 at_cmd=1 dollar=0 offset token redir='' kind
+  local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((idx == target)); then
@@ -53,6 +58,7 @@ function loops::loop_context() {
       printf '%s\n' "${found}"
       return 0
     fi
+    tokens::region_step "${command}" "${offset}" "${token}" region kind
     # A redirection leaves command position as it was, like the rest of the walkers (see
     # tokens::redirection_step).
     if tokens::redirection_step "${token}" redir; then
@@ -112,7 +118,10 @@ function loops::loop_context() {
     else
       dollar=0
     fi
-    if tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
+    # The `)` of a process substitution ends a word, not a command.
+    if [[ "${kind}" == 'close' && "${region[closed]}" == 'S' ]]; then
+      at_cmd=0
+    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
       at_cmd=0
@@ -131,18 +140,20 @@ function loops::loop_context() {
 #              followed it, and loops::loop_context (which has the barrier) answered `body` for the same
 #              command -- two readers of one structure disagreeing (#8). The barrier is opaque in
 #              both directions: while one is open, every loop keyword is ignored.
-# @arg $1 tokens the token stream from scanner::scan_command
-# @arg $2 target index of the invocation token
+# @arg $1 command the raw command string
+# @arg $2 tokens the token stream from scanner::scan_command
+# @arg $3 target index of the invocation token
 # @exitcode 0 a terminator is present in the enclosing body
 # @exitcode 1 no terminator
 function loops::body_has_terminator() {
-  local -r tokens="$1" target="$2"
-  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token redir=''
+  local -r command="$1" tokens="$2" target="$3"
+  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token redir='' kind
   local -a barrier=()
-  # shellcheck disable=SC2034 # offset is the record's first field; only the token matters here
+  local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     ((idx == target)) && seen=1
+    tokens::region_step "${command}" "${offset}" "${token}" region kind
     # A redirection in front of a terminator (`>f break`) leaves command position as it was.
     if tokens::redirection_step "${token}" redir; then
       idx="$((idx + 1))"
@@ -187,7 +198,10 @@ function loops::body_has_terminator() {
     else
       dollar=0
     fi
-    if tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
+    # The `)` of a process substitution ends a word, not a command.
+    if [[ "${kind}" == 'close' && "${region[closed]}" == 'S' ]]; then
+      at_cmd=0
+    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
       at_cmd=0
@@ -210,12 +224,14 @@ function loops::body_has_terminator() {
 #              kills (`for f in $(pgrep -f java); do echo "$f"; done`) must return 1 so the caller
 #              falls through to the ordinary warn path.
 # @arg $1 tokens_var name of the caller's token array
-# @arg $2 head_idx index of the `in`/`while`/`until` token whose body's `do` follows
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 head_idx index of the `in`/`while`/`until` token whose body's `do` follows
 # @exitcode 0 the loop body kills
 # @exitcode 1 it does not, or no body was found
 function loops::loop_body_has_kill() {
   local -n toks="$1"
-  local -r head_idx="$2"
+  local -r tokens_var="$1" openers_var="$2" head_idx="$3"
   # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
   local idx="$((head_idx + 1))" token found_do=0 body_depth=1 at_cmd=1 redir=''
   local -a pstack=()
@@ -263,7 +279,10 @@ function loops::loop_body_has_kill() {
         'kill') return 0 ;;
       esac
     fi
-    if tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
+    # The `)` of a process substitution ends a word, not a command.
+    if tokens::is_procsub_close "${tokens_var}" "${openers_var}" "${idx}"; then
+      at_cmd=0
+    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
       at_cmd=0

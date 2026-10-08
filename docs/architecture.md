@@ -154,7 +154,7 @@ low-level helpers first. That is the order below.
 | `lib/loops.sh`       | `loops::loop_context`, `loops::body_has_terminator`, `loops::loop_body_has_kill`                                                                                                                                                                                                                                                                                                                  |
 | `lib/messages.sh`    | `messages::emit_warn`, `messages::emit_deny`, `WARN_MESSAGE`, `SCANNER_INACTIVE_MESSAGE`, `WRITE_TOOL_LEAD`, `messages::deny_message`, `messages::repeat_message`                                                                                                                                                                                                                                 |
 | `lib/consumption.sh` | `XARGS_VALUE_OPTIONS`, `consumption::is_xargs_value_option`, `consumption::feeds_a_kill_forward`, `consumption::kill_in_command_position`, `consumption::feeds_a_kill_backward`, `consumption::feeds_a_kill`, `consumption::invocation_is_captured`, `consumption::next_command_reads_status`, `consumption::result_is_consumed`                                                                  |
-| `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrappers::wrapper_operand_budget`, `wrappers::pipe_producer_payload`, `wrappers::pipe_carry_clear`, `wrappers::segment_pipe_carry`, `wrappers::redirection_replaces_stdin`, `wrappers::shell_wrapper_payloads`                                                                                                        |
+| `lib/wrappers.sh`    | `LOCAL_SHELL_WRAPPERS`, `LOCAL_USER_SWITCH_WRAPPERS`, `MAX_PAYLOAD_DEPTH`, `wrappers::wrapper_operand_budget`, `wrappers::pipe_producer_payload`, `wrappers::pipe_carry_clear`, `wrappers::segment_pipe_carry`, `wrappers::redirection_replaces_stdin`, `wrappers::cut_substitutions`, `wrappers::shell_wrapper_payloads`                                                                         |
 | `lib/repeat.sh`      | `REPEAT_THRESHOLD`, `REPEAT_WINDOW_SECONDS`, `REPEAT_MAX_ENTRIES`, `repeat::repeat_check`                                                                                                                                                                                                                                                                                                         |
 | `lib/classify.sh`    | `TASK_OUTPUT_PATH_RE`, `classify::task_poll_detected`, `classify::probe_keys`, `classify::classify_invocation`, `classify::classify_wrapper_payloads`, `classify::classify_command`, `classify::inspect_preconditions`, `classify::repeat_tier_reason`, `classify::inspect_command`                                                                                                               |
 | `lib/human.sh`       | `human::print_help`, `human::human_mode`                                                                                                                                                                                                                                                                                                                                                          |
@@ -251,6 +251,14 @@ forward walks share `tokens::redirection_step`; the ones that read backward from
 a `kill` or from the invocation use `tokens::redirection_span_back`.
 `wrappers::shell_wrapper_payloads` keeps its own redirection handling, because
 it also tracks the heredoc and the pipe a redirection can replace.
+The braces of an unquoted `${...}` stay inside their word, so `FOO=${x} bash`
+and `> ${log}` are one word each, and `{name}` directly before a redirection
+operator (`{fd}>&1`) is read as a descriptor other than 0. A command
+substitution is still code to the scanner, but the simple command around it
+goes on past it: `wrappers::cut_substitutions` cuts each outermost `$(...)`,
+`$((...))` and backtick region out of the stream the wrapper reader walks, scans
+the region's own tokens for wrappers separately, and leaves the heredoc ordinals
+of what follows in step.
 
 The last line is the **integrity trailer**, `\t<SCAN:n>`, where `n` is the byte
 count of the command the scanner reassembled. `scanner::scan_command` requires that to

@@ -401,6 +401,48 @@ function words() {
   assert_output 'x < ( y ) > ( z )'
 }
 
+# --- A parameter expansion's braces stay inside its word ---------------------
+
+@test "scanner: an unquoted parameter expansion is one word" {
+  run words 'FOO=${x} bash'
+  assert_output 'FOO=$_x_ bash'
+}
+
+@test "scanner: a parameter expansion between words keeps both neighbours" {
+  run words 'bash > ${log} -c y'
+  assert_output 'bash > $_log_ -c y'
+}
+
+@test "scanner: a command substitution inside a parameter expansion is still code" {
+  run words 'echo ${x:-$(a)} b'
+  assert_output 'echo $_x:-$ ( a ) _ b'
+}
+
+@test "scanner: a parameter expansion's length form is one word" {
+  run words 'echo ${#arr[@]} b'
+  assert_output 'echo $_#arr[@]_ b'
+}
+
+@test "scanner: a space inside a parameter expansion does not split its word" {
+  run words 'echo ${x:-a b} c'
+  assert_output 'echo $_x:-a_b_ c'
+}
+
+@test "scanner: a hash inside a parameter expansion opens no comment" {
+  run words 'echo ${x:-a #b}; y'
+  assert_output 'echo $_x:-a_#b_ ; y'
+}
+
+@test "scanner: a brace group stays a brace group" {
+  run words '{ x; } ; echo {a,b}>f'
+  assert_output '{ x ; } ; echo { a,b } > f'
+}
+
+@test "scanner: a named descriptor before a redirection is a descriptor other than 0" {
+  run words 'bash {fd}>&1 -c y'
+  assert_output 'bash 9> & 1 -c y'
+}
+
 # --- The guard must announce itself dead, never die quietly ------------------
 
 # @description Run a copy of the hook end to end under a stripped environment and

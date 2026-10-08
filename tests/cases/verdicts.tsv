@@ -645,3 +645,37 @@
 "pkill >&2 --full java"	deny:kill
 "pkill >|f -f java"	deny:kill
 "pkill --full 2>&1 java"	deny:kill
+"echo 'pkill --full X' | FOO=$(true) bash"	deny:kill
+"echo 'pkill --full X' | FOO=`true` bash"	deny:kill
+"echo 'pkill --full X' | FOO=$((1+1)) bash"	deny:kill
+"echo 'pkill --full X' | FOO=\"$(true)\" bash"	deny:kill
+"echo 'pkill --full X' | FOO=${x} bash"	deny:kill
+"echo 'pkill --full X' | FOO=bar bash"	deny:kill
+"echo 'pkill --full X' | sudo FOO=${x} bash"	deny:kill
+"echo 'pkill --full X' | FOO=$(true) FOO2=${y} bash"	deny:kill
+"cat <<'EOF' | FOO=$(true) bash\npkill --full X\nEOF"	deny:kill
+"bash > ${log} <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash > \"$(mktemp)\" <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash > `mktemp` <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash 2>&${fd} <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash {fd}>&1 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash > ${log} -c 'pkill --full X'"	deny:kill
+"bash > \"$(mktemp)\" -c 'pkill --full X'"	deny:kill
+"FOO=$(echo hi) bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"FOO=$(cat <<'EOF'\nhello\nEOF\n) bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"FOO=$(echo 'pkill --full X' | bash) true"	deny:kill
+"echo 'pkill --full X' | FOO=$(echo 'echo PAYLOAD_RAN' | bash) bash"	deny:kill
+"echo 'echo PAYLOAD_RAN' | FOO=$(true) bash"	allow
+"echo 'echo PAYLOAD_RAN' | FOO=${x} bash"	allow
+"bash > ${log} <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"bash > \"$(mktemp)\" <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"bash ${x} <<'EOF'\npkill --full X\nEOF"	allow
+"bash $(true) <<'EOF'\npkill --full X\nEOF"	allow
+"pkill ${x} --full X"	deny:kill
+"pkill ${x} -f X"	deny:kill
+"echo 'pkill --full X' | FOO=$( ((1)) ) bash"	deny:kill
+"echo 'pkill --full X' | FOO=${x:-a b} bash"	deny:kill
+"echo ${x:-a #b}; pkill --full X"	deny:kill
+"echo 'echo PAYLOAD_RAN' | FOO=${x:-a b} bash"	allow
+"echo 'echo PAYLOAD_RAN' | FOO=$( ((1)) ) bash"	allow
+"echo 'pkill --full X' |`foo` bash"	allow

@@ -217,6 +217,129 @@ function wrappers::redirection_replaces_stdin() {
   esac
 }
 
+# @description Cut every outermost `$(...)`, `$((...))` and backtick region out of a token stream,
+#              so that the simple command around it reads as if the region were one word, and
+#              scan each region's own tokens for wrappers.
+#
+#              The scanner re-enters code context inside a region, so its tokens (`(`, `)`, the
+#              backtick) look like command boundaries to a reader of the simple command that
+#              contains it. They are not boundaries of that command: `FOO=$(true) bash` is one
+#              simple command, and `bash > "$(mktemp)" <<EOF` still owns its heredoc. The region
+#              is a command in its own right, though, and may hold a wrapper of its own, so its
+#              tokens go to wrappers::shell_wrapper_payloads on their own, which prints that
+#              region's payloads here.
+#
+#              A region is found the way the scanner finds it: a `(` glued to a `$` opens one,
+#              and the first `)` closes it, except that inside an arithmetic region (`$((`) a `(`
+#              nests, and so does a `(` directly followed by another `(`; a backtick closes a
+#              backtick region and opens one anywhere else. A `(` that is neither, a subshell
+#              or a process substitution, opens no region, and the first `)` after it closes
+#              the enclosing one, as the scanner reads it.
+#              A region with no close runs to the end of the stream, as the scanner reads it.
+#
+#              What the outer stream keeps of a region: the `$` word it hangs off, or a one-byte
+#              word standing in for a backtick region that follows whitespace or touches an operator,
+#              and an inert `<HO>` token for each heredoc operator and the body markers inside,
+#              so that the heredoc ordinals of the operators and bodies after the region
+#              still line up. A token glued directly behind the close (the closing quote of
+#              `"$(mktemp)"`, the `x` of `$(true)x`) belongs to the same word and is dropped; an
+#              operator glued there is kept.
+#
+#              Not handled: a heredoc whose operator is inside a region and whose body marker
+#              is outside it (`$(cat <<EOF)` then the body on the next line). The region's
+#              heredoc gets no body, and the ordinals outside it stay right.
+# @arg $1 command the raw command string
+# @arg $2 stream the token stream from scanner::scan_command
+# @arg $3 outer_var name of the variable set to the stream with each outermost region cut out (set)
+# @stdout the payloads found inside the cut regions, NUL-terminated
+# @exitcode 0 always; it ends on an assignment
+# shellcheck disable=SC2034 # cut_outer is the caller's variable, written through the nameref
+function wrappers::cut_substitutions() {
+  local -r command="$1" stream="$2"
+  local -n cut_outer="$3"
+  local -r heredoc_re='^[0-9]*<<([^<]|$)'
+  local offset token kind
+  local -a open_kinds=()
+  local outer='' region='' glue_at=-1 last_end=-1 last_token=''
+  while IFS=$'\t' read -r offset token; do
+    if [[ -z "${token}" ]]; then
+      outer+="${offset}"$'\t'$'\n'
+      continue
+    fi
+    kind=''
+    case "${token}" in
+      '`')
+        if ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" == 'B' ]]; then
+          kind='close'
+        else
+          kind='B'
+        fi
+        ;;
+      '(')
+        if [[ "${last_token}" == *'$' ]] && ((last_end == offset)); then
+          if [[ "${command:offset+1:1}" == '(' ]]; then
+            kind='A'
+          else
+            kind='P'
+          fi
+        elif ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" == 'A' || "${command:offset+1:1}" == '(' ]]; then
+          kind='A'
+        fi
+        ;;
+      ')')
+        if ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" != 'B' ]]; then
+          kind='close'
+        fi
+        ;;
+    esac
+    case "${kind}" in
+      '')
+        if ((${#open_kinds[@]} == 0)); then
+          if ((offset != glue_at)) || tokens::is_operator "${token}" \
+            || [[ "${token}" == '<'* || "${token}" == *'>'* ]]; then
+            outer+="${offset}"$'\t'"${token}"$'\n'
+          fi
+        else
+          region+="${offset}"$'\t'"${token}"$'\n'
+          if [[ "${token}" =~ ${heredoc_re} ]]; then
+            outer+="${offset}"$'\t''<HO>'$'\n'
+          elif [[ "${token}" == '<HD:'*'>' ]]; then
+            outer+="${offset}"$'\t'"${token}"$'\n'
+          fi
+        fi
+        ;;
+      'close')
+        unset 'open_kinds[-1]'
+        if ((${#open_kinds[@]} == 0)); then
+          wrappers::shell_wrapper_payloads "${command}" "${region}"
+          region=''
+          glue_at="$((offset + 1))"
+        else
+          region+="${offset}"$'\t'"${token}"$'\n'
+        fi
+        ;;
+      *)
+        if ((${#open_kinds[@]} == 0)); then
+          # A backtick that follows whitespace or touches an operator has no word
+          # of its own to hang off, so one stands in for it.
+          if [[ "${kind}" == 'B' ]] && { ((last_end != offset)) || tokens::is_operator "${last_token}"; }; then
+            outer+="${offset}"$'\t'$'\001'$'\n'
+          fi
+        else
+          region+="${offset}"$'\t'"${token}"$'\n'
+        fi
+        open_kinds+=("${kind}")
+        ;;
+    esac
+    last_end="$((offset + ${#token}))"
+    last_token="${token}"
+  done <<< "${stream}"
+  if ((${#open_kinds[@]} > 0)); then
+    wrappers::shell_wrapper_payloads "${command}" "${region}"
+  fi
+  cut_outer="${outer}"
+}
+
 # @description Find the payloads of local shell wrappers and print each one's raw text,
 #              NUL-terminated, with any surrounding quotes stripped.
 #
@@ -290,13 +413,27 @@ function wrappers::redirection_replaces_stdin() {
 #              Payloads are NUL-terminated because a heredoc body is usually several lines and
 #              has to reach classify::classify_command as one command.
 #
-#              Command position is tracked exactly as scanner::find_invocations tracks it, including the
-#              prefix-word chain, so `sudo bash -c ...` is reached.
+#              An expansion inside a word of the wrapper's simple command (`FOO=$(true) bash`,
+#              `FOO=${x} bash`, `bash > "$(mktemp)" <<EOF`) is part of that word: the scanner keeps the
+#              braces of `${...}` inside the word, and wrappers::cut_substitutions takes a command
+#              substitution out of the stream. An expansion as an operand (`bash ${x} <<EOF`) is an
+#              operand like a quoted one, so the body is that script's stdin; its value is not on the
+#              command line, which is a limit.
+#
+#              Command position is tracked as scanner::find_invocations tracks it, including the
+#              prefix-word chain, so `sudo bash -c ...` is reached; the one difference is that this
+#              reader steps over a substitution region as part of a word.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @stdout one payload per NUL, quotes stripped; nothing if there are none
 function wrappers::shell_wrapper_payloads() {
-  local -r command="$1" tokens="$2"
+  local -r command="$1"
+  local tokens="$2"
+  # Regions are rare, and cutting them costs a pass over the stream, so the
+  # raw text decides whether to look for any.
+  if [[ "${command}" == *\$\(* || "${command}" == *'`'* ]]; then
+    wrappers::cut_substitutions "${command}" "${tokens}" tokens
+  fi
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
   local offset token word next_at_cmd is_cmd_word raw budget
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
@@ -348,6 +485,12 @@ function wrappers::shell_wrapper_payloads() {
     # as an operand.
     if ((expect_delim == 1)); then
       expect_delim=0
+      continue
+    fi
+    # A heredoc operator inside a cut region: it only keeps the ordinals of the
+    # operators after it in step with the body markers.
+    if [[ "${token}" == '<HO>' ]]; then
+      heredoc_seq="$((heredoc_seq + 1))"
       continue
     fi
     if [[ "${token}" =~ ${bare_heredoc_re} ]]; then

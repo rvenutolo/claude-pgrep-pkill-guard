@@ -392,7 +392,7 @@ function tokens::redirection_span_back() {
 # @arg $2 offset the token's byte offset in the command
 # @arg $3 token the token
 # @arg $4 state name of the caller's associative array holding the tracking state. Never pass a
-#         variable called command, offset, token, kind_ref or state_ref.
+#         variable called command, offset, token, kinds, depth, top, kind_ref or state_ref.
 # @arg $5 kind name of the caller's variable that receives the result: empty when the token neither
 #         opens nor closes a region, `close` when it closes the innermost one, otherwise the
 #         letter of the region it opens

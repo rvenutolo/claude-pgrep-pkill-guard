@@ -129,20 +129,38 @@ function consumption::feeds_a_kill_forward() {
 #              for a real subshell or grouping construct, but `name=(...)` is an array literal: the
 #              `(` merely opens a list of words, and a `kill` immediately inside it is never invoked.
 #              The token right before the `(` ending in `=` is what tells them apart.
+#              A `$(...)`, `$((...))` or backtick region that closed right before the `kill` is a
+#              word, so the `kill` is its argument (`echo $(true) kill`) -- unless the region is
+#              the value of an assignment word (`` FOO=`true` kill ``), which the walk steps over.
 # @arg $1 tokens_var name of the caller's token array
-# @arg $2 index index of the token immediately before the `kill` word
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 index index of the token immediately before the `kill` word
 # @exitcode 0 the kill is in command position
 # @exitcode 1 it is an argument word, or sits inside an array literal
 function consumption::kill_in_command_position() {
   local -n toks="$1"
+  local -n openers="$2"
   local -r tokens_var="$1"
-  local index="$2" span
+  local index="$3" span opener
   while ((index >= 0)); do
     # A redirection in front of the `kill` (`>f kill $(pgrep ...)`) is skipped whole, target
     # included, before the word it would otherwise stop on.
     tokens::redirection_span_back "${tokens_var}" "${index}" span
     if ((span > 0)); then
       index="$((index - span))"
+      continue
+    fi
+    if [[ -n "${openers[index]:-}" ]]; then
+      opener="${openers[index]}"
+      if [[ "${toks[opener]}" == '`' ]]; then
+        # A backtick has no `$` word of its own to stand for the region: a glued assignment name
+        # before it is the only thing that makes the region a value rather than the command word.
+        ((opener > 0)) && [[ "${toks[opener - 1]}" == *= ]] || return 1
+        index="$((opener - 2))"
+      else
+        index="$((opener - 1))"
+      fi
       continue
     fi
     if tokens::is_prefix_command "${toks[index]##*/}" || tokens::is_assignment_word "${toks[index]}"; then
@@ -183,7 +201,7 @@ function consumption::kill_in_command_position() {
 function consumption::feeds_a_kill_backward() {
   local -n toks="$1"
   local -n openers="$2"
-  local -r tokens_var="$1" target="$3"
+  local -r tokens_var="$1" openers_var="$2" target="$3"
   local word k="$((target - 1))" span
   while ((k >= 0)); do
     # A redirection between the substitution's opener and the invocation
@@ -204,7 +222,7 @@ function consumption::feeds_a_kill_backward() {
       'kill')
         # The left side of `&&`: its non-zero status means "not in command position, keep walking",
         # and errexit and the ERR trap both leave it alone there.
-        consumption::kill_in_command_position "${tokens_var}" "$((k - 1))" && return 0
+        consumption::kill_in_command_position "${tokens_var}" "${openers_var}" "$((k - 1))" && return 0
         ;;
       'in')
         if ((k >= 2)) && { [[ "${toks[k - 2]}" == 'for' ]] || [[ "${toks[k - 2]}" == 'select' ]]; }; then

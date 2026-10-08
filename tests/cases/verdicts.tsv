@@ -717,3 +717,12 @@
 "for p in foo $(pgrep --full X); do echo PAYLOAD_RAN; done"	warn
 "kill foo kill $(pgrep --full X)"	deny:kill
 "echo kill $(true) $(pgrep --full X)"	warn
+"echo $(true) kill foo $(pgrep --full X)"	warn
+"echo $(true) kill $(pgrep --full X)"	warn
+"echo `true` kill $(pgrep --full X)"	warn
+"echo $((1)) kill $(pgrep --full X)"	warn
+"FOO=$(true) kill foo $(pgrep --full X)"	deny:kill
+"FOO=`true` kill foo $(pgrep --full X)"	deny:kill
+"FOO=$(true) kill $(pgrep --full X)"	deny:kill
+"true; echo $(true) kill foo $(pgrep --full X)"	warn
+"$(true) kill foo $(pgrep --full X)"	warn

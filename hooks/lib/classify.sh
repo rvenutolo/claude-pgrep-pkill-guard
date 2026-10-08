@@ -274,8 +274,8 @@ function classify::classify_command() {
     [[ -z "${idx}" ]] && continue
     args="$(scanner::invocation_args "${command}" "${tokens}" "${idx}")"
     scanner::has_flag "${args}" '--full' 'f' || continue
-    if invocation_finding="$(classify::classify_invocation cmd_tokens cmd_openers "${command}" "${tokens}" "${idx}" "${name}" \
-      "${args}")"; then
+    if invocation_finding="$(classify::classify_invocation cmd_tokens cmd_openers "${command}" "${tokens}" \
+      "${idx}" "${name}" "${args}")"; then
       case "${invocation_finding}" in
         deny:*)
           printf '%s\n' "${invocation_finding}"

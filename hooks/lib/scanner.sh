@@ -66,14 +66,51 @@ function scanner::scan_command() {
 #              never recorded. A redirection anywhere in front of the command word
 #              (`2> /dev/null pkill ...`, `sudo >f pkill ...`, `FOO=1 >f pkill ...`) is skipped
 #              with its target, by tokens::redirection_step, for the same reason.
-# @arg $1 tokens newline-separated "<offset>\t<token>" records from scanner::scan_command
+#
+#              A process substitution (`<(...)`, `>(...)`) is one word of the simple command around
+#              it, so `cat <(echo x) pkill --full X` has no invocation: `pkill` is `cat`'s argument.
+#              Its body is a command list of its own, and does have invocations. The `)` that
+#              closes it gives the state back as it stood at the opener, after one word, found by
+#              tokens::region_step.
+# @arg $1 command the raw command string
+# @arg $2 tokens newline-separated "<offset>\t<token>" records from scanner::scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>"
 function scanner::find_invocations() {
-  local -r tokens="$1"
+  local -r command="$1" tokens="$2"
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
-  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0 redir=''
+  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0 redir='' kind lt_glued=0 glued_back
+  local -a saved=()
+  local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
+    tokens::region_step "${command}" "${offset}" "${token}" region kind
+    # A process substitution is one word of the simple command around it. Its body is a command
+    # list of its own, which the `(` starts, and the `)` that ends it hands the state back as it
+    # stood at the opener, after that one word. When the `<` or `>` touches a word before it
+    # (`FOO=<(...)`, `a<(...)`) the substitution is a part of that word, which has been stepped
+    # already, so no further word is stepped.
+    if [[ "${token}" == '<' || "${token}" == '>' ]]; then
+      lt_glued=0
+      if ((region[prev_end] == offset)) && ! tokens::is_operator "${region[prev_token]}"; then
+        lt_glued=1
+      fi
+    fi
+    if [[ "${kind}" == 'S' ]]; then
+      saved+=("${lt_glued}:${at_cmd}:${chain}:${chain_skip}:${chain_operands}")
+    elif [[ "${kind}" == 'close' && "${region[closed]}" == 'S' ]]; then
+      IFS=':' read -r glued_back at_cmd chain chain_skip chain_operands <<< "${saved[-1]}"
+      unset 'saved[-1]'
+      if ((glued_back == 0)); then
+        if tokens::prefix_chain_step 'procsub' 'procsub' "${at_cmd}" chain chain_skip chain_operands; then
+          at_cmd=1
+        else
+          at_cmd=0
+        fi
+      fi
+      redir=''
+      idx="$((idx + 1))"
+      continue
+    fi
     # A redirection is neither the command word nor a prefix's word, wherever it sits: it leaves
     # command position, the chain and a pending option value exactly as they were.
     if tokens::redirection_step "${token}" redir; then
@@ -101,8 +138,10 @@ function scanner::find_invocations() {
 #
 #              A `$(...)`, `$((...))` or backtick region after the command name is a word of this
 #              simple command, not the end of it: `pkill $(true) --full X` keeps `--full` and `X`.
-#              The region's own tokens are dropped and the `$` word it hangs off stays. A token glued
-#              directly behind the close (the `x` of `$(true)x`) belongs to that same word and is dropped.
+#              The region's own tokens are dropped and the `$` word it hangs off stays. A process
+#              substitution (`<(...)`, `>(...)`) is a word of the simple command too and is dropped
+#              whole, so `pkill <(echo x) --full X` keeps `--full` and `X`. A token glued directly
+#              behind the close (the `x` of `$(true)x`) belongs to that same word and is dropped.
 #              The regions are the scanner's, found by tokens::region_step. An invocation that sits
 #              inside a region (`$(pgrep ...)`) ends at that region's own close.
 # @arg $1 command the raw command string
@@ -118,6 +157,10 @@ function scanner::invocation_args() {
     [[ -z "${token}" ]] && continue
     tokens::region_step "${command}" "${offset}" "${token}" region kind
     skip=0
+    # The `<` or `>` before a process substitution's `(` set the redirection state; the region
+    # is skipped whole, so nothing else would clear it and the next word would read as a target.
+    # shellcheck disable=SC2034 # redir is read by tokens::redirection_step through its nameref
+    [[ "${kind}" == 'S' ]] && redir=''
     if ((idx == target)); then
       base="${#region[kinds]}"
     elif ((idx > target)); then

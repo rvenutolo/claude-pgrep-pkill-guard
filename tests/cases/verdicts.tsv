@@ -726,3 +726,50 @@
 "FOO=$(true) kill $(pgrep --full X)"	deny:kill
 "true; echo $(true) kill foo $(pgrep --full X)"	warn
 "$(true) kill foo $(pgrep --full X)"	warn
+"cat <(echo x) pkill --full X"	allow
+"cat >(echo x) pkill --full X"	allow
+"cat <(echo x) <(echo y) pkill --full X"	allow
+"echo a; cat <(echo x) pkill --full X"	allow
+"diff <(echo a) <(echo b) pkill --full X"	allow
+"sudo cat <(echo x) pkill --full X"	allow
+"cat <(cat <(echo x) pkill --full X)"	allow
+"cat <(echo x) && pkill --full X"	deny:kill
+"cat <(echo x) | pkill --full X"	deny:kill
+"cat <(echo x) ; pkill --full X"	deny:kill
+"{ cat <(echo x); pkill --full X; }"	deny:kill
+"cat <(pkill --full X)"	deny:kill
+"cat >(pkill --full X)"	deny:kill
+"cat <(echo x) <(pkill --full X)"	deny:kill
+"cat <(echo $(pkill --full X))"	deny:kill
+"pkill <(echo x) --full X"	deny:kill
+"pkill >(echo x) --full X"	deny:kill
+"pkill --full <(echo x) X"	deny:kill
+"pkill --full X <(echo x)"	deny:kill
+"pkill -f <(echo x) <(echo y) X"	deny:kill
+"cat <(echo x) bash -c 'pkill --full X'"	allow
+"cat <(bash -c 'pkill --full X')"	deny:kill
+"cat <(echo x) bash <<'EOF'\npkill --full X\nEOF"	allow
+"echo 'pkill --full X' | cat <(echo x) bash"	allow
+"while cat <(echo x) pgrep --full X; do sleep 1; done"	allow
+"until cat <(echo x) pgrep --full X; do sleep 1; done"	allow
+"if cat <(echo x) pgrep --full X; then echo PAYLOAD_RAN; fi"	allow
+"while pgrep --full X <(echo x); do sleep 1; done"	deny:loop
+"cat <(echo x) pgrep --full X | xargs kill"	allow
+"for p in $(cat <(echo x) pgrep --full X); do kill $p; done"	allow
+"kill $(cat <(echo x) pgrep --full X)"	allow
+"kill $(pgrep <(echo x) --full X)"	deny:kill
+"kill <(echo x) $(pgrep --full X)"	deny:kill
+"pgrep <(echo x) --full X | xargs kill"	deny:kill
+"while true; do if pgrep --full X; then cat <(echo x) break; fi; done"	warn
+"while true; do if pgrep --full X; then cat <(echo x); break; fi; done"	deny:loop
+"while true; do if pgrep --full X; then cat >(echo x) break; fi; done"	warn
+"FOO=<(echo x) pkill --full X"	deny:kill
+"x=>(echo PAYLOAD_RAN) pkill --full X"	deny:kill
+"FOO=1 BAR=<(echo x) pkill --full X"	deny:kill
+"FOO=<(echo x) bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"FOO=<(echo x) bash -c 'pkill --full X'"	deny:kill
+"echo a<(echo x) pkill --full X"	allow
+"cat x<(echo x) pkill --full X"	allow
+"sudo -u <(echo x) pkill --full X"	deny:kill
+"sudo <(echo x) pkill --full X"	allow
+"cat <(echo x) bash -c 'echo PAYLOAD_RAN'; pkill --full X"	deny:kill

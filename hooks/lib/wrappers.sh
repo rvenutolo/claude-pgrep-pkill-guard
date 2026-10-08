@@ -415,8 +415,8 @@ function wrappers::shell_wrapper_payloads() {
   local tokens="$2"
   # Regions are rare, and cutting them costs a pass over the stream, so the
   # raw text decides whether to look for any.
-  if [[ "${command}" == *\$\(* || "${command}" == *'`'* \
-    || "${command}" == *'<('* || "${command}" == *'>('* ]]; then
+  if [[ "${command}" == *\$\(* || "${command}" == *'`'* ||
+    "${command}" == *'<('* || "${command}" == *'>('* ]]; then
     wrappers::cut_substitutions "${command}" "${tokens}" tokens
   fi
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0

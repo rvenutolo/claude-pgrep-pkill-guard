@@ -129,20 +129,38 @@ function consumption::feeds_a_kill_forward() {
 #              for a real subshell or grouping construct, but `name=(...)` is an array literal: the
 #              `(` merely opens a list of words, and a `kill` immediately inside it is never invoked.
 #              The token right before the `(` ending in `=` is what tells them apart.
+#              A `$(...)`, `$((...))` or backtick region that closed right before the `kill` is a
+#              word, so the `kill` is its argument (`echo $(true) kill`) -- unless the region is
+#              the value of an assignment word (`` FOO=`true` kill ``), which the walk steps over.
 # @arg $1 tokens_var name of the caller's token array
-# @arg $2 index index of the token immediately before the `kill` word
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 index index of the token immediately before the `kill` word
 # @exitcode 0 the kill is in command position
 # @exitcode 1 it is an argument word, or sits inside an array literal
 function consumption::kill_in_command_position() {
   local -n toks="$1"
+  local -n openers="$2"
   local -r tokens_var="$1"
-  local index="$2" span
+  local index="$3" span opener
   while ((index >= 0)); do
     # A redirection in front of the `kill` (`>f kill $(pgrep ...)`) is skipped whole, target
     # included, before the word it would otherwise stop on.
     tokens::redirection_span_back "${tokens_var}" "${index}" span
     if ((span > 0)); then
       index="$((index - span))"
+      continue
+    fi
+    if [[ -n "${openers[index]:-}" ]]; then
+      opener="${openers[index]}"
+      if [[ "${toks[opener]}" == '`' ]]; then
+        # A backtick has no `$` word of its own to stand for the region: a glued assignment name
+        # before it is the only thing that makes the region a value rather than the command word.
+        ((opener > 0)) && [[ "${toks[opener - 1]}" == *= ]] || return 1
+        index="$((opener - 2))"
+      else
+        index="$((opener - 1))"
+      fi
       continue
     fi
     if tokens::is_prefix_command "${toks[index]##*/}" || tokens::is_assignment_word "${toks[index]}"; then
@@ -160,25 +178,30 @@ function consumption::kill_in_command_position() {
   return 0
 }
 
-# @description Backward form of consumption::feeds_a_kill: `kill $(pgrep ...)`, `kill -9 $(pgrep ...)`, and the
-#              backtick equivalent. Here `kill` precedes the invocation, so the forward scan cannot
-#              see it. Skip the substitution punctuation and any flags on the way back, then require
-#              the `kill` to be in command position -- otherwise `echo kill $(...)`, where `kill` is
-#              merely an argument word, would be denied. A value word that belongs to a preceding
-#              `-s`/`--signal` (`kill -s TERM $(pgrep ...)`) is also skipped rather than treated as an
-#              unrecognized stop word: it is recognized by peeking at the token immediately before
-#              it, since scanning backward means the value is reached before its flag. A bare `in` is
-#              only a for/select head -- and thus worth deferring to loops::loop_body_has_kill -- when the
+# @description Backward form of consumption::feeds_a_kill: `kill $(pgrep ...)`, `kill -9 foo $(pgrep ...)`,
+#              and the backtick equivalent. Here `kill` precedes the invocation, so the forward scan
+#              cannot see it. Walk back to the nearest `kill` in the same simple command: the
+#              substitution punctuation, flags and literal operands (`kill -s TERM foo $(pgrep ...)`)
+#              are all arguments of that `kill` and are stepped over, and so is any earlier whole
+#              `$(...)`, `$((...))` or backtick region (`kill $(true) $(pgrep ...)`), which is one
+#              word of it. An operator or a keyword ends the walk. The `kill` must then be in command
+#              position -- otherwise `echo kill $(...)`, where `kill` is merely an argument word,
+#              would be denied -- and one that is not is an argument word like any other, so the walk
+#              goes on to a real `kill` before it (`kill foo kill $(...)`). A bare `in` is only a
+#              for/select head -- and thus worth deferring to loops::loop_body_has_kill -- when the
 #              token two back (past the loop variable) is actually `for`/`select`; otherwise it is an
 #              ordinary argument word (`echo in $(...)`) and the forward walk in loops::loop_body_has_kill
 #              could cross into an unrelated later loop's body.
 # @arg $1 tokens_var name of the caller's token array
-# @arg $2 target index of the invocation token
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 target index of the invocation token
 # @exitcode 0 a kill consumes the substitution
 # @exitcode 1 it does not
 function consumption::feeds_a_kill_backward() {
   local -n toks="$1"
-  local -r tokens_var="$1" target="$2"
+  local -n openers="$2"
+  local -r tokens_var="$1" openers_var="$2" target="$3"
   local word k="$((target - 1))" span
   while ((k >= 0)); do
     # A redirection between the substitution's opener and the invocation
@@ -188,18 +211,18 @@ function consumption::feeds_a_kill_backward() {
       k="$((k - span))"
       continue
     fi
+    # A region that closed before the invocation is one word of the command: step over all of it.
+    if [[ -n "${openers[k]:-}" ]]; then
+      k="$((openers[k] - 1))"
+      continue
+    fi
     word="${toks[k]##*/}"
     case "${word}" in
       '$' | '(' | '`') ;;
-      -*) ;;
       'kill')
-        # A bare call whose non-zero status is the verdict: safe only because
-        # classify::classify_invocation calls consumption::feeds_a_kill in the condition of an `if`,
-        # which keeps the whole dynamic extent off errexit's radar. Being the right-hand side of
-        # `||` in consumption::feeds_a_kill does not: errexit still applies to the last command of
-        # a list. Call consumption::feeds_a_kill the same way from anywhere new.
-        consumption::kill_in_command_position "${tokens_var}" "$((k - 1))"
-        return
+        # The left side of `&&`: its non-zero status means "not in command position, keep walking",
+        # and errexit and the ERR trap both leave it alone there.
+        consumption::kill_in_command_position "${tokens_var}" "${openers_var}" "$((k - 1))" && return 0
         ;;
       'in')
         if ((k >= 2)) && { [[ "${toks[k - 2]}" == 'for' ]] || [[ "${toks[k - 2]}" == 'select' ]]; }; then
@@ -208,10 +231,7 @@ function consumption::feeds_a_kill_backward() {
         return 1
         ;;
       *)
-        if ((k > 0)) \
-          && { [[ "${toks[k - 1]##*/}" == '-s' ]] || [[ "${toks[k - 1]##*/}" == '--signal' ]]; }; then
-          : # signal-name value word for -s/--signal, not a stop word
-        else
+        if tokens::is_operator "${toks[k]}" || tokens::is_keyword "${toks[k]}"; then
           return 1
         fi
         ;;
@@ -227,13 +247,14 @@ function consumption::feeds_a_kill_backward() {
 #              consumption::feeds_a_kill_backward.
 # @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
 #         invocation in the same command reuses it rather than re-parsing the token stream)
-# @arg $2 target index of the invocation token
+# @arg $2 openers_var name of the caller's region-opener array, built alongside the token array
+# @arg $3 target index of the invocation token
 # @exitcode 0 output feeds a kill
 # @exitcode 1 it does not
 function consumption::feeds_a_kill() {
-  local -r tokens_var="$1" target="$2"
+  local -r tokens_var="$1" openers_var="$2" target="$3"
   consumption::feeds_a_kill_forward "${tokens_var}" "${target}" \
-    || consumption::feeds_a_kill_backward "${tokens_var}" "${target}"
+    || consumption::feeds_a_kill_backward "${tokens_var}" "${openers_var}" "${target}"
 }
 
 # @description True when an invocation sits inside a command substitution, so its output is captured

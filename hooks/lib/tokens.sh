@@ -372,3 +372,76 @@ function tokens::redirection_span_back() {
     span_ref=2
   fi
 }
+
+# @description Advance region tracking by one token and report whether that token opens or closes
+#              a `$(...)`, `$((...))` or backtick region. This is the scanner's own rule, so a reader
+#              that works from the token stream sees the regions the scanner saw: a `(` glued to a
+#              `$` opens one, and the first `)` closes it, except that inside an arithmetic region
+#              (`$((`) a `(` nests, and so does a `(` directly followed by another `(`; a backtick
+#              closes a backtick region and opens one anywhere else. A `(` that is neither, a
+#              subshell or a process substitution, opens no region, and the first `)` after it
+#              closes the enclosing one, as the scanner reads it.
+#
+#              The state is an associative array the caller declares and passes by name, empty at the
+#              start of a stream. `kinds` holds one letter per open region, innermost last (`P`
+#              parenthesis, `A` arithmetic, `B` backtick), so `${#state[kinds]}` is the depth. `end`
+#              and `token` describe the token just stepped, and `prev_end` and `prev_token` the one
+#              before it. Callers pass only non-empty tokens, as the `{ read offset token }` loops
+#              all skip empty ones first.
+# @arg $1 command the raw command string, for the byte after a `(`
+# @arg $2 offset the token's byte offset in the command
+# @arg $3 token the token
+# @arg $4 state name of the caller's associative array holding the tracking state. Never pass a
+#         variable called command, offset, token, kinds, depth, top, kind_ref or state_ref.
+# @arg $5 kind name of the caller's variable that receives the result: empty when the token neither
+#         opens nor closes a region, `close` when it closes the innermost one, otherwise the
+#         letter of the region it opens
+# @set state updated as described above
+# @set kind the result
+# shellcheck disable=SC2034 # kind_ref is the caller's variable, written through the nameref
+function tokens::region_step() {
+  local -r command="$1" offset="$2" token="$3"
+  local -n state_ref="$4"
+  local -n kind_ref="$5"
+  local -r kinds="${state_ref[kinds]:-}"
+  local -r depth="${#kinds}"
+  local top=''
+  if ((depth > 0)); then
+    top="${kinds:depth-1:1}"
+  fi
+  kind_ref=''
+  case "${token}" in
+    '`')
+      if [[ "${top}" == 'B' ]]; then
+        kind_ref='close'
+      else
+        kind_ref='B'
+      fi
+      ;;
+    '(')
+      if [[ "${state_ref[token]:-}" == *'$' ]] && ((${state_ref[end]:--1} == offset)); then
+        if [[ "${command:offset+1:1}" == '(' ]]; then
+          kind_ref='A'
+        else
+          kind_ref='P'
+        fi
+      elif ((depth > 0)) && [[ "${top}" == 'A' || "${command:offset+1:1}" == '(' ]]; then
+        kind_ref='A'
+      fi
+      ;;
+    ')')
+      if ((depth > 0)) && [[ "${top}" != 'B' ]]; then
+        kind_ref='close'
+      fi
+      ;;
+  esac
+  case "${kind_ref}" in
+    '') ;;
+    'close') state_ref[kinds]="${kinds:0:depth-1}" ;;
+    *) state_ref[kinds]="${kinds}${kind_ref}" ;;
+  esac
+  state_ref['prev_end']="${state_ref[end]:--1}"
+  state_ref['prev_token']="${state_ref[token]:-}"
+  state_ref[end]="$((offset + ${#token}))"
+  state_ref[token]="${token}"
+}

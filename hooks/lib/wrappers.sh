@@ -229,12 +229,7 @@ function wrappers::redirection_replaces_stdin() {
 #              tokens go to wrappers::shell_wrapper_payloads on their own, which prints that
 #              region's payloads here.
 #
-#              A region is found the way the scanner finds it: a `(` glued to a `$` opens one,
-#              and the first `)` closes it, except that inside an arithmetic region (`$((`) a `(`
-#              nests, and so does a `(` directly followed by another `(`; a backtick closes a
-#              backtick region and opens one anywhere else. A `(` that is neither, a subshell
-#              or a process substitution, opens no region, and the first `)` after it closes
-#              the enclosing one, as the scanner reads it.
+#              Regions are found by tokens::region_step, which follows the scanner's rules.
 #              A region with no close runs to the end of the stream, as the scanner reads it.
 #
 #              What the outer stream keeps of a region: the `$` word it hangs off, or a one-byte
@@ -258,49 +253,25 @@ function wrappers::cut_substitutions() {
   local -r command="$1" stream="$2"
   local -n cut_outer="$3"
   local -r heredoc_re='^[0-9]*<<([^<]|$)'
-  local offset token kind
-  local -a open_kinds=()
-  local outer='' region='' glue_at=-1 last_end=-1 last_token=''
+  local offset token kind depth
+  local -A region=()
+  local outer='' inner='' glue_at=-1
   while IFS=$'\t' read -r offset token; do
     if [[ -z "${token}" ]]; then
       outer+="${offset}"$'\t'$'\n'
       continue
     fi
-    kind=''
-    case "${token}" in
-      '`')
-        if ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" == 'B' ]]; then
-          kind='close'
-        else
-          kind='B'
-        fi
-        ;;
-      '(')
-        if [[ "${last_token}" == *'$' ]] && ((last_end == offset)); then
-          if [[ "${command:offset+1:1}" == '(' ]]; then
-            kind='A'
-          else
-            kind='P'
-          fi
-        elif ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" == 'A' || "${command:offset+1:1}" == '(' ]]; then
-          kind='A'
-        fi
-        ;;
-      ')')
-        if ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" != 'B' ]]; then
-          kind='close'
-        fi
-        ;;
-    esac
+    tokens::region_step "${command}" "${offset}" "${token}" region kind
+    depth="${#region[kinds]}"
     case "${kind}" in
       '')
-        if ((${#open_kinds[@]} == 0)); then
+        if ((depth == 0)); then
           if ((offset != glue_at)) || tokens::is_operator "${token}" \
             || [[ "${token}" == '<'* || "${token}" == *'>'* ]]; then
             outer+="${offset}"$'\t'"${token}"$'\n'
           fi
         else
-          region+="${offset}"$'\t'"${token}"$'\n'
+          inner+="${offset}"$'\t'"${token}"$'\n'
           if [[ "${token}" =~ ${heredoc_re} ]]; then
             outer+="${offset}"$'\t''<HO>'$'\n'
           elif [[ "${token}" == '<HD:'*'>' ]]; then
@@ -309,33 +280,30 @@ function wrappers::cut_substitutions() {
         fi
         ;;
       'close')
-        unset 'open_kinds[-1]'
-        if ((${#open_kinds[@]} == 0)); then
-          wrappers::shell_wrapper_payloads "${command}" "${region}"
-          region=''
+        if ((depth == 0)); then
+          wrappers::shell_wrapper_payloads "${command}" "${inner}"
+          inner=''
           glue_at="$((offset + 1))"
         else
-          region+="${offset}"$'\t'"${token}"$'\n'
+          inner+="${offset}"$'\t'"${token}"$'\n'
         fi
         ;;
       *)
-        if ((${#open_kinds[@]} == 0)); then
+        if ((depth == 1)); then
           # A backtick that follows whitespace or touches an operator has no word
           # of its own to hang off, so one stands in for it.
-          if [[ "${kind}" == 'B' ]] && { ((last_end != offset)) || tokens::is_operator "${last_token}"; }; then
+          if [[ "${kind}" == 'B' ]] \
+            && { ((region[prev_end] != offset)) || tokens::is_operator "${region[prev_token]}"; }; then
             outer+="${offset}"$'\t'$'\001'$'\n'
           fi
         else
-          region+="${offset}"$'\t'"${token}"$'\n'
+          inner+="${offset}"$'\t'"${token}"$'\n'
         fi
-        open_kinds+=("${kind}")
         ;;
     esac
-    last_end="$((offset + ${#token}))"
-    last_token="${token}"
   done <<< "${stream}"
-  if ((${#open_kinds[@]} > 0)); then
-    wrappers::shell_wrapper_payloads "${command}" "${region}"
+  if ((${#region[kinds]} > 0)); then
+    wrappers::shell_wrapper_payloads "${command}" "${inner}"
   fi
   cut_outer="${outer}"
 }

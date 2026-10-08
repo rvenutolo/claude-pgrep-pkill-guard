@@ -98,20 +98,45 @@ function scanner::find_invocations() {
 #              `>&` and `>|`, and target) is not an argument and is dropped, so `2>&1 -f java` keeps
 #              `-f` and `java`, and `<<-EOF` leaves no `EOF` to be read as the pattern. Which tokens
 #              belong to a redirection is tokens::redirection_step's call.
-# @arg $1 tokens the token stream from scanner::scan_command
-# @arg $2 target index of the pgrep/pkill token itself
+#
+#              A `$(...)`, `$((...))` or backtick region after the command name is a word of this
+#              simple command, not the end of it: `pkill $(true) --full X` keeps `--full` and `X`.
+#              The region's own tokens are dropped and the `$` word it hangs off stays. A token glued
+#              directly behind the close (the `x` of `$(true)x`) belongs to that same word and is dropped.
+#              The regions are the scanner's, found by tokens::region_step. An invocation that sits
+#              inside a region (`$(pgrep ...)`) ends at that region's own close.
+# @arg $1 command the raw command string
+# @arg $2 tokens the token stream from scanner::scan_command
+# @arg $3 target index of the pgrep/pkill token itself
 # @stdout lines of "<offset>\t<token>"
 function scanner::invocation_args() {
-  local -r tokens="$1" target="$2"
+  local -r command="$1" tokens="$2" target="$3"
   # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
-  local idx=0 offset token redir=''
+  local idx=0 offset token redir='' kind skip base=0 glue_at=-1
+  local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
-    if ((idx > target)); then
-      tokens::redirection_step "${token}" redir || {
-        tokens::is_operator "${token}" && break
-        printf '%s\t%s\n' "${offset}" "${token}"
-      }
+    tokens::region_step "${command}" "${offset}" "${token}" region kind
+    skip=0
+    if ((idx == target)); then
+      base="${#region[kinds]}"
+    elif ((idx > target)); then
+      if [[ "${kind}" == 'close' ]]; then
+        ((${#region[kinds]} < base)) && break
+        glue_at="$((offset + 1))"
+        skip=1
+      elif [[ -n "${kind}" ]] || ((${#region[kinds]} > base)); then
+        skip=1
+      elif ((offset == glue_at)) && ! tokens::is_operator "${token}" \
+        && [[ "${token}" != '<'* && "${token}" != *'>'* ]]; then
+        skip=1
+      fi
+      if ((skip == 0)); then
+        tokens::redirection_step "${token}" redir || {
+          tokens::is_operator "${token}" && break
+          printf '%s\t%s\n' "${offset}" "${token}"
+        }
+      fi
     fi
     idx="$((idx + 1))"
   done <<< "${tokens}"

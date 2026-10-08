@@ -679,3 +679,50 @@
 "echo 'echo PAYLOAD_RAN' | FOO=${x:-a b} bash"	allow
 "echo 'echo PAYLOAD_RAN' | FOO=$( ((1)) ) bash"	allow
 "echo 'pkill --full X' |`foo` bash"	allow
+"pkill $(true) --full X"	deny:kill
+"pkill `true` -f X"	deny:kill
+"pkill $(true) $(true) --full X"	deny:kill
+"pkill $((1+2)) --full X"	deny:kill
+"pkill $(true) \"$(true)\" -f X"	deny:kill
+"pkill $(echo $(true)) --full X"	deny:kill
+"pkill FOO=$(true) --full X"	deny:kill
+"sudo pkill $(true) --full X"	deny:kill
+"echo $(pkill $(true) --full X)"	deny:kill
+"echo `pkill $(true) --full X`"	deny:kill
+"pkill $(echo --full) X"	allow
+"pkill $(true) X"	allow
+"pkill `true` X"	allow
+"echo pkill $(true) --full X"	allow
+"echo PAYLOAD_RAN $(true) --full X"	allow
+"kill $(pgrep $(true) --full X)"	deny:kill
+"kill $(pgrep `true` -f X)"	deny:kill
+"kill foo $(pgrep --full X)"	deny:kill
+"kill ${x} -9 $(pgrep --full X)"	deny:kill
+"kill -9 foo `pgrep --full X`"	deny:kill
+"kill $(true) $(pgrep --full X)"	deny:kill
+"kill $((1+2)) $(pgrep --full X)"	deny:kill
+"kill \"$(true)\" foo $(pgrep --full X)"	deny:kill
+"sudo kill foo $(pgrep --full X)"	deny:kill
+"kill foo \"$(pgrep --full X)\""	deny:kill
+"kill foo $(echo $(pgrep --full X))"	deny:kill
+"true; kill foo bar $(pgrep --full X)"	deny:kill
+"kill foo; echo $(pgrep --full X)"	warn
+"kill foo && echo $(pgrep --full X)"	warn
+"kill foo | echo $(pgrep --full X)"	warn
+"echo kill foo $(pgrep --full X)"	warn
+"echo foo $(pgrep --full X)"	warn
+"ls $(true) $(pgrep --full X)"	warn
+"x=$(true) echo foo $(pgrep --full X)"	warn
+"for p in foo $(pgrep --full X); do kill $p; done"	deny:kill
+"for p in foo $(pgrep --full X); do echo PAYLOAD_RAN; done"	warn
+"kill foo kill $(pgrep --full X)"	deny:kill
+"echo kill $(true) $(pgrep --full X)"	warn
+"echo $(true) kill foo $(pgrep --full X)"	warn
+"echo $(true) kill $(pgrep --full X)"	warn
+"echo `true` kill $(pgrep --full X)"	warn
+"echo $((1)) kill $(pgrep --full X)"	warn
+"FOO=$(true) kill foo $(pgrep --full X)"	deny:kill
+"FOO=`true` kill foo $(pgrep --full X)"	deny:kill
+"FOO=$(true) kill $(pgrep --full X)"	deny:kill
+"true; echo $(true) kill foo $(pgrep --full X)"	warn
+"$(true) kill foo $(pgrep --full X)"	warn

@@ -146,7 +146,9 @@ BEGIN {
       # `(` is deliberately not a starter here: `$(#` would swallow the closing
       # paren this scanner counts depth with. Nor are `<` and `>`, where a `#`
       # is part of a filename far more often than it opens a comment.
-      if (ch == "#" && (i == 1 || prev == " " || prev == "\t" || prev == "\n" \
+      # Inside `${...}` a `#` is part of the word.
+      if (ch == "#" && !(depth > 0 && opener[depth] == "V") \
+          && (i == 1 || prev == " " || prev == "\t" || prev == "\n" \
           || prev == ";" || prev == "&" || prev == "|")) {
         while (i <= n && substr(cmd, i, 1) != "\n") { masked = masked "\001"; i++ }
         continue
@@ -185,6 +187,11 @@ BEGIN {
           masked = masked "9"; i++
           continue
         }
+      }
+      # Inside the braces the text is part of the word, spaces included (`${x:-a b}`),
+      # and a `#` there is no comment.
+      if ((ch == " " || ch == "\t") && depth > 0 && opener[depth] == "V") {
+        masked = masked "\001"; i++; continue
       }
       if (ch == "}" && depth > 0 && opener[depth] == "V") {
         masked = masked "\001"; i++; depth--; continue

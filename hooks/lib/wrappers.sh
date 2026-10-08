@@ -231,12 +231,14 @@ function wrappers::redirection_replaces_stdin() {
 #
 #              A region is found the way the scanner finds it: a `(` glued to a `$` opens one,
 #              and the first `)` closes it, except that inside an arithmetic region (`$((`) a `(`
-#              nests; a backtick closes a backtick region and opens one anywhere else. A bare
-#              `(` outside a region, a subshell or a process substitution, is not a region.
+#              nests, and so does a `(` directly followed by another `(`; a backtick closes a
+#              backtick region and opens one anywhere else. A `(` that is neither, a subshell
+#              or a process substitution, opens no region, and the first `)` after it closes
+#              the enclosing one, as the scanner reads it.
 #              A region with no close runs to the end of the stream, as the scanner reads it.
 #
 #              What the outer stream keeps of a region: the `$` word it hangs off, or a one-byte
-#              word standing in for a backtick region that follows whitespace or an operator,
+#              word standing in for a backtick region that follows whitespace or touches an operator,
 #              and an inert `<HO>` token for each heredoc operator and the body markers inside,
 #              so that the heredoc ordinals of the operators and bodies after the region
 #              still line up. A token glued directly behind the close (the closing quote of
@@ -279,7 +281,7 @@ function wrappers::cut_substitutions() {
           else
             kind='P'
           fi
-        elif ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" == 'A' ]]; then
+        elif ((${#open_kinds[@]} > 0)) && [[ "${open_kinds[-1]}" == 'A' || "${command:offset+1:1}" == '(' ]]; then
           kind='A'
         fi
         ;;
@@ -317,9 +319,9 @@ function wrappers::cut_substitutions() {
         ;;
       *)
         if ((${#open_kinds[@]} == 0)); then
-          # A backtick that follows whitespace or an operator has no word of its
-          # own to hang off, so one stands in for it.
-          if [[ "${kind}" == 'B' ]] && ((last_end != offset)); then
+          # A backtick that follows whitespace or touches an operator has no word
+          # of its own to hang off, so one stands in for it.
+          if [[ "${kind}" == 'B' ]] && { ((last_end != offset)) || tokens::is_operator "${last_token}"; }; then
             outer+="${offset}"$'\t'$'\001'$'\n'
           fi
         else
@@ -417,8 +419,9 @@ function wrappers::cut_substitutions() {
 #              operand like a quoted one, so the body is that script's stdin; its value is not on the
 #              command line, which is a limit.
 #
-#              Command position is tracked exactly as scanner::find_invocations tracks it, including the
-#              prefix-word chain, so `sudo bash -c ...` is reached.
+#              Command position is tracked as scanner::find_invocations tracks it, including the
+#              prefix-word chain, so `sudo bash -c ...` is reached; the one difference is that this
+#              reader steps over a substitution region as part of a word.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @stdout one payload per NUL, quotes stripped; nothing if there are none

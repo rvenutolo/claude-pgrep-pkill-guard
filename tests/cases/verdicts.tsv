@@ -631,3 +631,17 @@
 "kill -9 $(2>&1 pgrep --full X)"	deny:kill
 "kill `>f pgrep --full X`"	deny:kill
 "for p in $(>f pgrep --full X); do kill $p; done"	deny:kill
+"pkill --full \"[j]ava\" <<-EOF\nx\nEOF"	allow
+"pkill --full \"[j]ava\" <<-'EOF'\nx\nEOF"	allow
+"pkill --full \"[j]ava\" <<-\"EOF\"\nx\nEOF"	allow
+"pkill --full -- \"[j]ava\" <<-EOF\nx\nEOF"	allow
+"pkill --full <<-EOF \"[j]ava\"\nx\nEOF"	allow
+"pkill --full \"java\" <<-EOF\nx\nEOF"	deny:kill
+"pkill --full 2>&1 \"[j]ava\""	allow
+"pkill --full >&2 \"[j]ava\""	allow
+"pkill --full >|f \"[j]ava\""	allow
+"pkill --full -- 2>&1 \"[j]ava\""	allow
+"pkill 2>&1 -f java"	deny:kill
+"pkill >&2 --full java"	deny:kill
+"pkill >|f -f java"	deny:kill
+"pkill --full 2>&1 java"	deny:kill

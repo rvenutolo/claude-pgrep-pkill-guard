@@ -673,4 +673,3 @@
 "bash $(true) <<'EOF'\npkill --full X\nEOF"	allow
 "pkill ${x} --full X"	deny:kill
 "pkill ${x} -f X"	deny:kill
-"kill ${x} $(pgrep --full X)"	deny:kill

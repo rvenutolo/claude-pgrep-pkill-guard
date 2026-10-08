@@ -423,9 +423,14 @@ function words() {
   assert_output 'echo $_#arr[@]_ b'
 }
 
-@test "scanner: a brace group and a descriptor brace are not parameter expansions" {
-  run words '{ x; } ; bash {fd}>&1'
-  assert_output '{ x ; } ; bash { fd } > & 1'
+@test "scanner: a brace group stays a brace group" {
+  run words '{ x; } ; echo {a,b}>f'
+  assert_output '{ x ; } ; echo { a,b } > f'
+}
+
+@test "scanner: a named descriptor before a redirection is a descriptor other than 0" {
+  run words 'bash {fd}>&1 -c y'
+  assert_output 'bash 9> & 1 -c y'
 }
 
 # --- The guard must announce itself dead, never die quietly ------------------

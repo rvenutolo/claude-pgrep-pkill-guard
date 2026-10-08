@@ -17,7 +17,8 @@
 # emitted to the tokenizer as a `<HD:len>` marker at its first byte, which is
 # how the hook slices a body fed to a local shell wrapper.
 #
-# The tokenizer breaks a word at whitespace, at `;&|(){}` and the backtick, and
+# The tokenizer breaks a word at whitespace, at `;&|(){}` and the backtick (the
+# braces of an unquoted `${...}` excepted, which stay in their word), and
 # at a redirection operator: a run of `<` and `>` is a token of its own, with the
 # digits of a file descriptor before it (`2>`, `10<`), and its target is the next
 # token (`>f` is `>`, `f`). A `<` or `>` inside arithmetic is a comparison and
@@ -160,6 +161,33 @@ BEGIN {
       }
       if (ch == ")" && depth > 0 && (opener[depth] == "P" || opener[depth] == "A")) {
         masked = masked ")"; i++; depth--; continue
+      }
+      # An unquoted `${...}` is part of the word it sits in, not a brace group.
+      # Its two braces become filler (which the tokenizer keeps inside a word),
+      # so `FOO=${x} bash` and `> ${log}` read as one word each. The frame it
+      # pushes is what tells its closing `}` from a brace group's, and a `$(`
+      # inside it still re-enters code context above this frame.
+      if (ch == "$" && substr(cmd, i + 1, 1) == "{") {
+        masked = masked "$\001"; i += 2; depth++; ctx[depth] = "N"; opener[depth] = "V"
+        continue
+      }
+      # `{name}` at the start of a word and directly before `<` or `>` names a
+      # file descriptor bash allocates for that redirection (`{fd}>&1`), so it
+      # is an operator's prefix and not a brace group or an operand. It becomes
+      # blanks and a `9`, glued to the operator: a descriptor other than 0, as
+      # the allocated one always is, at the same byte offsets.
+      if (ch == "{" && (prev == "" || index(" \t\n;&|()", prev) > 0) && (depth == 0 || opener[depth] != "A")) {
+        j = i + 1
+        while (substr(cmd, j, 1) ~ /[A-Za-z0-9_]/) j++
+        if (j > i + 1 && substr(cmd, i + 1, 1) !~ /[0-9]/ && substr(cmd, j, 1) == "}" \
+            && (substr(cmd, j + 1, 1) == "<" || substr(cmd, j + 1, 1) == ">")) {
+          for (; i < j; i++) masked = masked " "
+          masked = masked "9"; i++
+          continue
+        }
+      }
+      if (ch == "}" && depth > 0 && opener[depth] == "V") {
+        masked = masked "\001"; i++; depth--; continue
       }
       # A bare `(` nests one more arithmetic level whenever it is the first
       # paren of a `((` open (the arithmetic command form) or it appears

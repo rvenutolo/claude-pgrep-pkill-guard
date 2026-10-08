@@ -573,3 +573,57 @@
 "bash<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
 "bash -s<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
 "bash >&f<<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"2> /dev/null pkill --full X"	deny:kill
+"2>/dev/null pkill --full X"	deny:kill
+"> /tmp/o pkill --full X"	deny:kill
+">/tmp/o pkill --full X"	deny:kill
+">> /tmp/o pkill --full X"	deny:kill
+">| /tmp/o pkill --full X"	deny:kill
+"&> /tmp/o pkill --full X"	deny:kill
+"< /dev/null pkill --full X"	deny:kill
+"</dev/null pkill --full X"	deny:kill
+"<<< x pkill --full X"	deny:kill
+"2>&1 pkill --full X"	deny:kill
+">&2 pkill --full X"	deny:kill
+"2>&1 >/tmp/o pkill --full X"	deny:kill
+"2>/dev/null >&2 pkill --full X"	deny:kill
+"10>/tmp/o pkill --full X"	deny:kill
+"sudo 2> /dev/null pkill --full X"	deny:kill
+"sudo >f pkill --full X"	deny:kill
+"sudo -u >f root pkill --full X"	deny:kill
+"env >f pkill --full X"	deny:kill
+"time >f pkill --full X"	deny:kill
+"timeout >f 5 pkill --full X"	deny:kill
+"FOO=1 >f pkill --full X"	deny:kill
+">f FOO=1 pkill --full X"	deny:kill
+"echo a; 2>f pkill --full X"	deny:kill
+"echo a && 2>f pkill --full X"	deny:kill
+"echo a || 2>f pkill --full X"	deny:kill
+"echo a | 2>f pkill --full X"	deny:kill
+"( 2>f pkill --full X )"	deny:kill
+"{ 2>f pkill --full X; }"	deny:kill
+"echo $(2>f pkill --full X)"	deny:kill
+"x=$(>f pkill --full X)"	deny:kill
+"echo a\n2>f pkill --full X"	deny:kill
+"<<EOF pkill --full X\nbody\nEOF"	deny:kill
+"2>f pkill --full X >g"	deny:kill
+"/usr/bin/pkill 2>f --full X"	deny:kill
+">f kill $(pgrep --full X)"	deny:kill
+"2>&1 kill -9 $(pgrep --full X)"	deny:kill
+"pgrep --full X | >f xargs kill"	deny:kill
+"pgrep --full X | 2>&1 xargs kill"	deny:kill
+"pgrep --full X | xargs 2>&1 kill"	deny:kill
+"pgrep --full X | xargs >f -r kill"	deny:kill
+"until >f pgrep --full X; do sleep 1; done"	deny:loop
+"until 2>&1 pgrep --full X; do sleep 1; done"	deny:loop
+"while 2>f pgrep --full X; do sleep 1; done"	deny:loop
+"if >f pgrep --full X; then echo hi; fi"	warn
+"if ! 2>f pgrep --full X; then echo hi; fi"	warn
+"p=$(>f pgrep --full X)"	warn
+">f pgrep --full X; echo $?"	warn
+">f pgrep --full X | wc --lines"	warn
+">f pgrep --full X"	allow
+"2>&1 pgrep --full X"	allow
+"echo hi 2>f pkill --full X"	allow
+"echo hi >pkill"	allow
+"echo hi > f && echo pkill --full X"	allow

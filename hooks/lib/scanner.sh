@@ -63,15 +63,23 @@ function scanner::scan_command() {
 #              `NAME=value` in front of a command is ordinary shell, not an argument, and without
 #              this the assignment hides the invocation from the whole scan -- not just from the
 #              kill/loop tiers -- because `at_cmd` drops to 0 and the pgrep/pkill token itself is
-#              never recorded.
+#              never recorded. A redirection anywhere in front of the command word
+#              (`2> /dev/null pkill ...`, `sudo >f pkill ...`, `FOO=1 >f pkill ...`) is skipped
+#              with its target, by tokens::redirection_step, for the same reason.
 # @arg $1 tokens newline-separated "<offset>\t<token>" records from scanner::scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>"
 function scanner::find_invocations() {
   local -r tokens="$1"
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
-  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0
+  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0 redir=''
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
+    # A redirection is neither the command word nor a prefix's word, wherever it sits: it leaves
+    # command position, the chain and a pending option value exactly as they were.
+    if tokens::redirection_step "${token}" redir; then
+      idx="$((idx + 1))"
+      continue
+    fi
     word="${token##*/}"
     if ((at_cmd == 1)) && [[ "${word}" == 'pgrep' || "${word}" == 'pkill' ]]; then
       printf '%s\t%s\t%s\n' "${idx}" "${offset}" "${word}"

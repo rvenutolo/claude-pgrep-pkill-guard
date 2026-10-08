@@ -763,3 +763,13 @@
 "while true; do if pgrep --full X; then cat <(echo x) break; fi; done"	warn
 "while true; do if pgrep --full X; then cat <(echo x); break; fi; done"	deny:loop
 "while true; do if pgrep --full X; then cat >(echo x) break; fi; done"	warn
+"FOO=<(echo x) pkill --full X"	deny:kill
+"x=>(echo PAYLOAD_RAN) pkill --full X"	deny:kill
+"FOO=1 BAR=<(echo x) pkill --full X"	deny:kill
+"FOO=<(echo x) bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"FOO=<(echo x) bash -c 'pkill --full X'"	deny:kill
+"echo a<(echo x) pkill --full X"	allow
+"cat x<(echo x) pkill --full X"	allow
+"sudo -u <(echo x) pkill --full X"	deny:kill
+"sudo <(echo x) pkill --full X"	allow
+"cat <(echo x) bash -c 'echo PAYLOAD_RAN'; pkill --full X"	deny:kill

@@ -253,6 +253,7 @@ function wrappers::redirection_replaces_stdin() {
 # @arg $3 outer_var name of the variable set to the stream with each outermost region cut out (set)
 # @stdout the payloads found inside the cut regions, NUL-terminated
 # @exitcode 0 always; it ends on an assignment
+# shellcheck disable=SC2034 # cut_outer is the caller's variable, written through the nameref
 function wrappers::cut_substitutions() {
   local -r command="$1" stream="$2"
   local -n cut_outer="$3"
@@ -430,7 +431,7 @@ function wrappers::shell_wrapper_payloads() {
   local tokens="$2"
   # Regions are rare, and cutting them costs a pass over the stream, so the
   # raw text decides whether to look for any.
-  if [[ "${command}" == *'$('* || "${command}" == *'`'* ]]; then
+  if [[ "${command}" == *\$\(* || "${command}" == *'`'* ]]; then
     wrappers::cut_substitutions "${command}" "${tokens}" tokens
   fi
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0

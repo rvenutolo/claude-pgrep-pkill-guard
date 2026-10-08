@@ -257,7 +257,7 @@ operator (`{fd}>&1`) is read as a descriptor other than 0. A command
 substitution is still code to the scanner, but the simple command around it
 goes on past it. `tokens::region_step` finds the regions by the scanner's own
 rules, and each reader that walks a simple command uses it: `wrappers::cut_substitutions`
-cuts each outermost `$(...)`, `$((...))` and backtick region out of the stream the
+cuts each outermost `$(...)`, `$((...))`, backtick and process-substitution region out of the stream the
 wrapper reader walks, scans the region's own tokens for wrappers separately, and
 leaves the heredoc ordinals of what follows in step; `scanner::invocation_args`
 skips the regions after an invocation's name; and the backward walk from a `pgrep`

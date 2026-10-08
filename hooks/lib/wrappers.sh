@@ -256,7 +256,7 @@ function wrappers::cut_substitutions() {
   local -r heredoc_re='^[0-9]*<<([^<]|$)'
   local offset token kind depth
   local -A region=()
-  local outer='' inner='' glue_at=-1 outer_before_token=0
+  local outer='' inner='' glue_at=-1 outer_before_token=0 lt_glued=0
   while IFS=$'\t' read -r offset token; do
     if [[ -z "${token}" ]]; then
       outer+="${offset}"$'\t'$'\n'
@@ -270,6 +270,12 @@ function wrappers::cut_substitutions() {
           if ((offset != glue_at)) || tokens::is_operator "${token}" \
             || [[ "${token}" == '<'* || "${token}" == *'>'* ]]; then
             outer_before_token="${#outer}"
+            if [[ "${token}" == '<' || "${token}" == '>' ]]; then
+              lt_glued=0
+              if ((region[prev_end] == offset)) && ! tokens::is_operator "${region[prev_token]}"; then
+                lt_glued=1
+              fi
+            fi
             outer+="${offset}"$'\t'"${token}"$'\n'
           fi
         else
@@ -298,8 +304,13 @@ function wrappers::cut_substitutions() {
             && { ((region[prev_end] != offset)) || tokens::is_operator "${region[prev_token]}"; }; then
             outer+="${offset}"$'\t'$'\001'$'\n'
           elif [[ "${kind}" == 'S' ]]; then
-            # The `<` or `>` just before the `(` is the word's first byte, not a redirection.
-            outer="${outer:0:outer_before_token}$((offset - 1))"$'\t'$'\001'$'\n'
+            # The `<` or `>` just before the `(` is the word's first byte, not a redirection. A word
+            # it touches (`FOO=<(...)`) already stands for the whole, so only a lone one needs a
+            # stand-in.
+            outer="${outer:0:outer_before_token}"
+            if ((lt_glued == 0)); then
+              outer+="$((offset - 1))"$'\t'$'\001'$'\n'
+            fi
           fi
         else
           inner+="${offset}"$'\t'"${token}"$'\n'

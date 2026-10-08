@@ -78,7 +78,7 @@ function scanner::scan_command() {
 function scanner::find_invocations() {
   local -r command="$1" tokens="$2"
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
-  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0 redir='' kind
+  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0 redir='' kind lt_glued=0 glued_back
   local -a saved=()
   local -A region=()
   while IFS=$'\t' read -r offset token; do
@@ -86,16 +86,26 @@ function scanner::find_invocations() {
     tokens::region_step "${command}" "${offset}" "${token}" region kind
     # A process substitution is one word of the simple command around it. Its body is a command
     # list of its own, which the `(` starts, and the `)` that ends it hands the state back as it
-    # stood at the opener, after that one word.
+    # stood at the opener, after that one word. When the `<` or `>` touches a word before it
+    # (`FOO=<(...)`, `a<(...)`) the substitution is a part of that word, which has been stepped
+    # already, so no further word is stepped.
+    if [[ "${token}" == '<' || "${token}" == '>' ]]; then
+      lt_glued=0
+      if ((region[prev_end] == offset)) && ! tokens::is_operator "${region[prev_token]}"; then
+        lt_glued=1
+      fi
+    fi
     if [[ "${kind}" == 'S' ]]; then
-      saved+=("${at_cmd}:${chain}:${chain_skip}:${chain_operands}")
+      saved+=("${lt_glued}:${at_cmd}:${chain}:${chain_skip}:${chain_operands}")
     elif [[ "${kind}" == 'close' && "${region[closed]}" == 'S' ]]; then
-      IFS=':' read -r at_cmd chain chain_skip chain_operands <<< "${saved[-1]}"
+      IFS=':' read -r glued_back at_cmd chain chain_skip chain_operands <<< "${saved[-1]}"
       unset 'saved[-1]'
-      if tokens::prefix_chain_step 'procsub' 'procsub' "${at_cmd}" chain chain_skip chain_operands; then
-        at_cmd=1
-      else
-        at_cmd=0
+      if ((glued_back == 0)); then
+        if tokens::prefix_chain_step 'procsub' 'procsub' "${at_cmd}" chain chain_skip chain_operands; then
+          at_cmd=1
+        else
+          at_cmd=0
+        fi
       fi
       redir=''
       idx="$((idx + 1))"
@@ -149,6 +159,7 @@ function scanner::invocation_args() {
     skip=0
     # The `<` or `>` before a process substitution's `(` set the redirection state; the region
     # is skipped whole, so nothing else would clear it and the next word would read as a target.
+    # shellcheck disable=SC2034 # redir is read by tokens::redirection_step through its nameref
     [[ "${kind}" == 'S' ]] && redir=''
     if ((idx == target)); then
       base="${#region[kinds]}"

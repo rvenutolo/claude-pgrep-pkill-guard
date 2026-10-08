@@ -131,9 +131,10 @@ function consumption::feeds_a_kill_forward() {
 #              for a real subshell or grouping construct, but `name=(...)` is an array literal: the
 #              `(` merely opens a list of words, and a `kill` immediately inside it is never invoked.
 #              The token right before the `(` ending in `=` is what tells them apart.
-#              A `$(...)`, `$((...))` or backtick region that closed right before the `kill` is a
-#              word, so the `kill` is its argument (`echo $(true) kill`) -- unless the region is
-#              the value of an assignment word (`` FOO=`true` kill ``), which the walk steps over.
+#              A `$(...)`, `$((...))`, backtick or process-substitution region that closed right
+#              before the `kill` is a word, so the `kill` is its argument (`echo $(true) kill`,
+#              `echo <(true) kill`) -- unless the region is the value of an assignment word
+#              (`` FOO=`true` kill ``, `FOO=<(true) kill`), which the walk steps over.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
 #         region to the index of the token that opened it
@@ -187,9 +188,9 @@ function consumption::kill_in_command_position() {
 #              are all arguments of that `kill` and are stepped over, and so is any earlier whole
 #              `$(...)`, `$((...))`, backtick or process-substitution region (`kill $(true) $(pgrep ...)`,
 #              `kill <(true) $(pgrep ...)`), which is one word of it. An operator or a keyword ends
-#              the walk. The `kill` must then be in command position -- otherwise `echo kill $(...)`, where `kill` is merely an argument word,
-#              would be denied -- and one that is not is an argument word like any other, so the walk
-#              goes on to a real `kill` before it (`kill foo kill $(...)`). A bare `in` is only a
+#              the walk. The `kill` must then be in command position -- otherwise `echo kill $(...)`,
+#              where `kill` is merely an argument word, would be denied -- and one that is not is an
+#              argument word like any other, so the walk goes on to a real `kill` before it (`kill foo kill $(...)`). A bare `in` is only a
 #              for/select head -- and thus worth deferring to loops::loop_body_has_kill -- when the
 #              token two back (past the loop variable) is actually `for`/`select`; otherwise it is an
 #              ordinary argument word (`echo in $(...)`) and the forward walk in loops::loop_body_has_kill

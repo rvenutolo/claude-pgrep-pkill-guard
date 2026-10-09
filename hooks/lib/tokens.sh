@@ -20,8 +20,14 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # after them. `sudo pkill --full java` is the single most likely session-killing
 # form, so the guard must see through the prefix -- and through the prefix's own
 # options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
-# for the same reason the others do: `timeout 5 pkill --full java` runs the kill.
-readonly -a PREFIX_COMMANDS=('sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout')
+# for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
+# do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`
+# and `exec`. A wrapper that is not listed hides what it runs: the guard sees nothing
+# behind `flock` or `strace`.
+readonly -a PREFIX_COMMANDS=(
+  'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
+  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec'
+)
 
 # @description True when a token is a command prefix that keeps the following word in command
 #              position.
@@ -88,20 +94,59 @@ function tokens::prefix_value_option() {
         *) return 1 ;;
       esac
       ;;
+    'nice')
+      case "${word}" in
+        '-n' | '--adjustment') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'ionice')
+      case "${word}" in
+        '-c' | '--class' | '-n' | '--classdata' | '-p' | '--pid' | '-P' | '--pgid' | '-u' | '--uid') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'stdbuf')
+      case "${word}" in
+        '-i' | '--input' | '-o' | '--output' | '-e' | '--error') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'chrt')
+      case "${word}" in
+        '-T' | '--sched-runtime' | '-P' | '--sched-period' | '-D' | '--sched-deadline') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'watch')
+      case "${word}" in
+        '-n' | '--interval') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'exec')
+      case "${word}" in
+        '-a') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    # xargs keeps its option table next to the pipeline scan that also reads it.
+    'xargs') consumption::is_xargs_value_option "${word}" ;;
     *) return 1 ;;
   esac
 }
 
 # @description How many non-flag operands a prefix command takes before the command word.
 #
-#              Only `timeout` has any: its duration. Every other prefix takes none, so its first
-#              non-flag word IS the command -- which is what keeps `sudo deploy.sh pkill x`, where
-#              `pkill` is an argument to the script, from reading as a kill.
+#              `timeout` has its duration, `chrt` its priority and `taskset` its CPU mask (or, after
+#              `-c`, its CPU list). Every other prefix takes none, so its first non-flag word IS
+#              the command -- which is what keeps `sudo deploy.sh pkill x`, where `pkill` is an
+#              argument to the script, from reading as a kill.
 # @arg $1 prefix the prefix command
 # @stdout the operand count
 function tokens::prefix_operand_budget() {
   case "$1" in
-    'timeout') printf '1' ;;
+    'timeout' | 'chrt' | 'taskset') printf '1' ;;
     *) printf '0' ;;
   esac
 }
@@ -130,6 +175,30 @@ function tokens::prefix_breaks_chain() {
     'sudo')
       case "${word}" in
         '-l' | '--list' | '-v' | '--validate' | '-e' | '--edit' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'ionice')
+      case "${word}" in
+        '-p' | '--pid' | '-P' | '--pgid' | '-u' | '--uid' | '-h' | '--help' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'chrt')
+      case "${word}" in
+        '-p' | '--pid' | '-m' | '--max' | '-h' | '--help' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'taskset')
+      case "${word}" in
+        '-p' | '--pid' | '-h' | '--help' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'watch')
+      case "${word}" in
+        '-h' | '--help' | '-v' | '--version') return 0 ;;
         *) return 1 ;;
       esac
       ;;

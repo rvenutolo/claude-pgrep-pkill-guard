@@ -67,53 +67,74 @@ function scanner::scan_command() {
 #              (`2> /dev/null pkill ...`, `sudo >f pkill ...`, `FOO=1 >f pkill ...`) is skipped
 #              with its target, by tokens::redirection_step, for the same reason.
 #
-#              A process substitution (`<(...)`, `>(...)`) is one word of the simple command around
-#              it, so `cat <(echo x) pkill --full X` has no invocation: `pkill` is `cat`'s argument.
-#              Its body is a command list of its own, and does have invocations. The `)` that
-#              closes it gives the state back as it stood at the opener, after one word, found by
-#              tokens::region_step.
+#              A substitution (`$(...)`, `$((...))`, a backtick pair, or a process substitution
+#              `<(...)` / `>(...)`) is one word of the simple command around it, so
+#              `echo $(true) pkill --full X` and `cat <(echo x) pkill --full X` have no invocation:
+#              `pkill` is the argument of `echo` and `cat`. Its body is a command list of its own, and
+#              does have invocations. The `)` or closing backtick that ends it gives the state back as
+#              it stood at the opener, found by tokens::region_step. A `$(` is saved after its `$` word
+#              was stepped, so `FOO=$(true) pkill` keeps command position; a backtick or a `<`/`>` is
+#              saved before it and the close steps the one word it stands for, unless it touches a
+#              word before it. A token that touches the close (`$(true)pkill`) continues the same
+#              word: it is not a command word, and a word glued to an assignment stays part of it.
 # @arg $1 command the raw command string
 # @arg $2 tokens newline-separated "<offset>\t<token>" records from scanner::scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>"
 function scanner::find_invocations() {
   local -r command="$1" tokens="$2"
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
-  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0 redir='' kind lt_glued=0 glued_back
+  local at_cmd=1 idx=0 offset token word chain='' chain_skip=0 chain_operands=0 redir='' kind glued_back
+  local glued_open=0 tail_end=-1 glued_tail
   local -a saved=()
   local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     tokens::region_step "${command}" "${offset}" "${token}" region kind
-    # A process substitution is one word of the simple command around it. Its body is a command
-    # list of its own, which the `(` starts, and the `)` that ends it hands the state back as it
-    # stood at the opener, after that one word. When the `<` or `>` touches a word before it
-    # (`FOO=<(...)`, `a<(...)`) the substitution is a part of that word, which has been stepped
-    # already, so no further word is stepped.
-    if [[ "${token}" == '<' || "${token}" == '>' ]]; then
-      lt_glued=0
+    glued_tail=0
+    ((offset == tail_end)) && glued_tail=1
+    tail_end=-1
+    # A substitution is one word of the simple command around it. Its body is a command list of
+    # its own, which the opener starts, and the `)` or closing backtick that ends it hands the
+    # state back as it stood at the opener. A `$(` or `$((` opener comes after its `$` word has
+    # been stepped, so the close steps nothing more. A backtick or a `<`/`>` is saved before it
+    # is stepped, and the close steps the one word it stands for, unless it touches a word before
+    # it (`FOO=<(...)`, `a<(...)`, ``FOO=`...` ``): that word has been stepped already.
+    if [[ "${token}" == '<' || "${token}" == '>' || "${kind}" == 'B' ]]; then
+      glued_open=0
       if ((region[prev_end] == offset)) && ! tokens::is_operator "${region[prev_token]}"; then
-        lt_glued=1
+        glued_open=1
       fi
     fi
-    if [[ "${kind}" == 'S' ]]; then
-      saved+=("${lt_glued}:${at_cmd}:${chain}:${chain_skip}:${chain_operands}")
-    elif [[ "${kind}" == 'close' && "${region[closed]}" == 'S' ]]; then
-      IFS=':' read -r glued_back at_cmd chain chain_skip chain_operands <<< "${saved[-1]}"
-      unset 'saved[-1]'
-      if ((glued_back == 0)); then
-        if tokens::prefix_chain_step 'procsub' 'procsub' "${at_cmd}" chain chain_skip chain_operands; then
-          at_cmd=1
-        else
-          at_cmd=0
+    case "${kind}" in
+      'P' | 'A') saved+=("1:${at_cmd}:${chain}:${chain_skip}:${chain_operands}") ;;
+      'S' | 'B') saved+=("${glued_open}:${at_cmd}:${chain}:${chain_skip}:${chain_operands}") ;;
+      'close')
+        IFS=':' read -r glued_back at_cmd chain chain_skip chain_operands <<< "${saved[-1]}"
+        unset 'saved[-1]'
+        if ((glued_back == 0)); then
+          if tokens::prefix_chain_step 'procsub' 'procsub' "${at_cmd}" chain chain_skip chain_operands; then
+            at_cmd=1
+          else
+            at_cmd=0
+          fi
         fi
-      fi
-      redir=''
-      idx="$((idx + 1))"
-      continue
-    fi
+        redir=''
+        tail_end="${region[end]}"
+        idx="$((idx + 1))"
+        continue
+        ;;
+    esac
     # A redirection is neither the command word nor a prefix's word, wherever it sits: it leaves
     # command position, the chain and a pending option value exactly as they were.
     if tokens::redirection_step "${token}" redir; then
+      idx="$((idx + 1))"
+      continue
+    fi
+    # A token that touches the close of a substitution continues that word (`$(true)pkill`,
+    # `FOO=$(true)pkill`): it is not a command word and steps nothing. What follows it and touches
+    # it belongs to the word as well.
+    if ((glued_tail == 1)) && ! tokens::is_operator "${token}"; then
+      tail_end="${region[end]}"
       idx="$((idx + 1))"
       continue
     fi

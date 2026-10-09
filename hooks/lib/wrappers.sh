@@ -320,7 +320,9 @@ function wrappers::group_stdin_kind() {
       wrappers::redirection_stdin_kind "${command}" "${offset}" "${token}" kind
     fi
   done <<< "${stream}"
-  [[ "${kind}" == 'heredoc' ]] || ordinal=''
+  if [[ "${kind}" != 'heredoc' ]]; then
+    ordinal=''
+  fi
   printf '%s:%s' "${kind}" "${ordinal}"
 }
 

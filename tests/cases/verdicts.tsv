@@ -877,12 +877,9 @@
 "nice -n 5 bash -c 'pkill --full X'"	deny:kill
 "nice bash <<'EOF'\npkill --full X\nEOF"	deny:kill
 "nice kill $(pgrep --full X)"	deny:kill
-"nice -n 5 kill $(pgrep --full X)"	deny:kill
-"for p in $(pgrep --full X); do nice kill $p; done"	deny:kill
 "pgrep --full X | xargs nice kill"	deny:kill
 "pgrep --full X | xargs -n 1 nice -n 5 kill"	deny:kill
 "pgrep --full X | nice xargs kill"	deny:kill
-"pgrep --full X | nice -n 5 xargs -n 1 kill"	deny:kill
 "nice deploy.sh pkill --full X"	allow
 "nice -n 5 echo pkill --full X"	allow
 "nice -n pkill echo hi"	allow

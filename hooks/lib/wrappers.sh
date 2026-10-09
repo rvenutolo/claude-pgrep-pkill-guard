@@ -232,22 +232,45 @@ function wrappers::group_closer() {
 # @description Say where the stdin of a group or compound command ends up, from the redirections
 #              written after its closing word (`{ bash; } < f`, `done <<< x`). The group's stdin is
 #              what every command inside it reads, so this decides whether a pipe into the group
-#              still reaches the wrappers in it. An unbalanced group has no closing word to read
-#              and answers none.
+#              still reaches the wrappers in it, and which heredoc, if the group has one of its own,
+#              they read. An unbalanced group has no closing word to read and answers none.
+#
+#              A heredoc's ordinal counts the heredoc operators in the whole command, in text order:
+#              the ones before the group (`base_seq`), those inside it, and those among its
+#              redirections up to the one that is its stdin. A heredoc delimiter word is not a
+#              closing word, so `cat <<fi` inside a group does not close an `if`.
 # @arg $1 command the raw command string
 # @arg $2 stream the token stream after the group's opening token
 # @arg $3 first_closer the closing word the opening token expects
-# @stdout the kind of the last fd 0 redirection after the closer, empty for none
+# @arg $4 base_seq the number of heredoc operators before the group's opening token
+# @stdout `<kind>:<ordinal>`: the kind of the last fd 0 redirection after the closer, empty for none,
+#         and, when that kind is `heredoc`, the ordinal of its body (otherwise empty)
 # @exitcode 0 always
 function wrappers::group_stdin_kind() {
-  local -r command="$1" stream="$2" first_closer="$3"
+  local -r command="$1" stream="$2" first_closer="$3" base_seq="$4"
   local -a closers=("${first_closer}")
   local offset token closer inner_at_cmd=1 closed=0 expect_target=0 expect_delim=0 glue_at=-1 kind=''
+  local seq="${base_seq}" ordinal=''
   local -r redir_re='^[0-9]*[<>]+$' heredoc_re='^([0-9]*)<<([^<]|$)' bare_heredoc_re='^[0-9]*<<-?$'
   local -r single_re='^[0-9]*[<>]$' stdin_redir_re='^(0?<|0>)'
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     if ((closed == 0)); then
+      if ((expect_delim == 1)); then
+        expect_delim=0
+        inner_at_cmd=0
+        continue
+      fi
+      if [[ "${token}" == '<HO>' ]]; then
+        seq="$((seq + 1))"
+        continue
+      fi
+      if [[ "${token}" =~ ${bare_heredoc_re} ]]; then
+        expect_delim=1
+      fi
+      if [[ "${token}" =~ ${heredoc_re} ]]; then
+        seq="$((seq + 1))"
+      fi
       closer="$(wrappers::group_closer "${token}" "${inner_at_cmd}")"
       if [[ -n "${closer}" ]]; then
         closers+=("${closer}")
@@ -278,7 +301,8 @@ function wrappers::group_stdin_kind() {
     if [[ "${token}" == '&' && "${command:offset+1:1}" == '>' ]]; then
       continue
     fi
-    [[ "${token}" =~ ${redir_re} ]] || break
+    # `<<-` is no `redir_re` match (the dash), but it is a redirection.
+    [[ "${token}" =~ ${redir_re} || "${token}" =~ ${heredoc_re} ]] || break
     expect_target=1
     glue_at=-1
     [[ "${token}" =~ ${single_re} ]] && glue_at="$((offset + ${#token}))"
@@ -286,13 +310,18 @@ function wrappers::group_stdin_kind() {
       expect_delim=1
     fi
     if [[ "${token}" =~ ${heredoc_re} ]]; then
+      seq="$((seq + 1))"
       expect_target=0
-      [[ -z "${BASH_REMATCH[1]}" || "${BASH_REMATCH[1]}" == '0' ]] && kind='heredoc'
+      if [[ -z "${BASH_REMATCH[1]}" || "${BASH_REMATCH[1]}" == '0' ]]; then
+        kind='heredoc'
+        ordinal="${seq}"
+      fi
     elif [[ "${token}" =~ ${stdin_redir_re} ]]; then
       wrappers::redirection_stdin_kind "${command}" "${offset}" "${token}" kind
     fi
   done <<< "${stream}"
-  printf '%s' "${kind}"
+  [[ "${kind}" == 'heredoc' ]] || ordinal=''
+  printf '%s:%s' "${kind}" "${ordinal}"
 }
 
 # @description Say whether the redirection starting at an offset gives its simple command a stdin
@@ -545,6 +574,12 @@ function wrappers::cut_substitutions() {
 #              closes. A nested construct redirecting its own stdin hides the payload from the
 #              wrappers inside it alone.
 #
+#              A heredoc written on the construct itself (`{ bash; } <<EOF`, `done <<EOF`) is its
+#              stdin the same way, claimed by the same wrappers under the same rules and replacing
+#              a pipe into the construct. Its body is announced after the line that holds the
+#              closing word, so wrappers::group_stdin_kind also returns the heredoc's ordinal,
+#              counting the heredoc operators inside the construct and among its redirections.
+#
 #              Still not covered: content that is not on the command line at all
 #              (`printf '%s' "${script}" | bash`, `curl ... | bash`), a here-string fed to a
 #              wrapper (`bash <<< 'script'`), and a group or subshell as the producer
@@ -575,6 +610,9 @@ function wrappers::shell_wrapper_payloads() {
     "${command}" == *'<('* || "${command}" == *'>('* ]]; then
     wrappers::cut_substitutions "${command}" "${tokens}" tokens
   fi
+  # A group can only own a heredoc when the command has a heredoc operator at all.
+  local has_heredoc_op=0
+  [[ "${tokens}" == *'<<'* || "${tokens}" == *'<HO>'* ]] && has_heredoc_op=1
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
   local offset token word next_at_cmd is_cmd_word raw budget pending_source
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
@@ -594,11 +632,11 @@ function wrappers::shell_wrapper_payloads() {
   local seg_cmd='' seg_heredoc='' seg_stdout_moved=0 seg_stdin_kind='' seg_piped=0
   local stdout_before=0 stdout_redir=0 dup_target=0
   # Groups and compound commands. `grp_*` is what the stdin of the innermost
-  # one holds (the pipe it sits on the right of, as a heredoc ordinal or a
-  # literal), which every wrapper inside reads unless a pipe of its own comes
-  # first. `frame_*` hold the enclosing one's values for each open group, and
+  # one holds (the pipe it sits on the right of, or a heredoc written on it, as
+  # a heredoc ordinal or a literal), which every wrapper inside reads unless a
+  # pipe of its own comes first. `frame_*` hold the enclosing one's values for each open group, and
   # `frame_closer` the word that ends it.
-  local grp_heredoc='' grp_text='' grp_text_set=0 group_closer='' group_stream='' group_kind=''
+  local grp_heredoc='' grp_text='' grp_text_set=0 group_closer='' group_stream='' group_kind='' group_ordinal=''
   local -a frame_closer=() frame_heredoc=() frame_text=() frame_text_set=()
   local -a seg_words=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
@@ -825,7 +863,8 @@ function wrappers::shell_wrapper_payloads() {
     case "${token}" in
       '{' | '(' | 'if' | 'while' | 'until' | 'for' | 'select' | 'case')
         group_closer="$(wrappers::group_closer "${token}" "${at_cmd}")"
-        if [[ -n "${group_closer}" ]] && { ((${#frame_closer[@]} > 0)) || ((seg_piped == 1)); }; then
+        if [[ -n "${group_closer}" ]] \
+          && { ((${#frame_closer[@]} > 0)) || ((seg_piped == 1)) || ((has_heredoc_op == 1)); }; then
           frame_closer+=("${group_closer}")
           frame_heredoc+=("${grp_heredoc}")
           frame_text+=("${grp_text}")
@@ -839,11 +878,18 @@ function wrappers::shell_wrapper_payloads() {
           fi
           wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
           seg_piped=0
-          if [[ -n "${grp_heredoc}" ]] || ((grp_text_set == 1)); then
+          if [[ -n "${grp_heredoc}" ]] || ((grp_text_set == 1)) || ((has_heredoc_op == 1)); then
             group_stream="${tokens#*"${offset}"$'\t'"${token}"$'\n'}"
             [[ "${group_stream}" == "${tokens}" ]] && group_stream=''
-            group_kind="$(wrappers::group_stdin_kind "${command}" "${group_stream}" "${group_closer}")"
-            if ! wrappers::stdin_reaches_wrapper "${group_kind}" 'pipe'; then
+            group_kind="$(wrappers::group_stdin_kind "${command}" "${group_stream}" "${group_closer}" "${heredoc_seq}")"
+            group_ordinal="${group_kind#*:}"
+            group_kind="${group_kind%%:*}"
+            if [[ "${group_kind}" == 'heredoc' ]]; then
+              # The group's own heredoc is its stdin, whatever it was fed before.
+              grp_heredoc="${group_ordinal}"
+              grp_text=''
+              grp_text_set=0
+            elif ! wrappers::stdin_reaches_wrapper "${group_kind}" 'pipe'; then
               wrappers::pipe_carry_clear grp_heredoc grp_text grp_text_set
             fi
           fi

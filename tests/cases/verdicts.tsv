@@ -773,3 +773,60 @@
 "sudo -u <(echo x) pkill --full X"	deny:kill
 "sudo <(echo x) pkill --full X"	allow
 "cat <(echo x) bash -c 'echo PAYLOAD_RAN'; pkill --full X"	deny:kill
+"echo $(true) pkill --full X"	allow
+"echo `true` pkill --full X"	allow
+"echo $((1+1)) pkill --full X"	allow
+"$(true) pkill --full X"	allow
+"`true` pkill --full X"	allow
+"sudo $(true) pkill --full X"	allow
+"echo a`true` pkill --full X"	allow
+"echo $(echo $(true)) pkill --full X"	allow
+"echo `echo $(true)` pkill --full X"	allow
+"echo $(true) $((1+1)) `true` pkill --full X"	allow
+"echo $(true) pgrep --full X | xargs echo PAYLOAD_RAN"	allow
+"echo $(true) pgrep --full X"	allow
+"kill $(true) pgrep --full X"	allow
+"for p in $(echo $(true) pgrep --full X); do kill $p; done"	allow
+"FOO=$(true) pkill --full X"	deny:kill
+"FOO=`true` pkill --full X"	deny:kill
+"FOO=$((1+1)) pkill --full X"	deny:kill
+"FOO=1 BAR=$(true) pkill --full X"	deny:kill
+"FOO=$(true) BAR=`true` pkill --full X"	deny:kill
+"echo $(true); pkill --full X"	deny:kill
+"echo $(true) && pkill --full X"	deny:kill
+"echo `true` | pkill --full X"	deny:kill
+"echo $(true); pkill --full X $(true)"	deny:kill
+"echo $(pkill --full X)"	deny:kill
+"echo $(true) $(pkill --full X)"	deny:kill
+"echo `pkill --full X`"	deny:kill
+"echo $(true) $(echo $(true) pkill --full X)"	allow
+"echo $(true)pkill --full X"	allow
+"echo `true`pkill --full X"	allow
+"echo $(true)y pkill --full X"	allow
+"echo <(true)pkill --full X"	allow
+"FOO=$(true)pkill --full X"	allow
+"while true; do if pgrep --full X; then echo $(true) break; fi; done"	warn
+"while true; do if pgrep --full X; then echo `true` break; fi; done"	warn
+"while true; do if pgrep --full X; then echo $((1+1)) break; fi; done"	warn
+"while true; do if pgrep --full X; then echo $(true); break; fi; done"	deny:loop
+"while true; do if pgrep --full X; then FOO=$(true) break; fi; done"	deny:loop
+"while true; do if pgrep --full X; then FOO=`true` break; fi; done"	deny:loop
+"while true; do if pgrep --full X; then FOO=$((1+1)) break; fi; done"	deny:loop
+"for p in $(pgrep --full X); do echo $(true) kill $p; done"	warn
+"for p in $(pgrep --full X); do FOO=$(true) kill $p; done"	deny:kill
+"FOO+=x pkill --full X"	deny:kill
+"FOO+=$(true) pkill --full X"	deny:kill
+"FOO[1]=$(true) pkill --full X"	deny:kill
+"FOO=$(true)$(true) pkill --full X"	deny:kill
+"FOO=`true``true` pkill --full X"	deny:kill
+"FOO=$(true)`true` pkill --full X"	deny:kill
+"FOO=`true`$(true) pkill --full X"	deny:kill
+"echo $(true)$(true) pkill --full X"	allow
+"echo `true``true` pkill --full X"	allow
+"while true; do if pgrep --full X; then FOO=$(true)$(true) break; fi; done"	deny:loop
+"while true; do if pgrep --full X; then FOO=a`true` break; fi; done"	deny:loop
+"while true; do if pgrep --full X; then echo $(true)$(true) break; fi; done"	warn
+"for p in $(pgrep --full X); do FOO=$(true)$(true) kill $p; done"	deny:kill
+"for p in $(pgrep --full X); do FOO+=$(true) kill $p; done"	deny:kill
+"for p in $(pgrep --full X); do FOO[1]=$(true) kill $p; done"	deny:kill
+"for p in $(pgrep --full X); do echo $(true)$(true) kill $p; done"	warn

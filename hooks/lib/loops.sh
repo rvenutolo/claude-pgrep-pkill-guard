@@ -22,9 +22,11 @@
 #              simply inside a substitution with no loop of its own still belongs to whatever cond/body
 #              span encloses that substitution, which is why `until [ -z "$(pgrep --full x)" ]; do ...`
 #              still reports `cond` -- the lookup skips barrier markers to find the nearest real span.
-#              The `)` of a process substitution (`<(...)`, `>(...)`) ends a word of its command and
-#              not the command itself, so a loop keyword right after it is an argument
-#              (`cat <(echo x) done`).
+#              The close of a substitution (`$(...)`, `$((...))`, a backtick pair, `<(...)`, `>(...)`)
+#              ends a word of its command and not the command itself, so a loop keyword right after
+#              it is an argument (`echo $(true) done`, `cat <(echo x) done`) -- unless the word
+#              holding it is an assignment (`FOO=$(true) break`), which leaves command position as
+#              it was.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @arg $3 target index of the invocation token
@@ -32,7 +34,8 @@
 function loops::loop_context() {
   local -r command="$1" tokens="$2" target="$3"
   local -a stack=()
-  local idx=0 at_cmd=1 dollar=0 offset token redir='' kind
+  local idx=0 at_cmd=1 dollar=0 offset token redir='' kind closed_assign=0 tail_end=-1 glued_tail
+  local -a word_assign=()
   local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
@@ -59,6 +62,33 @@ function loops::loop_context() {
       return 0
     fi
     tokens::region_step "${command}" "${offset}" "${token}" region kind
+    closed_assign=0
+    glued_tail=0
+    ((offset == tail_end && at_cmd == 1)) && glued_tail=1
+    tail_end=-1
+    case "${kind}" in
+      'P' | 'A' | 'B' | 'S')
+        if ((glued_tail == 1)) || tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
+          word_assign+=(1)
+        else
+          word_assign+=(0)
+        fi
+        ;;
+      'close')
+        closed_assign="${word_assign[-1]}"
+        unset 'word_assign[-1]'
+        tail_end="${region[end]}"
+        ;;
+    esac
+    # A token touching the close of an assignment's substitution continues that word
+    # (`FOO=$(true)$(true) break`, ``FOO=a`true` break``): it leaves command position as it was.
+    if ((glued_tail == 1)) && [[ "${kind}" != 'close' ]] && ! tokens::is_operator "${token}"; then
+      tail_end="${region[end]}"
+      dollar=0
+      [[ "${token}" == *'$' ]] && dollar=1
+      idx="$((idx + 1))"
+      continue
+    fi
     # A redirection leaves command position as it was, like the rest of the walkers (see
     # tokens::redirection_step).
     if tokens::redirection_step "${token}" redir; then
@@ -118,9 +148,10 @@ function loops::loop_context() {
     else
       dollar=0
     fi
-    # The `)` of a process substitution ends a word, not a command.
-    if [[ "${kind}" == 'close' && "${region[closed]}" == 'S' ]]; then
-      at_cmd=0
+    # The close of a substitution ends a word, not a command, unless the word is an assignment
+    # (`FOO=$(true) break`): that leaves command position where it was.
+    if [[ "${kind}" == 'close' ]]; then
+      at_cmd="${closed_assign}"
     elif tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
@@ -147,13 +178,42 @@ function loops::loop_context() {
 # @exitcode 1 no terminator
 function loops::body_has_terminator() {
   local -r command="$1" tokens="$2" target="$3"
-  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token redir='' kind
+  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token redir='' kind closed_assign=0 tail_end=-1 glued_tail
+  local -a word_assign=()
   local -a barrier=()
+  # shellcheck disable=SC2034 # read through tokens::region_opens_assignment_value's nameref
   local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     ((idx == target)) && seen=1
     tokens::region_step "${command}" "${offset}" "${token}" region kind
+    closed_assign=0
+    glued_tail=0
+    ((offset == tail_end && at_cmd == 1)) && glued_tail=1
+    tail_end=-1
+    case "${kind}" in
+      'P' | 'A' | 'B' | 'S')
+        if ((glued_tail == 1)) || tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
+          word_assign+=(1)
+        else
+          word_assign+=(0)
+        fi
+        ;;
+      'close')
+        closed_assign="${word_assign[-1]}"
+        unset 'word_assign[-1]'
+        tail_end="${region[end]}"
+        ;;
+    esac
+    # A token touching the close of an assignment's substitution continues that word
+    # (`FOO=$(true)$(true) break`, ``FOO=a`true` break``): it leaves command position as it was.
+    if ((glued_tail == 1)) && [[ "${kind}" != 'close' ]] && ! tokens::is_operator "${token}"; then
+      tail_end="${region[end]}"
+      dollar=0
+      [[ "${token}" == *'$' ]] && dollar=1
+      idx="$((idx + 1))"
+      continue
+    fi
     # A redirection in front of a terminator (`>f break`) leaves command position as it was.
     if tokens::redirection_step "${token}" redir; then
       idx="$((idx + 1))"
@@ -198,9 +258,10 @@ function loops::body_has_terminator() {
     else
       dollar=0
     fi
-    # The `)` of a process substitution ends a word, not a command.
-    if [[ "${kind}" == 'close' && "${region[closed]}" == 'S' ]]; then
-      at_cmd=0
+    # The close of a substitution ends a word, not a command, unless the word is an assignment
+    # (`FOO=$(true) break`): that leaves command position where it was.
+    if [[ "${kind}" == 'close' ]]; then
+      at_cmd="${closed_assign}"
     elif tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1
     else
@@ -279,8 +340,8 @@ function loops::loop_body_has_kill() {
         'kill') return 0 ;;
       esac
     fi
-    # The `)` of a process substitution ends a word, not a command.
-    if tokens::is_procsub_close "${tokens_var}" "${openers_var}" "${idx}"; then
+    # The close of a substitution ends a word, not a command, unless the word is an assignment.
+    if tokens::is_word_region_close "${tokens_var}" "${openers_var}" "${idx}"; then
       at_cmd=0
     elif tokens::is_operator "${token}" || tokens::is_keyword "${token}"; then
       at_cmd=1

@@ -262,7 +262,8 @@ function tokens::prefix_chain_step() {
   return 1
 }
 
-# @description True when a token is a shell variable-assignment word (`FOO=bar`, `LC_ALL=C`, ...).
+# @description True when a token is a shell variable-assignment word (`FOO=bar`, `LC_ALL=C`,
+#              `FOO+=bar`, `FOO[1]=bar`, ...).
 #              Tested against the raw token rather than its basename: unlike a prefix command, an
 #              assignment's value routinely contains a `/` (`PATH=/usr/bin cmd`), and stripping to
 #              the basename there would corrupt the match.
@@ -271,7 +272,7 @@ function tokens::prefix_chain_step() {
 # @exitcode 1 it is not
 function tokens::is_assignment_word() {
   local -r token="$1"
-  [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]]
+  [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?\+?=.*$ ]]
 }
 
 # @description True when a token is a shell keyword after which the next word is again in
@@ -373,6 +374,39 @@ function tokens::redirection_span_back() {
   fi
 }
 
+# @description True when the region opened at an index is the value of an assignment word, read
+#              from the token array: `FOO=$(true)`, ``FOO=`true` ``, and a chain of regions and
+#              words touching it (`FOO=$(true)$(true)`, ``FOO=a`true` ``). The array carries no
+#              offsets, so a region or word directly before the opener is taken to touch it.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 opener index of the token that opened the region
+# @exitcode 0 an assignment word holds the region
+# @exitcode 1 none does
+function tokens::region_holds_assignment() {
+  local -n toks="$1"
+  local -n openers="$2"
+  local opener="$3" prev
+  while ((opener > 0)); do
+    prev="$((opener - 1))"
+    case "${toks[opener]}" in
+      '(') [[ "${toks[prev]}" == *'$' ]] || return 1 ;;
+      '`') ;;
+      *) return 1 ;;
+    esac
+    tokens::is_assignment_word "${toks[prev]}" && return 0
+    if [[ -n "${openers[prev]:-}" ]]; then
+      opener="${openers[prev]}"
+    elif ((prev > 0)) && [[ -n "${openers[prev - 1]:-}" ]]; then
+      opener="${openers[prev - 1]}"
+    else
+      return 1
+    fi
+  done
+  return 1
+}
+
 # @description True when the token at an index closes a `$(...)`, `$((...))`, backtick or
 #              process-substitution region that ends a word of its simple command, so the word after
 #              it is an argument. For a walker over the token array, which has no region state of its
@@ -386,24 +420,18 @@ function tokens::redirection_span_back() {
 # @exitcode 0 the token closes a region that ends a word
 # @exitcode 1 it closes none, or the region's word is an assignment
 function tokens::is_word_region_close() {
-  local -n toks="$1"
-  local -n openers="$2"
-  local -r index="$3"
+  local -r tokens_var="$1" openers_var="$2" index="$3"
+  local -n openers="${openers_var}"
   [[ -n "${openers[index]:-}" ]] || return 1
-  local -r opener="${openers[index]}"
-  if ((opener > 0)); then
-    case "${toks[opener]}" in
-      '(') [[ "${toks[opener - 1]}" == *'$' ]] && tokens::is_assignment_word "${toks[opener - 1]}" && return 1 ;;
-      '`') [[ "${toks[opener - 1]}" == *'=' ]] && tokens::is_assignment_word "${toks[opener - 1]}" && return 1 ;;
-    esac
-  fi
+  tokens::region_holds_assignment "${tokens_var}" "${openers_var}" "${openers[index]}" && return 1
   return 0
 }
 
 # @description True when the region opener just stepped by tokens::region_step belongs to an
-#              assignment word in front of it: `FOO=$(`, `FOO=$((` or ``FOO=` `` (a backtick glued
-#              to the `=`). The walkers that have no saved command position read it at the opener,
-#              to know at the close whether the word leaves command position where it was.
+#              assignment word in front of it: `FOO=$(`, `FOO=$((` or a backtick touching an
+#              assignment word (``FOO=` ``, ``FOO=a` ``). The walkers that have no saved command
+#              position read it at the opener, to know at the close whether the word leaves
+#              command position where it was.
 # @arg $1 state name of the caller's associative array passed to tokens::region_step
 # @arg $2 kind the opener's kind from tokens::region_step (`P`, `A`, `B` or `S`)
 # @arg $3 offset the opener token's byte offset
@@ -416,8 +444,7 @@ function tokens::region_opens_assignment_value() {
   case "${kind}" in
     'P' | 'A') [[ "${before}" == *'$' ]] && tokens::is_assignment_word "${before}" ;;
     'B')
-      [[ "${before}" == *'=' ]] && ((${state_ref[prev_end]:--1} == offset)) \
-        && tokens::is_assignment_word "${before}"
+      ((${state_ref[prev_end]:--1} == offset)) && tokens::is_assignment_word "${before}"
       ;;
     *) return 1 ;;
   esac
@@ -438,9 +465,10 @@ function tokens::region_opens_assignment_value() {
 #              start of a stream. `kinds` holds one letter per open region, innermost last (`P`
 #              parenthesis, `A` arithmetic, `B` backtick, `S` process substitution), so
 #              `${#state[kinds]}` is the depth. `closed` holds the letter of the region the token
-#              just closed, empty for any other token, so a reader can tell the `)` of a process
-#              substitution (a word) from the `)` of a subshell (an operator). `end` and `token`
-#              describe the token just stepped, and `prev_end` and `prev_token` the one before it.
+#              just closed, empty for any other token, so a reader can tell the close of a
+#              substitution (the end of a word) from a `)` that closes no region, as a
+#              subshell's does (an operator). `end` and `token` describe the token just stepped,
+#              and `prev_end` and `prev_token` the one before it.
 #              Callers pass only non-empty tokens, as the `{ read offset token }` loops all skip
 #              empty ones first.
 # @arg $1 command the raw command string, for the byte after a `(`

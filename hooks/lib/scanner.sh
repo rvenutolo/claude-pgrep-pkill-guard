@@ -100,7 +100,7 @@ function scanner::find_invocations() {
     # is stepped, and the close steps the one word it stands for, unless it touches a word before
     # it (`FOO=<(...)`, `a<(...)`, ``FOO=`...` ``): that word has been stepped already.
     if [[ "${token}" == '<' || "${token}" == '>' || "${kind}" == 'B' ]]; then
-      glued_open=0
+      glued_open="${glued_tail}"
       if ((region[prev_end] == offset)) && ! tokens::is_operator "${region[prev_token]}"; then
         glued_open=1
       fi

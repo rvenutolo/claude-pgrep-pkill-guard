@@ -34,7 +34,7 @@
 function loops::loop_context() {
   local -r command="$1" tokens="$2" target="$3"
   local -a stack=()
-  local idx=0 at_cmd=1 dollar=0 offset token redir='' kind closed_assign=0
+  local idx=0 at_cmd=1 dollar=0 offset token redir='' kind closed_assign=0 tail_end=-1 glued_tail
   local -a word_assign=()
   local -A region=()
   while IFS=$'\t' read -r offset token; do
@@ -63,9 +63,12 @@ function loops::loop_context() {
     fi
     tokens::region_step "${command}" "${offset}" "${token}" region kind
     closed_assign=0
+    glued_tail=0
+    ((offset == tail_end && at_cmd == 1)) && glued_tail=1
+    tail_end=-1
     case "${kind}" in
       'P' | 'A' | 'B' | 'S')
-        if tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
+        if ((glued_tail == 1)) || tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
           word_assign+=(1)
         else
           word_assign+=(0)
@@ -74,8 +77,18 @@ function loops::loop_context() {
       'close')
         closed_assign="${word_assign[-1]}"
         unset 'word_assign[-1]'
+        tail_end="${region[end]}"
         ;;
     esac
+    # A token touching the close of an assignment's substitution continues that word
+    # (`FOO=$(true)$(true) break`, ``FOO=a`true` break``): it leaves command position as it was.
+    if ((glued_tail == 1)) && [[ "${kind}" != 'close' ]] && ! tokens::is_operator "${token}"; then
+      tail_end="${region[end]}"
+      dollar=0
+      [[ "${token}" == *'$' ]] && dollar=1
+      idx="$((idx + 1))"
+      continue
+    fi
     # A redirection leaves command position as it was, like the rest of the walkers (see
     # tokens::redirection_step).
     if tokens::redirection_step "${token}" redir; then
@@ -165,18 +178,22 @@ function loops::loop_context() {
 # @exitcode 1 no terminator
 function loops::body_has_terminator() {
   local -r command="$1" tokens="$2" target="$3"
-  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token redir='' kind closed_assign=0
+  local depth=0 seen=0 at_cmd=1 idx=0 dollar=0 offset token redir='' kind closed_assign=0 tail_end=-1 glued_tail
   local -a word_assign=()
   local -a barrier=()
+  # shellcheck disable=SC2034 # read through tokens::region_opens_assignment_value's nameref
   local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     ((idx == target)) && seen=1
     tokens::region_step "${command}" "${offset}" "${token}" region kind
     closed_assign=0
+    glued_tail=0
+    ((offset == tail_end && at_cmd == 1)) && glued_tail=1
+    tail_end=-1
     case "${kind}" in
       'P' | 'A' | 'B' | 'S')
-        if tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
+        if ((glued_tail == 1)) || tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
           word_assign+=(1)
         else
           word_assign+=(0)
@@ -185,8 +202,18 @@ function loops::body_has_terminator() {
       'close')
         closed_assign="${word_assign[-1]}"
         unset 'word_assign[-1]'
+        tail_end="${region[end]}"
         ;;
     esac
+    # A token touching the close of an assignment's substitution continues that word
+    # (`FOO=$(true)$(true) break`, ``FOO=a`true` break``): it leaves command position as it was.
+    if ((glued_tail == 1)) && [[ "${kind}" != 'close' ]] && ! tokens::is_operator "${token}"; then
+      tail_end="${region[end]}"
+      dollar=0
+      [[ "${token}" == *'$' ]] && dollar=1
+      idx="$((idx + 1))"
+      continue
+    fi
     # A redirection in front of a terminator (`>f break`) leaves command position as it was.
     if tokens::redirection_step "${token}" redir; then
       idx="$((idx + 1))"

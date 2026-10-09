@@ -1013,3 +1013,29 @@
 "echo 'pkill --full X' | { echo }; bash; }"	deny:kill
 "echo 'pkill --full X' | { echo }; bash; } < /tmp/f"	allow
 "echo 'pkill --full X' >&'1' | bash"	deny:kill
+"{ bash; } <<'EOF'\npkill --full X\nEOF"	deny:kill
+"( bash ) <<'EOF'\npkill --full X\nEOF"	deny:kill
+"if true; then bash; fi <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{\n bash\n} <<'EOF'\npkill --full X\nEOF"	deny:kill
+"while true; do bash; done <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ cat; bash; } <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ sudo bash; } <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ ( bash ); } <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ bash; } 2>&1 <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ bash; } 0<<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ true; } <<'A'\nx\nA\n{ bash; } <<'B'\npkill --full X\nB"	deny:kill
+"{ bash <<'A'\necho PAYLOAD_RAN\nA\n} <<'B'\npkill --full X\nB"	allow
+"{ { bash; } <<'A'\necho PAYLOAD_RAN\nA\n} <<'B'\npkill --full X\nB"	allow
+"{ cat <<'A' >/dev/null; bash; } <<'B'\necho PAYLOAD_RAN\nA\npkill --full X\nB"	deny:kill
+"echo hi | { bash; } <<'EOF'\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | { bash; } <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"{ bash; } <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"{ bash < /dev/null; } <<'EOF'\npkill --full X\nEOF"	allow
+"{ bash <<< 'echo PAYLOAD_RAN'; } <<'EOF'\npkill --full X\nEOF"	allow
+"{ bash; } < /tmp/f <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ bash; } <<'EOF' < /tmp/f\npkill --full X\nEOF"	allow
+"{ echo PAYLOAD_RAN | bash; } <<'EOF'\npkill --full X\nEOF"	allow
+"{ bash -c 'echo PAYLOAD_RAN'; } <<'EOF'\npkill --full X\nEOF"	allow
+"{ true; } <<'EOF'\npkill --full X\nEOF"	allow
+"{ bash; } <<-'EOF'\n\tpkill --full X\n\tEOF"	deny:kill
+"( bash <<'A'\necho PAYLOAD_RAN\nA\n) <<'B'\npkill --full X\nB"	allow

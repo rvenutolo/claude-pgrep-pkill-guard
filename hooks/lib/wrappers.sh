@@ -175,7 +175,7 @@ function wrappers::segment_pipe_carry() {
 #              be shown displaced, and a payload kept wrongly is a false deny where one dropped
 #              wrongly is a false allow.
 # @arg $1 kind the kind of the segment's last fd 0 redirection, empty for none
-# @arg $2 source `pipe` for a payload the pipe carried, `heredoc` for one the wrapper wrote itself
+# @arg $2 source_name `pipe` for a payload the pipe carried, `heredoc` for one the wrapper wrote itself
 # @exitcode 0 the payload reaches the wrapper, or cannot be shown not to
 # @exitcode 1 a later redirection of fd 0 displaces it
 function wrappers::stdin_reaches_wrapper() {
@@ -197,7 +197,7 @@ function wrappers::stdin_reaches_wrapper() {
 #              what a relative path names depends on a directory the text does not show. `<&-`
 #              counts too, since a closed stdin reads nothing.
 #
-#              Everything else answers no, so that a caller dropping a piped payload on a yes
+#              Everything else answers no, so that a caller dropping a payload on a yes
 #              fails closed. `<&N` duplicates a descriptor that may be the pipe itself (`<&0`). A
 #              target with an expansion (`< "${f}"`, `<<< "$(cat)"`) or a process substitution
 #              (`< <(cat)`) can hand the piped text back. So can a path that names the current
@@ -394,8 +394,8 @@ function wrappers::cut_substitutions() {
 #              body's ordinal among the markers.
 #
 #              bash applies the LAST redirection of fd 0, so the wrapper's own heredoc is the script
-#              only when nothing after it in the simple command takes fd 0 over: `bash <<EOF < f`,
-#              `bash <<EOF <<< 'x'` and `<<EOF bash <> f` read the file or the here-string and the
+#              only when nothing after it in the simple command takes fd 0 over: `bash <<EOF < /tmp/f`,
+#              `bash <<EOF <<< 'x'` and `<<EOF bash <> /tmp/f` read the file or the here-string and the
 #              body is never run, while `bash < f <<EOF` still runs it. A later redirection that may
 #              be the pipe or a descriptor the text cannot resolve (`<&3`, `< <(...)`) is not shown
 #              to displace it, and the body stays a payload. wrappers::stdin_reaches_wrapper holds
@@ -729,8 +729,8 @@ function wrappers::shell_wrapper_payloads() {
       # A heredoc written on the wrapper's own simple command is the one bash
       # applies; the pipe only supplies stdin when nothing else did. Whether
       # anything else does is not known until the simple command ends, so the
-      # pipe's payload is claimed here and dropped at the flush if `seg_stdin_kind`
-      # is set by then.
+      # pipe's payload is claimed here and dropped at the flush unless
+      # wrappers::stdin_reaches_wrapper says it still reaches the wrapper.
       if [[ -z "${pending}" && -n "${pipe_heredoc}" ]]; then
         pending="${pipe_heredoc}"
         pending_piped=1

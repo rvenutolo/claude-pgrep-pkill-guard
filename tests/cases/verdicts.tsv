@@ -1010,3 +1010,6 @@
 "echo 'pkill --full X' | if bash; then :; fi"	deny:kill
 "echo 'pkill --full X' | if true; then :; fi; bash"	allow
 "cat <<'EOF' | { bash; } < /tmp/f\npkill --full X\nEOF"	allow
+"echo 'pkill --full X' | { echo }; bash; }"	deny:kill
+"echo 'pkill --full X' | { echo }; bash; } < /tmp/f"	allow
+"echo 'pkill --full X' >&'1' | bash"	deny:kill

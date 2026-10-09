@@ -830,3 +830,88 @@
 "for p in $(pgrep --full X); do FOO+=$(true) kill $p; done"	deny:kill
 "for p in $(pgrep --full X); do FOO[1]=$(true) kill $p; done"	deny:kill
 "for p in $(pgrep --full X); do echo $(true)$(true) kill $p; done"	warn
+"nice pkill --full X"	deny:kill
+"nice -n 5 pkill --full X"	deny:kill
+"nice -5 pkill --full X"	deny:kill
+"nice --adjustment=5 pkill --full X"	deny:kill
+"nice --adjustment 5 pkill --full X"	deny:kill
+"ionice pkill --full X"	deny:kill
+"ionice -c 3 pkill --full X"	deny:kill
+"ionice -c 2 -n 4 pkill --full X"	deny:kill
+"ionice --class 2 --classdata 4 pkill --full X"	deny:kill
+"stdbuf -o L pkill --full X"	deny:kill
+"stdbuf -oL pkill --full X"	deny:kill
+"stdbuf --output=L pkill --full X"	deny:kill
+"stdbuf --output L --error 0 pkill --full X"	deny:kill
+"setsid pkill --full X"	deny:kill
+"setsid -w pkill --full X"	deny:kill
+"setsid --fork pkill --full X"	deny:kill
+"chrt -f 1 pkill --full X"	deny:kill
+"chrt --fifo 1 pkill --full X"	deny:kill
+"chrt -d -T 1 -P 2 -D 3 0 pkill --full X"	deny:kill
+"taskset 0x1 pkill --full X"	deny:kill
+"taskset -c 0,1 pkill --full X"	deny:kill
+"taskset --cpu-list 0 pkill --full X"	deny:kill
+"unbuffer pkill --full X"	deny:kill
+"unbuffer -p pkill --full X"	deny:kill
+"watch pkill --full X"	deny:kill
+"watch -n 1 pkill --full X"	deny:kill
+"watch --interval 1 pkill --full X"	deny:kill
+"xargs pkill --full X"	deny:kill
+"xargs -n 1 pkill --full X"	deny:kill
+"xargs -I {} pkill --full {}"	deny:kill
+"exec pkill --full X"	deny:kill
+"exec -a foo pkill --full X"	deny:kill
+"sudo nice pkill --full X"	deny:kill
+"nice sudo pkill --full X"	deny:kill
+"nice -n 5 sudo -u root pkill --full X"	deny:kill
+"sudo -u root nice -n 5 pkill --full X"	deny:kill
+"sudo xargs pkill --full X"	deny:kill
+"nohup nice -n 5 setsid pkill --full X"	deny:kill
+"FOO=1 nice pkill --full X"	deny:kill
+"nice -n 5 echo 'pkill --full X' | bash"	deny:kill
+"echo 'pkill --full X' | nice bash"	deny:kill
+"echo 'pkill --full X' | setsid bash"	deny:kill
+"echo 'pkill --full X' | stdbuf -oL bash"	deny:kill
+"echo 'pkill --full X' | ionice -c 3 bash"	deny:kill
+"nice -n 5 bash -c 'pkill --full X'"	deny:kill
+"nice bash <<'EOF'\npkill --full X\nEOF"	deny:kill
+"nice kill $(pgrep --full X)"	deny:kill
+"pgrep --full X | xargs nice kill"	deny:kill
+"pgrep --full X | xargs -n 1 nice -n 5 kill"	deny:kill
+"pgrep --full X | nice xargs kill"	deny:kill
+"nice deploy.sh pkill --full X"	allow
+"nice -n 5 echo pkill --full X"	allow
+"nice -n pkill echo hi"	allow
+"ionice -c pkill echo hi"	allow
+"ionice -p 123 pkill --full X"	allow
+"ionice -P 123 pkill --full X"	allow
+"ionice -u 1000 pkill --full X"	allow
+"stdbuf -o pkill echo hi"	allow
+"stdbuf -oL deploy.sh pkill --full X"	allow
+"setsid deploy.sh pkill --full X"	allow
+"chrt -p 0 pkill --full X"	allow
+"chrt -m pkill --full X"	allow
+"taskset -p 0x1 pkill --full X"	allow
+"taskset 0x1 deploy.sh pkill --full X"	allow
+"unbuffer deploy.sh pkill --full X"	allow
+"watch -n pkill echo hi"	allow
+"watch deploy.sh pkill --full X"	allow
+"xargs echo pkill --full X"	allow
+"xargs -n pkill echo hi"	allow
+"exec -a pkill echo hi"	allow
+"exec deploy.sh pkill --full X"	allow
+"echo 'pkill --full X' | nice cat"	allow
+"echo 'pkill --full X' | setsid -w cat"	allow
+"echo hi | xargs -n 1 echo"	allow
+"pgrep -f java | xargs -n 1 nice echo"	warn
+"watch -q 3 pkill --full X"	deny:kill
+"watch --equexit 3 pkill --full X"	deny:kill
+"watch -q 3 echo pkill --full X"	allow
+"taskset -c0 pkill --full X"	deny:kill
+"taskset --cpu-list=0,1 pkill --full X"	deny:kill
+"taskset -ac0 pkill --full X"	deny:kill
+"taskset -c0 echo pkill --full X"	allow
+"taskset --cpu-list=0 echo pkill --full X"	allow
+"taskset -ac0-3 grep pkill --full f"	allow
+"taskset -c 0 echo pkill --full X"	allow

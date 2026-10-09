@@ -20,8 +20,15 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # after them. `sudo pkill --full java` is the single most likely session-killing
 # form, so the guard must see through the prefix -- and through the prefix's own
 # options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
-# for the same reason the others do: `timeout 5 pkill --full java` runs the kill.
-readonly -a PREFIX_COMMANDS=('sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout')
+# for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
+# do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`
+# and `exec`. A wrapper that is not listed hides what it runs: the guard sees nothing
+# behind `flock` or `strace`. `watch` also hands a single quoted operand to `sh -c`
+# (`watch 'pkill --full X'`), which the chain does not read.
+readonly -a PREFIX_COMMANDS=(
+  'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
+  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec'
+)
 
 # @description True when a token is a command prefix that keeps the following word in command
 #              position.
@@ -88,22 +95,74 @@ function tokens::prefix_value_option() {
         *) return 1 ;;
       esac
       ;;
+    'nice')
+      case "${word}" in
+        '-n' | '--adjustment') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'ionice')
+      case "${word}" in
+        '-c' | '--class' | '-n' | '--classdata' | '-p' | '--pid' | '-P' | '--pgid' | '-u' | '--uid') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'stdbuf')
+      case "${word}" in
+        '-i' | '--input' | '-o' | '--output' | '-e' | '--error') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'chrt')
+      case "${word}" in
+        '-T' | '--sched-runtime' | '-P' | '--sched-period' | '-D' | '--sched-deadline') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'watch')
+      case "${word}" in
+        '-n' | '--interval' | '-q' | '--equexit') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'exec')
+      case "${word}" in
+        '-a') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    # xargs keeps its option table next to the pipeline scan that also reads it.
+    'xargs') consumption::is_xargs_value_option "${word}" ;;
     *) return 1 ;;
   esac
 }
 
 # @description How many non-flag operands a prefix command takes before the command word.
 #
-#              Only `timeout` has any: its duration. Every other prefix takes none, so its first
-#              non-flag word IS the command -- which is what keeps `sudo deploy.sh pkill x`, where
-#              `pkill` is an argument to the script, from reading as a kill.
+#              `timeout` has its duration, `chrt` its priority and `taskset` its CPU mask (or, after
+#              `-c`, its CPU list). Every other prefix takes none, so its first non-flag word IS
+#              the command -- which is what keeps `sudo deploy.sh pkill x`, where `pkill` is an
+#              argument to the script, from reading as a kill.
 # @arg $1 prefix the prefix command
 # @stdout the operand count
 function tokens::prefix_operand_budget() {
   case "$1" in
-    'timeout') printf '1' ;;
+    'timeout' | 'chrt' | 'taskset') printf '1' ;;
     *) printf '0' ;;
   esac
+}
+
+# @description True when a flag of a prefix carries the operand the prefix would otherwise take
+#              before the command, so that operand is spent. `taskset 0x1 cmd` takes a CPU mask
+#              first, and `taskset -c 0 cmd` takes the list as a separate word, but `taskset -c0 cmd`
+#              and `taskset --cpu-list=0 cmd` attach the list, and no mask follows.
+# @arg $1 prefix the prefix command
+# @arg $2 word the flag word to test
+# @exitcode 0 the flag carries the prefix's operand
+# @exitcode 1 it does not
+function tokens::prefix_flag_carries_operand() {
+  local -r prefix="$1" word="$2"
+  [[ "${prefix}" == 'taskset' ]] && [[ "${word}" == --cpu-list=* || "${word}" =~ ^-[A-Za-z]*c[0-9] ]]
 }
 
 # @description True when an option makes its prefix run no command at all, so the words after it
@@ -130,6 +189,30 @@ function tokens::prefix_breaks_chain() {
     'sudo')
       case "${word}" in
         '-l' | '--list' | '-v' | '--validate' | '-e' | '--edit' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'ionice')
+      case "${word}" in
+        '-p' | '--pid' | '-P' | '--pgid' | '-u' | '--uid' | '-h' | '--help' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'chrt')
+      case "${word}" in
+        '-p' | '--pid' | '-m' | '--max' | '-h' | '--help' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'taskset')
+      case "${word}" in
+        '-p' | '--pid' | '-h' | '--help' | '-V' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'watch')
+      case "${word}" in
+        '-h' | '--help' | '-v' | '--version') return 0 ;;
         *) return 1 ;;
       esac
       ;;
@@ -251,6 +334,7 @@ function tokens::prefix_chain_step() {
         skip_ref=1
         return 1
       fi
+      tokens::prefix_flag_carries_operand "${chain_ref}" "${word}" && operands_ref=0
       return 0
     fi
   fi

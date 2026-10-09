@@ -11,7 +11,7 @@
 
 # Wrappers that run their `-c` payload as code ON THIS MACHINE, in this process
 # tree, so the payload's `bash -c ...` ancestor is the same one a pgrep inside it
-# would match. `ssh`, `docker exec`, `kubectl exec`, `watch` and friends are
+# would match. `ssh`, `docker exec`, `kubectl exec` and friends are
 # deliberately absent: their payload runs somewhere else (or under a different
 # ancestor), and the scanner's masking of it is correct rather than a gap. That
 # distinction -- who runs the payload -- is the whole content of this feature;

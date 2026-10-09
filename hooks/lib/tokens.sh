@@ -23,7 +23,8 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
 # do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`
 # and `exec`. A wrapper that is not listed hides what it runs: the guard sees nothing
-# behind `flock` or `strace`.
+# behind `flock` or `strace`. `watch` also hands a single quoted operand to `sh -c`
+# (`watch 'pkill --full X'`), which the chain does not read.
 readonly -a PREFIX_COMMANDS=(
   'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
   'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec'
@@ -120,7 +121,7 @@ function tokens::prefix_value_option() {
       ;;
     'watch')
       case "${word}" in
-        '-n' | '--interval') return 0 ;;
+        '-n' | '--interval' | '-q' | '--equexit') return 0 ;;
         *) return 1 ;;
       esac
       ;;
@@ -149,6 +150,19 @@ function tokens::prefix_operand_budget() {
     'timeout' | 'chrt' | 'taskset') printf '1' ;;
     *) printf '0' ;;
   esac
+}
+
+# @description True when a flag of a prefix carries the operand the prefix would otherwise take
+#              before the command, so that operand is spent. `taskset 0x1 cmd` takes a CPU mask
+#              first, and `taskset -c 0 cmd` takes the list as a separate word, but `taskset -c0 cmd`
+#              and `taskset --cpu-list=0 cmd` attach the list, and no mask follows.
+# @arg $1 prefix the prefix command
+# @arg $2 word the flag word to test
+# @exitcode 0 the flag carries the prefix's operand
+# @exitcode 1 it does not
+function tokens::prefix_flag_carries_operand() {
+  local -r prefix="$1" word="$2"
+  [[ "${prefix}" == 'taskset' ]] && [[ "${word}" == --cpu-list=* || "${word}" =~ ^-[A-Za-z]*c[0-9] ]]
 }
 
 # @description True when an option makes its prefix run no command at all, so the words after it
@@ -320,6 +334,7 @@ function tokens::prefix_chain_step() {
         skip_ref=1
         return 1
       fi
+      tokens::prefix_flag_carries_operand "${chain_ref}" "${word}" && operands_ref=0
       return 0
     fi
   fi

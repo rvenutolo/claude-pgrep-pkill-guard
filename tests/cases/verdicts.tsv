@@ -915,3 +915,19 @@
 "taskset --cpu-list=0 echo pkill --full X"	allow
 "taskset -ac0-3 grep pkill --full f"	allow
 "taskset -c 0 echo pkill --full X"	allow
+"bash <<'EOF' < /tmp/f\npkill --full X\nEOF"	allow
+"<<'EOF' < /tmp/f bash\npkill --full X\nEOF"	allow
+"bash <<'EOF' <<< 'echo PAYLOAD_RAN'\npkill --full X\nEOF"	allow
+"bash <<'EOF' <> /tmp/f\npkill --full X\nEOF"	allow
+"bash <<'EOF' 0< /tmp/f\npkill --full X\nEOF"	allow
+"bash <<'EOF' <&-\npkill --full X\nEOF"	allow
+"<<'EOF' bash < /tmp/f\npkill --full X\nEOF"	allow
+"bash <<'EOF' > /tmp/log < /tmp/f\npkill --full X\nEOF"	allow
+"bash < /tmp/f <<'EOF'\npkill --full X\nEOF"	deny:kill
+"bash <<'EOF' 3< /tmp/f\npkill --full X\nEOF"	deny:kill
+"bash <<'EOF' < /tmp/f <<'EOF2'\npkill --full X\nEOF\npkill --full Y\nEOF2"	deny:kill
+"bash <<'EOF' <&3\npkill --full X\nEOF"	deny:kill
+"bash <<'EOF' < /tmp/f <&3\npkill --full X\nEOF"	deny:kill
+"bash <<'EOF' < <(echo PAYLOAD_RAN)\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | bash <(echo PAYLOAD_RAN)"	allow
+"echo 'pkill --full X' | { bash; } < /tmp/f"	allow

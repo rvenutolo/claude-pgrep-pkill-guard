@@ -163,6 +163,29 @@ function wrappers::segment_pipe_carry() {
   fi
 }
 
+# @description Say whether a payload from one source is what a wrapper's stdin ends up reading.
+#              bash applies the last redirection of fd 0 in a simple command, so exactly one source
+#              wins. The kind says what the last one was, as far as the command text shows:
+#              `` (none: the wrapper reads the pipe it sits on), `heredoc` (its own heredoc),
+#              `text` (a here-string), `replaced` (a literal file or a closed stdin, proven not
+#              to be the pipe) or `maybe-pipe` (a duplicated descriptor, a process substitution
+#              or an expansion, which may be the pipe itself).
+#
+#              `maybe-pipe` keeps both the pipe and a heredoc the wrapper wrote itself. Neither can
+#              be shown displaced, and a payload kept wrongly is a false deny where one dropped
+#              wrongly is a false allow.
+# @arg $1 kind the kind of the segment's last fd 0 redirection, empty for none
+# @arg $2 source_name `pipe` for a payload the pipe carried, `heredoc` for one the wrapper wrote itself
+# @exitcode 0 the payload reaches the wrapper, or cannot be shown not to
+# @exitcode 1 a later redirection of fd 0 displaces it
+function wrappers::stdin_reaches_wrapper() {
+  local -r kind="$1" source_name="$2"
+  case "${kind}:${source_name}" in
+    ':pipe' | 'maybe-pipe:pipe' | 'heredoc:heredoc' | 'maybe-pipe:heredoc') return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # @description Say whether the redirection starting at an offset gives its simple command a stdin
 #              that is not the pipe that command sits on, as far as the command text shows.
 #
@@ -174,7 +197,7 @@ function wrappers::segment_pipe_carry() {
 #              what a relative path names depends on a directory the text does not show. `<&-`
 #              counts too, since a closed stdin reads nothing.
 #
-#              Everything else answers no, so that a caller dropping a piped payload on a yes
+#              Everything else answers no, so that a caller dropping a payload on a yes
 #              fails closed. `<&N` duplicates a descriptor that may be the pipe itself (`<&0`). A
 #              target with an expansion (`< "${f}"`, `<<< "$(cat)"`) or a process substitution
 #              (`< <(cat)`) can hand the piped text back. So can a path that names the current
@@ -370,6 +393,14 @@ function wrappers::cut_substitutions() {
 #              order, so a heredoc's ordinal among all `<<` tokens -- fd-prefixed or not -- is its
 #              body's ordinal among the markers.
 #
+#              bash applies the LAST redirection of fd 0, so the wrapper's own heredoc is the script
+#              only when nothing after it in the simple command takes fd 0 over: `bash <<EOF < /tmp/f`,
+#              `bash <<EOF <<< 'x'` and `<<EOF bash <> /tmp/f` read the file or the here-string and the
+#              body is never run, while `bash < f <<EOF` still runs it. A later redirection that may
+#              be the pipe or a descriptor the text cannot resolve (`<&3`, `< <(...)`) is not shown
+#              to displace it, and the body stays a payload. wrappers::stdin_reaches_wrapper holds
+#              that decision for every source of the wrapper's stdin.
+#
 #              A payload piped into the wrapper counts too. The wrapper reads its script
 #              from stdin, so the left of the pipe is what it runs -- but only when that side hands
 #              the text through unchanged: `cat` with no operand but `-`, and no redirection of its
@@ -420,7 +451,7 @@ function wrappers::shell_wrapper_payloads() {
     wrappers::cut_substitutions "${command}" "${tokens}" tokens
   fi
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
-  local offset token word next_at_cmd is_cmd_word raw budget
+  local offset token word next_at_cmd is_cmd_word raw budget pending_source
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
   local heredoc_seq=0 body_seq=0 pending='' leading_pending='' wanted=' ' expect_delim=0 len fd
@@ -429,13 +460,13 @@ function wrappers::shell_wrapper_payloads() {
   # now; `pipe_*` is what an ended segment left behind for the next one, which
   # only the very next command word may claim. `pending_text` is the wrapper's
   # claimed literal payload, held until its simple command ends the same way a
-  # heredoc ordinal is. `seg_stdin` says the segment gives its own fd 0
-  # something that is not the pipe, and `pending_piped` that `pending` holds
-  # the pipe's heredoc rather than one the wrapper wrote itself. At the flush
-  # `seg_stdin` alone drops a claimed literal, and with `pending_piped` it
-  # drops a claimed pipe heredoc: bash hands the wrapper the redirection and
-  # the pipe is never read.
-  local seg_cmd='' seg_heredoc='' seg_redir=0 seg_stdin=0
+  # heredoc ordinal is. `seg_stdin_kind` is where the segment's fd 0 comes from
+  # after its last fd 0 redirection (see wrappers::stdin_reaches_wrapper), and
+  # `pending_piped` says that `pending` holds the pipe's heredoc rather than one
+  # the wrapper wrote itself. At the flush each claimed payload is kept only if
+  # its own source is what fd 0 ends up reading: bash applies the last
+  # redirection, so any other source is never read.
+  local seg_cmd='' seg_heredoc='' seg_redir=0 seg_stdin_kind=''
   local -a seg_words=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
   local pending_text='' pending_text_set=0 pending_piped=0
@@ -488,7 +519,7 @@ function wrappers::shell_wrapper_payloads() {
         # Remembered for the pipeline carry whoever owns it: bash applies the
         # LAST stdin heredoc of a simple command, so a later one replaces it.
         seg_heredoc="${heredoc_seq}"
-        seg_stdin=1
+        seg_stdin_kind='heredoc'
         if ((in_wrapper == 1 && saw_c == 0)); then
           pending="${heredoc_seq}"
           pending_piped=0
@@ -546,12 +577,15 @@ function wrappers::shell_wrapper_payloads() {
       fi
       # bash applies the last redirection of fd 0, so each one decides afresh:
       # a later one that may be the pipe again (`< /tmp/f <&3`) withdraws what
-      # an earlier one, a heredoc included, established.
+      # an earlier one established, and one that provably is not the pipe
+      # displaces what an earlier one established, a heredoc included.
       if [[ "${token}" =~ ${stdin_redir_re} ]]; then
-        if wrappers::redirection_replaces_stdin "${command}" "${offset}"; then
-          seg_stdin=1
+        if ! wrappers::redirection_replaces_stdin "${command}" "${offset}"; then
+          seg_stdin_kind='maybe-pipe'
+        elif [[ "${token}" == *'<<<' ]]; then
+          seg_stdin_kind='text'
         else
-          seg_stdin=0
+          seg_stdin_kind='replaced'
         fi
       fi
       # A producer whose own output is redirected sends the wrapper nothing:
@@ -570,12 +604,16 @@ function wrappers::shell_wrapper_payloads() {
       fi
       if tokens::is_operator "${token}"; then
         # A redirection of the wrapper's own stdin replaces the pipe, so what
-        # the pipe carried is never read; a heredoc the wrapper wrote itself
-        # still counts.
-        if [[ -n "${pending}" ]] && ((pending_piped == 0 || seg_stdin == 0)); then
+        # the pipe carried is never read; and a later one replaces the wrapper's
+        # own heredoc the same way.
+        pending_source='heredoc'
+        ((pending_piped == 1)) && pending_source='pipe'
+        if [[ -n "${pending}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" "${pending_source}"; then
           wanted+="${pending} "
         fi
-        ((pending_text_set == 1 && seg_stdin == 0)) && printf '%s\0' "${pending_text}"
+        if ((pending_text_set == 1)) && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'pipe'; then
+          printf '%s\0' "${pending_text}"
+        fi
         in_wrapper=0
         saw_c=0
         saw_s=0
@@ -656,7 +694,7 @@ function wrappers::shell_wrapper_payloads() {
       seg_cmd=''
       seg_heredoc=''
       seg_redir=0
-      seg_stdin=0
+      seg_stdin_kind=''
       seg_words=()
       leading_pending=''
     elif tokens::is_keyword "${token}"; then
@@ -691,8 +729,8 @@ function wrappers::shell_wrapper_payloads() {
       # A heredoc written on the wrapper's own simple command is the one bash
       # applies; the pipe only supplies stdin when nothing else did. Whether
       # anything else does is not known until the simple command ends, so the
-      # pipe's payload is claimed here and dropped at the flush if `seg_stdin`
-      # is set by then.
+      # pipe's payload is claimed here and dropped at the flush unless
+      # wrappers::stdin_reaches_wrapper says it still reaches the wrapper.
       if [[ -z "${pending}" && -n "${pipe_heredoc}" ]]; then
         pending="${pipe_heredoc}"
         pending_piped=1
@@ -713,7 +751,7 @@ function wrappers::shell_wrapper_payloads() {
   # A wrapper whose simple command runs to the end of the input (`echo 'x' |
   # bash`) meets no operator to flush on. A heredoc payload needs no such
   # flush: its body marker always follows the <NL> that ended that command.
-  if ((pending_text_set == 1 && seg_stdin == 0)); then
+  if ((pending_text_set == 1)) && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'pipe'; then
     printf '%s\0' "${pending_text}"
   fi
 }

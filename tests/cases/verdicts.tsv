@@ -1039,3 +1039,6 @@
 "{ true; } <<'EOF'\npkill --full X\nEOF"	allow
 "{ bash; } <<-'EOF'\n\tpkill --full X\n\tEOF"	deny:kill
 "( bash <<'A'\necho PAYLOAD_RAN\nA\n) <<'B'\npkill --full X\nB"	allow
+"echo 'pkill --full X' | { bash; } <<-'EOF'\n\techo PAYLOAD_RAN\n\tEOF"	allow
+"if true; then cat <<fi\nx\nfi\nbash; fi <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ cat <<'A' > /dev/null\nx\nA\nbash; } <<'B'\npkill --full X\nB"	deny:kill

@@ -869,8 +869,10 @@ function wrappers::shell_wrapper_payloads() {
           frame_heredoc+=("${grp_heredoc}")
           frame_text+=("${grp_text}")
           frame_text_set+=("${grp_text_set}")
-          # A pipe into the group is its stdin; without one it keeps the
-          # enclosing group's.
+          # A pipe into the group is its stdin, and so is a heredoc written on
+          # it (below); without either it keeps the enclosing group's. A frame
+          # opens for every group when the command has a heredoc operator,
+          # since the group may own one.
           if ((seg_piped == 1)); then
             grp_heredoc="${pipe_heredoc}"
             grp_text="${pipe_text}"

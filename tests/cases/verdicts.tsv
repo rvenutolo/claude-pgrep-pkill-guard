@@ -905,3 +905,13 @@
 "echo 'pkill --full X' | setsid -w cat"	allow
 "echo hi | xargs -n 1 echo"	allow
 "pgrep -f java | xargs -n 1 nice echo"	warn
+"watch -q 3 pkill --full X"	deny:kill
+"watch --equexit 3 pkill --full X"	deny:kill
+"watch -q 3 echo pkill --full X"	allow
+"taskset -c0 pkill --full X"	deny:kill
+"taskset --cpu-list=0,1 pkill --full X"	deny:kill
+"taskset -ac0 pkill --full X"	deny:kill
+"taskset -c0 echo pkill --full X"	allow
+"taskset --cpu-list=0 echo pkill --full X"	allow
+"taskset -ac0-3 grep pkill --full f"	allow
+"taskset -c 0 echo pkill --full X"	allow

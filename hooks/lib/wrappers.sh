@@ -177,7 +177,7 @@ function wrappers::segment_pipe_carry() {
 #              `maybe-pipe` keeps both the pipe and a heredoc the wrapper wrote itself. Neither can
 #              be shown displaced, and a payload kept wrongly is a false deny where one dropped
 #              wrongly is a false allow.
-# @arg $1 kind the kind of the segment's last fd 0 redirection, empty for none
+# @arg $1 kind the kind of the last fd 0 redirection of the segment or group, empty for none
 # @arg $2 source_name `pipe` for a payload the pipe carried, `heredoc` for one the wrapper wrote itself
 # @exitcode 0 the payload reaches the wrapper, or cannot be shown not to
 # @exitcode 1 a later redirection of fd 0 displaces it
@@ -252,7 +252,7 @@ function wrappers::group_stdin_kind() {
       if [[ -n "${closer}" ]]; then
         closers+=("${closer}")
       elif [[ "${token}" == "${closers[-1]}" ]] \
-        && { [[ "${token}" == '}' || "${token}" == ')' ]] || ((inner_at_cmd == 1)); }; then
+        && { [[ "${token}" == ')' ]] || ((inner_at_cmd == 1)); }; then
         unset 'closers[-1]'
         ((${#closers[@]} == 0)) && closed=1
       fi
@@ -581,19 +581,16 @@ function wrappers::shell_wrapper_payloads() {
   local chain='' chain_skip=0 chain_operands=0
   local heredoc_seq=0 body_seq=0 pending='' leading_pending='' wanted=' ' expect_delim=0 len fd
   local expect_redir_target=0
-  # The pipeline carry. `seg_*` is the simple command being read right
-  # now; `pipe_*` is what an ended segment left behind for the next one, which
-  # only the very next command word may claim (or a group opening right after
-  # the pipe, which hands it to `grp_*`). `seg_piped` says the segment sits on the
-  # right of a pipe, and so does not read the enclosing group's stdin.
-  # `pending_text` is the wrapper's
-  # claimed literal payload, held until its simple command ends the same way a
-  # heredoc ordinal is. `seg_stdin_kind` is where the segment's fd 0 comes from
-  # after its last fd 0 redirection (see wrappers::stdin_reaches_wrapper), and
-  # `pending_piped` says that `pending` holds the pipe's heredoc rather than one
-  # the wrapper wrote itself. At the flush each claimed payload is kept only if
-  # its own source is what fd 0 ends up reading: bash applies the last
-  # redirection, so any other source is never read.
+  # The pipeline carry. `seg_*` is the simple command being read right now; `pipe_*` is what an
+  # ended segment left behind for the next one, which only the very next command word may claim (or
+  # a group opening right after the pipe, which hands it to `grp_*`). `seg_piped` says the segment
+  # sits on the right of a pipe, and so does not read the enclosing group's stdin. `pending_text` is
+  # the wrapper's claimed literal payload, held until its simple command ends the same way a heredoc
+  # ordinal is. `seg_stdin_kind` is where the segment's fd 0 comes from after its last fd 0
+  # redirection (see wrappers::stdin_reaches_wrapper), and `pending_piped` says that `pending` holds
+  # the pipe's heredoc rather than one the wrapper wrote itself. At the flush each claimed payload
+  # is kept only if its own source is what fd 0 ends up reading: bash applies the last redirection,
+  # so any other source is never read.
   local seg_cmd='' seg_heredoc='' seg_stdout_moved=0 seg_stdin_kind='' seg_piped=0
   local stdout_before=0 stdout_redir=0 dup_target=0
   # Groups and compound commands. `grp_*` is what the stdin of the innermost
@@ -701,8 +698,11 @@ function wrappers::shell_wrapper_payloads() {
         continue
       fi
       # `>&1` duplicates fd 1 onto itself, which moves nothing.
-      if ((dup_target == 1)) && [[ "${command:offset:${#token}}" == '1' ]]; then
-        seg_stdout_moved="${stdout_before}"
+      if ((dup_target == 1)); then
+        case "${command:offset:${#token}}" in
+          '1' | "'1'" | '"1"') seg_stdout_moved="${stdout_before}" ;;
+          *) ;;
+        esac
       fi
       dup_target=0
       # Any other operator here is no target. It ends the simple command and
@@ -851,7 +851,7 @@ function wrappers::shell_wrapper_payloads() {
         ;;
       '}' | ')' | 'fi' | 'done' | 'esac')
         if ((${#frame_closer[@]} > 0)) && [[ "${token}" == "${frame_closer[-1]}" ]] \
-          && { [[ "${token}" == '}' || "${token}" == ')' ]] || ((at_cmd == 1)); }; then
+          && { [[ "${token}" == ')' ]] || ((at_cmd == 1)); }; then
           grp_heredoc="${frame_heredoc[-1]}"
           grp_text="${frame_text[-1]}"
           grp_text_set="${frame_text_set[-1]}"

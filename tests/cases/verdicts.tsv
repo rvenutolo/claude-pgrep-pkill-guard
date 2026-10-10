@@ -1080,3 +1080,16 @@
 "{ echo 'pkill --full X'; } | bash -s arg"	deny:kill
 "echo hi | { echo 'pkill --full X'; } | bash"	deny:kill
 "{ echo 'pkill --full X'; } | { echo b; } | bash"	allow
+"{ cat <<'EOF'\npkill --full X\nEOF\n} | bash"	deny:kill
+"( cat <<'EOF'\npkill --full X\nEOF\n) | bash"	deny:kill
+"for i in 1; do cat <<'EOF'\npkill --full X\nEOF\ndone | bash"	deny:kill
+"{ cat <<'EOF'\npkill --full X\nEOF\necho hi; } | bash"	deny:kill
+"{ cat <<'EOF' > /tmp/f\npkill --full X\nEOF\n} | bash"	allow
+"{ cat <<'EOF'\necho PAYLOAD_RAN\nEOF\n} | bash -c 'echo PAYLOAD_RAN'"	allow
+"{ bash; bash; } <<'EOF'\npkill --full X\nEOF"	deny:kill
+"{ ( echo 'pkill --full X' ) > /tmp/f; } | bash"	allow
+"{ { echo 'pkill --full X'; } > /tmp/f; } | bash"	allow
+"{ for i in 1; do echo 'pkill --full X'; done > /tmp/f; } | bash"	allow
+"{ if true; then echo 'pkill --full X'; fi > /dev/null; } | bash"	allow
+"{ { echo 'pkill --full X'; } 2>&1; } | bash"	deny:kill
+"{ { echo 'pkill --full X'; } | cat; } | bash"	allow

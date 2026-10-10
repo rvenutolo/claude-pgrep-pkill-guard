@@ -30,7 +30,7 @@ out="$(printf '{"tool_name":"Bash","tool_input":{"command":"pkill --full java"}}
 
 case "${out}" in
   *INACTIVE*)
-    echo "OK: guard reported INACTIVE under bash ${bash_major}"
+    echo "OK: guard reported INACTIVE under bash ${bash_major}" >&2
     exit 0
     ;;
   *)

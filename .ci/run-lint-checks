@@ -190,6 +190,9 @@ function main() {
   log 'running actionlint'
   if [[ -d "${REPO_DIR}/.github/workflows" ]]; then
     actionlint || rc=1
+  else
+    log 'no .github/workflows directory found - actionlint skipped' >&2
+    rc=1
   fi
 
   log 'running zizmor'

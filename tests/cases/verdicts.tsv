@@ -1121,3 +1121,13 @@
 "bash 3<<< 'pkill --full X'"	allow
 "bash <<< 'pkill --full X' <<< 'echo PAYLOAD_RAN'"	allow
 "bash <<< 'echo PAYLOAD_RAN' <<< 'pkill --full X'"	deny:kill
+"env bash <<< 'pkill --full X'"	deny:kill
+"if true; then bash; fi <<< 'pkill --full X'"	deny:kill
+"{ { bash; }; } <<< 'pkill --full X'"	deny:kill
+"cat - <<< 'pkill --full X' | bash"	deny:kill
+"cat <<< 'pkill --full X' | tee /tmp/f | bash"	allow
+"cat <<< 'pkill --full X' > /tmp/f | bash"	allow
+"bash <<< $'pkill --full X'"	allow
+"{ bash; } <<< 'pkill --full X' <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"{ bash; } <<'EOF' <<< 'pkill --full X'\necho PAYLOAD_RAN\nEOF"	deny:kill
+"{ echo PAYLOAD_RAN; } <<< 'pkill --full X' | bash"	allow

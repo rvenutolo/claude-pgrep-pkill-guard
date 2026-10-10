@@ -255,7 +255,9 @@ it also tracks the heredoc and the pipe a redirection can replace
 redirection of a group's or compound command's own stdin
 (`wrappers::group_stdin_kind`) decides whether a pipe into it reaches the
 wrappers inside, and a heredoc written on the group itself
-(`{ bash; } <<EOF`) is claimed by those wrappers the same way.
+(`{ bash; } <<EOF`) is claimed by those wrappers the same way. A group on the
+left of a pipe (`{ echo '...'; } | bash`) hands the wrapper the text its
+commands print, newline-joined, which fails closed.
 The braces of an unquoted `${...}` stay inside their word, so `FOO=${x} bash`
 and `> ${log}` are one word each, and `{name}` directly before a redirection
 operator (`{fd}>&1`) is read as a descriptor other than 0. A command

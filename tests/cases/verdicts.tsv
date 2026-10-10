@@ -1093,3 +1093,49 @@
 "{ if true; then echo 'pkill --full X'; fi > /dev/null; } | bash"	allow
 "{ { echo 'pkill --full X'; } 2>&1; } | bash"	deny:kill
 "{ { echo 'pkill --full X'; } | cat; } | bash"	allow
+"bash <<< 'pkill --full X'"	deny:kill
+"bash -s <<< 'pkill --full X'"	deny:kill
+"bash 0<<< 'pkill --full X'"	deny:kill
+"bash <<<'pkill --full X'"	deny:kill
+"bash <<< \"pkill --full X\""	deny:kill
+"sudo bash <<< 'pkill --full X'"	deny:kill
+"<<< 'pkill --full X' bash"	deny:kill
+"bash <<'EOF' <<< 'pkill --full X'\necho PAYLOAD_RAN\nEOF"	deny:kill
+"bash <<< 'pkill --full X' <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"bash <<< 'pkill --full X' < /tmp/f"	allow
+"bash < /tmp/f <<< 'pkill --full X'"	deny:kill
+"echo 'echo PAYLOAD_RAN' | bash <<< 'pkill --full X'"	deny:kill
+"{ bash; } <<< 'pkill --full X'"	deny:kill
+"cat <<< 'pkill --full X' | bash"	deny:kill
+"{ cat; } <<< 'pkill --full X' | bash"	deny:kill
+"{ cat <<< 'pkill --full X'; } | bash"	deny:kill
+"bash <<< 'echo PAYLOAD_RAN'"	allow
+"bash -c 'echo PAYLOAD_RAN' <<< 'pkill --full X'"	allow
+"bash script.sh <<< 'pkill --full X'"	allow
+"bash <<< \"$x\""	allow
+"bash <<< 'pkill --full X' 2>&1"	deny:kill
+"bash <<< 'pkill --full X' && echo PAYLOAD_RAN"	deny:kill
+"{ bash; } <<< 'echo PAYLOAD_RAN'"	allow
+"cat <<< 'echo PAYLOAD_RAN' | bash"	allow
+"echo 'pkill --full X' | cat <<< 'echo PAYLOAD_RAN' | bash"	allow
+"bash 3<<< 'pkill --full X'"	allow
+"bash <<< 'pkill --full X' <<< 'echo PAYLOAD_RAN'"	allow
+"bash <<< 'echo PAYLOAD_RAN' <<< 'pkill --full X'"	deny:kill
+"env bash <<< 'pkill --full X'"	deny:kill
+"if true; then bash; fi <<< 'pkill --full X'"	deny:kill
+"{ { bash; }; } <<< 'pkill --full X'"	deny:kill
+"cat - <<< 'pkill --full X' | bash"	deny:kill
+"cat <<< 'pkill --full X' | tee /tmp/f | bash"	allow
+"cat <<< 'pkill --full X' > /tmp/f | bash"	allow
+"bash <<< $'pkill --full X'"	allow
+"{ bash; } <<< 'pkill --full X' <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"{ bash; } <<'EOF' <<< 'pkill --full X'\necho PAYLOAD_RAN\nEOF"	deny:kill
+"{ echo PAYLOAD_RAN; } <<< 'pkill --full X' | bash"	allow
+"bash <<< 'pkill --full X' <&0"	deny:kill
+"bash <<< 'pkill --full X' < /dev/stdin"	deny:kill
+"bash <<< 'pkill --full X' <&3"	deny:kill
+"{ bash; } <<< 'pkill --full X' <&0"	deny:kill
+"{ bash; } <<< 'pkill --full X' < /dev/stdin"	deny:kill
+"cat <<< 'pkill --full X' <&0 | bash"	deny:kill
+"bash <<< 'pkill --full X' <&0 < /tmp/f"	allow
+"bash <<< 'pkill --full X' <&0 <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow

@@ -172,7 +172,7 @@ function wrappers::segment_pipe_carry() {
 #              `{ cat <<EOF ... EOF } | bash`) is printed here instead.
 # @arg $1 wanted_var name of the space-delimited list of wanted ordinals (set)
 # @arg $2 bodies_var name of the array of heredoc bodies by ordinal
-# @arg $3 body_seq the number of body markers read so far
+# @arg $3 seen_seq the number of body markers read so far
 # @arg $4 ordinals the space-separated ordinals being claimed
 # @stdout each newly claimed body that was announced already, NUL-terminated
 # @exitcode 0 always

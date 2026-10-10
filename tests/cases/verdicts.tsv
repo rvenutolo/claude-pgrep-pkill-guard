@@ -1131,3 +1131,11 @@
 "{ bash; } <<< 'pkill --full X' <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
 "{ bash; } <<'EOF' <<< 'pkill --full X'\necho PAYLOAD_RAN\nEOF"	deny:kill
 "{ echo PAYLOAD_RAN; } <<< 'pkill --full X' | bash"	allow
+"bash <<< 'pkill --full X' <&0"	deny:kill
+"bash <<< 'pkill --full X' < /dev/stdin"	deny:kill
+"bash <<< 'pkill --full X' <&3"	deny:kill
+"{ bash; } <<< 'pkill --full X' <&0"	deny:kill
+"{ bash; } <<< 'pkill --full X' < /dev/stdin"	deny:kill
+"cat <<< 'pkill --full X' <&0 | bash"	deny:kill
+"bash <<< 'pkill --full X' <&0 < /tmp/f"	allow
+"bash <<< 'pkill --full X' <&0 <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow

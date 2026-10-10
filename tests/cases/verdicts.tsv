@@ -1042,3 +1042,41 @@
 "echo 'pkill --full X' | { bash; } <<-'EOF'\n\techo PAYLOAD_RAN\n\tEOF"	allow
 "if true; then cat <<fi\nx\nfi\nbash; fi <<'EOF'\npkill --full X\nEOF"	deny:kill
 "{ cat <<'A' > /dev/null\nx\nA\nbash; } <<'B'\npkill --full X\nB"	deny:kill
+"{ echo 'pkill --full X'; } | bash"	deny:kill
+"( echo 'pkill --full X' ) | bash"	deny:kill
+"{ echo a; echo 'pkill --full X'; } | bash"	deny:kill
+"{ echo 'pkill --full X'; echo a; } | bash"	deny:kill
+"{\n echo 'pkill --full X'\n} | bash"	deny:kill
+"{ printf '%s\\n' 'pkill --full X'; } | bash"	deny:kill
+"{ cat; } <<'EOF' | bash\npkill --full X\nEOF"	deny:kill
+"{ cat <<'EOF'; } | bash\npkill --full X\nEOF"	deny:kill
+"( cat <<'EOF' ) | bash\npkill --full X\nEOF"	deny:kill
+"for i in 1 2; do echo 'pkill --full X'; done | bash"	deny:kill
+"if true; then echo 'pkill --full X'; fi | bash"	deny:kill
+"{ true && echo 'pkill --full X'; } | bash"	deny:kill
+"{ false || echo 'pkill --full X'; } | bash"	deny:kill
+"{ { echo 'pkill --full X'; }; } | bash"	deny:kill
+"{ ( echo 'pkill --full X' ); } | bash"	deny:kill
+"{ echo 'pkill --full X'; } |& bash"	deny:kill
+"{ echo 'pkill --full X'; } 2>&1 | bash"	deny:kill
+"{ echo 'pkill --full X'; } | sudo bash"	deny:kill
+"{ echo 'pkill --full X'; } | { bash; }"	deny:kill
+"{ echo 'pkill --full X'; } | bash -s"	deny:kill
+"{ echo 'pkill --full X' > /tmp/f; } | bash"	allow
+"{ echo 'pkill --full X'; } > /tmp/f | bash"	allow
+"{ echo 'pkill --full X'; } &> /tmp/f | bash"	allow
+"{ echo 'pkill --full X' | cat; } | bash"	allow
+"{ echo 'pkill --full X'; } || bash"	allow
+"{ echo 'pkill --full X'; }; bash"	allow
+"{ echo 'pkill --full X'; } & bash"	allow
+"{ echo 'pkill --full X'; } | cat | bash"	allow
+"{ echo 'pkill --full X'; } | bash -c 'echo PAYLOAD_RAN'"	allow
+"{ echo 'pkill --full X'; } | bash < /tmp/f"	allow
+"{ echo 'pkill --full X'; } | bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
+"{ echo PAYLOAD_RAN; } | bash"	allow
+"( echo PAYLOAD_RAN; echo PAYLOAD_RAN ) | bash"	allow
+"{ true; } | bash"	allow
+"{ echo; } | cat"	allow
+"{ echo 'pkill --full X'; } | bash -s arg"	deny:kill
+"echo hi | { echo 'pkill --full X'; } | bash"	deny:kill
+"{ echo 'pkill --full X'; } | { echo b; } | bash"	allow

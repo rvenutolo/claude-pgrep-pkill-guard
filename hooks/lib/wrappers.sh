@@ -990,11 +990,13 @@ function wrappers::shell_wrapper_payloads() {
     fi
 
     # The segment's operand words, kept in case it turns out to be a producer
-    # on the left of a pipe. A word still in command position is the command
-    # itself or a prefix's own option, neither of which the producer prints.
-    # Nor does it print the value of a prefix's option (the `root` of `sudo -u
-    # root echo ...`), which is out of command position but still the prefix's:
-    # `chain_skip` is still set from the option when its value arrives here.
+    # on the left of a pipe. Only a word that the chain step has already left
+    # out of command position is kept. A word still in it is none of what the
+    # producer prints: the command itself, a prefix word with its options, a
+    # `VAR=value` assignment, `timeout`'s duration. Nor does it print the value
+    # of a prefix's option (the `root` of `sudo -u root echo ...`), which is out
+    # of command position but still the prefix's: `chain_skip` is still set
+    # from the option when its value arrives here.
     if ((at_cmd == 0 && chain_skip == 0)) && ! tokens::is_operator "${token}" \
       && ! tokens::is_keyword "${token}"; then
       raw="${command:offset:${#token}}"

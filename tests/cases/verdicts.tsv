@@ -2131,3 +2131,8 @@
 "pgrep -f x; bash -c 'kill 1'"	allow
 "while ssh host bash -c 'pgrep -f x'; do sleep 1; done"	allow
 "while bash -c \"bash -c 'pgrep -f x'\"; do sleep 1; done"	allow
+"bash -c 'kill \"$1\"' _ $(pgrep -f x)"	deny:kill
+"sh -c 'kill $0' $(pgrep -f x)"	deny:kill
+"sudo bash -c 'kill \"$@\"' _ $(pgrep -f x)"	deny:kill
+"bash -c 'echo \"$1\"' _ $(pgrep -f x)"	warn
+"bash -c 'kill 1'; echo $(pgrep -f x)"	warn

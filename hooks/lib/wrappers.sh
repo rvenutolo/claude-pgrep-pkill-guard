@@ -44,6 +44,14 @@ readonly -a SHELL_WRAPPER_VALUE_OPTIONS=('emulate' 'init-file' 'rcfile')
 readonly -a USER_SWITCH_VALUE_OPTIONS=('--shell' '--group' '--supp-group' '--whitelist-environment' '--user')
 readonly -a USER_SWITCH_COMMAND_OPTIONS=('--command' '--session-command')
 
+# The commands that run the value of one of their options as a shell command line, one row each:
+# `<command>:<option letter>:<long option name>`, the long name empty when there is none.
+# `script -c`, `flock -c`, `entr -s` and `sg -c` hand the string to a shell, and `env -S` splits
+# it into the command to run; either way a kill inside it runs here.
+readonly -a SCRIPT_OPTION_COMMANDS=(
+  'env:S:split-string' 'flock:c:command' 'script:c:command' 'entr:s:' 'sg:c:'
+)
+
 # How many wrapper payloads deep to follow. `bash -c 'bash -c "..."'` resolves at
 # 2; the limit is a runaway backstop, not a judgement about nesting.
 # shellcheck disable=SC2034 # read by hooks/lib/classify.sh
@@ -710,6 +718,51 @@ function wrappers::cut_substitutions() {
   cut_outer="${outer}"
 }
 
+# @description Say where the script is when an option word of a command in SCRIPT_OPTION_COMMANDS
+#              names one: in the next word (`script -c '...'`, `script -qc '...'`,
+#              `flock --command '...'`), or attached to the option (`--command='...'`,
+#              `-S'...'`). A short option is read as getopt reads it: alone or as the last letter
+#              of a cluster it takes the next word, and with text behind it that text is the
+#              value.
+# @arg $1 runner the command, already reduced to its basename
+# @arg $2 word the option word as written
+# @stdout `next`, or `attached:<n>` with the number of leading bytes of the word that are not
+#         the script
+# @exitcode 0 the word is an option whose value is a script
+# @exitcode 1 it is not, or the command is not in the table
+function wrappers::script_option() {
+  local -r runner="$1" word="$2"
+  local row letter long
+  for row in "${SCRIPT_OPTION_COMMANDS[@]}"; do
+    [[ "${row%%:*}" == "${runner}" ]] || continue
+    letter="${row#*:}"
+    long="${letter#*:}"
+    letter="${letter%%:*}"
+    if [[ "${word}" == --* ]]; then
+      [[ -n "${long}" ]] || return 1
+      if [[ "${word}" == "--${long}" ]]; then
+        printf 'next'
+        return 0
+      fi
+      if [[ "${word}" == "--${long}="* ]]; then
+        printf 'attached:%s' "$((${#long} + 3))"
+        return 0
+      fi
+      return 1
+    fi
+    if [[ "${word}" == "-${letter}"?* ]]; then
+      printf 'attached:2'
+      return 0
+    fi
+    if [[ "${word}" =~ ^-[A-Za-z]*${letter}$ ]]; then
+      printf 'next'
+      return 0
+    fi
+    return 1
+  done
+  return 1
+}
+
 # @description Print the script `watch` runs for its operands, NUL-terminated. `watch` joins its
 #              operands with single spaces and hands the result to `sh -c`, so the first operand and
 #              the words after it make up one command line.
@@ -946,7 +999,10 @@ function wrappers::shell_wrapper_payloads() {
   local acc_idx acc_heredoc acc_text acc_text_set acc_word acc_through group_piped=0 producers_open=0
   local -a seg_words=()
   # `watch` tracking: it is the prefix whose operands are read as a script (see the capture below).
-  local watch_active=0 watch_exec=0 watch_dd=0 watch_first='' watch_first_set=0
+  local watch_active=0 watch_exec=0 watch_dd=0 watch_first='' watch_first_set=0 watch_kind=''
+  # `script_next` says the next word is the value of an option that wrappers::script_option
+  # found, and so a script.
+  local script_next=0 script_runner script_where
   local -a watch_rest=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
   # `pipe_open` says no word of the next stage has been read since a pipe: bash continues the
@@ -1437,6 +1493,36 @@ function wrappers::shell_wrapper_payloads() {
     elif tokens::is_keyword "${token}"; then
       leading_pending=''
     fi
+    # A command that runs the value of one of its options as a command line (`script -c '...'`,
+    # `env -S '...'`). The command is the segment's command word, or the prefix whose options are
+    # still being read.
+    if ((script_next == 1)); then
+      script_next=0
+      if ! tokens::is_operator "${token}"; then
+        raw="${command:offset:${#token}}"
+        if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
+          raw="${raw:1:${#raw}-2}"
+        fi
+        printf '%s\0' "${raw}"
+      fi
+    elif [[ "${token}" == -* ]]; then
+      script_runner="${seg_cmd}"
+      if [[ -z "${script_runner}" ]] && ((at_cmd == 1)); then
+        script_runner="${chain}"
+      fi
+      if [[ -n "${script_runner}" ]] && script_where="$(wrappers::script_option "${script_runner}" "${token}")"; then
+        if [[ "${script_where}" == 'next' ]]; then
+          script_next=1
+        else
+          raw="${command:offset:${#token}}"
+          raw="${raw:${script_where#attached:}}"
+          if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
+            raw="${raw:1:${#raw}-2}"
+          fi
+          printf '%s\0' "${raw}"
+        fi
+      fi
+    fi
     # The operands after watch's first one. They are kept here and not in `seg_words`, which leaves out
     # a word still in command position (`watch sudo '...'`).
     if ((watch_first_set == 1)) && ! tokens::is_operator "${token}"; then
@@ -1449,13 +1535,15 @@ function wrappers::shell_wrapper_payloads() {
     # `watch` runs its operands through `sh -c`, so they are a script: a quoted word, or one with
     # backslash escapes, is hidden from the prefix chain, and so is the quoted word after a prefix
     # operand (`watch sudo '...'`). `-x`/`--exec` runs the operand as a program name instead, and
-    # nothing is read.
+    # nothing is read. `eval` runs its operands the same way, and so does `sudo` with `-s` or `-i`,
+    # which hands them to the target user's shell.
     if ((watch_active == 1 && at_cmd == 1 && chain_skip == 0)) && ! tokens::is_operator "${token}" \
       && ! tokens::is_keyword "${token}"; then
       if ((watch_dd == 0)) && [[ "${token}" == '--' ]]; then
         watch_dd=1
       elif ((watch_dd == 0)) && [[ "${word}" == -* ]]; then
-        if [[ "${word}" == '--exec' || ("${word}" == -*x* && "${word}" != --*) ]]; then
+        if [[ "${watch_kind}" == 'watch' ]] \
+          && [[ "${word}" == '--exec' || ("${word}" == -*x* && "${word}" != --*) ]]; then
           watch_exec=1
         fi
       elif ! tokens::is_assignment_word "${token}"; then
@@ -1478,10 +1566,19 @@ function wrappers::shell_wrapper_payloads() {
     else
       next_at_cmd=0
     fi
-    if ((at_cmd == 1)) && [[ "${word}" == 'watch' && "${chain}" == 'watch' ]]; then
+    if ((at_cmd == 1)) && [[ ("${word}" == 'watch' || "${word}" == 'eval') && "${chain}" == "${word}" ]]; then
       watch_active=1
       watch_exec=0
       watch_dd=0
+      watch_kind="${word}"
+    fi
+    # `sudo -s` and `sudo -i` run the words behind sudo's options as one command line of a shell.
+    if ((at_cmd == 1)) && [[ "${chain}" == 'sudo' && "${chain_before}" == 'sudo' ]] \
+      && [[ "${token}" == '--shell' || "${token}" == '--login' || "${token}" =~ ^-[A-Za-z]*[si][A-Za-z]*$ ]]; then
+      watch_active=1
+      watch_exec=0
+      watch_dd=0
+      watch_kind='sudo'
     fi
     # Leaving command position marks the command word, with one exception: a
     # prefix's value-taking option (`sudo -u`) leaves it only for its value,

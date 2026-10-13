@@ -21,9 +21,9 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # form, so the guard must see through the prefix -- and through the prefix's own
 # options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
-# do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`
-# and `exec`. A wrapper that is not listed hides what it runs: the guard sees nothing
-# behind `flock` or `strace`. `watch` also hands its operands to `sh -c`
+# do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`,
+# `exec`, `flock` and the builtin `eval`. A wrapper that is not listed hides what it runs: the
+# guard sees nothing behind `strace`. `watch` and `eval` also hand their operands to a shell
 # (`watch 'pkill --full X'`); the chain cannot see into a quoted one, so
 # wrappers::shell_wrapper_payloads reads it as a payload.
 #
@@ -34,7 +34,7 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # nothing more, since NAME ends the chain and the `{` restores command position.
 readonly -a PREFIX_COMMANDS=(
   'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
-  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc'
+  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval'
 )
 
 # @description True when a token is a command prefix that keeps the following word in command
@@ -137,6 +137,14 @@ function tokens::prefix_value_spelling() {
         *) return 1 ;;
       esac
       ;;
+    'flock')
+      case "${word}" in
+        '-w' | '--wait' | '--timeout' | '-E' | '--conflict-exit-code' | '-c' | '--command')
+          return 0
+          ;;
+        *) return 1 ;;
+      esac
+      ;;
     # The xargs option table is in consumption.sh.
     'xargs') consumption::is_xargs_value_option "${word}" ;;
     *) return 1 ;;
@@ -183,15 +191,15 @@ function tokens::prefix_value_option() {
 
 # @description How many non-flag operands a prefix command takes before the command word.
 #
-#              `timeout` has its duration, `chrt` its priority and `taskset` its CPU mask (or, after
-#              `-c`, its CPU list). Every other prefix takes none, so its first non-flag word IS
-#              the command -- which is what keeps `sudo deploy.sh pkill x`, where `pkill` is an
-#              argument to the script, from reading as a kill.
+#              `timeout` has its duration, `chrt` its priority, `taskset` its CPU mask (or, after
+#              `-c`, its CPU list) and `flock` its lock file. Every other prefix takes none, so
+#              its first non-flag word IS the command -- which is what keeps `sudo deploy.sh pkill
+#              x`, where `pkill` is an argument to the script, from reading as a kill.
 # @arg $1 prefix the prefix command
 # @stdout the operand count
 function tokens::prefix_operand_budget() {
   case "$1" in
-    'timeout' | 'chrt' | 'taskset') printf '1' ;;
+    'timeout' | 'chrt' | 'taskset' | 'flock') printf '1' ;;
     *) printf '0' ;;
   esac
 }

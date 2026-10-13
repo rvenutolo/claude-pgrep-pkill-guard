@@ -31,7 +31,8 @@
 # @stderr the `usage:` line on a surplus argument, one `FAIL: <message>` line
 #         per missing or unparsable file, per violated invariant and for an
 #         invariant program that fails to run, and an `OK:` line when every
-#         invariant holds
+#         invariant holds; the ERR trap's `[<script>] ERROR: ...` report when a
+#         command fails instead
 # @exitcode 0 every invariant holds
 # @exitcode 1 a file is missing or unparsable, the invariant program fails to
 #             run, or an invariant is violated

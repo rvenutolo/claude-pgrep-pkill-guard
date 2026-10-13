@@ -6,7 +6,8 @@
 #              runnable on its own — it is not.
 # @noargs
 # @stderr one FAIL line per .bats file that has a shebang, naming the file and
-#         its first line, and one FAIL line for an empty scan
+#         its first line, and one FAIL line for an empty scan; the ERR trap's
+#         `[<script>] ERROR: ...` report when a command fails instead
 # @exitcode 0 no .bats file has a shebang
 # @exitcode 1 at least one does, or no .bats files exist
 # @exitcode * otherwise the failing git status, when the repository root cannot

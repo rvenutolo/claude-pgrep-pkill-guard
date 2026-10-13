@@ -52,8 +52,9 @@
 #              would silently corrupt prose. Read the output, fix those by hand,
 #              and run again.
 # @noargs
-# @stderr a `[<script>] <message>` banner before each step, the reason for
-#         each empty file list, and a closing line on a non-zero verdict
+# @stderr a `[<script>] <message>` banner before each step, the reason for each
+#         empty file list, and a closing line on a non-zero verdict; the ERR
+#         trap's `[<script>] ERROR: ...` report when a command fails instead
 # @exitcode 0 every fixer ran and had nothing left it could not fix
 # @exitcode 1 a fixer failed, left an unfixable finding, or a file list came
 #             up empty

@@ -88,7 +88,8 @@
 #         run takes rather than a parallel branch.
 # @stderr the usage line on a surplus argument, or the verdict: an OK, SKIP,
 #         WARN or FAIL line, with indented lines of explanation where the
-#         verdict carries them
+#         verdict carries them; the ERR trap's `[<script>] ERROR: ...` report
+#         when a command fails instead
 # @exitcode 0 the report is fresh, hooks/ changed only in ways exempt_reason
 #             clears, the recorded commit is unavailable (skip), or the report is
 #             stale or its commit unreachable and BENCH_FRESH_STRICT is unset

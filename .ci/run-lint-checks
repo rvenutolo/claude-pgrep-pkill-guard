@@ -8,9 +8,10 @@
 #              codes rather than failing fast, so one run surfaces every
 #              failing category.
 # @noargs
-# @stderr a `[<script>] <message>` banner before each step, the reason for
-#         each empty file list or missing directory, and a closing line on a
-#         non-zero verdict
+# @stderr a `[<script>] <message>` banner before each step, the reason for each
+#         empty file list or missing directory, and a closing line on a non-zero
+#         verdict; the ERR trap's `[<script>] ERROR: ...` report when a command
+#         fails instead
 # @exitcode 0 every linter passed
 # @exitcode 1 at least one linter failed, a file list came up empty, or the
 #             .github or .github/workflows directory is missing

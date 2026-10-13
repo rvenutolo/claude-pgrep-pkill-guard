@@ -50,8 +50,9 @@
 #         Without it the only possible test would be "exits 0 on the real
 #         repo", which a script that unconditionally returned 0 would also pass.
 # @stderr the usage line, one FAIL line per missing marker (with indented
-#         hints), unreadable or empty file, or empty table, and one OK line
-#         when every marker is present
+#         hints), unreadable or empty file, or empty table, and one OK line when
+#         every marker is present; the ERR trap's `[<script>] ERROR: ...` report
+#         when a command fails instead
 # @exitcode 0 every phrase appears in every file its row names
 # @exitcode 1 a phrase is missing, a listed file is unreadable or reads as
 #             empty, or the table is empty

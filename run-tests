@@ -42,9 +42,10 @@
 #         order, then bats arguments and test paths; give neither to run all
 #         of tests/
 # @stdout the bats terminal output (and kcov's, under --coverage)
-# @stderr a `[<script>] <message>` line naming the awk in use under --awk=bwk,
-#         a `[<script>] FATAL: <message>` line on each exit-1 cause this script
-#         detects, or the bash-version message
+# @stderr a `[<script>] <message>` line naming the awk in use under --awk=bwk, a
+#         `[<script>] FATAL: <message>` line on each exit-1 cause this script
+#         detects, or the bash-version message; the ERR trap's
+#         `[<script>] ERROR: ...` report when a command fails instead
 # @exitcode 0 all tests passed and the repo was left untouched
 # @exitcode 1 bats missing, nawk missing or not one-true-awk under --awk=bwk,
 #             kcov missing under --coverage, --report or --coverage given

@@ -39,8 +39,9 @@
 #         the real repo", which a script that unconditionally returned 0 would
 #         also pass.
 # @stderr the usage line on a surplus argument; one FAIL line per fault, some
-#         with indented lines of explanation; the OK summary line when the
-#         table and hooks/lib/ agree
+#         with indented lines of explanation; the OK summary line when the table
+#         and hooks/lib/ agree; the ERR trap's `[<script>] ERROR: ...` report
+#         when a command fails instead
 # @exitcode 0 the table and hooks/lib/ agree in both directions
 # @exitcode 1 the loader is missing, a row is stale or malformed, a part is
 #             unlisted or listed twice, the table is empty, or no tracked part

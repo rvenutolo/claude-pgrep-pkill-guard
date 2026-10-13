@@ -40,7 +40,8 @@
 # @stdout lychee's report
 # @stderr a `[<script>] <message>` banner before the check, a `WARN:` advisory
 #         when no GitHub token is available, and a `FAIL:` line when the file
-#         list is empty or lychee fails
+#         list is empty or lychee fails; the ERR trap's `[<script>] ERROR: ...`
+#         report when a command fails instead
 # @exitcode 0 every link in the tracked tree resolves
 # @exitcode 1 a link failed or lychee itself could not run, or the file list came
 #             up empty

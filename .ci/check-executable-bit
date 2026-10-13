@@ -14,7 +14,8 @@
 #         script that unconditionally returned 0 would also pass.
 # @stderr the usage line, or FAIL lines naming each file with the wrong mode,
 #         each expected-mode row that matches no tracked file (with an indented
-#         hint), and an empty scan
+#         hint), and an empty scan; the ERR trap's `[<script>] ERROR: ...`
+#         report when a command fails instead
 # @exitcode 0 every file has its expected mode
 # @exitcode 1 at least one file has the wrong mode, an expected-mode row matches
 #             no tracked file, or no tracked files were found

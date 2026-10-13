@@ -25,7 +25,8 @@
 #             be resolved
 # @stderr a `[<script>] <message>` banner before each step, a warning naming
 #         each untracked file, `one or more checks failed` on exit 1, and the
-#         usage line on exit 2
+#         usage line on exit 2; the ERR trap's `[<script>] ERROR: ...` report
+#         when a command fails instead
 
 set -Eeuo pipefail
 shopt -s inherit_errexit

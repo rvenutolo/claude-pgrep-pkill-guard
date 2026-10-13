@@ -2056,3 +2056,37 @@
 "pgrep --full x | cat <<EOF |\nbody\nEOF\nxargs kill"	deny:kill
 "pgrep --full x | cat <<EOF |\nbody $(echo hi) more\nEOF\nwc -l"	warn
 "pgrep --full x | cat <<EOF |\nxargs kill\nEOF\nsort"	allow
+"{ pgrep --full x || true; cp f{,.bak}; } | xargs kill"	deny:kill
+"{ pgrep --full x || true; ls | xargs -I{} echo {}; } | xargs kill"	deny:kill
+"{ pgrep --full x && find /tmp -name y -exec ls {} \\; ; } | xargs kill"	deny:kill
+"{ pgrep --full x || echo {}; } | xargs kill"	deny:kill
+"{ pgrep --full x || echo a{b}c; } | xargs kill"	deny:kill
+"{ echo {}; pgrep --full x || true; } | xargs kill"	deny:kill
+"{ pgrep --full x || true; echo {}; } | while read -r p; do kill $p; done"	deny:kill
+"{ pgrep --full x & echo {}; } | xargs kill"	deny:kill
+"{ pgrep --full x; cp f{,.bak}; } | xargs kill"	deny:kill
+"{ xargs kill; cp f{,.bak}; } < <(pgrep --full x)"	deny:kill
+"{ cp f{,.bak}; wc -l; } < <(pgrep --full x)"	warn
+"{ for f in while until; do pgrep --full x || true; done; } | xargs kill"	deny:kill
+"{ pgrep --full x || true; echo then if; } | xargs kill"	deny:kill
+"( pgrep --full x || echo time if ) | xargs kill"	deny:kill
+"{ pgrep --full x; echo then if; } | xargs kill"	deny:kill
+"case $y in a) pgrep --full x || true ;; b) echo 1 | xargs kill ;; esac"	deny:kill
+"pgrep --full x || case a in a) echo | xargs kill;; esac"	deny:kill
+"pgrep --full x || true; echo } | xargs kill"	deny:kill
+"pgrep --full x || echo a) | xargs kill"	deny:kill
+"function f { pgrep --full x || true; } | xargs kill"	deny:kill
+"if pgrep --full x || true; then echo; fi | xargs kill"	deny:kill
+"pgrep --full x | while read -r p; do [[ -n $p ]] && echo \"$p\"; done"	allow
+"pgrep --full x | while read -r p; do ps -p $p -o comm= || true; done"	allow
+"pgrep --full x | { read -r p; [[ -n $p ]] && echo $p; }"	allow
+"pgrep --full x | if a; then b && c; fi"	allow
+"pgrep --full x | { sort && echo ok; }"	warn
+"pgrep --full x | while read p; do ( echo ) done; kill 1"	allow
+"pgrep --full x | while read p; do { echo; } done; kill 1"	allow
+"pgrep --full x | while read p; do ( echo ) done | xargs kill"	deny:kill
+"pgrep --full x | grep -F {; kill 1"	allow
+"pgrep --full x | case a in (a) wc -l ;; esac"	warn
+"pgrep --full x | case a in (a) xargs kill ;; esac"	deny:kill
+"pgrep --full x | for i do xargs kill; done"	deny:kill
+"pgrep --full x | grep -v { || kill 1"	deny:kill

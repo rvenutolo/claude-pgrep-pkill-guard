@@ -1999,3 +1999,11 @@
 "while true; do ( pgrep --full x || exit 1 ); sleep 1; done"	warn
 "while true; do pgrep --full x || echo $(break); sleep 5; done"	warn
 "while true; do echo $(for i in 1; do break; done); pgrep --full x && echo up; sleep 1; done"	warn
+"while true; do ( while b; do pgrep --full x && echo up; case $x in a) break;; esac; done ); sleep 1; done"	deny:loop
+"while true; do y=$( while b; do pgrep --full x && echo up; case $x in a) break;; esac; done ); sleep 1; done"	deny:loop
+"while true; do ( while b; do pgrep --full x && echo up; y=${x%)}; break; done ); sleep 1; done"	deny:loop
+"while true; do ( while b; do [ -s /tmp/claude-1000/x/tasks/abc.output ] && echo y; case $x in a) break;; esac; done ); sleep 1; done"	deny:task-poll
+"( while b; do pgrep --full x && echo up; case $x in a) break;; esac; done )"	deny:loop
+"(while true; do pgrep --full x && echo up; y=${x%)}; break; done)"	deny:loop
+"while true; do ( echo a ); pgrep --full x && echo up; break; done"	deny:loop
+"while true; do ( while b; do echo a; done ); pgrep --full x && echo up; sleep 1; done"	warn

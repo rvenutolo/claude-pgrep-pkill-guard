@@ -24,6 +24,12 @@ readonly -a LOCAL_SHELL_WRAPPERS=('bash' 'sh' 'zsh' 'dash' 'ksh')
 # operand budget below.
 readonly -a LOCAL_USER_SWITCH_WRAPPERS=('su' 'runuser')
 
+# The long options of a wrapper that take the next word as their value. That word is no operand:
+# counted as one it would be taken for the script to run, and drop the payload the wrapper really
+# reads. The short ones are letters, read by wrappers::wrapper_option_values.
+readonly -a SHELL_WRAPPER_VALUE_OPTIONS=('--rcfile' '--init-file')
+readonly -a USER_SWITCH_VALUE_OPTIONS=('--shell' '--group' '--supp-group' '--whitelist-environment' '--user')
+
 # How many wrapper payloads deep to follow. `bash -c 'bash -c "..."'` resolves at
 # 2; the limit is a runaway backstop, not a judgement about nesting.
 # shellcheck disable=SC2034 # read by hooks/lib/classify.sh
@@ -62,6 +68,45 @@ function wrappers::wrapper_operand_budget() {
     fi
   done
   return 1
+}
+
+# @description How many of the words after an option of a local wrapper are that option's values.
+#
+#              A shell takes an option name behind each `o` and `O` of a short cluster, whichever
+#              sign leads it (`-o pipefail`, `+O extglob`, `-euo pipefail`), and the cluster's other
+#              letters stay flags. `su` and `runuser` read a cluster as getopt does: the first
+#              letter that takes a value ends the flags, and it takes the next word only when it
+#              is the last letter (`-s /bin/sh`, but not `-s/bin/sh`). Their `-c` is such a letter,
+#              and its value is the payload, which the caller reads.
+# @arg $1 word the option word, already reduced to its basename
+# @arg $2 kind `shell` for a shell, `user` for a user-switching wrapper
+# @stdout the number of value words
+# @exitcode 0 always
+function wrappers::wrapper_option_values() {
+  local -r word="$1" kind="$2"
+  local option letters flags count=0
+  if [[ "${word}" == --* ]]; then
+    if [[ "${kind}" == 'shell' ]]; then
+      for option in "${SHELL_WRAPPER_VALUE_OPTIONS[@]}"; do
+        [[ "${word}" == "${option}" ]] && count=1
+      done
+    else
+      for option in "${USER_SWITCH_VALUE_OPTIONS[@]}"; do
+        [[ "${word}" == "${option}" ]] && count=1
+      done
+    fi
+  elif [[ "${kind}" == 'shell' ]]; then
+    letters="${word:1}"
+    letters="${letters//[!oO]/}"
+    count="${#letters}"
+  else
+    letters="${word:1}"
+    flags="${letters%%[csgGwu]*}"
+    if ((${#flags} + 1 == ${#letters})) && [[ "${letters}" != *c ]]; then
+      count=1
+    fi
+  fi
+  printf '%s' "${count}"
 }
 
 # @description The text a pass-through producer on the left of a pipe hands to the wrapper on the
@@ -591,7 +636,9 @@ function wrappers::watch_payload() {
 #              neither runs the payload here); a `-c` precedes it, in the same simple command,
 #              within the wrapper's operand budget (see wrappers::wrapper_operand_budget -- this is what
 #              keeps `bash deploy.sh -c '...'`, where the `-c` belongs to the script, from being
-#              read as a payload); and the raw slice is a single fully quoted word. That last
+#              read as a payload; the value of an option, such as the `pipefail` of `-o pipefail`,
+#              is no operand, see wrappers::wrapper_option_values); and the raw slice is a single
+#              fully quoted word. That last
 #              condition is what keeps the recursion honest -- a double-quoted payload containing
 #              a command substitution is NOT one opaque token, because the scanner deliberately
 #              re-enters code context inside `$(...)`, and the outer scan can already see the
@@ -752,6 +799,9 @@ function wrappers::shell_wrapper_payloads() {
   local has_pipe_op=0
   [[ "${tokens}" == *$'\t|\n'* ]] && has_pipe_op=1
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
+  # `wrapper_kind` is `shell` or `user` (see wrappers::wrapper_option_values), and `option_values`
+  # counts the words still to come that are values of the wrapper's options.
+  local wrapper_kind='' option_values=0
   local offset token word next_at_cmd is_cmd_word raw budget pending_source
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
@@ -977,7 +1027,8 @@ function wrappers::shell_wrapper_payloads() {
       # `-s` in a short cluster says stdin IS the script, so the operands after
       # it are that script's positional parameters ($1...) rather than a script
       # to run in the body's place.
-      if [[ "${word}" == -*s* && "${word}" != --* ]]; then
+      # Only a shell's: `-s` of `su` and `runuser` names the shell to run.
+      if [[ "${wrapper_kind}" == 'shell' && "${word}" == -*s* && "${word}" != --* ]] && ((option_values == 0)); then
         saw_s=1
       fi
       if tokens::is_operator "${token}"; then
@@ -1002,7 +1053,11 @@ function wrappers::shell_wrapper_payloads() {
         pending=''
         pending_text=''
         pending_text_set=0
-      elif ((saw_c == 1)) && [[ "${word}" != -* ]]; then
+      elif ((option_values > 0)); then
+        # The value of an option (`-o pipefail`, `--rcfile f`, `su -s /bin/sh`): no operand, and
+        # not the `-c` string either.
+        option_values="$((option_values - 1))"
+      elif ((saw_c == 1)) && [[ "${word}" != -* ]] && [[ "${wrapper_kind}" != 'shell' || "${word}" != +* ]]; then
         raw="${command:offset:${#token}}"
         if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
           printf '%s\0' "${raw:1:${#raw}-2}"
@@ -1014,13 +1069,19 @@ function wrappers::shell_wrapper_payloads() {
         pending=''
         pending_text=''
         pending_text_set=0
-      elif [[ "${word}" == -*c* && "${word}" != --* ]] && ((saw_s_operand == 0)); then
-        # A short cluster, so `bash -lc '...'` counts as well as `bash -c '...'`.
+      elif [[ "${word}" == -* || ("${wrapper_kind}" == 'shell' && "${word}" == +*) ]]; then
+        # An option, which a shell also spells with a `+`. A short cluster counts for `-c`, so
+        # `bash -lc '...'` does as well as `bash -c '...'`.
         # Once `-s` has taken an operand the wrapper's own option list is over:
         # in `bash -s arg -c '...'` the `-c` and the string after it are $2 and
         # $3 of the body, and nothing here runs that string.
-        saw_c=1
-      elif [[ "${word}" != -* ]]; then
+        if ((saw_s_operand == 0)); then
+          option_values="$(wrappers::wrapper_option_values "${word}" "${wrapper_kind}")"
+          if [[ "${word}" == -*c* && "${word}" != --* ]]; then
+            saw_c=1
+          fi
+        fi
+      else
         # An operand before any `-c`. Spend one from the budget, and once it is
         # gone the wrapper no longer owns the options that follow -- unless
         # `-s` already said stdin is the script, in which case no operand ever
@@ -1300,6 +1361,9 @@ function wrappers::shell_wrapper_payloads() {
       saw_s=0
       saw_s_operand=0
       operands="${budget}"
+      option_values=0
+      wrapper_kind='shell'
+      ((budget == 0)) || wrapper_kind='user'
       pending="${leading_pending}"
       leading_pending=''
       pending_text=''

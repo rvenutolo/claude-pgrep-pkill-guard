@@ -62,7 +62,8 @@
 #         The alternative -- skipping the Darwin case on a Linux runner -- would
 #         mean the branch is never executed by anything at all.
 # @stderr the usage line, one FAIL line (with indented hints) per failure, and
-#         one SKIP line per linux-only entry not checked off Linux
+#         one SKIP line per linux-only entry not checked off Linux; the ERR
+#         trap's `[<script>] ERROR: ...` report when a command fails instead
 # @exitcode 0 every declared tool resolves and every package is justified
 # @exitcode 1 the tools file is missing or unreadable, the list is empty, a
 #             declared tool is missing or carries an unknown annotation, the

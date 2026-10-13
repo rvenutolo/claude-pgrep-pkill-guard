@@ -58,7 +58,8 @@
 # @noargs
 # @stderr one FAIL line per unguarded return, unreadable scan record or empty
 #         scan, some followed by indented lines of explanation; the OK summary
-#         lines when every in-scope return clears the trap
+#         lines when every in-scope return clears the trap; the ERR trap's
+#         `[<script>] ERROR: ...` report when a command fails instead
 # @exitcode 0 every in-scope return is preceded by `trap - ERR`
 # @exitcode 1 at least one is not, or the scan came up empty or emitted a
 #             record it cannot read

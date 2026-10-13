@@ -40,7 +40,8 @@
 #              pins. The canary checked before any file is scanned fails the
 #              gate when a different shfmt answers.
 # @arg $@ paths the bash and bats files to check
-# @stderr one FAIL line per violation, then a verdict line
+# @stderr one FAIL line per violation, then a verdict line; the ERR trap's
+#         `[<script>] ERROR: ...` report when a command fails instead
 # @exitcode 0 every file is clean
 # @exitcode 1 a violation, no files given, a file shfmt cannot parse, a named
 #             path that cannot be read or searched (a directory, a missing

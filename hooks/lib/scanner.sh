@@ -83,7 +83,10 @@ function scanner::scan_command() {
 #              a kill consumes an invocation's output, so `sudo -u root kill` and `timeout 5 kill`
 #              are kills and `sudo -u kill echo` is not. The `(` of `name=(...)` opens a list of
 #              words and not a subshell, and a `kill` among the words in front of that list's first
-#              operator is not reported.
+#              operator is not reported. A `pgrep` or `pkill` in command position in that list, as
+#              its first word is, is reported: the words are written to be run later as
+#              `"${name[@]}"`, which the scan cannot follow, so `x=(pkill --full X)` is denied where
+#              it is written.
 # @arg $1 command the raw command string
 # @arg $2 tokens newline-separated "<offset>\t<token>" records from scanner::scan_command
 # @stdout lines of "<index>\t<offset>\t<basename>", the basename being `pgrep`, `pkill` or `kill`
@@ -161,6 +164,12 @@ function scanner::find_invocations() {
     elif tokens::is_operator "${token}"; then
       array_words=0
     fi
+    # The `(` of an array literal restores command position like a subshell's, and a word of the
+    # literal that stands in command position, as its first word does, is reported like a command
+    # on purpose: `x=(pkill --full X)` is written to be run as `"${x[@]}"`, which no walk here
+    # can follow, so the literal is where the kill is caught. Only a `kill` in front of the
+    # literal's first operator is left out: on its own it is denied nowhere, and reported it
+    # would turn a capture such as `x=(kill $(pgrep ...))` into a kill of the substitution.
     if ((at_cmd == 1)); then
       case "${word}" in
         'pgrep' | 'pkill') printf '%s\t%s\t%s\n' "${idx}" "${offset}" "${word}" ;;

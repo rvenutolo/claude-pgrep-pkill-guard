@@ -130,8 +130,8 @@ function classify::probe_keys() {
 #              bracket mitigation covers is clean; the rest is classify::classify_position's.
 # @arg $1 tokens_var name of the command's token array
 # @arg $2 openers_var name of the array that maps each region-closing token's index to its opener's
-# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in command
-#         position
+# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 command the raw command
 # @arg $5 tokens the scanner's token stream for the command
 # @arg $6 idx the invocation's token index
@@ -161,8 +161,8 @@ function classify::classify_invocation() {
 #              ancestor -- and fixes an inflated count, but it never clears a loop.
 # @arg $1 tokens_var name of the command's token array
 # @arg $2 openers_var name of the array that maps each region-closing token's index to its opener's
-# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in command
-#         position
+# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 command the raw command
 # @arg $5 tokens the scanner's token stream for the command
 # @arg $6 idx the token index to classify at
@@ -219,6 +219,8 @@ function classify::payload_facts() {
   local -r payload="$1"
   [[ "${payload}" == *pgrep* || "${payload}" == *kill* ]] || return 0
   local tokens idx offset name args operand ignores counts
+  # A payload the scanner cannot read holds no facts; classify::classify_wrapper_payloads reports
+  # it as `inactive`.
   tokens="$(scanner::scan_command "${payload}")" || return 0
   while IFS=$'\t' read -r idx offset name; do
     case "${name}" in
@@ -351,11 +353,15 @@ function classify::classify_command() {
   done <<< "${invocations}"
 
   # The payloads of the wrappers in this command, each with the token index of its anchor. A
-  # payload is run where its wrapper stands, so what it holds is read there: a `kill` in it makes
-  # the wrapper a `kill` for the walks that ask what an invocation feeds
-  # (`pgrep --full x | bash -c 'xargs kill'`), and a `pgrep --full` in it is classified below at
-  # the wrapper's position (`while bash -c 'pgrep --full x'; do ...`). Collected before any
-  # invocation is classified, like the kills above.
+  # payload is run where its wrapper stands, so what it holds is read there: a `kill` in it marks
+  # the wrapper's anchor in cmd_kills with the value `payload`, which the walks of
+  # consumption::feeds_a_kill read as a `kill` (`pgrep --full x | bash -c 'xargs kill'`), and a
+  # `pgrep --full` in it is classified below at the wrapper's position
+  # (`while bash -c 'pgrep --full x'; do ...`). Collected before any invocation is classified,
+  # like the kills above.
+  #
+  # standins holds one row per such `pgrep`, in payload order:
+  # `<anchor index>:<ignores ancestors, 0 or 1>:<counts, 0 or 1>`.
   local -a payload_texts=() standins=()
   local record anchor_idx fact fact_ignores fact_counts
   if ((depth < MAX_PAYLOAD_DEPTH)); then
@@ -398,11 +404,12 @@ function classify::classify_command() {
     fi
   fi
 
-  # Each `pgrep --full` a payload holds, read where its wrapper stands. Rows of
-  # `<anchor index>:<ignores ancestors>:<counts>`, in payload order.
+  # Each `pgrep --full` a payload holds, read where its wrapper stands.
   local standin
   for standin in "${standins[@]}"; do
     IFS=':' read -r anchor_idx fact_ignores fact_counts <<< "${standin}"
+    # classify::classify_position reads its argument lines for `--count` alone, so one line that
+    # says so stands for the payload's `pgrep --count`.
     args=''
     ((fact_counts == 0)) || args=$'0\t--count'
     if invocation_finding="$(classify::classify_position cmd_tokens cmd_openers cmd_kills "${command}" \

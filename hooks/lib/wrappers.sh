@@ -647,7 +647,7 @@ function wrappers::redirection_replaces_stdin() {
 # @arg $1 command the raw command string
 # @arg $2 stream the token stream from scanner::scan_command
 # @arg $3 outer_var name of the variable set to the stream with each outermost region cut out (set)
-# @stdout the payloads found inside the cut regions, NUL-terminated
+# @stdout the payloads found inside the cut regions, as wrappers::shell_wrapper_payloads prints them
 # @exitcode 0 always; it ends on an assignment
 # shellcheck disable=SC2034 # cut_outer is the caller's variable, written through the nameref
 function wrappers::cut_substitutions() {

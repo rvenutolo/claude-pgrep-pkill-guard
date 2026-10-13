@@ -149,7 +149,10 @@ function consumption::construct_bounds() {
 #              or into a `grep` that counts (`-c`, `--count`), or a `&&` or `||` tests the status
 #              of the pipeline so far.
 #
-#              The word looked for must be the command word of a later pipeline stage, found by
+#              Asked about `kill`, a wrapper whose payload holds one counts as well
+#              (`| bash -c 'xargs kill'`): classify::classify_command marks its anchor in the
+#              kills array with the value `payload`. Otherwise
+#              the word looked for must be the command word of a later pipeline stage, found by
 #              stepping tokens::prefix_chain_step over the stage: prefix words, their options, option
 #              values and operands, and assignment words may stand in front of it (`| xargs kill`,
 #              `| sudo -u root xargs -n 1 kill`, `| xargs timeout 5 kill`, `| sudo wc -l`), while
@@ -198,7 +201,7 @@ function consumption::construct_bounds() {
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
 #         region to the index of the token that opened it
 # @arg $3 kills_var name of the caller's array holding an entry at the index of every `kill` in
-#         command position
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 target index of the invocation token
 # @arg $5 seek `kill` or `count`
 # @exitcode 0 a later stage is a `kill`; or, asked about `count`, one is `wc`, `xargs` or a
@@ -562,7 +565,9 @@ function consumption::pipeline_feeds() {
 #              (`sudo -u root kill $(...)`, `timeout 5 kill $(...)`) -- otherwise
 #              `echo kill $(...)`, where `kill` is merely an argument word, would be denied -- and one
 #              that is not is an argument word like any other, so the walk goes on to a real `kill`
-#              before it (`kill foo kill $(...)`). A bare `in` is only a for/select head -- and thus worth
+#              before it (`kill foo kill $(...)`). A wrapper whose payload kills counts as a
+#              `kill` wherever the walk meets its mark (`bash -c 'kill "$1"' _ $(...)`). A bare
+#              `in` is only a for/select head -- and thus worth
 #              deferring to loops::loop_body_has_kill -- when the token two back (past the loop
 #              variable) is actually `for`/`select`; otherwise the forward walk in
 #              loops::loop_body_has_kill could cross into an unrelated later loop's body, and the
@@ -572,7 +577,7 @@ function consumption::pipeline_feeds() {
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
 #         region to the index of the token that opened it
 # @arg $3 kills_var name of the caller's array holding an entry at the index of every `kill` in
-#         command position
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 target index of the invocation token
 # @exitcode 0 a kill consumes the substitution
 # @exitcode 1 it does not
@@ -594,6 +599,11 @@ function consumption::feeds_a_kill_backward() {
     if [[ -n "${openers[k]:-}" ]]; then
       k="$((openers[k] - 1))"
       continue
+    fi
+    # A wrapper whose payload kills, as classify::classify_command marked it: the substitution is
+    # one of its operands, and so a parameter of that payload (`bash -c 'kill "$1"' _ $(...)`).
+    if [[ "${kills[k]:-}" == 'payload' ]]; then
+      return 0
     fi
     word="${toks[k]##*/}"
     # An option is no path: reduced, `--file=/x/in` would read as the `in` of a `for` head.
@@ -676,7 +686,7 @@ function consumption::feeds_a_kill_backward() {
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
 #         region to the index of the token that opened it
 # @arg $3 kills_var name of the caller's array holding an entry at the index of every `kill` in
-#         command position
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 target index of the invocation token
 # @arg $5 seek `kill` or `count`
 # @exitcode 0 the command the substitution feeds does what was asked
@@ -768,7 +778,8 @@ function consumption::substitution_feeds() {
 #         invocation in the same command reuses it rather than re-parsing the token stream)
 # @arg $2 openers_var name of the caller's region-opener array, built alongside the token array
 # @arg $3 kills_var name of the caller's array holding an entry at the index of every `kill` in
-#         command position, as scanner::find_invocations reported them
+#         command position, as scanner::find_invocations reported them, and at the anchor of
+#         every wrapper whose payload holds one
 # @arg $4 target index of the invocation token
 # @exitcode 0 output feeds a kill
 # @exitcode 1 it does not
@@ -900,7 +911,7 @@ function consumption::next_command_reads_status() {
 # @arg $1 tokens_var name of the caller's token array, built once by classify::classify_command
 # @arg $2 openers_var name of the caller's region-opener array, built alongside the token array
 # @arg $3 kills_var name of the caller's array holding an entry at the index of every `kill` in
-#         command position
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 target index of the invocation token
 # @arg $5 args the invocation's argument lines
 # @arg $6 command the raw command string, for the `$?` check

@@ -372,13 +372,17 @@ function loops::body_has_terminator() {
 # @description Find the `do` that opens the loop body a given `done` closes. The stream is walked
 #              from its start, with the command position loops::loop_body_has_kill tracks, so a
 #              `do` or `done` that is an argument word (`echo done`) opens and closes nothing.
+#              Bash also reads the keywords in two places that are not command position here: a
+#              `do` behind a loop variable (`for x do`), and a `done` directly behind the word
+#              that closes a compound command (`fi done`, `esac done`, `done done`). A `done`
+#              with no body open before the one asked about is passed over.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
 #         region to the index of the token that opened it
 # @arg $3 done_idx index of the `done` token
 # @stdout the index of the matching `do`
 # @exitcode 0 the `done` closes a body
-# @exitcode 1 it does not: it is no keyword there, or no `do` is open
+# @exitcode 1 it does not: it is no keyword there, or no `do` is open at it
 function loops::done_body_start() {
   local -n toks="$1"
   local -r tokens_var="$1" openers_var="$2" done_idx="$3"
@@ -391,18 +395,28 @@ function loops::done_body_start() {
       idx="$((idx + 1))"
       continue
     fi
-    if ((at_cmd == 1)); then
-      if [[ "${token}" == 'do' ]]; then
-        starts+=("${idx}")
-      elif [[ "${token}" == 'done' ]]; then
-        ((${#starts[@]} > 0)) || return 1
-        if ((idx == done_idx)); then
-          printf '%s' "${starts[${#starts[@]} - 1]}"
-          return 0
+    case "${token}" in
+      'do')
+        if ((at_cmd == 1)) \
+          || { ((idx >= 2)) && [[ "${toks[idx - 2]}" == 'for' || "${toks[idx - 2]}" == 'select' ]]; }; then
+          starts+=("${idx}")
         fi
-        unset 'starts[${#starts[@]}-1]'
-      fi
-    fi
+        ;;
+      'done')
+        if ((at_cmd == 1)) \
+          || { ((idx >= 1)) && [[ "${toks[idx - 1]}" == 'fi' || "${toks[idx - 1]}" == 'esac' ||
+            "${toks[idx - 1]}" == 'done' ]]; }; then
+          if ((idx == done_idx)); then
+            ((${#starts[@]} > 0)) || return 1
+            printf '%s' "${starts[${#starts[@]} - 1]}"
+            return 0
+          fi
+          if ((${#starts[@]} > 0)); then
+            unset 'starts[${#starts[@]}-1]'
+          fi
+        fi
+        ;;
+    esac
     if tokens::is_word_region_close "${tokens_var}" "${openers_var}" "${idx}"; then
       at_cmd=0
     elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" \

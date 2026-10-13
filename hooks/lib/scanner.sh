@@ -153,6 +153,8 @@ function scanner::find_invocations() {
       continue
     fi
     word="${token##*/}"
+    # An option is no path: reduced, `--chdir=/tmp` would read as the word `tmp` and end the chain.
+    [[ "${token}" == -* ]] && word="${token}"
     if [[ "${token}" == '(' && "${region[prev_token]}" == *= ]]; then
       array_words=1
     elif tokens::is_operator "${token}"; then

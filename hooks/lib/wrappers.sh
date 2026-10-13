@@ -1076,6 +1076,8 @@ function wrappers::shell_wrapper_payloads() {
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
     word="${token##*/}"
+    # An option is no path: reduced, `--chdir=/tmp` would read as the word `tmp` and end the chain.
+    [[ "${token}" == -* ]] && word="${token}"
 
     if ((pipe_open == 1)); then
       case "${token}" in

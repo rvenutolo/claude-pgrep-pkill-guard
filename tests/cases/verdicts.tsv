@@ -1954,3 +1954,11 @@
 "pgrep --full x | grep -e -- -c"	warn
 "pgrep --full x | grep --regexp java -c"	warn
 "while true; do pgrep --full x | grep -c java; sleep 1; done"	warn
+"x=(pkill --full X)"	deny:kill
+"x+=(pkill --full X)"	deny:kill
+"x=(pkill --full X); \"${x[@]}\""	deny:kill
+"cmd=(pgrep --full X); echo \"${cmd[@]}\""	allow
+"cmd=(pgrep --full X); if \"${cmd[@]}\"; then echo y; fi"	allow
+"x=(echo pkill --full X)"	allow
+"x=(sudo pkill --full X)"	deny:kill
+"x=(kill 1 2)"	allow

@@ -385,8 +385,13 @@ function consumption::pipeline_feeds() {
     before="${prev}"
     prev="${word}"
     # A `kill` in command position inside a group or compound command that is a stage reads the
-    # pipe, or may: which of the commands in there read their stdin is not known.
-    if [[ "${seek}" == 'kill' && -n "${kills[idx]:-}" ]] && ((${#open[@]} > 0)); then
+    # pipe, or may: which of the commands in there read their stdin is not known. Outside one
+    # only a wrapper whose payload kills counts here (`| bash -c 'xargs kill'`), which
+    # classify::classify_command records with the value `payload`; a stage's own `kill` is
+    # found as its command word below, since a recorded one may stand behind the braces of a
+    # `{}` argument (`| xargs -I{} echo {} kill`).
+    if [[ "${seek}" == 'kill' && -n "${kills[idx]:-}" ]] \
+      && { ((${#open[@]} > 0)) || [[ "${kills[idx]}" == 'payload' ]]; }; then
       return 0
     fi
     # The braces of an `xargs -I{}` placeholder are tokens of their own. Among xargs's own words

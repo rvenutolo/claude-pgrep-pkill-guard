@@ -332,20 +332,25 @@ function wrappers::segment_pipe_carry() {
 # @arg $2 bodies_var name of the array of heredoc bodies by ordinal
 # @arg $3 seen_seq the number of body markers read so far
 # @arg $4 ordinals the space-separated ordinals being claimed
-# @stdout each newly claimed body that was announced already, NUL-terminated
+# @arg $5 anchors_var name of the array that receives, by ordinal, the anchor of the wrapper that
+#         claims each body (set)
+# @arg $6 anchor the claiming wrapper's anchor
+# @stdout each newly claimed body that was announced already, as an `<anchor><TAB><body>` record,
+#         NUL-terminated
 # @exitcode 0 always
-# shellcheck disable=SC2034 # wanted_ref is the caller's variable, which shellcheck cannot follow
+# shellcheck disable=SC2034 # wanted_ref and anchors_ref are the caller's variables, which shellcheck cannot follow
 function wrappers::claim_heredocs() {
-  local -n wanted_ref="$1" bodies_ref="$2"
-  local -r seen_seq="$3" ordinals="$4"
+  local -n wanted_ref="$1" bodies_ref="$2" anchors_ref="$5"
+  local -r seen_seq="$3" ordinals="$4" anchor="$6"
   local -a claimed=()
   local claim_ord
   IFS=' ' read -r -a claimed <<< "${ordinals}"
   for claim_ord in "${claimed[@]}"; do
     [[ "${wanted_ref}" == *" ${claim_ord} "* ]] && continue
     wanted_ref+="${claim_ord} "
+    anchors_ref[claim_ord]="${anchor}"
     if ((claim_ord <= seen_seq)); then
-      printf '%s\0' "${bodies_ref[claim_ord]}"
+      printf '%s\t%s\0' "${anchor}" "${bodies_ref[claim_ord]}"
     fi
   done
 }
@@ -793,21 +798,26 @@ function wrappers::sudo_runs_shell() {
 #              operands with single spaces and hands the result to `sh -c`, so the first operand and
 #              the words after it make up one command line. `eval`, `sudo -s`, `sudo -i`,
 #              `entr -s` and `env -S` are read the same way.
-# @arg $1 first the first operand, quotes stripped
+# @arg $1 anchor the anchor of the prefix that runs the script
+# @arg $2 first the first operand, quotes stripped
 # @arg $@ operands the operands after it, quotes stripped
-# @stdout the joined script, NUL-terminated
+# @stdout an `<anchor><TAB><script>` record with the joined script, NUL-terminated
 function wrappers::watch_payload() {
-  local -r first="$1"
-  shift
+  local -r anchor="$1" first="$2"
+  shift 2
   local script="${first}" operand
   for operand in "$@"; do
     script+=" ${operand}"
   done
-  printf '%s\0' "${script}"
+  printf '%s\t%s\0' "${anchor}" "${script}"
 }
 
 # @description Find the payloads of local shell wrappers and print each one's raw text,
-#              NUL-terminated, with any surrounding quotes stripped.
+#              NUL-terminated, with any surrounding quotes stripped. Each is printed behind its
+#              anchor and a tab: the byte offset of a word of the simple command that runs it
+#              (the wrapper word, the prefix or option that makes its operands a script, or the
+#              option that names one), so that classify::classify_command can read the wrapper
+#              where it stands as the commands its payload holds.
 #
 #              A `-c` payload counts only when all of these hold: the wrapper is in command position
 #              (so `ssh host bash -c ...` and a bare `echo bash -c ...` are both skipped, since
@@ -974,7 +984,7 @@ function wrappers::watch_payload() {
 #              reader steps over a substitution region as part of a word.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
-# @stdout one payload per NUL, quotes stripped; nothing if there are none
+# @stdout one `<anchor><TAB><payload>` record per NUL, quotes stripped; nothing if there are none
 function wrappers::shell_wrapper_payloads() {
   local -r command="$1"
   local tokens="$2"
@@ -1040,6 +1050,12 @@ function wrappers::shell_wrapper_payloads() {
   # `script_next` says the next word is the value of an option that wrappers::script_option
   # found, and so a script.
   local script_next=0 script_runner script_where watch_armed
+  # Each payload is printed behind its anchor: the offset of a word of the simple command that
+  # runs it. `anchor` is the wrapper being read, `watch_anchor` and `script_anchor` the word that
+  # armed an operand capture or named a script option, and `hd_anchor` the anchor of the wrapper
+  # that claimed each heredoc body, by ordinal.
+  local anchor=0 watch_anchor=0 script_anchor=0
+  local -a hd_anchor=()
   local -a watch_rest=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
   # `pipe_open` says no word of the next stage has been read since a pipe: bash continues the
@@ -1149,7 +1165,7 @@ function wrappers::shell_wrapper_payloads() {
       hd_body[body_seq]="${command:offset:len}"
       body_end="$((offset + len))"
       if [[ "${wanted}" == *" ${body_seq} "* ]]; then
-        printf '%s\0' "${hd_body[body_seq]}"
+        printf '%s\t%s\0' "${hd_anchor[body_seq]}" "${hd_body[body_seq]}"
       fi
       continue
     fi
@@ -1247,13 +1263,13 @@ function wrappers::shell_wrapper_payloads() {
           pending=''
           pending_text_set=0
         elif ((seg_here_set == 1)); then
-          printf '%s\0' "${seg_here_text}"
+          printf '%s\t%s\0' "${anchor}" "${seg_here_text}"
         fi
         if [[ -n "${pending}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" "${pending_source}"; then
-          wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}"
+          wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}" hd_anchor "${anchor}"
         fi
         if ((pending_text_set == 1)) && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'pipe'; then
-          printf '%s\0' "${pending_text}"
+          printf '%s\t%s\0' "${anchor}" "${pending_text}"
         fi
         in_wrapper=0
         saw_c=0
@@ -1270,13 +1286,13 @@ function wrappers::shell_wrapper_payloads() {
         option_values="$((option_values - 1))"
         raw="${command:offset:${#token}}"
         if ((saw_c == 1)) && [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-          printf '%s\0' "${raw:1:${#raw}-2}"
+          printf '%s\t%s\0' "${anchor}" "${raw:1:${#raw}-2}"
         fi
       elif ((saw_c == 1)) && [[ "${option_word}" != -* ]] \
         && [[ "${wrapper_kind}" != 'shell' || "${option_word}" != +* ]]; then
         raw="${command:offset:${#token}}"
         if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-          printf '%s\0' "${raw:1:${#raw}-2}"
+          printf '%s\t%s\0' "${anchor}" "${raw:1:${#raw}-2}"
         fi
         in_wrapper=0
         saw_c=0
@@ -1486,7 +1502,7 @@ function wrappers::shell_wrapper_payloads() {
 
     if tokens::is_operator "${token}"; then
       if ((watch_first_set == 1)); then
-        wrappers::watch_payload "${watch_first}" "${watch_rest[@]}"
+        wrappers::watch_payload "${watch_anchor}" "${watch_first}" "${watch_rest[@]}"
       fi
       watch_active=0
       watch_first_set=0
@@ -1543,7 +1559,7 @@ function wrappers::shell_wrapper_payloads() {
         if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
           raw="${raw:1:${#raw}-2}"
         fi
-        printf '%s\0' "${raw}"
+        printf '%s\t%s\0' "${script_anchor}" "${raw}"
       fi
     elif [[ "${token}" == -* ]]; then
       script_runner="${seg_cmd}"
@@ -1559,16 +1575,18 @@ function wrappers::shell_wrapper_payloads() {
             watch_exec=0
             watch_dd=0
             watch_kind='env'
+            watch_anchor="${offset}"
           fi
         elif [[ "${script_where}" == 'next' ]]; then
           script_next=1
+          script_anchor="${offset}"
         else
           raw="${command:offset:${#token}}"
           raw="${raw:${script_where#attached:}}"
           if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
             raw="${raw:1:${#raw}-2}"
           fi
-          printf '%s\0' "${raw}"
+          printf '%s\t%s\0' "${offset}" "${raw}"
         fi
       fi
     fi
@@ -1636,6 +1654,7 @@ function wrappers::shell_wrapper_payloads() {
         watch_exec=0
         watch_dd=0
         watch_kind="${watch_armed}"
+        watch_anchor="${offset}"
       fi
     fi
     # Leaving command position marks the command word, with one exception: a
@@ -1670,6 +1689,7 @@ function wrappers::shell_wrapper_payloads() {
     fi
     if ((opens_wrapper == 1)); then
       in_wrapper=1
+      anchor="${offset}"
       saw_c=0
       saw_s=0
       saw_s_operand=0
@@ -1736,15 +1756,15 @@ function wrappers::shell_wrapper_payloads() {
     pending=''
     pending_text_set=0
   elif ((in_wrapper == 1 && seg_here_set == 1)); then
-    printf '%s\0' "${seg_here_text}"
+    printf '%s\t%s\0' "${anchor}" "${seg_here_text}"
   fi
   if [[ -n "${pending}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" "${pending_source}"; then
-    wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}"
+    wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}" hd_anchor "${anchor}"
   fi
   if ((pending_text_set == 1)) && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'pipe'; then
-    printf '%s\0' "${pending_text}"
+    printf '%s\t%s\0' "${anchor}" "${pending_text}"
   fi
   if ((watch_first_set == 1)); then
-    wrappers::watch_payload "${watch_first}" "${watch_rest[@]}"
+    wrappers::watch_payload "${watch_anchor}" "${watch_first}" "${watch_rest[@]}"
   fi
 }

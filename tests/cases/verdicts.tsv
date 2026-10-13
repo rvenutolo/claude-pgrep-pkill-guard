@@ -1984,3 +1984,18 @@
 "sudo -al pkill --full X"	deny:kill
 "watch -bv 'pkill --full X'"	allow
 "watch -vd pkill --full X"	allow
+"(while true; do pgrep --full x && echo up; break; done)"	deny:loop
+"echo $(while true; do pgrep --full x && echo up; break; done)"	deny:loop
+"echo `while true; do pgrep --full x && echo up; break; done`"	deny:loop
+"(while true; do [ -s /tmp/claude-1000/x/tasks/abc.output ] && break; sleep 1; done)"	deny:task-poll
+"while true; do ( while b; do pgrep --full x && echo up; break; done ); sleep 1; done"	deny:loop
+"while true; do ( while b; do pgrep --full x && echo up; exit; done ); sleep 1; done"	deny:loop
+"while true; do ( while b; do pgrep --full x && echo up; done ); break; done"	warn
+"while true; do y=$(while read l; do pgrep --full x && echo up; done); break; done"	warn
+"(while true; do pgrep --full x && echo up; done); exit"	warn
+"(while true; do pgrep --full x && echo up; done; break)"	warn
+"while true; do p=$(pgrep --full x); [ -z \"$p\" ] && break; sleep 1; done"	deny:loop
+"while true; do ( pgrep --full x && echo up ); break; done"	deny:loop
+"while true; do ( pgrep --full x || exit 1 ); sleep 1; done"	warn
+"while true; do pgrep --full x || echo $(break); sleep 5; done"	warn
+"while true; do echo $(for i in 1; do break; done); pgrep --full x && echo up; sleep 1; done"	warn

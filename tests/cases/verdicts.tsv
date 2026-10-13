@@ -1825,3 +1825,27 @@
 "sudo -s"	allow
 "grep -c 'pkill --full X' f"	allow
 "sort -s 'pkill --full X'"	allow
+"watch sudo -u bob -i nice 'pkill --full X'"	deny:kill
+"watch sudo -u bob -s timeout 5 'pkill --full X'"	deny:kill
+"watch sudo -u bob --login nice 'pkill --full X'"	deny:kill
+"sudo -s watch -n 1 sudo 'pkill' --full X"	deny:kill
+"watch sudo -u bob -s nice 'pgrep -f x | xargs kill'"	deny:kill
+"watch sudo -u bob -i nice 'pgrep -f x && echo y'"	warn
+"watch sudo -u bob -i nice 'echo hi'"	allow
+"eval sudo -u bob -s nice 'pkill --full X'"	deny:kill
+"sudo -s sudo -u bob -s nice 'pkill --full X'"	deny:kill
+"ls | entr -sr 'pkill --full X'"	deny:kill
+"ls | entr pkill --full X"	deny:kill
+"ls | entr -r pkill --full X"	deny:kill
+"ls | entr sh -c 'pkill --full X'"	deny:kill
+"ls | entr grep -s 'pkill --full X' /_"	allow
+"ls | entr echo -s 'pkill --full X'"	allow
+"script -qc'pkill --full X' /dev/null"	deny:kill
+"env -iS'pkill --full X'"	deny:kill
+"env -S pkill --full X"	deny:kill
+"env -S 'pkill' --full X"	deny:kill
+"env -S 'pkill --full' X"	deny:kill
+"sudo -uadmin 'pkill --full X'"	allow
+"sudo -gstaff 'pkill --full X'"	allow
+"sudo -us 'pkill --full X'"	allow
+"sudo -nis 'pkill --full X'"	deny:kill

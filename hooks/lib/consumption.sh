@@ -41,8 +41,9 @@ function consumption::is_xargs_value_option() {
 # @description True when a later stage of the invocation's pipeline does what the caller asks
 #              about. Asked about `kill`, this is the forward form of consumption::feeds_a_kill: the
 #              invocation's output is piped into a `kill`. Asked about `count`, it is the pipeline
-#              test of consumption::result_is_consumed: the output is piped into `wc` or `xargs`, or
-#              a `&&` or `||` tests the status of the pipeline so far.
+#              test of consumption::result_is_consumed: the output is piped into `wc` or `xargs`,
+#              or into a `grep` that counts (`-c`, `--count`), or a `&&` or `||` tests the status
+#              of the pipeline so far.
 #
 #              The word looked for must be the command word of a later pipeline stage, found by
 #              stepping tokens::prefix_chain_step over the stage: prefix words, their options, option
@@ -80,8 +81,8 @@ function consumption::is_xargs_value_option() {
 #         command position
 # @arg $4 target index of the invocation token
 # @arg $5 seek `kill` or `count`
-# @exitcode 0 a later stage is a `kill`; or, asked about `count`, one is `wc` or `xargs`, or a
-#           `&&` or `||` follows
+# @exitcode 0 a later stage is a `kill`; or, asked about `count`, one is `wc`, `xargs` or a
+#           counting `grep`, or a `&&` or `||` follows
 # @exitcode 1 neither
 function consumption::pipeline_feeds() {
   local -n toks="$1"
@@ -91,6 +92,8 @@ function consumption::pipeline_feeds() {
   # shellcheck disable=SC2034 # redir and the chain state are written through namerefs, which shellcheck cannot follow
   local idx segment='none' token word prev='none' redir='' chain='' chain_skip=0 chain_operands=0 at_cmd=0
   local close opener operator span depth=0 nest ahead closer detached=0 inside target_region
+  local grep_skip=0 i
+  local -r grep_value_re='^--(regexp|file|max-count|after-context|before-context|context|include|exclude|label)$'
   local -a closers=()
   for close in "${!openers[@]}"; do
     closers["${openers[close]}"]="${close}"
@@ -229,6 +232,34 @@ function consumption::pipeline_feeds() {
         fi
         ;;
     esac
+    # The words of a `grep` stage, asked about a count: `-c` or `--count` among its options makes
+    # grep print one, up to a `--` or an operator. A cluster is read as getopt reads it, so the
+    # letters behind one that takes a value are that value (`-ec` searches for `c`), and so is
+    # the word after it, as it is after a long option that takes one.
+    if [[ "${segment}" == 'grep' ]]; then
+      if tokens::is_operator "${token}"; then
+        segment='other'
+      elif ((grep_skip == 1)); then
+        grep_skip=0
+      elif [[ "${token}" == '--' ]]; then
+        segment='other'
+      elif [[ "${token}" == '--count' ]]; then
+        return 0
+      elif [[ "${token}" =~ ${grep_value_re} ]]; then
+        grep_skip=1
+      elif [[ "${token}" =~ ^-[A-Za-z0-9]+$ ]]; then
+        for ((i = 1; i < ${#token}; i++)); do
+          case "${token:i:1}" in
+            'c') return 0 ;;
+            [efmABCdD])
+              ((i == ${#token} - 1)) && grep_skip=1
+              break
+              ;;
+          esac
+        done
+      fi
+      continue
+    fi
     [[ "${segment}" == 'head' ]] || continue
     if tokens::is_operator "${token}"; then
       segment='other'
@@ -237,6 +268,11 @@ function consumption::pipeline_feeds() {
     if ((at_cmd == 1)); then
       case "${seek}:${word}" in
         'kill:kill' | 'count:wc' | 'count:xargs') return 0 ;;
+        'count:grep' | 'count:egrep' | 'count:fgrep')
+          segment='grep'
+          grep_skip=0
+          continue
+          ;;
         'kill:while' | 'kill:until')
           loops::loop_body_has_kill "${tokens_var}" "${openers_var}" "${kills_var}" "${idx}" && return 0
           segment='other'
@@ -579,8 +615,9 @@ function consumption::next_command_reads_status() {
 # @description True when an invocation's result is read as a boolean, a count, or captured into a
 #              variable, rather than merely displayed. Only then can the silent off-by-one produce a
 #              wrong conclusion. These shapes count: pgrep's own `--count` / `-c`; an enclosing `if`
-#              or `elif`, or a leading `!`, which read the exit status as a boolean; `wc` or `xargs`
-#              as the command of a later stage of the invocation's pipeline, or a `&&` or `||` behind
+#              or `elif`, or a leading `!`, which read the exit status as a boolean; `wc`, `xargs`
+#              or a counting `grep` (`-c`, `--count`) as the command of a later stage of the
+#              invocation's pipeline, or a `&&` or `||` behind
 #              that pipeline, which consumption::pipeline_feeds finds; standing in a process
 #              substitution that is the stdin of `mapfile`, `readarray`, `read`, `wc` or `xargs`,
 #              which consumption::substitution_feeds finds; sitting inside a command

@@ -1932,3 +1932,25 @@
 "xargs echo < <(pgrep --full X)"	warn
 "sudo xargs echo < <(pgrep --full X)"	warn
 "sudo --output=/tmp/read sort < <(pgrep --full X)"	allow
+"pgrep --full x | grep -c java"	warn
+"pgrep --full x | grep --count java"	warn
+"pgrep --full x | grep -ic java"	warn
+"pgrep --full x | grep java -c"	warn
+"pgrep --full x | grep -e java -c"	warn
+"pgrep --full x | grep --color=never -c java"	warn
+"pgrep --full x | sudo grep -c java"	warn
+"pgrep --full x | egrep -c java"	warn
+"pgrep --full x | sort | grep -c java"	warn
+"pgrep --full x |\ngrep -c java"	warn
+"pgrep --full x | grep -v c"	allow
+"pgrep --full x | grep -e -c"	allow
+"pgrep --full x | grep -ec"	allow
+"pgrep --full x | grep -A2 java"	allow
+"pgrep --full x | grep -- -c"	allow
+"pgrep --full x | grep java; echo -c"	allow
+"pgrep --full x | cat -c"	allow
+"pgrep --full x | grep --regexp -c"	allow
+"pgrep --full x | grep --max-count -c java"	allow
+"pgrep --full x | grep -e -- -c"	warn
+"pgrep --full x | grep --regexp java -c"	warn
+"while true; do pgrep --full x | grep -c java; sleep 1; done"	warn

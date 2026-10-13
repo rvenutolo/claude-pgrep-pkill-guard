@@ -1870,3 +1870,22 @@
 "sudo -D/tmp ls /usr/bin/pkill --full X"	allow
 "sudo --prompt=/x/if pgrep --full x"	allow
 "pgrep --full x --pidfile=/x/if"	allow
+"env -S/usr/bin/pkill --full X"	deny:kill
+"env -iS/usr/bin/pkill --full X"	deny:kill
+"env -S./pkill --full X"	deny:kill
+"env --split-string=/usr/bin/pkill --full X"	deny:kill
+"sudo env -S/usr/bin/pkill --full X"	deny:kill
+"env -S/usr/bin/bash -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | env -S/bin/bash"	deny:kill
+"env -S/usr/bin/timeout 5 pkill --full X"	deny:kill
+"env -S/bin/kill $(pgrep --full x)"	deny:kill
+"pgrep --full x | env -S/usr/bin/xargs -n 1 kill"	deny:kill
+"while env -S/usr/bin/pgrep --full x; do sleep 1; done"	deny:loop
+"if env -S/usr/bin/pgrep --full x; then echo y; fi"	warn
+"pgrep --full x | env --split-string=/usr/bin/wc -l"	warn
+"kill --file=/x/in $(pgrep --full x)"	deny:kill
+"kill $(sudo --prompt=/x/in pgrep --full x)"	deny:kill
+"sudo -D/home/Sam/src pkill --full X"	deny:kill
+"sudo -D/usr/bin/pkill --full X"	allow
+"pgrep --full x | sudo -D/usr/bin/wc -l"	allow
+"pgrep --full x | xargs --arg-file=/usr/bin/kill echo"	warn

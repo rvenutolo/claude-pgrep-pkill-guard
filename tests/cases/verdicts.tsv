@@ -1682,3 +1682,47 @@
 "su -g wheel root -c 'pkill --full X'"	deny:kill
 "su root -s /bin/sh -c 'pkill --full X'"	deny:kill
 "runuser -u bob -c 'pkill --full X'"	deny:kill
+"bash -login -c 'pkill --full X'"	deny:kill
+"bash -posix -c 'pkill --full X'"	deny:kill
+"bash -noprofile -norc -c 'pkill --full X'"	deny:kill
+"bash -posix -ec 'pkill --full X'"	deny:kill
+"bash -version -c 'pkill --full X'"	deny:kill
+"sh -posix -c 'pkill --full X'"	deny:kill
+"sudo bash -login -c 'pkill --full X'"	deny:kill
+"bash -posix -o pipefail -c 'pkill --full X'"	deny:kill
+"bash -rcfile /tmp/f -c 'pkill --full X'"	deny:kill
+"bash -norc <<'EOF'\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | bash -login -s arg"	deny:kill
+"echo 'pkill --full X' | bash -noprofile -s a b"	deny:kill
+"echo 'pkill --full X' | bash -login script.sh"	allow
+"bash -login script.sh -c 'pkill --full X'"	allow
+"bash -noprofile -norc script.sh -c 'pkill --full X'"	allow
+"zsh -oerrexit -c 'pkill --full X'"	deny:kill
+"ksh -oerrexit -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | zsh -oerrexit -s arg"	deny:kill
+"echo 'pkill --full X' | zsh -oerrexit script.sh"	allow
+"zsh -O -c 'pkill --full X'"	deny:kill
+"zsh -Oc 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | zsh -O -s a"	deny:kill
+"zsh --emulate sh -c 'pkill --full X'"	deny:kill
+"bash +c 'pkill --full X'"	deny:kill
+"bash +xc 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | bash +s arg"	deny:kill
+"bash -o -c 'pkill --full X'"	deny:kill
+"bash -c -o 'pkill --full X'"	deny:kill
+"bash -co 'pkill --full X'"	deny:kill
+"bash --rcfile -c 'pkill --full X'"	deny:kill
+"bash -o 2>&1 -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | bash -o -s arg"	deny:kill
+"su -s -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | su -s /bin/sh root extra"	deny:kill
+"su -s/bin/sh root -c 'pkill --full X'"	deny:kill
+"su -s/usr/local/bin/sh root -c 'pkill --full X'"	deny:kill
+"su --shell=/bin/sh root -c 'pkill --full X'"	deny:kill
+"su --command 'pkill --full X'"	deny:kill
+"su root --command 'pkill --full X'"	deny:kill
+"su --session-command 'pkill --full X'"	deny:kill
+"dash -norc errexit 'pkill --full X'"	deny:kill
+"ksh -norc errexit 'pkill --full X'"	allow
+"dash --norc -c 'pkill --full X'"	deny:kill
+"zsh -version -c 'pkill --full X'"	deny:kill

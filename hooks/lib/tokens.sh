@@ -234,10 +234,10 @@ function tokens::prefix_flag_carries_operand() {
 #              Every omission (`sudo -K`, `env --help`, ...) costs a false deny, never a false
 #              allow, so completeness here buys much less than it does in tokens::prefix_value_spelling.
 # @arg $1 prefix the prefix command
-# @arg $2 word the option word to test
+# @arg $2 word the option spelling to test
 # @exitcode 0 the option ends the chain
 # @exitcode 1 it does not
-function tokens::prefix_breaks_chain() {
+function tokens::prefix_break_spelling() {
   local -r prefix="$1" word="$2"
   case "${prefix}" in
     'command')
@@ -278,6 +278,32 @@ function tokens::prefix_breaks_chain() {
       ;;
     *) return 1 ;;
   esac
+}
+
+# @description True when an option word of a prefix command makes it run no command at all (see
+#              tokens::prefix_break_spelling), alone or inside a word of several short flags.
+#              Such a word is read as getopt reads it, like tokens::prefix_value_option does: the
+#              first letter that takes a value ends the flags, and the letters behind it are that
+#              value. So `sudo -nl cmd` and `sudo -lU bob cmd` run nothing, while the `l` of
+#              `sudo -ul cmd` is a user name and `cmd` runs.
+# @arg $1 prefix the prefix command, already reduced to its basename
+# @arg $2 word the option word to test
+# @exitcode 0 the option ends the chain
+# @exitcode 1 it does not
+function tokens::prefix_breaks_chain() {
+  local -r prefix="$1" word="$2"
+  local i
+  tokens::prefix_break_spelling "${prefix}" "${word}" && return 0
+  [[ "${word}" =~ ^-[A-Za-z0-9]{2,}$ ]] || return 1
+  for ((i = 1; i < ${#word}; i++)); do
+    if tokens::prefix_break_spelling "${prefix}" "-${word:i:1}"; then
+      return 0
+    fi
+    if tokens::prefix_value_spelling "${prefix}" "-${word:i:1}"; then
+      return 1
+    fi
+  done
+  return 1
 }
 
 # @description Advance command-position tracking by one token and report whether the word AFTER it

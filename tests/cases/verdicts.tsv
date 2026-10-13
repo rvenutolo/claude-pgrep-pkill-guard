@@ -1915,3 +1915,20 @@
 "cat <(pgrep --full X)"	allow
 "diff <(pgrep --full X) <(pgrep --full Y)"	allow
 "sort < <(echo $(pgrep --full X))"	warn
+"grep read < <(pgrep --full X)"	allow
+"cat /tmp/read < <(pgrep --full X)"	allow
+"sort --output=/tmp/xargs < <(pgrep --full X)"	allow
+"while true; do grep read < <(pgrep --full X); break; done"	allow
+"IFS= read -r p < <(pgrep --full X)"	warn
+"sudo wc -l < <(pgrep --full X)"	warn
+"command mapfile -t pids < <(pgrep --full X)"	warn
+"read -r done < <(pgrep --full X)"	warn
+"for i in 1; do kill $i; for x do cat; done < <(pgrep --full X); done"	allow
+"while read -r p; do if [[ -n $p ]]; then kill $p; fi done < <(pgrep --full X)"	deny:kill
+"while read -r p; do case $p in *) kill $p ;; esac done < <(pgrep --full X)"	deny:kill
+"for a in 1; do while read -r p; do kill $p; done done < <(pgrep --full X)"	deny:kill
+"for x do echo $x; done; while read -r p; do kill $p; done < <(pgrep --full X)"	deny:kill
+"for x do read -r p; kill $p; done < <(pgrep --full X)"	deny:kill
+"xargs echo < <(pgrep --full X)"	warn
+"sudo xargs echo < <(pgrep --full X)"	warn
+"sudo --output=/tmp/read sort < <(pgrep --full X)"	allow

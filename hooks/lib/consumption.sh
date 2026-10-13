@@ -38,6 +38,110 @@ function consumption::is_xargs_value_option() {
   return 1
 }
 
+# @description Find the innermost group, subshell, substitution or compound command around a
+#              token: `{ ...; }`, `( ... )`, `$( ... )` and its kin, a backtick pair,
+#              `if ... fi`, `case ... esac`, and a `while`, `until`, `for` or `select` loop up
+#              to its `done`. The stream is walked from its start, tracking command position:
+#              a keyword or a brace that is an argument word (`echo fi`, `echo then if`, `{}`,
+#              `f{,.bak}`) opens and closes nothing. A `)` directly inside a `case` is a
+#              pattern's and closes nothing, and neither does a closing word that the innermost
+#              open construct does not end with. The `{` of `function f {` is not read as a
+#              group's.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 index index of the token to look around; one that opens or closes a construct is
+#         outside it
+# @arg $4 open name of the caller's variable that receives the index of the token that opens
+#         the construct. Never pass a variable that shares a name with one of this function's
+#         locals, here or as `close`.
+# @arg $5 close name of the caller's variable that receives the index of the token that closes it
+# @exitcode 0 a construct holds the token and closes after it
+# @exitcode 1 none does
+# shellcheck disable=SC2034 # open_ref and close_ref are the caller's variables, written through the namerefs
+function consumption::construct_bounds() {
+  local -n toks="$1"
+  local -r tokens_var="$1" openers_var="$2" index="$3"
+  local -n open_ref="$4" close_ref="$5"
+  # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
+  local idx token at_cmd=1 redir='' top closes pushed depth_at=-1 before=''
+  # Index-aligned, innermost last: starts[i] is the index of the token that opened a construct
+  # and ends[i] the word that closes it.
+  local -a starts=() ends=()
+  for ((idx = 0; idx < ${#toks[@]}; idx++)); do
+    token="${toks[idx]}"
+    if ((idx == index)); then
+      ((${#ends[@]} > 0)) || return 1
+      depth_at="${#ends[@]}"
+    fi
+    if tokens::redirection_step "${token}" redir; then
+      continue
+    fi
+    top=''
+    ((${#ends[@]} > 0)) && top="${ends[-1]}"
+    closes=0
+    pushed=''
+    case "${token}" in
+      '(') pushed=')' ;;
+      '{') ((at_cmd == 1)) && pushed='}' ;;
+      'if') ((at_cmd == 1)) && pushed='fi' ;;
+      'case') ((at_cmd == 1)) && pushed='esac' ;;
+      'while' | 'until' | 'for' | 'select') ((at_cmd == 1)) && pushed='done' ;;
+      '`')
+        if [[ "${top}" == '`' ]]; then
+          closes=1
+        else
+          pushed='`'
+        fi
+        ;;
+      ')') [[ "${top}" == ')' ]] && closes=1 ;;
+      '}') [[ "${top}" == '}' ]] && ((at_cmd == 1)) && closes=1 ;;
+      'fi' | 'esac' | 'done')
+        # bash also reads a closing keyword directly behind another one (`fi done`).
+        if [[ "${top}" == "${token}" ]] \
+          && { ((at_cmd == 1)) || [[ "${before}" == 'fi' || "${before}" == 'esac' || "${before}" == 'done' ]]; }; then
+          closes=1
+        fi
+        ;;
+    esac
+    if ((closes == 1)); then
+      if ((idx > index && ${#ends[@]} == depth_at)); then
+        open_ref="${starts[-1]}"
+        close_ref="${idx}"
+        return 0
+      fi
+      unset 'starts[-1]' 'ends[-1]'
+      # The token asked about closes this construct, and so sits in the one around it.
+      if ((idx == index)); then
+        ((${#ends[@]} > 0)) || return 1
+        depth_at="${#ends[@]}"
+      fi
+    elif [[ -n "${pushed}" ]]; then
+      starts+=("${idx}")
+      ends+=("${pushed}")
+    fi
+    if tokens::is_word_region_close "${tokens_var}" "${openers_var}" "${idx}"; then
+      at_cmd=0
+    elif [[ "${token}" == '{' || "${token}" == '}' ]] && ((at_cmd == 0)); then
+      # The braces of `{}` and of a brace expansion (`f{,.bak}`) are tokens of their own, and
+      # words of the command they stand in.
+      at_cmd=0
+    elif tokens::is_operator "${token}"; then
+      at_cmd=1
+    elif ((at_cmd == 1)) && { tokens::is_keyword "${token}" || [[ "${token}" == 'coproc' ]]; }; then
+      at_cmd=1
+    elif [[ "${token}" == 'do' ]] && ((idx >= 2)) \
+      && [[ "${toks[idx - 2]}" == 'for' || "${toks[idx - 2]}" == 'select' ]]; then
+      # `for x do`: bash reads the keyword behind the loop variable.
+      at_cmd=1
+    else
+      at_cmd=0
+    fi
+    before="${token}"
+  done
+  return 1
+}
+
 # @description True when a later stage of the invocation's pipeline does what the caller asks
 #              about. Asked about `kill`, this is the forward form of consumption::feeds_a_kill: the
 #              invocation's output is piped into a `kill`. Asked about `count`, it is the pipeline
@@ -56,24 +160,40 @@ function consumption::is_xargs_value_option() {
 #              that is a redirection's target (`2> >(cat)`) is no word at all. The one
 #              region that is read is a `>(...)`: the command inside it reads what the stage writes
 #              to it (`| tee >(wc -l)`, `| tee >(xargs kill)`), so the word looked for anywhere in it
-#              counts. Asked about `kill`, a stage headed by `while`/`until`
-#              (`pgrep -f java | while read -r p; do kill "$p"; done`) defers to
-#              loops::loop_body_has_kill. The first command of a group or subshell that opens a
-#              stage is not read.
+#              counts.
+#
+#              A group, a subshell or a compound command (`if`, `case`, `for`, `select`, `while`,
+#              `until`) that is a stage, in any position, is read inside: its stdin is the pipe,
+#              and which of its commands read it is not known, so the first word of each command
+#              in its list is looked at like a stage's (`| { sort; xargs kill; }`,
+#              `| if a; then wc -l; fi`). A `&&` or `||` behind a later command of that list
+#              tests that command and is no count (`| while read -r p; do a && b; done`).
+#              Asked about `kill`, any `kill` in command position inside it counts, as
+#              scanner::find_invocations recorded them (`| { read -r p; kill "$p"; }`), and a
+#              `while` or `until` is also handed to loops::loop_body_has_kill. Past the word that
+#              closes it the pipeline goes on (`| { cat; } | xargs kill`). A function is not
+#              followed to its body (`| f`).
 #
 #              The scan follows the invocation's own pipeline and no further: `|` and `|&`
 #              carry it into the next stage, and `;` and a newline that does not follow a pipe end
-#              it. Comments and blank lines behind a trailing pipe do not.
+#              it. Comments and blank lines behind a trailing pipe do not, and neither does the
+#              body of a heredoc that starts there (`pgrep --full x <<EOF |`, the body, then
+#              `xargs kill`).
 #              Asked about `count`, a `&&` or `||` is the answer. Asked about `kill`, `||`, `&&`
 #              and a lone `&` end the scan, because what stands behind them reads
 #              nothing the invocation wrote (`pgrep --full x || kill 1`,
-#              `pgrep --full x & echo y | xargs kill`) -- unless a group or subshell holds them.
+#              `pgrep --full x & echo y | xargs kill`) -- unless a group, subshell or compound
+#              command holds them.
 #              Inside one that a stage of this pipeline opened, the command behind the operator
 #              still reads the pipe (`pgrep --full x | (grep -v y || xargs kill)`). Inside one the
-#              invocation itself sits in, the output is the group's, so the scan goes on from the
-#              group's closer (`(pgrep --full x || true) | xargs kill`). A lone `&` does the same for
-#              either question, and past it a `&&` or `||` no longer tests the invocation's status
-#              (`(pgrep --full x &) && echo z`).
+#              invocation itself sits in, found by consumption::construct_bounds, the output is
+#              that construct's, so the scan goes on from its closer
+#              (`(pgrep --full x || true) | xargs kill`, `{ pgrep --full x; } | xargs kill`,
+#              `if a; then pgrep --full x; fi | xargs kill`). Behind a list operator that closer
+#              is the first `)` or `}` ahead that nothing ahead opened, whatever position it
+#              stands in, which fails closed. A lone `&`, a `;` and a newline go on from the
+#              closer for either question, and a `&&` or `||` past one is not counted
+#              (`(pgrep --full x &) && echo z`, `{ pgrep --full x; echo y; } && echo z`).
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
 #         region to the index of the token that opened it
@@ -91,15 +211,30 @@ function consumption::pipeline_feeds() {
   local -r tokens_var="$1" openers_var="$2" kills_var="$3" target="$4" seek="$5"
   # shellcheck disable=SC2034 # redir and the chain state are written through namerefs, which shellcheck cannot follow
   local idx segment='none' token word prev='none' redir='' chain='' chain_skip=0 chain_operands=0 at_cmd=0
-  local close opener operator span depth=0 nest ahead closer detached=0 inside target_region
-  local grep_skip=0 i
+  local close opener operator span opened closer nest ahead detached=0 listed=0 inside target_region
+  local grep_skip=0 i in_body=0 top before='' loose=0
   local -r grep_value_re='^--(regexp|file|max-count|after-context|before-context|context|include|exclude|label)$'
-  local -a closers=()
+  # The groups, subshells and compound commands opened since the invocation, innermost last:
+  # each entry is the word that closes one.
+  local -a closers=() open=()
   for close in "${!openers[@]}"; do
     closers["${openers[close]}"]="${close}"
   done
   for ((idx = target + 1; idx < ${#toks[@]}; idx++)); do
     token="${toks[idx]}"
+    if ((in_body == 1)); then
+      # The body of a heredoc behind a trailing pipe: the array has no offsets, so the body is
+      # read as far as its tokens are filler. Its text is masked to filler, a substitution in
+      # it is a region, and the terminator line is filler too.
+      if [[ -n "${closers[idx]:-}" ]]; then
+        idx="${closers[idx]}"
+        continue
+      fi
+      if [[ "${token}" == '<NL>' || "${token%'$'}" != *[!$'\001']* ]]; then
+        continue
+      fi
+      in_body=0
+    fi
     if [[ -n "${closers[idx]:-}" ]]; then
       # A region is one word of its simple command. The `$` word in front of a `$(` has been
       # stepped already, and an assignment word holds its backtick region; any other backtick
@@ -160,16 +295,19 @@ function consumption::pipeline_feeds() {
           continue
           ;;
         'or' | 'and')
-          # Whatever stands behind it runs or not by the status of the pipeline so far.
-          if [[ "${seek}" == 'count' ]] && ((detached == 0)); then
+          # Whatever stands behind it runs or not by the status of the pipeline so far. Behind
+          # a later command of a stage's own list it tests that command, not the pipeline.
+          if [[ "${seek}" == 'count' ]] && ((detached == 0 && listed == 0)); then
             return 0
           fi
           ;;
         'background') detached=1 ;;
       esac
       idx="$((idx + span - 1))"
-      if ((depth > 0)); then
-        # Inside a group a later stage opened: the next command reads the same pipe.
+      if ((${#open[@]} > 0 || loose > 0)); then
+        # Inside a group or compound command a later stage opened: the next command reads the
+        # same pipe. A `{` that is a word with no `}` behind it yet is read as one too
+        # (`| grep -v { || kill 1`), which fails closed.
         segment='head'
         at_cmd=1
         chain=''
@@ -178,8 +316,10 @@ function consumption::pipeline_feeds() {
         chain_operands=0
         continue
       fi
-      # The closer of a group the invocation sits in, if there is one: the first `)` or `}` ahead
-      # that nothing ahead opened.
+      # On to the closer of the group the invocation sits in, if there is one: the first `)` or
+      # `}` ahead that nothing ahead opened. That reading knows no command position, so a stray
+      # closer counts (`pgrep --full x || echo } | xargs kill`), which fails closed. With none,
+      # the closer of the compound command around the invocation.
       nest=0
       closer=-1
       for ((ahead = idx + 1; ahead < ${#toks[@]}; ahead++)); do
@@ -198,22 +338,57 @@ function consumption::pipeline_feeds() {
             ;;
         esac
       done
-      ((closer >= 0)) || break
+      if ((closer < 0)); then
+        consumption::construct_bounds "${tokens_var}" "${openers_var}" "${idx}" opened closer || break
+      fi
       idx="${closer}"
       segment='other'
       continue
     fi
     case "${token}" in
-      ';') break ;;
-      '<NL>')
+      ';' | '<NL>')
         # A newline after a trailing `|` continues the pipeline -- bash does
         # not end the command there, and the next stage is usually on the next line.
-        # A newline anywhere else does end it.
-        [[ "${prev}" == '|' ]] || break
+        if [[ "${token}" == '<NL>' && "${prev}" == '|' ]]; then
+          continue
+        fi
+        if ((${#open[@]} > 0)); then
+          # Inside a group or compound command a later stage opened: the next command of its
+          # list reads the same pipe.
+          segment='head'
+          at_cmd=1
+          chain=''
+          chain_skip=0
+          # shellcheck disable=SC2034 # read through tokens::prefix_chain_step's nameref
+          chain_operands=0
+          prev="${token}"
+          listed=1
+          continue
+        fi
+        # Anywhere else it ends the invocation's command. Inside a group or compound command
+        # the output is still that construct's, so the scan goes on from its closer; the status
+        # a `&&` or `||` behind it tests is some later command's.
+        consumption::construct_bounds "${tokens_var}" "${openers_var}" "${idx}" opened closer || break
+        idx="${closer}"
+        segment='other'
+        detached=1
         continue
         ;;
+      '<HD:'*'>')
+        # A heredoc's body starts here. Behind a trailing pipe the next stage follows the body.
+        if [[ "${prev}" == '|' ]]; then
+          in_body=1
+          continue
+        fi
+        ;;
     esac
+    before="${prev}"
     prev="${word}"
+    # A `kill` in command position inside a group or compound command that is a stage reads the
+    # pipe, or may: which of the commands in there read their stdin is not known.
+    if [[ "${seek}" == 'kill' && -n "${kills[idx]:-}" ]] && ((${#open[@]} > 0)); then
+      return 0
+    fi
     # The braces of an `xargs -I{}` placeholder are tokens of their own. Among xargs's own words
     # they are an option's value or an argument, not a group, and the word after them can still
     # be the command (`xargs -I{} kill {}`). Behind any other prefix `{}` is the command it runs.
@@ -222,13 +397,59 @@ function consumption::pipeline_feeds() {
       at_cmd=1
       continue
     fi
-    # The groups and subshells opened since the invocation. A closer with none open closes
-    # one the invocation sits in, or is a `case` pattern's.
+    # The groups and subshells opened since the invocation. One that opens a stage is read
+    # like the stage it is: its first word is in command position. A brace is a group's only
+    # in command position: anywhere else it is a word (`{}`, `f{,.bak}`). A parenthesis
+    # directly inside a `case` is a pattern's, `(a)` or `a)`, and the pattern's list starts
+    # behind the closing one. A closer with none open closes a construct the invocation sits
+    # in.
+    top=''
+    ((${#open[@]} > 0)) && top="${open[-1]}"
     case "${token}" in
-      '(' | '{') depth="$((depth + 1))" ;;
-      ')' | '}')
-        if ((depth > 0)); then
-          depth="$((depth - 1))"
+      '(' | '{')
+        if [[ "${segment}" == 'head' ]] && ((at_cmd == 1)); then
+          open+=("${token}")
+          chain=''
+          continue
+        fi
+        [[ "${token}" == '(' && "${top}" != 'esac' ]] && open+=('(')
+        [[ "${token}" == '{' ]] && loose="$((loose + 1))"
+        ;;
+      ')')
+        if [[ "${top}" == 'esac' ]]; then
+          segment='head'
+          at_cmd=1
+          chain=''
+          chain_skip=0
+          # shellcheck disable=SC2034 # read through tokens::prefix_chain_step's nameref
+          chain_operands=0
+          continue
+        fi
+        if [[ "${top}" == '(' ]]; then
+          unset 'open[-1]'
+          ((${#open[@]} > 0)) || listed=0
+        fi
+        ;;
+      '}')
+        if [[ "${top}" == '{' && "${segment}" == 'head' ]] && ((at_cmd == 1)); then
+          unset 'open[-1]'
+          ((${#open[@]} > 0)) || listed=0
+        elif ((loose > 0)); then
+          loose="$((loose - 1))"
+        fi
+        ;;
+      'fi' | 'esac' | 'done')
+        # The word that closes a compound command, in command position or, as bash also reads
+        # it, directly behind another closing word (`fi done`, `) done`).
+        if [[ "${top}" == "${token}" ]] \
+          && { { [[ "${segment}" == 'head' ]] && ((at_cmd == 1)); } \
+            || [[ "${before}" == ')' || "${before}" == '}' || "${before}" == 'fi' || "${before}" == 'esac' ||
+              "${before}" == 'done' ]]; }; then
+          unset 'open[-1]'
+          ((${#open[@]} > 0)) || listed=0
+          segment='other'
+          at_cmd=0
+          continue
         fi
         ;;
     esac
@@ -273,9 +494,33 @@ function consumption::pipeline_feeds() {
           grep_skip=0
           continue
           ;;
-        'kill:while' | 'kill:until')
-          loops::loop_body_has_kill "${tokens_var}" "${openers_var}" "${kills_var}" "${idx}" && return 0
+      esac
+      # A compound command that opens a stage, or stands in a group that does, is read up to
+      # the word that closes it: every command in it may read the pipe.
+      case "${token}" in
+        'while' | 'until')
+          if [[ "${seek}" == 'kill' ]] \
+            && loops::loop_body_has_kill "${tokens_var}" "${openers_var}" "${kills_var}" "${idx}"; then
+            return 0
+          fi
+          open+=('done')
+          listed=1
+          ;;
+        'for' | 'select')
+          open+=('done')
+          listed=1
+          ;;
+        'if')
+          open+=('fi')
+          listed=1
+          ;;
+        'case')
+          # The word and the patterns behind it are no commands; the `)` of a pattern restores
+          # command position.
+          open+=('esac')
+          listed=1
           segment='other'
+          at_cmd=0
           continue
           ;;
       esac
@@ -411,6 +656,11 @@ function consumption::feeds_a_kill_backward() {
 #              commands and their flags, is `mapfile`, `readarray` or `read`, which capture the
 #              output, or `wc` or `xargs`.
 #
+#              A group or subshell in front of the redirection (`{ xargs kill; } < <(...)`) reads
+#              the substitution as it reads a pipe: for `kill`, any `kill` in command position
+#              inside it counts, and for `count`, one of those readers as the first word of a
+#              command inside it. consumption::construct_bounds finds where it opens.
+#
 #              The substitution must be the innermost region around the invocation, and the target
 #              of an input redirection of any descriptor (`< <(...)`, `3< <(...)`). Redirections
 #              with a plain word as their target that stand between the command and that one are
@@ -432,7 +682,7 @@ function consumption::substitution_feeds() {
   local -n kills="$3"
   local -r tokens_var="$1" openers_var="$2" target="$4" seek="$5"
   local -r input_re='^[0-9]*<$'
-  local close opener enclosing=-1 k span start idx first word
+  local close opener enclosing=-1 k span start idx first word opened closer
   for close in "${!openers[@]}"; do
     opener="${openers[close]}"
     if ((opener < target && close > target && opener > enclosing)); then
@@ -456,6 +706,23 @@ function consumption::substitution_feeds() {
       if [[ -n "${kills[idx]:-}" ]]; then
         return 0
       fi
+    done
+    return 1
+  fi
+  # A group or subshell reads the substitution as it reads a pipe: every command in it may.
+  if [[ "${toks[k]}" == '}' || "${toks[k]}" == ')' ]] && [[ -z "${openers[k]:-}" ]] && ((k > 0)) \
+    && consumption::construct_bounds "${tokens_var}" "${openers_var}" "$((k - 1))" opened closer \
+    && ((closer == k)); then
+    for ((idx = opened + 1; idx < k; idx++)); do
+      if [[ "${seek}" == 'kill' ]]; then
+        [[ -n "${kills[idx]:-}" ]] && return 0
+        continue
+      fi
+      # A reader's name counts as the first word of a command only.
+      tokens::is_operator "${toks[idx - 1]}" || tokens::is_keyword "${toks[idx - 1]}" || continue
+      case "${toks[idx]##*/}" in
+        'mapfile' | 'readarray' | 'read' | 'wc' | 'xargs') return 0 ;;
+      esac
     done
     return 1
   fi
@@ -489,7 +756,7 @@ function consumption::substitution_feeds() {
 
 # @description True when the invocation's output feeds a kill: forward (`pgrep ... | xargs
 #              kill`, `... | while read p; do kill "$p"; done`), backward (`kill $(pgrep ...)`), or
-#              as the stdin of a loop that kills (`while read p; do kill "$p"; done < <(pgrep
+#              as the stdin of a loop or group that kills (`while read p; do kill "$p"; done < <(pgrep
 #              ...)`). The scans are independent; see consumption::pipeline_feeds,
 #              consumption::feeds_a_kill_backward and consumption::substitution_feeds.
 # @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
@@ -620,8 +887,8 @@ function consumption::next_command_reads_status() {
 #              invocation's pipeline, or a `&&` or `||` behind
 #              that pipeline, which consumption::pipeline_feeds finds; standing in a process
 #              substitution that is the stdin of `mapfile`, `readarray`, `read`, `wc` or `xargs`,
-#              which consumption::substitution_feeds finds; sitting inside a command
-#              substitution; and the next command in the list reading `$?`, which
+#              or of a group that holds one, which consumption::substitution_feeds finds; sitting
+#              inside a command substitution; and the next command in the list reading `$?`, which
 #              consumption::next_command_reads_status handles. A pipeline that only passes the output
 #              on (`| sort | head`) displays it, and a `&&` or `||` behind a lone `&` tests some
 #              other command's status.

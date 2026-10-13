@@ -1962,3 +1962,16 @@
 "x=(echo pkill --full X)"	allow
 "x=(sudo pkill --full X)"	deny:kill
 "x=(kill 1 2)"	allow
+"sudo -nl pkill --full X"	allow
+"sudo -lU bob pkill --full X"	allow
+"sudo -vu root pkill --full X"	allow
+"sudo -eu root pkill --full X"	allow
+"ionice -tp 123 pkill --full X"	allow
+"command -pv pkill --full X"	allow
+"sudo -ln pkill --full X"	allow
+"pgrep --full x | sudo -nl xargs kill"	allow
+"sudo -ul pkill --full X"	deny:kill
+"sudo -ulroot pkill --full X"	deny:kill
+"sudo -nE pkill --full X"	deny:kill
+"command -p pkill --full X"	deny:kill
+"ionice -tc 3 pkill --full X"	deny:kill

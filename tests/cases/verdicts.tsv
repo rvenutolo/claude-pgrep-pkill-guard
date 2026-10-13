@@ -1889,3 +1889,29 @@
 "sudo -D/usr/bin/pkill --full X"	allow
 "pgrep --full x | sudo -D/usr/bin/wc -l"	allow
 "pgrep --full x | xargs --arg-file=/usr/bin/kill echo"	warn
+"while read -r p; do kill $p; done < <(pgrep --full X)"	deny:kill
+"while read -r p; do timeout 5 kill $p; done < <(pgrep --full X)"	deny:kill
+"until ! read -r p; do kill $p; done < <(pgrep --full X)"	deny:kill
+"while read -r p; do kill $p; done 2> /dev/null < <(pgrep --full X)"	deny:kill
+"while read -r p; do kill $p; done < <(pgrep --full X) 2> /dev/null"	deny:kill
+"while read -r p; do kill $p; done 0< <(pgrep --full X)"	deny:kill
+"while read -r p <&3; do kill $p; done 3< <(pgrep --full X)"	deny:kill
+"while read -r p; do while read q; do :; done; kill $p; done < <(pgrep --full X)"	deny:kill
+"while read -r p; do kill $p; done < <(sudo pgrep --full X)"	deny:kill
+"while read -r p; do kill $p; done < <(pgrep --full X | sort)"	deny:kill
+"while read -r p\ndo\n  kill \"$p\"\ndone < <(pgrep --full X)"	deny:kill
+"for i in 1 2; do read -r p; kill $p; done < <(pgrep --full X)"	deny:kill
+"while read -r p; do echo $p; done < <(pgrep --full X)"	allow
+"while read -r p; do echo $p; done < <(pgrep --full X); kill 1"	allow
+"for i in 1 2; do kill $i; done; while read -r p; do echo $p; done < <(pgrep --full X)"	allow
+"while read -r p; do echo kill $p; done < <(pgrep --full X)"	allow
+"mapfile -t pids < <(pgrep --full X)"	warn
+"readarray -t pids < <(pgrep --full X)"	warn
+"read -r pid < <(pgrep --full X)"	warn
+"mapfile -t pids < <(pgrep --full X); kill \"${pids[@]}\""	warn
+"if read -r p < <(pgrep --full X); then echo y; fi"	warn
+"wc -l < <(pgrep --full X)"	warn
+"sort < <(pgrep --full X)"	allow
+"cat <(pgrep --full X)"	allow
+"diff <(pgrep --full X) <(pgrep --full Y)"	allow
+"sort < <(echo $(pgrep --full X))"	warn

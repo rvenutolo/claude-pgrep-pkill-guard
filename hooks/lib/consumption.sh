@@ -138,7 +138,8 @@ function consumption::pipeline_feeds() {
     fi
     word="${token##*/}"
     # An option is no path: reduced, `--chdir=/tmp` would read as the word `tmp` and end the chain.
-    [[ "${token}" == -* ]] && word="${token}"
+    # The one exception is the command line attached to `env -S` (see SPLIT_STRING_WORD_RE).
+    [[ "${token}" == -* && ! "${token}" =~ ${SPLIT_STRING_WORD_RE} ]] && word="${token}"
     if [[ "${token}" == '|' || "${token}" == '&' ]]; then
       tokens::list_operator_at "${tokens_var}" "${idx}" operator span
       case "${operator}" in
@@ -309,8 +310,8 @@ function consumption::feeds_a_kill_backward() {
       continue
     fi
     word="${toks[k]##*/}"
-    # An option is no path: reduced, `--file=/x/if` would read as the keyword.
-    [[ "${toks[k]}" == -* ]] && word="${toks[k]}"
+    # An option is no path: reduced, `--file=/x/in` would read as the `in` of a `for` head.
+    [[ "${toks[k]}" == -* && ! "${toks[k]}" =~ ${SPLIT_STRING_WORD_RE} ]] && word="${toks[k]}"
     stop=0
     case "${word}" in
       '$') ;;
@@ -536,7 +537,7 @@ function consumption::result_is_consumed() {
   while ((k >= 0)); do
     word="${toks[k]##*/}"
     # An option is no path: reduced, `--file=/x/if` would read as the keyword.
-    [[ "${toks[k]}" == -* ]] && word="${toks[k]}"
+    [[ "${toks[k]}" == -* && ! "${toks[k]}" =~ ${SPLIT_STRING_WORD_RE} ]] && word="${toks[k]}"
     case "${word}" in
       'if' | 'elif' | '!') return 0 ;;
       *)

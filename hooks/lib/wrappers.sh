@@ -994,7 +994,7 @@ function wrappers::shell_wrapper_payloads() {
   # `wrapper_name` is the wrapper being read and `wrapper_kind` its family: `shell`, `user`, or
   # `source` for the builtins of LOCAL_SOURCE_BUILTINS.
   # `option_word` is the word under test as an option: the whole token, since the basename
-  # reduction would cut `-s/bin/sh` down to an operand. `option_values` counts the words still to
+  # reduction would cut a shell's `+o/x` down to an operand. `option_values` counts the words still to
   # come that are values of the wrapper's options (see wrappers::wrapper_option_facts).
   local wrapper_name='' wrapper_kind='' option_word option_values=0 option_c option_s
   local offset token word next_at_cmd is_cmd_word raw budget pending_source
@@ -1077,7 +1077,8 @@ function wrappers::shell_wrapper_payloads() {
     [[ -z "${token}" ]] && continue
     word="${token##*/}"
     # An option is no path: reduced, `--chdir=/tmp` would read as the word `tmp` and end the chain.
-    [[ "${token}" == -* ]] && word="${token}"
+    # The one exception is the command line attached to `env -S` (see SPLIT_STRING_WORD_RE).
+    [[ "${token}" == -* && ! "${token}" =~ ${SPLIT_STRING_WORD_RE} ]] && word="${token}"
 
     if ((pipe_open == 1)); then
       case "${token}" in

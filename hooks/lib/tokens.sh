@@ -22,10 +22,11 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
 # do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`,
-# `exec`, `flock` and the builtin `eval`. A wrapper that is not listed hides what it runs: the
-# guard sees nothing behind `strace`. `watch` and `eval` also hand their operands to a shell
-# (`watch 'pkill --full X'`); the chain cannot see into a quoted one, so
-# wrappers::shell_wrapper_payloads reads it as a payload.
+# `exec`, `flock`, `entr` and the builtin `eval`. A wrapper that is not listed hides what it
+# runs: the guard sees nothing behind `strace`. `watch` and `eval` also hand their operands to
+# a shell (`watch 'pkill --full X'`), and so do `sudo -s`, `sudo -i`, `entr -s` and `env -S`;
+# the chain cannot see into a quoted one, so wrappers::shell_wrapper_payloads reads it as a
+# payload.
 #
 # `coproc` is bash's reserved word and not a program, so it is a prefix only where bash reads
 # it as one, the first word of a command or the word behind the reserved word `time`, which is
@@ -34,7 +35,7 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # nothing more, since NAME ends the chain and the `{` restores command position.
 readonly -a PREFIX_COMMANDS=(
   'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
-  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval'
+  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval' 'entr'
 )
 
 # @description True when a token is a command prefix that keeps the following word in command

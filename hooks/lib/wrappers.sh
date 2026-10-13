@@ -44,12 +44,13 @@ readonly -a SHELL_WRAPPER_VALUE_OPTIONS=('emulate' 'init-file' 'rcfile')
 readonly -a USER_SWITCH_VALUE_OPTIONS=('--shell' '--group' '--supp-group' '--whitelist-environment' '--user')
 readonly -a USER_SWITCH_COMMAND_OPTIONS=('--command' '--session-command')
 
-# The commands that run the value of one of their options as a shell command line, one row each:
+# The commands that run the value of one of their options as a command line, one row each:
 # `<command>:<option letter>:<long option name>`, the long name empty when there is none.
-# `script -c`, `flock -c`, `entr -s` and `sg -c` hand the string to a shell, and `env -S` splits
-# it into the command to run; either way a kill inside it runs here.
+# `script -c`, `flock -c` and `sg -c` hand the string to a shell, and `env -S` splits it into the
+# command to run, with the words behind it as further arguments; either way a kill inside it
+# runs here.
 readonly -a SCRIPT_OPTION_COMMANDS=(
-  'env:S:split-string' 'flock:c:command' 'script:c:command' 'entr:s:' 'sg:c:'
+  'env:S:split-string' 'flock:c:command' 'script:c:command' 'sg:c:'
 )
 
 # How many wrapper payloads deep to follow. `bash -c 'bash -c "..."'` resolves at
@@ -721,9 +722,9 @@ function wrappers::cut_substitutions() {
 # @description Say where the script is when an option word of a command in SCRIPT_OPTION_COMMANDS
 #              names one: in the next word (`script -c '...'`, `script -qc '...'`,
 #              `flock --command '...'`), or attached to the option (`--command='...'`,
-#              `-S'...'`). A short option is read as getopt reads it: alone or as the last letter
-#              of a cluster it takes the next word, and with text behind it that text is the
-#              value.
+#              `-S'...'`, `-qc'...'`). A short option is read as getopt reads it: alone or as the
+#              last letter of a cluster it takes the next word, and with text behind its first
+#              occurrence in the word that text is the value.
 # @arg $1 runner the command, already reduced to its basename
 # @arg $2 word the option word as written
 # @stdout `next`, or `attached:<n>` with the number of leading bytes of the word that are not
@@ -732,7 +733,7 @@ function wrappers::cut_substitutions() {
 # @exitcode 1 it is not, or the command is not in the table
 function wrappers::script_option() {
   local -r runner="$1" word="$2"
-  local row letter long
+  local row letter long flags
   for row in "${SCRIPT_OPTION_COMMANDS[@]}"; do
     [[ "${row%%:*}" == "${runner}" ]] || continue
     letter="${row#*:}"
@@ -750,22 +751,48 @@ function wrappers::script_option() {
       fi
       return 1
     fi
-    if [[ "${word}" == "-${letter}"?* ]]; then
-      printf 'attached:2'
-      return 0
-    fi
-    if [[ "${word}" =~ ^-[A-Za-z]*${letter}$ ]]; then
+    [[ "${word}" =~ ^-[A-Za-z]+ ]] || return 1
+    flags="${BASH_REMATCH[0]%%"${letter}"*}"
+    [[ "${flags}" != "${BASH_REMATCH[0]}" ]] || return 1
+    if ((${#flags} + 1 == ${#word})); then
       printf 'next'
-      return 0
+    else
+      printf 'attached:%s' "$((${#flags} + 1))"
     fi
-    return 1
+    return 0
   done
   return 1
 }
 
-# @description Print the script `watch` runs for its operands, NUL-terminated. `watch` joins its
+# @description True when an option word of `sudo` makes it run a shell (`-s`, `-i`, `--shell`,
+#              `--login`), which takes the words behind sudo's options as one command line. A
+#              cluster is read as getopt reads it: the letters behind the first one that takes a
+#              value are that value (`-uadmin`), not flags.
+# @arg $1 word the option word as written
+# @exitcode 0 the option makes sudo run a shell
+# @exitcode 1 it does not
+function wrappers::sudo_runs_shell() {
+  local -r word="$1"
+  local i
+  if [[ "${word}" == '--shell' || "${word}" == '--login' ]]; then
+    return 0
+  fi
+  [[ "${word}" =~ ^-[A-Za-z]+$ ]] || return 1
+  for ((i = 1; i < ${#word}; i++)); do
+    if [[ "${word:i:1}" == [si] ]]; then
+      return 0
+    fi
+    if tokens::prefix_value_spelling 'sudo' "-${word:i:1}"; then
+      return 1
+    fi
+  done
+  return 1
+}
+
+# @description Print the script a prefix runs for its operands, NUL-terminated. `watch` joins its
 #              operands with single spaces and hands the result to `sh -c`, so the first operand and
-#              the words after it make up one command line.
+#              the words after it make up one command line. `eval`, `sudo -s`, `sudo -i`,
+#              `entr -s` and `env -S` are read the same way.
 # @arg $1 first the first operand, quotes stripped
 # @arg $@ operands the operands after it, quotes stripped
 # @stdout the joined script, NUL-terminated
@@ -917,6 +944,15 @@ function wrappers::watch_payload() {
 #              wrappers::watch_payload does; a plain unquoted operand yields the same verdict through
 #              the prefix chain as through the script. With `-x` or `--exec` the operand is a program
 #              name, not a script, and nothing is read; `watch $'...'` is not read either.
+#              `eval` is read the same way, and so are the words behind the options of `sudo -s`
+#              and `sudo -i`, the operands of `entr -s`, and the words behind `env -S`. A capture
+#              under way is not restarted by a prefix among its operands: the script is
+#              classified again on its own, that prefix included.
+#
+#              So is the value of the option that names a command line for the commands in
+#              SCRIPT_OPTION_COMMANDS (`script -c '...'`, `flock FILE -c '...'`,
+#              `env --split-string='...'`), found by wrappers::script_option for the segment's
+#              command word or for the prefix whose options are being read.
 #
 #              Still not covered: content that is not on the command line at all
 #              (`printf '%s' "${script}" | bash`, `curl ... | bash`), a here-string that is not a
@@ -998,11 +1034,12 @@ function wrappers::shell_wrapper_payloads() {
   local group_moved=0 group_text='' group_here_set=0
   local acc_idx acc_heredoc acc_text acc_text_set acc_word acc_through group_piped=0 producers_open=0
   local -a seg_words=()
-  # `watch` tracking: it is the prefix whose operands are read as a script (see the capture below).
+  # Operand capture for a prefix whose operands are read as a script (see the capture below);
+  # `watch_kind` names the prefix that armed it.
   local watch_active=0 watch_exec=0 watch_dd=0 watch_first='' watch_first_set=0 watch_kind=''
   # `script_next` says the next word is the value of an option that wrappers::script_option
   # found, and so a script.
-  local script_next=0 script_runner script_where
+  local script_next=0 script_runner script_where watch_armed
   local -a watch_rest=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
   # `pipe_open` says no word of the next stage has been read since a pipe: bash continues the
@@ -1511,7 +1548,16 @@ function wrappers::shell_wrapper_payloads() {
         script_runner="${chain}"
       fi
       if [[ -n "${script_runner}" ]] && script_where="$(wrappers::script_option "${script_runner}" "${token}")"; then
-        if [[ "${script_where}" == 'next' ]]; then
+        if [[ "${script_where}" == 'next' && "${script_runner}" == 'env' ]]; then
+          # `env -S STRING ARG...` runs the command line STRING with the ARGs appended, so the
+          # words behind the option are captured as one script, like `watch`'s operands.
+          if ((watch_active == 0 && watch_first_set == 0)); then
+            watch_active=1
+            watch_exec=0
+            watch_dd=0
+            watch_kind='env'
+          fi
+        elif [[ "${script_where}" == 'next' ]]; then
           script_next=1
         else
           raw="${command:offset:${#token}}"
@@ -1535,10 +1581,13 @@ function wrappers::shell_wrapper_payloads() {
     # `watch` runs its operands through `sh -c`, so they are a script: a quoted word, or one with
     # backslash escapes, is hidden from the prefix chain, and so is the quoted word after a prefix
     # operand (`watch sudo '...'`). `-x`/`--exec` runs the operand as a program name instead, and
-    # nothing is read. `eval` runs its operands the same way, and so does `sudo` with `-s` or `-i`,
-    # which hands them to the target user's shell.
-    if ((watch_active == 1 && at_cmd == 1 && chain_skip == 0)) && ! tokens::is_operator "${token}" \
-      && ! tokens::is_keyword "${token}"; then
+    # nothing is read. `eval` runs its operands the same way, and so do `sudo` with `-s` or `-i`,
+    # which hands them to the target user's shell, `entr -s` and `env -S`.
+    # The string of `env -S` is the value of that option, which the chain skips: it is the first
+    # operand all the same.
+    if ((watch_active == 1)) \
+      && { ((at_cmd == 1 && chain_skip == 0)) || { [[ "${watch_kind}" == 'env' ]] && ((chain_skip == 1)); }; } \
+      && ! tokens::is_operator "${token}" && ! tokens::is_keyword "${token}"; then
       if ((watch_dd == 0)) && [[ "${token}" == '--' ]]; then
         watch_dd=1
       elif ((watch_dd == 0)) && [[ "${word}" == -* ]]; then
@@ -1566,19 +1615,25 @@ function wrappers::shell_wrapper_payloads() {
     else
       next_at_cmd=0
     fi
-    if ((at_cmd == 1)) && [[ ("${word}" == 'watch' || "${word}" == 'eval') && "${chain}" == "${word}" ]]; then
-      watch_active=1
-      watch_exec=0
-      watch_dd=0
-      watch_kind="${word}"
-    fi
-    # `sudo -s` and `sudo -i` run the words behind sudo's options as one command line of a shell.
-    if ((at_cmd == 1)) && [[ "${chain}" == 'sudo' && "${chain_before}" == 'sudo' ]] \
-      && [[ "${token}" == '--shell' || "${token}" == '--login' || "${token}" =~ ^-[A-Za-z]*[si][A-Za-z]*$ ]]; then
-      watch_active=1
-      watch_exec=0
-      watch_dd=0
-      watch_kind='sudo'
+    # A capture already under way is never re-armed: the prefix that started it owns the operands,
+    # and the script they make up is classified again on its own, inner prefix included.
+    if ((at_cmd == 1 && watch_active == 0 && watch_first_set == 0)); then
+      watch_armed=''
+      if [[ ("${word}" == 'watch' || "${word}" == 'eval') && "${chain}" == "${word}" ]]; then
+        watch_armed="${word}"
+      elif [[ "${chain}" == 'sudo' && "${chain_before}" == 'sudo' ]] && wrappers::sudo_runs_shell "${token}"; then
+        # `sudo -s` and `sudo -i` run the words behind sudo's options as one command line.
+        watch_armed='sudo'
+      elif [[ "${chain}" == 'entr' && "${chain_before}" == 'entr' && "${token}" =~ ^-[A-Za-z]*s[A-Za-z]*$ ]]; then
+        # `entr -s` hands its first operand to a shell; without it the operands are a utility.
+        watch_armed='entr'
+      fi
+      if [[ -n "${watch_armed}" ]]; then
+        watch_active=1
+        watch_exec=0
+        watch_dd=0
+        watch_kind="${watch_armed}"
+      fi
     fi
     # Leaving command position marks the command word, with one exception: a
     # prefix's value-taking option (`sudo -u`) leaves it only for its value,

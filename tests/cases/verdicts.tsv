@@ -2007,3 +2007,52 @@
 "(while true; do pgrep --full x && echo up; y=${x%)}; break; done)"	deny:loop
 "while true; do ( echo a ); pgrep --full x && echo up; break; done"	deny:loop
 "while true; do ( while b; do echo a; done ); pgrep --full x && echo up; sleep 1; done"	warn
+"pgrep --full x | { xargs kill; }"	deny:kill
+"pgrep --full x | ( xargs kill )"	deny:kill
+"pgrep --full x | while read p; do echo; done | wc -l"	warn
+"pgrep --full x | { sort; }"	allow
+"{ pgrep --full x; } | xargs kill"	deny:kill
+"pgrep --full x | { cat; } | xargs kill"	deny:kill
+"pgrep --full x | if true; then xargs kill; fi"	deny:kill
+"pgrep --full x | { while read p; do kill $p; done; }"	deny:kill
+"{ xargs kill; } < <(pgrep --full x)"	deny:kill
+"{ while read p; do kill $p; done; } < <(pgrep --full x)"	deny:kill
+"( xargs kill ) < <(pgrep --full x)"	deny:kill
+"{ sort; } < <(pgrep --full x)"	allow
+"{ wc -l; } < <(pgrep --full x)"	warn
+"pgrep --full x | { wc -l; }"	warn
+"pgrep --full x | { grep -c java; }"	warn
+"pgrep --full x | { cat; } | wc -l"	warn
+"pgrep --full x | { echo hi; }"	allow
+"pgrep --full x | { kill 1; }"	deny:kill
+"pgrep --full x | { read p; kill $p; }"	deny:kill
+"pgrep --full x | { xargs echo; } | xargs kill"	deny:kill
+"pgrep --full x | sort | { xargs kill; }"	deny:kill
+"pgrep --full x | { sort; } && echo y"	warn
+"pgrep --full x | { sort; xargs kill; }"	deny:kill
+"pgrep --full x | { echo hi; } ; xargs kill"	allow
+"pgrep --full x | case a in a) xargs kill ;; esac"	deny:kill
+"pgrep --full x | case a in a) sort ;; esac"	allow
+"pgrep --full x | for i in 1; do xargs kill; done"	deny:kill
+"pgrep --full x | if true; then sort; else xargs kill; fi"	deny:kill
+"pgrep --full x | if true; then sort; fi | wc -l"	warn
+"if true; then pgrep --full x; fi | xargs kill"	deny:kill
+"while true; do pgrep --full x; break; done | xargs kill"	deny:kill
+"case a in a) pgrep --full x ;; esac | xargs kill"	deny:kill
+"{ pgrep --full x; echo; } | { cat; } | { xargs kill; }"	deny:kill
+"( pgrep --full x; true ) | xargs kill"	deny:kill
+"{ { pgrep --full x; }; } | xargs kill"	deny:kill
+"pgrep --full x | { sort; } | wc -l"	warn
+"{ pgrep --full x; } | wc -l"	warn
+"pgrep --full x | { true; }; kill 1"	allow
+"pgrep --full x; { kill 1; }"	allow
+"{ pgrep --full x; }; kill 1"	allow
+"{ pgrep --full x; echo hi; } && echo ok"	allow
+"for i in 1 2; do pgrep --full x; done"	allow
+"f() { xargs kill; }; pgrep --full x | f"	allow
+"pgrep --full x |\n{ xargs kill; }"	deny:kill
+"pgrep --full x | {\n  sort\n  xargs kill\n}"	deny:kill
+"pgrep --full foo <<EOF |\nx\nEOF\nxargs kill"	deny:kill
+"pgrep --full x | cat <<EOF |\nbody\nEOF\nxargs kill"	deny:kill
+"pgrep --full x | cat <<EOF |\nbody $(echo hi) more\nEOF\nwc -l"	warn
+"pgrep --full x | cat <<EOF |\nxargs kill\nEOF\nsort"	allow

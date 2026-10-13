@@ -213,7 +213,9 @@ function loops::terminator_ends_body() {
 #              both directions for the bodies: the ones open outside it are set aside while it is
 #              open, so a loop keyword inside can neither close nor end them, and the bodies opened
 #              inside it are dropped when it closes. A loop that sits wholly inside a barrier has
-#              its own body there, and only a terminator inside the same barrier can end it. An
+#              its own body there, and only a terminator inside the same barrier can end it. A
+#              `)` inside a body of the barrier's own scope does not close the barrier: it is a
+#              `case` pattern's. An
 #              invocation inside a barrier with no loop of its own around it there belongs to the
 #              nearest body outside, as it does for loops::loop_context.
 # @arg $1 command the raw command string
@@ -229,7 +231,7 @@ function loops::body_has_terminator() {
   local -a barrier=()
   # The ids of the open bodies, outermost first, each written as a space and the id, and the
   # terminators met before the invocation, one `kind:count:path` row each. `scopes` holds the
-  # bodies set aside at each open barrier, one entry a barrier.
+  # bodies set aside at each open barrier, one entry per barrier.
   local open='' scope
   local -a earlier=() scopes=()
   # shellcheck disable=SC2034 # read through tokens::region_opens_assignment_value's nameref
@@ -341,10 +343,11 @@ function loops::body_has_terminator() {
         open=''
         ;;
       ')')
-        # Same rule as loops::loop_context: a case-pattern `)` has no opener and must
-        # not pop anything.
-        if ((${#barrier[@]} > 0)) && [[ "${barrier[${#barrier[@]} - 1]}" == 'subshell' ||
-          "${barrier[${#barrier[@]} - 1]}" == 'capture' ]]; then
+        # A case-pattern `)` has no opener and must not pop anything, nor must the `)` of
+        # `${x%)}`. As in loops::loop_context, one that stands inside a body of the current scope
+        # is taken for such: the barrier that holds a loop closes behind the loop's `done`.
+        if ((${#barrier[@]} > 0)) && [[ -z "${open}" ]] \
+          && [[ "${barrier[${#barrier[@]} - 1]}" == 'subshell' || "${barrier[${#barrier[@]} - 1]}" == 'capture' ]]; then
           unset 'barrier[${#barrier[@]}-1]'
           open="${scopes[${#scopes[@]} - 1]}"
           unset 'scopes[${#scopes[@]}-1]'

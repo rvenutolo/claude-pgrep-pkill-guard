@@ -24,6 +24,11 @@ readonly -a LOCAL_SHELL_WRAPPERS=('bash' 'sh' 'zsh' 'dash' 'ksh')
 # operand budget below.
 readonly -a LOCAL_USER_SWITCH_WRAPPERS=('su' 'runuser')
 
+# The builtins that run a file's text in the current shell. They are wrappers only for an operand
+# that names their own stdin (see wrappers::names_own_stdin): any other operand is a file the
+# guard cannot read, and they take no `-c`.
+readonly -a LOCAL_SOURCE_BUILTINS=('source' '.')
+
 # The long options of a shell, without their dashes. bash reads each with one dash as well as with
 # two (`-login`, `-norc`), so for `bash` and `sh` a one-dash word that spells one is that option
 # and not a cluster of short flags: its letters are no `-c`, `-s` or `-o`. `emulate` is zsh's. The ones in
@@ -76,7 +81,26 @@ function wrappers::wrapper_operand_budget() {
       return 0
     fi
   done
+  for wrapper in "${LOCAL_SOURCE_BUILTINS[@]}"; do
+    if [[ "${token}" == "${wrapper}" ]]; then
+      printf '0'
+      return 0
+    fi
+  done
   return 1
+}
+
+# @description True when a script operand names the stdin of the command it is written on, so
+#              that the script the wrapper runs is whatever its stdin holds (`bash /dev/stdin`,
+#              `source /dev/fd/0`). The directory is matched at the end of any path, as
+#              wrappers::redirection_replaces_stdin matches it: `/dev//stdin` is not caught, and
+#              `/tmp/../dev/stdin` is.
+# @arg $1 path the operand, with any surrounding quotes stripped
+# @exitcode 0 the operand names the command's own stdin
+# @exitcode 1 it names something else
+function wrappers::names_own_stdin() {
+  local -r path="$1"
+  [[ "${path}" == *dev/stdin || "${path}" == *dev/fd/0 || "${path}" == *proc/self/fd/0 ]]
 }
 
 # @description What an option word of a local wrapper says: how many of the words after it are
@@ -764,6 +788,10 @@ function wrappers::watch_payload() {
 #              a heredoc the producer's line opened (`cat <<EOF |`, the body, then `bash`). Inside a
 #              group, a stage on the next line behind a pipe that carries nothing the reader can
 #              follow (`{ cat |`, newline, `bash; }`) is read as reading the group's stdin.
+#              A script operand that names the wrapper's own stdin (`bash /dev/stdin`, see
+#              wrappers::names_own_stdin) displaces nothing: it says what `-s` says. `source` and
+#              `.` are read as wrappers for that operand alone, and with any other, or none, they
+#              run nothing of their stdin.
 #              Past the pipe nothing else changes: the payload is handed to the
 #              same machinery, so an operand still displaces stdin, a `-c` still claims the payload instead,
 #              `-s` still keeps stdin as the script, and the prefix chain is still followed.
@@ -861,7 +889,8 @@ function wrappers::shell_wrapper_payloads() {
   local has_pipe_op=0
   [[ "${tokens}" == *$'\t|\n'* ]] && has_pipe_op=1
   local at_cmd=1 in_wrapper=0 saw_c=0 saw_s=0 saw_s_operand=0 operands=0
-  # `wrapper_name` is the wrapper being read and `wrapper_kind` its family, `shell` or `user`.
+  # `wrapper_name` is the wrapper being read and `wrapper_kind` its family: `shell`, `user`, or
+  # `source` for the builtins of LOCAL_SOURCE_BUILTINS.
   # `option_word` is the word under test as an option: the whole token, since the basename
   # reduction would cut `-s/bin/sh` down to an operand. `option_values` counts the words still to
   # come that are values of the wrapper's options (see wrappers::wrapper_option_facts).
@@ -1103,14 +1132,18 @@ function wrappers::shell_wrapper_payloads() {
         # own heredoc the same way.
         pending_source='heredoc'
         ((pending_piped == 1)) && pending_source='pipe'
+        # `source` and `.` with no operand naming their stdin run none of it.
+        if [[ "${wrapper_kind}" == 'source' ]] && ((saw_s == 0)); then
+          pending=''
+          pending_text_set=0
+        elif ((seg_here_set == 1)); then
+          printf '%s\0' "${seg_here_text}"
+        fi
         if [[ -n "${pending}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" "${pending_source}"; then
           wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}"
         fi
         if ((pending_text_set == 1)) && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'pipe'; then
           printf '%s\0' "${pending_text}"
-        fi
-        if ((seg_here_set == 1)); then
-          printf '%s\0' "${seg_here_text}"
         fi
         in_wrapper=0
         saw_c=0
@@ -1142,7 +1175,8 @@ function wrappers::shell_wrapper_payloads() {
         pending=''
         pending_text=''
         pending_text_set=0
-      elif [[ "${option_word}" == -* || ("${wrapper_kind}" == 'shell' && "${option_word}" == +*) ]]; then
+      elif [[ "${wrapper_kind}" != 'source' || "${option_word}" == '--' ]] \
+        && [[ "${option_word}" == -* || ("${wrapper_kind}" == 'shell' && "${option_word}" == +*) ]]; then
         # An option, which a shell also spells with a `+`. A short cluster counts for `-c`, so
         # `bash -lc '...'` does as well as `bash -c '...'`. `-s` in one says stdin IS the script,
         # so the operands after it are that script's positional parameters ($1...) rather than a
@@ -1164,6 +1198,17 @@ function wrappers::shell_wrapper_payloads() {
         # Only a shell's `-s` ends its option list at the first operand: `su -s /bin/sh root -c
         # '...'` still reads its `-c`.
         if ((saw_s == 1)) && [[ "${wrapper_kind}" == 'shell' ]]; then
+          saw_s_operand=1
+        fi
+        # A script operand that names the wrapper's own stdin (`bash /dev/stdin`) says what `-s`
+        # says: stdin is the script, and the words after it are its parameters. For `source` and
+        # `.` it is the one operand that makes them a wrapper at all.
+        raw="${command:offset:${#token}}"
+        if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
+          raw="${raw:1:${#raw}-2}"
+        fi
+        if ((saw_s == 0)) && [[ "${wrapper_kind}" != 'user' ]] && wrappers::names_own_stdin "${raw}"; then
+          saw_s=1
           saw_s_operand=1
         fi
         if ((operands > 0)); then
@@ -1442,6 +1487,9 @@ function wrappers::shell_wrapper_payloads() {
       wrapper_name="${word}"
       wrapper_kind='shell'
       ((budget == 0)) || wrapper_kind='user'
+      if [[ "${word}" == 'source' || "${word}" == '.' ]]; then
+        wrapper_kind='source'
+      fi
       pending="${leading_pending}"
       leading_pending=''
       pending_text=''
@@ -1496,14 +1544,18 @@ function wrappers::shell_wrapper_payloads() {
   # inside a group that produces for the wrapper) is claimed here.
   pending_source='heredoc'
   ((pending_piped == 1)) && pending_source='pipe'
+  # `source` and `.` with no operand naming their stdin run none of it.
+  if ((in_wrapper == 1)) && [[ "${wrapper_kind}" == 'source' ]] && ((saw_s == 0)); then
+    pending=''
+    pending_text_set=0
+  elif ((in_wrapper == 1 && seg_here_set == 1)); then
+    printf '%s\0' "${seg_here_text}"
+  fi
   if [[ -n "${pending}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" "${pending_source}"; then
     wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}"
   fi
   if ((pending_text_set == 1)) && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'pipe'; then
     printf '%s\0' "${pending_text}"
-  fi
-  if ((in_wrapper == 1 && seg_here_set == 1)); then
-    printf '%s\0' "${seg_here_text}"
   fi
   if ((watch_first_set == 1)); then
     wrappers::watch_payload "${watch_first}" "${watch_rest[@]}"

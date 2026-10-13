@@ -361,10 +361,86 @@ function consumption::feeds_a_kill_backward() {
   return 1
 }
 
-# @description True when the invocation's output feeds a kill, either forward (`pgrep ... | xargs
-#              kill`, `... | while read p; do kill "$p"; done`) or backward (`kill $(pgrep ...)`).
-#              The scans are independent; see consumption::pipeline_feeds and
-#              consumption::feeds_a_kill_backward.
+# @description True when the invocation stands in a process substitution that is the stdin of a
+#              command (`cmd < <(pgrep ...)`), and that command does what the caller asks. The
+#              spelling is the pipe written the other way round, and the one to use where a pipe
+#              into `while` would lose the loop's variables.
+#
+#              For `kill`: the substitution is redirected into a loop (`done < <(...)`) whose body
+#              holds a `kill` in command position, as scanner::find_invocations recorded them.
+#              A `kill` on the command itself (`xargs kill < <(...)`) stands before the
+#              invocation, where consumption::feeds_a_kill_backward finds it. For `count`: a word
+#              of the command is `mapfile`, `readarray` or `read`, which capture the output, or
+#              `wc` or `xargs`.
+#
+#              The substitution must be the innermost region around the invocation, and the target
+#              of an input redirection of any descriptor (`< <(...)`, `3< <(...)`). Other
+#              redirections between the command and that one are stepped over. What else runs
+#              inside the substitution is not looked at (`< <(pgrep ... | sort)`), which fails
+#              closed.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
+#         region to the index of the token that opened it
+# @arg $3 kills_var name of the caller's array holding an entry at the index of every `kill` in
+#         command position
+# @arg $4 target index of the invocation token
+# @arg $5 seek `kill` or `count`
+# @exitcode 0 the command the substitution feeds does what was asked
+# @exitcode 1 it does not, or the invocation is in no such substitution
+function consumption::substitution_feeds() {
+  local -n toks="$1"
+  local -n openers="$2"
+  local -n kills="$3"
+  local -r tokens_var="$1" openers_var="$2" target="$4" seek="$5"
+  local -r input_re='^[0-9]*<$'
+  local close opener enclosing=-1 k span start idx
+  for close in "${!openers[@]}"; do
+    opener="${openers[close]}"
+    if ((opener < target && close > target && opener > enclosing)); then
+      enclosing="${opener}"
+    fi
+  done
+  ((enclosing >= 1)) || return 1
+  [[ "${toks[enclosing]}" == '<' && "${toks[enclosing - 1]}" =~ ${input_re} ]] || return 1
+  k="$((enclosing - 2))"
+  while ((k >= 0)); do
+    tokens::redirection_span_back "${tokens_var}" "${k}" span
+    ((span > 0)) || break
+    k="$((k - span))"
+  done
+  ((k >= 0)) || return 1
+  if [[ "${toks[k]}" == 'done' ]]; then
+    [[ "${seek}" == 'kill' ]] || return 1
+    start="$(loops::done_body_start "${tokens_var}" "${openers_var}" "${k}")" || return 1
+    for ((idx = start + 1; idx < k; idx++)); do
+      if [[ -n "${kills[idx]:-}" ]]; then
+        return 0
+      fi
+    done
+    return 1
+  fi
+  [[ "${seek}" == 'count' ]] || return 1
+  while ((k >= 0)); do
+    if [[ -n "${openers[k]:-}" ]]; then
+      k="$((openers[k] - 1))"
+      continue
+    fi
+    if tokens::is_operator "${toks[k]}" || tokens::is_keyword "${toks[k]}"; then
+      return 1
+    fi
+    case "${toks[k]##*/}" in
+      'mapfile' | 'readarray' | 'read' | 'wc' | 'xargs') return 0 ;;
+    esac
+    k="$((k - 1))"
+  done
+  return 1
+}
+
+# @description True when the invocation's output feeds a kill: forward (`pgrep ... | xargs
+#              kill`, `... | while read p; do kill "$p"; done`), backward (`kill $(pgrep ...)`), or
+#              as the stdin of a loop that kills (`while read p; do kill "$p"; done < <(pgrep
+#              ...)`). The scans are independent; see consumption::pipeline_feeds,
+#              consumption::feeds_a_kill_backward and consumption::substitution_feeds.
 # @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
 #         invocation in the same command reuses it rather than re-parsing the token stream)
 # @arg $2 openers_var name of the caller's region-opener array, built alongside the token array
@@ -376,7 +452,8 @@ function consumption::feeds_a_kill_backward() {
 function consumption::feeds_a_kill() {
   local -r tokens_var="$1" openers_var="$2" kills_var="$3" target="$4"
   consumption::pipeline_feeds "${tokens_var}" "${openers_var}" "${kills_var}" "${target}" 'kill' \
-    || consumption::feeds_a_kill_backward "${tokens_var}" "${openers_var}" "${kills_var}" "${target}"
+    || consumption::feeds_a_kill_backward "${tokens_var}" "${openers_var}" "${kills_var}" "${target}" \
+    || consumption::substitution_feeds "${tokens_var}" "${openers_var}" "${kills_var}" "${target}" 'kill'
 }
 
 # @description True when an invocation sits inside a command substitution, so its output is captured
@@ -489,7 +566,9 @@ function consumption::next_command_reads_status() {
 #              wrong conclusion. These shapes count: pgrep's own `--count` / `-c`; an enclosing `if`
 #              or `elif`, or a leading `!`, which read the exit status as a boolean; `wc` or `xargs`
 #              as the command of a later stage of the invocation's pipeline, or a `&&` or `||` behind
-#              that pipeline, which consumption::pipeline_feeds finds; sitting inside a command
+#              that pipeline, which consumption::pipeline_feeds finds; standing in a process
+#              substitution that is the stdin of `mapfile`, `readarray`, `read`, `wc` or `xargs`,
+#              which consumption::substitution_feeds finds; sitting inside a command
 #              substitution; and the next command in the list reading `$?`, which
 #              consumption::next_command_reads_status handles. A pipeline that only passes the output
 #              on (`| sort | head`) displays it, and a `&&` or `||` behind a lone `&` tests some
@@ -551,6 +630,9 @@ function consumption::result_is_consumed() {
   done
 
   consumption::pipeline_feeds "${tokens_var}" "${openers_var}" "${kills_var}" "${target}" 'count' && return 0
+
+  # `mapfile -t pids < <(pgrep ...)`: the same reading with the substitution as the command's stdin.
+  consumption::substitution_feeds "${tokens_var}" "${openers_var}" "${kills_var}" "${target}" 'count' && return 0
 
   # `p=$(pgrep ...)`: the output is captured rather than printed.
   consumption::invocation_is_captured "${tokens_var}" "${target}" && return 0

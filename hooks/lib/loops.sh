@@ -210,8 +210,12 @@ function loops::terminator_ends_body() {
 #              the barrier a literal `done` inside `$( )` closed the body and hid a real `break` that
 #              followed it, and loops::loop_context (which has the barrier) answered `body` for the same
 #              command -- two readers of one structure disagreeing (#8). The barrier is opaque in
-#              both directions: while one is open, every loop keyword is ignored, so a loop that sits
-#              wholly inside one has no body here.
+#              both directions for the bodies: the ones open outside it are set aside while it is
+#              open, so a loop keyword inside can neither close nor end them, and the bodies opened
+#              inside it are dropped when it closes. A loop that sits wholly inside a barrier has
+#              its own body there, and only a terminator inside the same barrier can end it. An
+#              invocation inside a barrier with no loop of its own around it there belongs to the
+#              nearest body outside, as it does for loops::loop_context.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @arg $3 target index of the invocation token
@@ -224,9 +228,10 @@ function loops::body_has_terminator() {
   local -a word_assign=()
   local -a barrier=()
   # The ids of the open bodies, outermost first, each written as a space and the id, and the
-  # terminators met before the invocation, one `kind:count:path` row each.
-  local open=''
-  local -a earlier=()
+  # terminators met before the invocation, one `kind:count:path` row each. `scopes` holds the
+  # bodies set aside at each open barrier, one entry a barrier.
+  local open='' scope
+  local -a earlier=() scopes=()
   # shellcheck disable=SC2034 # read through tokens::region_opens_assignment_value's nameref
   local -A region=()
   while IFS=$'\t' read -r offset token; do
@@ -251,9 +256,14 @@ function loops::body_has_terminator() {
     fi
     if ((idx == target)); then
       seen=1
-      # No body is open: nothing here is a terminator of the invocation's loop.
-      [[ -n "${open}" ]] || return 1
+      # The innermost body: one open in this scope, or else in the nearest scope around it.
       body="${open##* }"
+      for ((scope = ${#scopes[@]} - 1; scope >= 0; scope--)); do
+        [[ -z "${body}" ]] || break
+        body="${scopes[scope]##* }"
+      done
+      # No body is open: nothing here is a terminator of the invocation's loop.
+      [[ -n "${body}" ]] || return 1
       for record in "${earlier[@]}"; do
         IFS=':' read -r kind count pending <<< "${record}"
         loops::terminator_ends_body "${kind}" "${count}" "${pending}" "${body}" && return 0
@@ -293,7 +303,7 @@ function loops::body_has_terminator() {
       idx="$((idx + 1))"
       continue
     fi
-    if ((at_cmd == 1 && ${#barrier[@]} == 0)); then
+    if ((at_cmd == 1)); then
       case "${token}" in
         'do')
           next_body="$((next_body + 1))"
@@ -327,6 +337,8 @@ function loops::body_has_terminator() {
         else
           barrier+=('subshell')
         fi
+        scopes+=("${open}")
+        open=''
         ;;
       ')')
         # Same rule as loops::loop_context: a case-pattern `)` has no opener and must
@@ -334,13 +346,19 @@ function loops::body_has_terminator() {
         if ((${#barrier[@]} > 0)) && [[ "${barrier[${#barrier[@]} - 1]}" == 'subshell' ||
           "${barrier[${#barrier[@]} - 1]}" == 'capture' ]]; then
           unset 'barrier[${#barrier[@]}-1]'
+          open="${scopes[${#scopes[@]} - 1]}"
+          unset 'scopes[${#scopes[@]}-1]'
         fi
         ;;
       '`')
         if ((${#barrier[@]} > 0)) && [[ "${barrier[${#barrier[@]} - 1]}" == 'backtick' ]]; then
           unset 'barrier[${#barrier[@]}-1]'
+          open="${scopes[${#scopes[@]} - 1]}"
+          unset 'scopes[${#scopes[@]}-1]'
         else
           barrier+=('backtick')
+          scopes+=("${open}")
+          open=''
         fi
         ;;
     esac

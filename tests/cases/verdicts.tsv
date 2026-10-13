@@ -1781,3 +1781,47 @@
 "echo 'pkill --full X' | env . /dev/stdin"	allow
 "echo 'pkill --full X' | xargs source /dev/stdin"	allow
 "echo 'pkill --full X' | ./source /dev/stdin"	allow
+"eval 'pkill --full X'"	deny:kill
+"eval \"pkill --full X\""	deny:kill
+"eval pkill --full X"	deny:kill
+"eval -- 'pkill --full X'"	deny:kill
+"eval 'echo a; pkill --full X'"	deny:kill
+"eval 'pgrep --full x | xargs kill'"	deny:kill
+"cd /tmp && eval 'pkill --full X'"	deny:kill
+"eval 'echo hi'"	allow
+"eval \"$cmd\""	allow
+"echo eval 'pkill --full X'"	allow
+"env -S 'pkill --full X'"	deny:kill
+"env --split-string='pkill --full X'"	deny:kill
+"env --split-string 'pkill --full X'"	deny:kill
+"env -i -S 'pkill --full X'"	deny:kill
+"env -S 'echo hi'"	allow
+"flock /tmp/lockfile -c 'pkill --full X'"	deny:kill
+"flock --command 'pkill --full X' /tmp/lockfile"	deny:kill
+"flock -n /tmp/lockfile -c 'pkill --full X'"	deny:kill
+"flock /tmp/lockfile pkill --full X"	deny:kill
+"flock -w 5 /tmp/lockfile pkill --full X"	deny:kill
+"flock -n /tmp/lockfile bash -c 'pkill --full X'"	deny:kill
+"flock /tmp/lockfile echo pkill --full X"	allow
+"flock -n 9 || exit 1"	allow
+"script -c 'pkill --full X' /dev/null"	deny:kill
+"script -qc 'pkill --full X' /dev/null"	deny:kill
+"script -q -c 'pkill --full X'"	deny:kill
+"script --command 'pkill --full X'"	deny:kill
+"script --command='pkill --full X' /dev/null"	deny:kill
+"sudo script -qc 'pkill --full X' /dev/null"	deny:kill
+"script -c 'echo hi' /dev/null"	allow
+"script -a 'pkill --full X'"	allow
+"entr -s 'pkill --full X'"	deny:kill
+"ls | entr -rs 'pkill --full X'"	deny:kill
+"entr -s 'echo hi'"	allow
+"sg users -c 'pkill --full X'"	deny:kill
+"sudo -s 'pkill --full X'"	deny:kill
+"sudo -i 'pkill --full X'"	deny:kill
+"sudo -u root -s 'pkill --full X'"	deny:kill
+"sudo --login 'pkill --full X'"	deny:kill
+"sudo -s pkill --full X"	deny:kill
+"sudo -s 'echo hi'"	allow
+"sudo -s"	allow
+"grep -c 'pkill --full X' f"	allow
+"sort -s 'pkill --full X'"	allow

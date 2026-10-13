@@ -1975,3 +1975,12 @@
 "sudo -nE pkill --full X"	deny:kill
 "command -p pkill --full X"	deny:kill
 "ionice -tc 3 pkill --full X"	deny:kill
+"watch -dv pkill --full X"	deny:kill
+"watch -dh 'pkill --full X'"	deny:kill
+"watch -bdv pkill --full X"	deny:kill
+"pgrep --full X | watch -dv xargs kill"	deny:kill
+"watch -sv pkill --full X"	deny:kill
+"sudo -cl pkill --full X"	deny:kill
+"sudo -al pkill --full X"	deny:kill
+"watch -bv 'pkill --full X'"	allow
+"watch -vd pkill --full X"	allow

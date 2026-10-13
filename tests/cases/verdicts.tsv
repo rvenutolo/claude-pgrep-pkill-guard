@@ -1726,3 +1726,58 @@
 "ksh -norc errexit 'pkill --full X'"	allow
 "dash --norc -c 'pkill --full X'"	deny:kill
 "zsh -version -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | bash /dev/stdin"	deny:kill
+"bash /dev/stdin <<< 'pkill --full X'"	deny:kill
+"bash /dev/stdin <<'EOF'\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | bash /dev/fd/0"	deny:kill
+"echo 'pkill --full X' | bash /proc/self/fd/0"	deny:kill
+"echo 'pkill --full X' | bash /dev/stdin arg"	deny:kill
+"echo 'pkill --full X' | bash '/dev/stdin'"	deny:kill
+"echo 'pkill --full X' | bash -e /dev/stdin"	deny:kill
+"echo 'pkill --full X' | sudo bash /dev/stdin"	deny:kill
+"echo 'pkill --full X' | sh /dev/stdin; echo y"	deny:kill
+"echo 'pkill --full X' | { bash /dev/stdin; }"	deny:kill
+"bash /dev/stdin -c 'pkill --full X'"	allow
+"echo 'pkill --full X' | bash /dev/stdin < /tmp/f"	allow
+"echo 'pkill --full X' | bash /dev/stdout"	allow
+"echo 'pkill --full X' | bash /dev/fd/3"	allow
+"echo 'pkill --full X' | bash script.sh /dev/stdin"	allow
+"source /dev/stdin <<'EOF'\npkill --full X\nEOF"	deny:kill
+". /dev/stdin <<'EOF'\npkill --full X\nEOF"	deny:kill
+"source /dev/stdin <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | source /dev/stdin"	deny:kill
+"echo 'pkill --full X' | . /dev/fd/0"	deny:kill
+"echo 'pkill --full X' | source /dev/stdin arg"	deny:kill
+"echo 'pkill --full X' | source script.sh"	allow
+"source script.sh <<'EOF'\npkill --full X\nEOF"	allow
+"echo 'pkill --full X' | source script.sh /dev/stdin"	allow
+"echo 'pkill --full X' | source"	allow
+"echo source /dev/stdin <<< 'pkill --full X'"	allow
+"echo 'pkill --full X' | ./run /dev/stdin"	allow
+"source <<< 'pkill --full X'"	allow
+"source <<'EOF'\npkill --full X\nEOF"	allow
+"echo 'pkill --full X' | source; echo y"	allow
+"echo 'pkill --full X' | { source /dev/stdin; }"	deny:kill
+"echo 'pkill --full X' | source -- /dev/stdin"	deny:kill
+"echo 'pkill --full X' | sudo source /dev/stdin"	allow
+"source /dev/stdin < <(echo 'pkill --full X')"	allow
+"source ./x.sh; echo 'pkill --full X' | bash"	deny:kill
+"echo 'pkill --full X' | bash -s ! ."	deny:kill
+"echo 'pkill --full X' | bash -s -- time source"	deny:kill
+"echo 'pkill --full X' | bash -s if ."	deny:kill
+"bash -s ! . <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | su -s /bin/sh ! ."	deny:kill
+"echo 'pkill --full X' | bash -s ! bash"	deny:kill
+"echo 'pkill --full X' | timeout . bash"	deny:kill
+"echo 'pkill --full X' | taskset source bash"	deny:kill
+"echo 'pkill --full X' | bash /dev/stdin ! ."	deny:kill
+"echo 'pkill --full X' | source /dev/stdin ! ."	deny:kill
+"echo 'pkill --full X' | source -p /tmp /dev/stdin"	deny:kill
+"echo 'pkill --full X' | bash /dev//stdin"	deny:kill
+"echo 'pkill --full X' | bash /dev/./fd/0"	deny:kill
+"echo 'pkill --full X' | bash /proc/thread-self/fd/0"	deny:kill
+"echo 'pkill --full X' | command source /dev/stdin"	deny:kill
+"echo 'pkill --full X' | FOO=1 source /dev/stdin"	deny:kill
+"echo 'pkill --full X' | env . /dev/stdin"	allow
+"echo 'pkill --full X' | xargs source /dev/stdin"	allow
+"echo 'pkill --full X' | ./source /dev/stdin"	allow

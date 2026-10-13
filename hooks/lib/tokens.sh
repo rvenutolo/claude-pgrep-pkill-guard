@@ -38,6 +38,13 @@ readonly -a PREFIX_COMMANDS=(
   'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval' 'entr'
 )
 
+# An option word that carries the command line of `env -S` in the same word (`-S/usr/bin/cmd`,
+# `-iS./cmd`, `--split-string=/usr/bin/cmd`). The walkers keep every other option word as written
+# and reduce this one to its basename like a command word, because the text behind the option is
+# the command env runs.
+# shellcheck disable=SC2034 # read by scanner.sh, consumption.sh and wrappers.sh
+readonly SPLIT_STRING_WORD_RE='^(-[A-Za-z]*S|--split-string=).'
+
 # @description True when a token is a command prefix that keeps the following word in command
 #              position.
 # @arg $1 token the token to test
@@ -290,7 +297,7 @@ function tokens::prefix_breaks_chain() {
 #              per word. The first word that is none of those IS the command, so the chain ends
 #              there. An option that makes the prefix run nothing ends it too.
 # @arg $1 token the raw token
-# @arg $2 word the token reduced to its basename
+# @arg $2 word the token reduced to its basename, or an option word as written
 # @arg $3 at_cmd 1 when this token is itself in command position
 # @arg $4 chain name of the caller's variable holding the prefix in effect, or one of the sentinels
 #         `pipe`, `assignment`, `time-builtin` and `--`, which match no prefix; empty when neither

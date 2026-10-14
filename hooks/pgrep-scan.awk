@@ -39,6 +39,27 @@
 # is no RT), so the CALLER TERMINATES THE INPUT WITH EXACTLY ONE NEWLINE and the
 # code below drops exactly one: a command's own trailing newline survives,
 # which is what a heredoc body's byte count depends on.
+# True when the backslash at a position ends an odd run of backslashes, so that it escapes the
+# byte after it rather than being escaped itself.
+function continuation_at(pos,    nslash) {
+  nslash = 0
+  while (pos - nslash >= 1 && substr(cmd, pos - nslash, 1) == "\\") nslash++
+  return nslash % 2 == 1
+}
+
+# True when the word starting at a position is the first word of a command: only blanks stand
+# between it and the start of the input, an operator byte, or a reserved word that a command
+# follows. A `[[` anywhere else is an argument (`test [[`).
+function starts_command(pos,    back, lead) {
+  back = pos - 1
+  while (back >= 1 && index(" \t", substr(cmd, back, 1)) > 0) back--
+  if (back < 1 || index(";&|(){\n", substr(cmd, back, 1)) > 0) return 1
+  lead = ""
+  while (back >= 1 && substr(cmd, back, 1) ~ /[a-z!]/) { lead = substr(cmd, back, 1) lead; back-- }
+  if (back >= 1 && index(" \t\n;&|(){", substr(cmd, back, 1)) == 0) return 0
+  return lead ~ /^(if|elif|while|until|then|do|else|!)$/
+}
+
 BEGIN {
   ORS = ""
   cmd = ""
@@ -142,6 +163,12 @@ BEGIN {
         hb_id[depth] = hb_n; hb_start[hb_n] = i; hb_len[hb_n] = n + 1 - i; hb_n++
         continue
       }
+      # A `[[` that is the first word of a command opens a conditional expression,
+      # and the `]]` that starts a word closes it; inside, a `|` separates pattern
+      # alternatives.
+      if (ch == "[" && substr(cmd, i + 1, 1) == "[" && starts_command(i) \
+          && index(" \t\n", substr(cmd, i + 2, 1)) > 0) dbl[depth] = 1
+      if (ch == "]" && substr(cmd, i + 1, 1) == "]" && dbl[depth] && index(" \t\n", prev) > 0) dbl[depth] = 0
       # A `#` opens a comment only at the start of a WORD. The precondition is
       # load-bearing: without it the `#` of `${#arr[@]}` would open a comment and
       # mask the rest of the line. A word also starts after a command separator,
@@ -151,10 +178,19 @@ BEGIN {
       # `(` is deliberately not a starter here: `$(#` would swallow the closing
       # paren this scanner counts depth with. Nor are `<` and `>`, where a `#`
       # is part of a filename far more often than it opens a comment.
-      # Inside `${...}` a `#` is part of the word.
+      # Inside `${...}` a `#` is part of the word. A `#` directly behind a
+      # backslash-newline continues the word before the backslash, which bash
+      # joins it to (`a\`, then `#b`), so the byte before the backslash decides.
+      # Inside `[[ ... ]]` a `|` is part of a pattern, and the `#` behind it too.
+      if (ch == "#") {
+        wprev = prev
+        if (prev == "\n" && i > 2 && substr(cmd, i - 2, 1) == "\\" && continuation_at(i - 2)) {
+          wprev = (i > 3) ? substr(cmd, i - 3, 1) : ""
+        }
+      }
       if (ch == "#" && !(depth > 0 && opener[depth] == "V") \
-          && (i == 1 || prev == " " || prev == "\t" || prev == "\n" \
-          || prev == ";" || prev == "&" || prev == "|")) {
+          && (wprev == "" || wprev == " " || wprev == "\t" || wprev == "\n" \
+          || wprev == ";" || wprev == "&" || (wprev == "|" && !dbl[depth]))) {
         while (i <= n && substr(cmd, i, 1) != "\n") { masked = masked " "; i++ }
         continue
       }

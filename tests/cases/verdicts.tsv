@@ -2209,3 +2209,8 @@
 "bash -c 'echo a'\"$(cat f)\""	allow
 "bash -c ls"	allow
 "echo 'pk'\"ill\" | grep pk"	allow
+"bash -c \"echo \\\"; pkill --full X\\\"\""	deny:kill
+"script -c \"echo \\\"; pkill --full X\\\"\" /dev/null"	deny:kill
+"watch 'echo a'\\\"' ; pkill --full X'"	deny:kill
+"env -S \"echo a\\\"; pkill --full X\""	deny:kill
+"echo \"echo \\\"; pkill --full X\\\"\" | bash"	deny:kill

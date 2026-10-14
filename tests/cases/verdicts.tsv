@@ -2243,3 +2243,21 @@
 "echo 'pkill --full X' > >(bash) 2> /dev/null # note"	deny:kill
 "x=$(echo hi > >(cat)); bash -c 'pgrep --full x'"	allow
 "make > >(tee -a build.log) 2> >(tee -a err.log >&2); bash -c 'pgrep --full x'"	allow
+"coproc P while pgrep --full x; do sleep 1; done"	deny:loop
+"coproc P until pgrep --full x; do sleep 1; done"	deny:loop
+"coproc P { while pgrep --full x; do sleep 1; done; }"	deny:loop
+"coproc P for i in 1 2; do pgrep --full x && break; sleep 1; done"	deny:loop
+"coproc P sleep 1; while pgrep --full x; do sleep 1; done"	deny:loop
+"coproc while_x pgrep --full x"	allow
+"if pgrep --full x; then echo y; fi"	warn
+"if 2> >(cat) pgrep --full x; then echo y; fi"	warn
+"if FOO=$(true) pgrep --full x; then echo y; fi"	warn
+"if FOO=`true` pgrep --full x; then echo y; fi"	warn
+"! 2> >(cat) pgrep --full x"	warn
+"! FOO=$(true) pgrep --full x"	warn
+"echo $(true); pgrep --full x"	allow
+"while true; do pgrep --full x && 2> /dev/null break; sleep 1; done"	deny:loop
+"while true; do pgrep --full x && 2> >(cat) break; sleep 1; done"	deny:loop
+"while true; do pgrep --full x && > \"$(mktemp)\" break; sleep 1; done"	deny:loop
+"while 2> >(cat) pgrep --full x; do sleep 1; done"	deny:loop
+"while true; do pgrep --full x; echo $(true) break; sleep 1; done"	allow

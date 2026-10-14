@@ -20,8 +20,8 @@ readonly -a LOCAL_SHELL_WRAPPERS=('bash' 'sh' 'zsh' 'dash' 'ksh')
 
 # The same, for the user-switching wrappers. `su -c` and `runuser -c` hand the
 # payload to a shell here, under this process tree, so a pgrep inside one matches
-# the same ancestor. They are listed apart from the shells only because of the
-# operand budget below.
+# the same ancestor. They are listed apart from the shells for the operand budget
+# below and for their options; `runuser -u USER` runs a command and not a shell.
 readonly -a LOCAL_USER_SWITCH_WRAPPERS=('su' 'runuser')
 
 # The builtins that run a file's text in the current shell. They are wrappers only for an operand
@@ -45,14 +45,15 @@ readonly -a USER_SWITCH_VALUE_OPTIONS=('--shell' '--group' '--supp-group' '--whi
 readonly -a USER_SWITCH_COMMAND_OPTIONS=('--command' '--session-command')
 
 # The commands that run the value of one of their options as a command line, one row each:
-# `<command>:<option letter>:<long option name>`, the long name empty when there is none.
+# `<command>:<option letter>:<long option name>`.
 # `script -c`, `flock -c` and `sg -c` hand the string to a shell, and `env -S` splits it into the
 # command to run, with the words behind it as further arguments; either way a kill inside it
-# runs here. For `su` and `runuser` only the long spellings are here, for the value attached
-# (`--command='...'`): the wrapper reads their `-c` itself, within its operand budget.
+# runs here. The letter or the long name may be empty. A letter followed by `=` is read only with
+# the value attached (`-c'...'`): the wrapper reads the `-c` of `su` and `runuser` with a
+# separate value itself, within its operand budget.
 readonly -a SCRIPT_OPTION_COMMANDS=(
   'env:S:split-string' 'flock:c:command' 'script:c:command' 'sg:c:'
-  'su::command' 'su::session-command' 'runuser::command' 'runuser::session-command'
+  'su:c=:command' 'su::session-command' 'runuser:c=:command' 'runuser::session-command'
 )
 
 # The longest word wrappers::literal_word reads. It walks the word a byte at a time, which grows
@@ -77,7 +78,8 @@ readonly MAX_PAYLOAD_DEPTH=4
 #              `su - user -c '...'` is the ordinary spelling and does run the payload. Exactly one,
 #              though: past the user name the words are arguments to the login shell, so a `-c`
 #              among them is not su's either. Budget 1. A bare `-` needs no budget, being already
-#              spelled like a flag.
+#              spelled like a flag. The attached spellings (`--command='...'`, `-c'...'`) are read
+#              by wrappers::script_option, whatever the budget, which fails closed.
 #
 #              `source` and `.` take no `-c` at all: their first operand is the file to run, and
 #              they are wrappers only when it names their own stdin. Budget 0.
@@ -761,7 +763,7 @@ function wrappers::cut_substitutions() {
 # @exitcode 1 it is not, or the command is not in the table
 function wrappers::script_option() {
   local -r runner="$1" word="$2"
-  local row letter long flags
+  local row letter long flags attached_only
   for row in "${SCRIPT_OPTION_COMMANDS[@]}"; do
     [[ "${row%%:*}" == "${runner}" ]] || continue
     letter="${row#*:}"
@@ -780,10 +782,16 @@ function wrappers::script_option() {
       continue
     fi
     [[ -n "${letter}" ]] || continue
+    attached_only=0
+    if [[ "${letter}" == *= ]]; then
+      attached_only=1
+      letter="${letter%=}"
+    fi
     [[ "${word}" =~ ^-[A-Za-z]+ ]] || return 1
     flags="${BASH_REMATCH[0]%%"${letter}"*}"
     [[ "${flags}" != "${BASH_REMATCH[0]}" ]] || return 1
     if ((${#flags} + 1 == ${#word})); then
+      ((attached_only == 0)) || return 1
       printf 'next'
     else
       printf 'attached:%s' "$((${#flags} + 1))"
@@ -1159,8 +1167,15 @@ function wrappers::body_runs_shell() {
 #
 #              So is the value of the option that names a command line for the commands in
 #              SCRIPT_OPTION_COMMANDS (`script -c '...'`, `flock FILE -c '...'`,
-#              `env --split-string='...'`), found by wrappers::script_option for the segment's
-#              command word or for the prefix whose options are being read.
+#              `env --split-string='...'`, `su --command='...'`), found by wrappers::script_option
+#              for the segment's command word, for the prefix whose options are being read, or
+#              for the `su` or `runuser` being read.
+#
+#              `runuser -u USER` runs the command behind its options directly. When that command
+#              is a plain word that names no wrapper, the words behind it are its own (the `-c` of
+#              `runuser -u bob -- psql -c '...'` is psql's) and what runuser claimed from a pipe
+#              is its input, unless it is `cat` or `tee` handing that on down a pipe. Any other
+#              command word keeps runuser read as the shell.
 #
 #              A process substitution is a payload source too. One that is a wrapper's script
 #              operand (`bash <(echo '...')`, `source <(...)`), or the target of a shell's stdin
@@ -1270,8 +1285,9 @@ function wrappers::shell_wrapper_payloads() {
   # armed an operand capture or named a script option, and `hd_anchor` the anchor of the wrapper
   # that claimed each heredoc body, by ordinal.
   local anchor=0 watch_anchor=0 script_anchor=0 exec_word=0 exec_chain=0
-  # `user_direct` says the `runuser` being read has `-u`, so it runs a command and not a shell.
-  local user_direct=0
+  # `user_direct` says the `runuser` being read has `-u`, so it runs a command and not a shell, and
+  # `direct_word` names that command once it is a plain word that is no wrapper.
+  local user_direct=0 direct_word=''
   # A process substitution the segment's stdout is redirected into (`> >(bash)`): the offset of its
   # `>`, -1 for none, and of the redirection operator; `tee_subs` the ones a `tee` writes to;
   # `seg_start` the offset of the first token of the segment that is no redirection, and
@@ -1500,28 +1516,20 @@ function wrappers::shell_wrapper_payloads() {
       continue
     fi
 
-    # `runuser -u USER` runs the command behind its options directly, with no shell: the first
-    # word past them that is no option or option value is that command, and what the wrapper
-    # claimed from a pipe or a group goes on to it. A `-c` there keeps its string a payload.
+    # `runuser -u USER` runs the command behind its options directly, with no shell. When the
+    # first word past them, unless a `-c` came first, is a plain word that names no wrapper
+    # (`runuser -u bob -- psql -c '...'`), the words behind it are that command's and not
+    # runuser's, and what runuser claimed from a pipe is the command's input (see the flush
+    # below). Any other word keeps the reading of runuser as the shell, which fails closed.
     if ((in_wrapper == 1 && user_direct == 1 && option_values == 0 && saw_c == 0)) && [[ "${token}" != -* ]] \
       && ! tokens::is_operator "${token}"; then
-      if ((pending_piped == 1)) && [[ -n "${pending}" ]]; then
-        pipe_heredoc="${pending}"
-      fi
-      if ((pending_text_set == 1)); then
-        pipe_text="${pending_text}"
-        pipe_text_set=1
-      fi
-      in_wrapper=0
-      saw_c=0
-      saw_s=0
-      saw_s_operand=0
-      pending=''
-      pending_text=''
-      pending_text_set=0
       user_direct=0
+      if [[ "${command:offset:${#token}}" =~ ^[A-Za-z0-9_./+-]+$ ]] \
+        && ! wrappers::wrapper_operand_budget "${word}" > /dev/null; then
+        direct_word="${word}"
+      fi
     fi
-    if ((in_wrapper == 1)); then
+    if ((in_wrapper == 1)) && { [[ -z "${direct_word}" ]] || tokens::is_operator "${token}"; }; then
       option_word="${word}"
       if [[ "${token}" == [-+]* ]]; then
         option_word="${token}"
@@ -1532,6 +1540,17 @@ function wrappers::shell_wrapper_payloads() {
         option_values=0
       fi
       if tokens::is_operator "${token}"; then
+        # What `runuser -u USER CMD` claimed from a pipe is CMD's input, and runs nothing, unless
+        # CMD is `cat` or `tee` and hands it on down a pipe.
+        if [[ -n "${direct_word}" ]] \
+          && ! [[ "${token}" == '|' && ("${direct_word}" == 'cat' || "${direct_word}" == 'tee') ]]; then
+          if ((pending_piped == 1)); then
+            pending=''
+          fi
+          pending_text=''
+          pending_text_set=0
+        fi
+        direct_word=''
         # A redirection of the wrapper's own stdin replaces the pipe, so what
         # the pipe carried is never read; and a later one replaces the wrapper's
         # own heredoc the same way.
@@ -1881,10 +1900,12 @@ function wrappers::shell_wrapper_payloads() {
       if [[ -z "${script_runner}" ]] && ((at_cmd == 1)); then
         script_runner="${chain}"
       fi
-      # The user name of `su` and `runuser` reads as the segment's command word to the chain;
-      # their options are still theirs.
+      # The user name of `runuser`, a prefix, reads as the segment's command word to the chain;
+      # the options of `su` and `runuser` are still theirs.
       if ((in_wrapper == 1)) && [[ "${wrapper_kind}" == 'user' ]]; then
         script_runner="${wrapper_name}"
+        # Behind `runuser -u USER CMD` the options are CMD's (`script -qc '...'`).
+        [[ -z "${direct_word}" ]] || script_runner="${direct_word}"
       fi
       if [[ -n "${script_runner}" ]] && script_where="$(wrappers::script_option "${script_runner}" "${token}")"; then
         if [[ "${script_where}" == 'next' && "${script_runner}" == 'env' ]]; then
@@ -2017,6 +2038,7 @@ function wrappers::shell_wrapper_payloads() {
     if ((opens_wrapper == 1)); then
       in_wrapper=1
       user_direct=0
+      direct_word=''
       anchor="${offset}"
       saw_c=0
       saw_s=0
@@ -2094,6 +2116,13 @@ function wrappers::shell_wrapper_payloads() {
   # bash`) meets no operator to flush on. A heredoc body that follows it is
   # printed when its marker goes by; one that was announced already (a body
   # inside a group that produces for the wrapper) is claimed here.
+  if [[ -n "${direct_word}" ]]; then
+    if ((pending_piped == 1)); then
+      pending=''
+    fi
+    pending_text=''
+    pending_text_set=0
+  fi
   pending_source='heredoc'
   ((pending_piped == 1)) && pending_source='pipe'
   # `source` and `.` with no operand naming their stdin run none of it.

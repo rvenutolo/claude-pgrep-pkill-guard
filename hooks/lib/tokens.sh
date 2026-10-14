@@ -22,8 +22,8 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
 # do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`,
-# `exec`, `flock`, `entr`, `systemd-run`, `runuser` (with `-u` it runs the command itself) and the
-# builtin `eval`. A wrapper that is not listed hides what it runs: the guard sees nothing behind
+# `exec`, `flock`, `entr`, `systemd-run`, `runuser` (whose `-u` runs the command behind its options) and
+# the builtin `eval`. A wrapper that is not listed hides what it runs: the guard sees nothing behind
 # `strace`. `find` is no prefix: the command it runs stands behind one of its `-exec` actions,
 # which tokens::prefix_chain_step reads. `watch` and `eval` also hand their operands to a shell
 # (`watch 'pkill --full X'`), and so do `sudo -s`, `sudo -i`, `entr -s` and `env -S`; the chain
@@ -155,8 +155,6 @@ function tokens::prefix_value_spelling() {
         *) return 1 ;;
       esac
       ;;
-    # `-H` and `-M` name where the command runs, and `-M .host` is this machine: the command
-    # behind them is read as run here, which fails closed for another host.
     'runuser')
       case "${word}" in
         '-u' | '--user' | '-g' | '--group' | '-G' | '--supp-group' | '-s' | '--shell' | '-w' | \
@@ -166,6 +164,8 @@ function tokens::prefix_value_spelling() {
         *) return 1 ;;
       esac
       ;;
+    # `-H` and `-M` name where the command runs, and `-M .host` is this machine: the command
+    # behind them is read as run here, which fails closed for another host.
     'systemd-run')
       case "${word}" in
         '-u' | '--unit' | '-p' | '--property' | '--description' | '--slice' | '--expand-environment' | \

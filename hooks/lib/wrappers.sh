@@ -48,9 +48,11 @@ readonly -a USER_SWITCH_COMMAND_OPTIONS=('--command' '--session-command')
 # `<command>:<option letter>:<long option name>`, the long name empty when there is none.
 # `script -c`, `flock -c` and `sg -c` hand the string to a shell, and `env -S` splits it into the
 # command to run, with the words behind it as further arguments; either way a kill inside it
-# runs here.
+# runs here. For `su` and `runuser` only the long spellings are here, for the value attached
+# (`--command='...'`): the wrapper reads their `-c` itself, within its operand budget.
 readonly -a SCRIPT_OPTION_COMMANDS=(
   'env:S:split-string' 'flock:c:command' 'script:c:command' 'sg:c:'
+  'su::command' 'su::session-command' 'runuser::command' 'runuser::session-command'
 )
 
 # The longest word wrappers::literal_word reads. It walks the word a byte at a time, which grows
@@ -766,7 +768,7 @@ function wrappers::script_option() {
     long="${letter#*:}"
     letter="${letter%%:*}"
     if [[ "${word}" == --* ]]; then
-      [[ -n "${long}" ]] || return 1
+      [[ -n "${long}" ]] || continue
       if [[ "${word}" == "--${long}" ]]; then
         printf 'next'
         return 0
@@ -775,8 +777,9 @@ function wrappers::script_option() {
         printf 'attached:%s' "$((${#long} + 3))"
         return 0
       fi
-      return 1
+      continue
     fi
+    [[ -n "${letter}" ]] || continue
     [[ "${word}" =~ ^-[A-Za-z]+ ]] || return 1
     flags="${BASH_REMATCH[0]%%"${letter}"*}"
     [[ "${flags}" != "${BASH_REMATCH[0]}" ]] || return 1
@@ -1267,6 +1270,8 @@ function wrappers::shell_wrapper_payloads() {
   # armed an operand capture or named a script option, and `hd_anchor` the anchor of the wrapper
   # that claimed each heredoc body, by ordinal.
   local anchor=0 watch_anchor=0 script_anchor=0 exec_word=0 exec_chain=0
+  # `user_direct` says the `runuser` being read has `-u`, so it runs a command and not a shell.
+  local user_direct=0
   # A process substitution the segment's stdout is redirected into (`> >(bash)`): the offset of its
   # `>`, -1 for none, and of the redirection operator; `tee_subs` the ones a `tee` writes to;
   # `seg_start` the offset of the first token of the segment that is no redirection, and
@@ -1495,6 +1500,27 @@ function wrappers::shell_wrapper_payloads() {
       continue
     fi
 
+    # `runuser -u USER` runs the command behind its options directly, with no shell: the first
+    # word past them that is no option or option value is that command, and what the wrapper
+    # claimed from a pipe or a group goes on to it. A `-c` there keeps its string a payload.
+    if ((in_wrapper == 1 && user_direct == 1 && option_values == 0 && saw_c == 0)) && [[ "${token}" != -* ]] \
+      && ! tokens::is_operator "${token}"; then
+      if ((pending_piped == 1)) && [[ -n "${pending}" ]]; then
+        pipe_heredoc="${pending}"
+      fi
+      if ((pending_text_set == 1)); then
+        pipe_text="${pending_text}"
+        pipe_text_set=1
+      fi
+      in_wrapper=0
+      saw_c=0
+      saw_s=0
+      saw_s_operand=0
+      pending=''
+      pending_text=''
+      pending_text_set=0
+      user_direct=0
+    fi
     if ((in_wrapper == 1)); then
       option_word="${word}"
       if [[ "${token}" == [-+]* ]]; then
@@ -1567,6 +1593,10 @@ function wrappers::shell_wrapper_payloads() {
         # Once `-s` has taken an operand the wrapper's own option list is over:
         # in `bash -s arg -c '...'` the `-c` and the string after it are $2 and
         # $3 of the body, and nothing here runs that string.
+        if [[ "${wrapper_name}" == 'runuser' ]] \
+          && [[ "${option_word}" == '-u' || "${option_word}" == '--user' || "${option_word}" == --user=* ]]; then
+          user_direct=1
+        fi
         if ((saw_s_operand == 0)); then
           IFS=':' read -r option_values option_c option_s \
             <<< "$(wrappers::wrapper_option_facts "${option_word}" "${wrapper_name}")"
@@ -1851,6 +1881,11 @@ function wrappers::shell_wrapper_payloads() {
       if [[ -z "${script_runner}" ]] && ((at_cmd == 1)); then
         script_runner="${chain}"
       fi
+      # The user name of `su` and `runuser` reads as the segment's command word to the chain;
+      # their options are still theirs.
+      if ((in_wrapper == 1)) && [[ "${wrapper_kind}" == 'user' ]]; then
+        script_runner="${wrapper_name}"
+      fi
       if [[ -n "${script_runner}" ]] && script_where="$(wrappers::script_option "${script_runner}" "${token}")"; then
         if [[ "${script_where}" == 'next' && "${script_runner}" == 'env' ]]; then
           # `env -S STRING ARG...` runs the command line STRING with the ARGs appended, so the
@@ -1981,6 +2016,7 @@ function wrappers::shell_wrapper_payloads() {
     fi
     if ((opens_wrapper == 1)); then
       in_wrapper=1
+      user_direct=0
       anchor="${offset}"
       saw_c=0
       saw_s=0

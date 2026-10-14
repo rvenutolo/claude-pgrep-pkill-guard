@@ -2214,3 +2214,26 @@
 "watch 'echo a'\\\"' ; pkill --full X'"	deny:kill
 "env -S \"echo a\\\"; pkill --full X\""	deny:kill
 "echo \"echo \\\"; pkill --full X\\\"\" | bash"	deny:kill
+"echo 'pkill --full X' > >(bash)"	deny:kill
+"printf '%s\\n' 'pkill --full X' 1> >(sh)"	deny:kill
+"cat <<'EOF' > >(bash)\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' > >(sudo bash)"	deny:kill
+"echo 'pkill --full X' | tee >(bash)"	deny:kill
+"echo 'pkill --full X' | tee log >(bash) > /dev/null"	deny:kill
+"bash <(echo 'pkill --full X')"	deny:kill
+"sudo bash <(echo 'pkill --full X')"	deny:kill
+"source <(echo 'pkill --full X')"	deny:kill
+". <(echo 'pkill --full X')"	deny:kill
+"bash < <(echo 'pkill --full X')"	deny:kill
+"bash <(cat <<'EOF'\npkill --full X\nEOF\n)"	deny:kill
+"bash <(printf 'pkill --full X\\n')"	deny:kill
+"while bash <(echo 'pgrep --full x'); do sleep 1; done"	deny:loop
+"echo hi > >(bash -c 'pkill --full X')"	deny:kill
+"cat <(echo 'pkill --full X')"	allow
+"echo 'pkill --full X' > >(cat)"	allow
+"diff <(echo 'pkill --full X') <(echo b)"	allow
+"echo 'pkill --full X' 2> >(bash)"	allow
+"echo 'pkill --full X' > >(bash) > /dev/null"	allow
+"bash <(echo 'echo hi')"	allow
+"echo 'pkill --full X' | tee >(wc -l)"	allow
+"grep pkill <(echo 'pkill --full X')"	allow

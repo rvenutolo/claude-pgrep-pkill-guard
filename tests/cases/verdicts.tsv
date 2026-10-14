@@ -2136,3 +2136,54 @@
 "sudo bash -c 'kill \"$@\"' _ $(pgrep -f x)"	deny:kill
 "bash -c 'echo \"$1\"' _ $(pgrep -f x)"	warn
 "bash -c 'kill 1'; echo $(pgrep -f x)"	warn
+"find /tmp -exec sh -c 'pkill --full X' ';'"	deny:kill
+"find /tmp -exec pkill --full X ';'"	deny:kill
+"find /tmp -exec pkill --full X {} +"	deny:kill
+"find /tmp -execdir sh -c 'pkill --full X' \\;"	deny:kill
+"find /tmp -ok pkill --full X \\;"	deny:kill
+"find /tmp -okdir pkill --full X \\;"	deny:kill
+"find /tmp -name '*.pid' -exec sudo pkill --full X \\;"	deny:kill
+"find /tmp -exec echo {} \\; -exec pkill --full X \\;"	deny:kill
+"sudo find / -xdev -exec pkill --full X \\;"	deny:kill
+"find /tmp -exec kill $(pgrep --full X) \\;"	deny:kill
+"find /tmp -exec bash -c 'pgrep -f x | xargs kill' \\;"	deny:kill
+"while find /tmp -exec pgrep --full x \\; ; do sleep 1; done"	deny:loop
+"echo -exec pkill --full X"	deny:kill
+"find /tmp -name pkill"	allow
+"find /tmp -exec echo pkill --full X \\;"	allow
+"find /tmp -executable -name pkill"	allow
+"find . -exec grep -l pkill {} +"	allow
+"find /tmp -exec echo {} \\;"	allow
+"systemd-run sh -c 'pkill --full X'"	deny:kill
+"systemd-run pkill --full X"	deny:kill
+"systemd-run --user --scope pkill --full X"	deny:kill
+"systemd-run --unit=foo -p Restart=no pkill --full X"	deny:kill
+"systemd-run --on-active=30 pkill --full X"	deny:kill
+"systemd-run -u foo --uid root -E A=b pkill --full X"	deny:kill
+"systemd-run --working-directory /tmp --slice app pkill --full X"	deny:kill
+"sudo systemd-run -qG pkill --full X"	deny:kill
+"systemd-run -tqu foo pkill --full X"	deny:kill
+"/usr/bin/systemd-run --wait -- pkill --full X"	deny:kill
+"while systemd-run --wait pgrep --full x; do sleep 1; done"	deny:loop
+"systemd-run --unit pkill echo hi"	allow
+"systemd-run -p pkill echo hi"	allow
+"systemd-run --help pkill --full X"	allow
+"systemd-run -M box pkill --full X"	deny:kill
+"systemd-run --host root@h pkill --full X"	deny:kill
+"systemd-run echo pkill --full X"	allow
+"script -O -exec typescript -c 'pkill --full X'"	deny:kill
+"script -B -execdir f --command 'pkill --full X'"	deny:kill
+"script /dev/null -exec x -c 'pkill --full X'"	deny:kill
+"sg users -exec x -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | { foo -exec } ; bash; }"	deny:kill
+"{ echo 'pkill --full X'; foo -exec }; } | bash"	deny:kill
+"if foo -exec fi; then echo 'pkill --full X'; fi | bash"	deny:kill
+"echo 'pkill --full X' | while foo -exec done; do bash; done"	deny:kill
+"{ foo -exec } ; bash; } <<EOF\npkill --full X\nEOF"	deny:kill
+"{ foo -exec }; bash; } <<< 'pkill --full X'"	deny:kill
+"case x in x) foo -exec esac; echo 'pkill --full X';; esac | bash"	deny:kill
+"while foo -ok done; do bash; break; done <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | foo -exec { bash; }"	allow
+"systemd-run --root-directory /x pkill --full X"	deny:kill
+"systemd-run -M .host pkill --full X"	deny:kill
+"systemd-run --machine=box pkill --full X"	deny:kill

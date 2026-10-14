@@ -1054,7 +1054,7 @@ function wrappers::shell_wrapper_payloads() {
   # runs it. `anchor` is the wrapper being read, `watch_anchor` and `script_anchor` the word that
   # armed an operand capture or named a script option, and `hd_anchor` the anchor of the wrapper
   # that claimed each heredoc body, by ordinal.
-  local anchor=0 watch_anchor=0 script_anchor=0
+  local anchor=0 watch_anchor=0 script_anchor=0 exec_word=0 exec_chain=0
   local -a hd_anchor=()
   local -a watch_rest=()
   local pipe_heredoc='' pipe_text='' pipe_text_set=0 last_pipe_offset=-1
@@ -1352,13 +1352,14 @@ function wrappers::shell_wrapper_payloads() {
 
     # The segment's operand words, kept in case it turns out to be a producer
     # on the left of a pipe. Only a word that the chain step has already left
-    # out of command position is kept. A word still in it is none of what the
+    # out of command position is kept, or the word behind an `-exec` action,
+    # which is an argument to bash. Any other word still in it is none of what the
     # producer prints: the command itself, a prefix word with its options, a
     # `VAR=value` assignment, `timeout`'s duration. Nor does it print the value
     # of a prefix's option (the `root` of `sudo -u root echo ...`), which is out
     # of command position but still the prefix's: `chain_skip` is still set
     # from the option when its value arrives here.
-    if ((at_cmd == 0 && chain_skip == 0)) && ! tokens::is_operator "${token}" \
+    if ((chain_skip == 0)) && ((at_cmd == 0 || exec_word == 1)) && ! tokens::is_operator "${token}" \
       && ! tokens::is_keyword "${token}"; then
       raw="${command:offset:${#token}}"
       if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
@@ -1415,7 +1416,7 @@ function wrappers::shell_wrapper_payloads() {
 
     case "${token}" in
       '{' | '(' | 'if' | 'while' | 'until' | 'for' | 'select' | 'case')
-        group_closer="$(wrappers::group_closer "${token}" "${at_cmd}")"
+        group_closer="$(wrappers::group_closer "${token}" "$((at_cmd == 1 && exec_word == 0))")"
         if [[ -n "${group_closer}" ]] \
           && { ((${#frame_closer[@]} > 0)) || ((seg_piped == 1)) || ((has_heredoc_op == 1)) \
             || ((has_pipe_op == 1)); }; then
@@ -1481,7 +1482,7 @@ function wrappers::shell_wrapper_payloads() {
         ;;
       '}' | ')' | 'fi' | 'done' | 'esac')
         if ((${#frame_closer[@]} > 0)) && [[ "${token}" == "${frame_closer[-1]}" ]] \
-          && { [[ "${token}" == ')' ]] || ((at_cmd == 1)); }; then
+          && { [[ "${token}" == ')' ]] || ((at_cmd == 1 && exec_word == 0)); }; then
           grp_heredoc="${frame_heredoc[-1]}"
           grp_text="${frame_text[-1]}"
           grp_text_set="${frame_text_set[-1]}"
@@ -1657,7 +1658,7 @@ function wrappers::shell_wrapper_payloads() {
         watch_anchor="${offset}"
       fi
     fi
-    # Leaving command position marks the command word, with one exception: a
+    # Leaving command position marks a command word, with one exception: a
     # prefix's value-taking option (`sudo -u`) leaves it only for its value,
     # and the chain step says so by setting `chain_skip`. Taking that option
     # for the command would drop the carry a wrapper further along the same
@@ -1665,7 +1666,11 @@ function wrappers::shell_wrapper_payloads() {
     is_cmd_word=0
     if ((at_cmd == 1 && next_at_cmd == 0 && chain_skip == 0)); then
       is_cmd_word=1
-      seg_cmd="${word}"
+      # The command an `-exec` action runs is not the segment's: `find` still is, and so is a
+      # command that merely has such a word among its own (`script -O -exec f -c '...'`).
+      if ((exec_chain == 0)) || [[ -z "${seg_cmd}" ]]; then
+        seg_cmd="${word}"
+      fi
     fi
     # A wrapper opens only outside one: a keyword among a wrapper's operands restores command
     # position (`bash -s ! bash`), and a wrapper opened there would take over the payload the
@@ -1732,6 +1737,20 @@ function wrappers::shell_wrapper_payloads() {
       # A command word that is not a local wrapper: whatever the pipe carried is
       # this command's input, and nothing here runs it as a script.
       wrappers::pipe_carry_clear pipe_heredoc pipe_text pipe_text_set
+    fi
+    # The word behind `-exec`, `-execdir`, `-ok` or `-okdir` is in command position for the
+    # chain step (`find . -exec sh -c '...' \;`), but to bash it is an argument: it opens and
+    # closes no group, and it is still one of the words its command prints. `exec_word` says
+    # the token just read is that word, and `exec_chain` that the command behind an action
+    # has not been named yet.
+    if tokens::is_operator "${token}" || ((is_cmd_word == 1)); then
+      exec_chain=0
+    fi
+    exec_word=0
+    if ((at_cmd == 0 && next_at_cmd == 1)) \
+      && [[ "${word}" == '-exec' || "${word}" == '-execdir' || "${word}" == '-ok' || "${word}" == '-okdir' ]]; then
+      exec_word=1
+      exec_chain=1
     fi
     # Set here, after the operator branch above has run for the closing word itself, which would
     # otherwise discard it.

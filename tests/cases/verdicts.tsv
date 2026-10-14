@@ -2312,3 +2312,17 @@
 "[[ a ]] | # c\npkill --full X"	deny:kill
 "echo [[ x | # c; pkill --full X"	allow
 "[[ a == b ]] && echo x | # c; pkill --full X\npgrep --full y"	allow
+"# x\\\n# it's\npkill --full X"	deny:kill
+"echo a # x\\\n# it's\npkill --full X"	deny:kill
+"echo a # x\\\n# it's\nwhile pgrep --full X; do sleep 1; done"	deny:loop
+"cat <<'E\\'\nbody\nE\\\n# it's\npkill --full X"	deny:kill
+"echo then [[ x |# it's\npkill --full X"	deny:kill
+"git commit -m do [[ x |# it's\npkill --full X"	deny:kill
+"echo $(true) [[ x |# it's\npkill --full X"	deny:kill
+"echo a{ [[ |# it's\npkill --full X"	deny:kill
+"case x in ([[ ) echo;; esac; echo z |# it's\npkill --full X"	deny:kill
+"[[ (a == a)]] && echo z |# it's\npkill --full X"	deny:kill
+"[[ ! (a)]]; echo z |# it's\npkill --full X"	deny:kill
+"echo $( [[ (a)]] ); echo $(echo z |# it's\ncat\n)\npkill --full X"	deny:kill
+"x=$(echo then [[ a); echo $(echo z |# it's\ncat\n)\npkill --full X"	deny:kill
+"echo hi # C:\\temp\\\n# then pkill --full X\nls"	allow

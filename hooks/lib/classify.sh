@@ -126,15 +126,12 @@ function classify::probe_keys() {
 }
 
 # @description Classify one pgrep/pkill invocation the caller has already established carries
-#              `--full`: deny for a kill or a loop, warn for a consumed result. `--ignore-ancestors`
-#              excludes ANCESTORS only: a sibling waiter whose command line carries the same literal
-#              is still matched, so two waiters for one event deadlock each other. It therefore
-#              clears a kill -- the session shell is an ancestor -- and fixes an inflated count, but
-#              it never clears a loop.
+#              `--full`: deny for a kill or a loop, warn for a consumed result. A pattern the
+#              bracket mitigation covers is clean; the rest is classify::classify_position's.
 # @arg $1 tokens_var name of the command's token array
 # @arg $2 openers_var name of the array that maps each region-closing token's index to its opener's
-# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in command
-#         position
+# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 command the raw command
 # @arg $5 tokens the scanner's token stream for the command
 # @arg $6 idx the invocation's token index
@@ -146,10 +143,39 @@ function classify::probe_keys() {
 function classify::classify_invocation() {
   local -r tokens_var="$1" openers_var="$2" kills_var="$3" command="$4" tokens="$5"
   local -r idx="$6" name="$7" args="$8"
-  local operand context ignores_ancestors=0
+  local operand ignores_ancestors=0
   scanner::has_flag "${args}" '--ignore-ancestors' 'A' && ignores_ancestors=1
   operand="$(scanner::pattern_operand "${command}" "${args}")"
   scanner::bracket_mitigation_holds "${command}" "${operand}" && return 1
+  classify::classify_position "${tokens_var}" "${openers_var}" "${kills_var}" "${command}" "${tokens}" \
+    "${idx}" "${name}" "${ignores_ancestors}" "${args}"
+}
+
+# @description Classify a `pgrep --full` or `pkill --full` by where it stands in the command: deny
+#              for a kill or a loop, warn for a consumed result. The token at the index is the
+#              invocation itself, or a word of the wrapper whose payload holds it
+#              (`while bash -c 'pgrep --full x'; do ...`), which stands where the invocation
+#              runs. `--ignore-ancestors` excludes ANCESTORS only: a sibling waiter whose command
+#              line carries the same literal is still matched, so two waiters for one event
+#              deadlock each other. It therefore clears a kill -- the session shell is an
+#              ancestor -- and fixes an inflated count, but it never clears a loop.
+# @arg $1 tokens_var name of the command's token array
+# @arg $2 openers_var name of the array that maps each region-closing token's index to its opener's
+# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in
+#         command position, and at the anchor of every wrapper whose payload holds one
+# @arg $4 command the raw command
+# @arg $5 tokens the scanner's token stream for the command
+# @arg $6 idx the token index to classify at
+# @arg $7 name `pgrep` or `pkill`
+# @arg $8 ignores_ancestors 1 when the invocation carries `--ignore-ancestors`
+# @arg $9 args the invocation's argument tokens, read for `--count` alone
+# @stdout `deny:kill<TAB>name`, `deny:loop<TAB>name`, or `warn`
+# @exitcode 0 a verdict was printed
+# @exitcode 1 the position is clean or exempt; nothing printed
+function classify::classify_position() {
+  local -r tokens_var="$1" openers_var="$2" kills_var="$3" command="$4" tokens="$5"
+  local -r idx="$6" name="$7" ignores_ancestors="$8" args="$9"
+  local context
   if [[ "${name}" == 'pkill' ]] \
     || consumption::feeds_a_kill "${tokens_var}" "${openers_var}" "${kills_var}" "${idx}"; then
     ((ignores_ancestors == 1)) && return 1
@@ -180,22 +206,92 @@ function classify::classify_invocation() {
   return 1
 }
 
+# @description Classify every `pgrep --full` and `pkill --full` invocation of a command, in order.
+#              The first deny ends the pass; a warn is reported when none denies.
+# @arg $1 tokens_var name of the command's token array
+# @arg $2 openers_var name of the array that maps each region-closing token's index to its opener's
+# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in
+#         command position, and at the anchor of every wrapper whose payload holds one
+# @arg $4 command the raw command
+# @arg $5 tokens the scanner's token stream for the command
+# @arg $6 invocations the lines scanner::find_invocations printed for the command
+# @stdout a `deny:...` verdict line, or `warn`
+# @exitcode 0 a verdict was printed
+# @exitcode 1 no invocation is denied or warned about; nothing printed
+function classify::classify_invocations() {
+  local -r tokens_var="$1" openers_var="$2" kills_var="$3" command="$4" tokens="$5" invocations="$6"
+  local idx offset name args finding warned=0
+  while IFS=$'\t' read -r idx offset name; do
+    [[ -z "${idx}" || "${name}" == 'kill' ]] && continue
+    args="$(scanner::invocation_args "${command}" "${tokens}" "${idx}")"
+    scanner::has_flag "${args}" '--full' 'f' || continue
+    if finding="$(classify::classify_invocation "${tokens_var}" "${openers_var}" "${kills_var}" "${command}" \
+      "${tokens}" "${idx}" "${name}" "${args}")"; then
+      case "${finding}" in
+        deny:*)
+          printf '%s\n' "${finding}"
+          return 0
+          ;;
+        'warn') warned=1 ;;
+      esac
+    fi
+  done <<< "${invocations}"
+  ((warned == 1)) || return 1
+  printf 'warn\n'
+}
+
+# @description Say what a wrapper payload holds that the command around its wrapper can consume:
+#              a `kill` in command position, and each `pgrep --full` whose pattern the bracket
+#              mitigation does not cover. The payload's own text is read, not a payload inside
+#              it. Any such command counts, wherever it stands in the payload, which fails
+#              closed: `while bash -c 'pgrep --full x; echo y'; do ...` is read as a loop on the
+#              `pgrep`.
+# @arg $1 payload the payload's text
+# @stdout a line `kill` for each `kill`, and a line
+#         `pgrep<TAB><ignores ancestors, 0 or 1><TAB><counts, 0 or 1>` for each such `pgrep`
+function classify::payload_facts() {
+  local -r payload="$1"
+  [[ "${payload}" == *pgrep* || "${payload}" == *kill* ]] || return 0
+  local tokens idx offset name args operand ignores counts
+  # A payload the scanner cannot read holds no facts; classify::classify_wrapper_payloads reports
+  # it as `inactive`.
+  tokens="$(scanner::scan_command "${payload}")" || return 0
+  while IFS=$'\t' read -r idx offset name; do
+    case "${name}" in
+      'kill') printf 'kill\n' ;;
+      'pgrep')
+        args="$(scanner::invocation_args "${payload}" "${tokens}" "${idx}")"
+        scanner::has_flag "${args}" '--full' 'f' || continue
+        operand="$(scanner::pattern_operand "${payload}" "${args}")"
+        scanner::bracket_mitigation_holds "${payload}" "${operand}" && continue
+        ignores=0
+        counts=0
+        scanner::has_flag "${args}" '--ignore-ancestors' 'A' && ignores=1
+        scanner::has_flag "${args}" '--count' 'c' && counts=1
+        printf 'pgrep\t%s\t%s\n' "${ignores}" "${counts}"
+        ;;
+    esac
+  done <<< "$(scanner::find_invocations "${payload}" "${tokens}")"
+  return 0
+}
+
 # @description Classify the code a shell wrapper in this command would run: a `bash -c '...'`
 #              payload, a heredoc body fed to `bash`, or a literal piped into it (`echo '...' | bash`)
 #              gets the same classification the outer command just got. A deny inside wins outright;
 #              a warn inside only lifts an allow. Bounded by MAX_PAYLOAD_DEPTH so a payload that wraps
 #              a payload cannot recurse forever.
-# @arg $1 command the raw command
-# @arg $2 tokens the scanner's token stream for the command
-# @arg $3 depth the current nesting depth
+# @arg $1 payloads_var name of the caller's array of payload texts, as
+#         wrappers::shell_wrapper_payloads found them
+# @arg $2 depth the current nesting depth
 # @stdout `inactive`, a `deny:...` verdict line, or `warn`
 # @exitcode 0 a verdict was printed
 # @exitcode 1 no payload changes the outer verdict; nothing printed
 function classify::classify_wrapper_payloads() {
-  local -r command="$1" tokens="$2" depth="$3"
+  local -n payloads="$1"
+  local -r depth="$2"
   ((depth < MAX_PAYLOAD_DEPTH)) || return 1
   local payload payload_verdict lifted=0
-  while IFS= read -r -d '' payload; do
+  for payload in "${payloads[@]}"; do
     [[ -z "${payload}" ]] && continue
     payload_verdict="$(classify::classify_command "${payload}" "$((depth + 1))")"
     case "${payload_verdict}" in
@@ -210,7 +306,7 @@ function classify::classify_wrapper_payloads() {
         ;;
       'warn') lifted=1 ;;
     esac
-  done < <(wrappers::shell_wrapper_payloads "${command}" "${tokens}")
+  done
   if ((lifted == 1)); then
     printf 'warn\n'
     return 0
@@ -255,7 +351,7 @@ function classify::classify_command() {
   # For a process substitution that is the `<` or `>` before the `(`, which belongs to the same
   # word.
   local -a cmd_tokens=() cmd_openers=() open_stack=()
-  local -A region=()
+  local -A region=() offset_index=()
   local raw_offset raw_token region_kind
   while IFS=$'\t' read -r raw_offset raw_token; do
     [[ -z "${raw_token}" ]] && continue
@@ -269,6 +365,7 @@ function classify::classify_command() {
       'S') open_stack+=("$((${#cmd_tokens[@]} - 1))") ;;
       *) open_stack+=("${#cmd_tokens[@]}") ;;
     esac
+    offset_index["${raw_offset}"]="${#cmd_tokens[@]}"
     cmd_tokens+=("${raw_token}")
   done <<< "${tokens}"
 
@@ -288,21 +385,17 @@ function classify::classify_command() {
       cmd_kills[idx]=1
     fi
   done <<< "${invocations}"
-  while IFS=$'\t' read -r idx offset name; do
-    [[ -z "${idx}" || "${name}" == 'kill' ]] && continue
-    args="$(scanner::invocation_args "${command}" "${tokens}" "${idx}")"
-    scanner::has_flag "${args}" '--full' 'f' || continue
-    if invocation_finding="$(classify::classify_invocation cmd_tokens cmd_openers cmd_kills "${command}" \
-      "${tokens}" "${idx}" "${name}" "${args}")"; then
-      case "${invocation_finding}" in
-        deny:*)
-          printf '%s\n' "${invocation_finding}"
-          return 0
-          ;;
-        'warn') verdict='warn' ;;
-      esac
-    fi
-  done <<< "${invocations}"
+
+  if invocation_finding="$(classify::classify_invocations cmd_tokens cmd_openers cmd_kills "${command}" \
+    "${tokens}" "${invocations}")"; then
+    case "${invocation_finding}" in
+      'warn') verdict='warn' ;;
+      *)
+        printf '%s\n' "${invocation_finding}"
+        return 0
+        ;;
+    esac
+  fi
 
   # A loop on a harness task-output file is denied whatever the pgrep tier
   # thought of the command; a pgrep deny above has already returned.
@@ -314,8 +407,69 @@ function classify::classify_command() {
     fi
   fi
 
+  # The payloads of the wrappers in this command, each with the token index of its anchor. A
+  # payload is run where its wrapper stands, so what it holds is read there: a `kill` in it marks
+  # the wrapper's anchor in cmd_kills with the value `payload`, which the walks of
+  # consumption::feeds_a_kill read as a `kill` (`pgrep --full x | bash -c 'xargs kill'`), and a
+  # `pgrep --full` in it is classified below at the wrapper's position
+  # (`while bash -c 'pgrep --full x'; do ...`). The payloads are read only here, behind the
+  # tiers that need none, so a command those tiers deny costs no wrapper pass; when one marks
+  # a `kill`, the invocations are classified once more with it.
+  #
+  # standins holds one row per such `pgrep`, in payload order:
+  # `<anchor index>:<ignores ancestors, 0 or 1>:<counts, 0 or 1>`.
+  local -a payload_texts=() standins=()
+  local record anchor_idx fact fact_ignores fact_counts marked=0
+  if ((depth < MAX_PAYLOAD_DEPTH)); then
+    while IFS= read -r -d '' record; do
+      payload_texts+=("${record#*$'\t'}")
+      anchor_idx="${offset_index["${record%%$'\t'*}"]:-}"
+      [[ -n "${anchor_idx}" ]] || continue
+      while IFS=$'\t' read -r fact fact_ignores fact_counts; do
+        case "${fact}" in
+          'kill')
+            cmd_kills[anchor_idx]='payload'
+            marked=1
+            ;;
+          'pgrep') standins+=("${anchor_idx}:${fact_ignores}:${fact_counts}") ;;
+        esac
+      done <<< "$(classify::payload_facts "${record#*$'\t'}")"
+    done < <(wrappers::shell_wrapper_payloads "${command}" "${tokens}")
+  fi
+
+  if ((marked == 1)) && invocation_finding="$(classify::classify_invocations cmd_tokens cmd_openers cmd_kills \
+    "${command}" "${tokens}" "${invocations}")"; then
+    case "${invocation_finding}" in
+      'warn') verdict='warn' ;;
+      *)
+        printf '%s\n' "${invocation_finding}"
+        return 0
+        ;;
+    esac
+  fi
+
+  # Each `pgrep --full` a payload holds, read where its wrapper stands.
+  local standin
+  for standin in "${standins[@]}"; do
+    IFS=':' read -r anchor_idx fact_ignores fact_counts <<< "${standin}"
+    # classify::classify_position reads its argument lines for `--count` alone, so one line that
+    # says so stands for the payload's `pgrep --count`.
+    args=''
+    ((fact_counts == 0)) || args=$'0\t--count'
+    if invocation_finding="$(classify::classify_position cmd_tokens cmd_openers cmd_kills "${command}" \
+      "${tokens}" "${anchor_idx}" 'pgrep' "${fact_ignores}" "${args}")"; then
+      case "${invocation_finding}" in
+        deny:*)
+          printf '%s\n' "${invocation_finding}"
+          return 0
+          ;;
+        'warn') verdict='warn' ;;
+      esac
+    fi
+  done
+
   local payload_finding
-  if payload_finding="$(classify::classify_wrapper_payloads "${command}" "${tokens}" "${depth}")"; then
+  if payload_finding="$(classify::classify_wrapper_payloads payload_texts "${depth}")"; then
     case "${payload_finding}" in
       'warn') verdict='warn' ;;
       *)

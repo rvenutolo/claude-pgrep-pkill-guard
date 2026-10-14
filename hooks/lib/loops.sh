@@ -469,7 +469,7 @@ function loops::done_body_start() {
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
 #         region to the index of the token that opened it
 # @arg $3 kills_var name of the caller's array holding an entry at the index of every `kill` in
-#         command position
+#         command position, and at the anchor of every wrapper whose payload holds one
 # @arg $4 head_idx index of the `in`/`while`/`until` token whose body's `do` follows
 # @exitcode 0 the loop body kills
 # @exitcode 1 it does not, or no body was found

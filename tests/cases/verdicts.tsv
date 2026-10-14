@@ -2090,3 +2090,49 @@
 "pgrep --full x | case a in (a) xargs kill ;; esac"	deny:kill
 "pgrep --full x | for i do xargs kill; done"	deny:kill
 "pgrep --full x | grep -v { || kill 1"	deny:kill
+"while bash -c 'pgrep -f x'; do sleep 1; done"	deny:loop
+"while eval 'pgrep -f x'; do sleep 1; done"	deny:loop
+"until bash -c 'pgrep -f x'; do sleep 1; done"	deny:loop
+"while sudo bash -c 'pgrep -f x'; do sleep 1; done"	deny:loop
+"while true; do bash -c 'pgrep -f x' && break; sleep 1; done"	deny:loop
+"while sudo -s 'pgrep -f x'; do sleep 1; done"	deny:loop
+"while script -c 'pgrep -f x' /dev/null; do sleep 1; done"	deny:loop
+"while flock /tmp/l -c 'pgrep -f x'; do sleep 1; done"	deny:loop
+"while watch 'pgrep -f x'; do sleep 1; done"	deny:loop
+"while bash <<< 'pgrep -f x'; do sleep 1; done"	deny:loop
+"while echo 'pgrep -f x' | bash; do sleep 1; done"	deny:loop
+"while bash <<'EOF'\npgrep -f x\nEOF\ndo sleep 1; done"	deny:loop
+"while bash -c 'pgrep -f x; echo hi'; do sleep 1; done"	deny:loop
+"while bash -c 'pgrep -f x | wc -l'; do sleep 1; done"	deny:loop
+"while bash -c 'pgrep -f --ignore-ancestors x'; do sleep 1; done"	deny:loop
+"kill $(eval 'pgrep -f x')"	deny:kill
+"kill $(bash -c 'pgrep -f x')"	deny:kill
+"kill $(sudo -s 'pgrep -f x')"	deny:kill
+"kill $(bash <<< 'pgrep -f x')"	deny:kill
+"bash -c 'pgrep -f x' | xargs kill"	deny:kill
+"bash -c 'pgrep -f x' | { xargs kill; }"	deny:kill
+"pgrep -f x | eval 'xargs kill'"	deny:kill
+"pgrep -f x | bash -c 'xargs kill'"	deny:kill
+"pgrep -f x | sudo bash -c 'xargs kill'"	deny:kill
+"pgrep -f x | sort | bash -c 'xargs kill'"	deny:kill
+"while read -r p; do bash -c 'kill 1'; done < <(pgrep -f x)"	deny:kill
+"if bash -c 'pgrep -f x'; then echo y; fi"	warn
+"bash -c 'pgrep -f x' | wc -l"	warn
+"bash -c 'pgrep -f x' && echo up"	warn
+"p=$(bash -c 'pgrep -f x')"	warn
+"bash -c 'pgrep -f x'"	allow
+"while bash -c 'pgrep x'; do sleep 1; done"	allow
+"while bash -c \"pgrep -f '[x]y'\"; do sleep 1; done"	allow
+"kill $(bash -c 'pgrep -f --ignore-ancestors x')"	allow
+"while bash -c 'echo hi'; do pgrep -f x; sleep 1; done"	allow
+"for i in 1 2 3; do bash -c 'pgrep -f x'; done"	allow
+"pgrep -f x | bash -c 'echo kill'"	allow
+"pgrep x | bash -c 'xargs kill'"	allow
+"pgrep -f x; bash -c 'kill 1'"	allow
+"while ssh host bash -c 'pgrep -f x'; do sleep 1; done"	allow
+"while bash -c \"bash -c 'pgrep -f x'\"; do sleep 1; done"	allow
+"bash -c 'kill \"$1\"' _ $(pgrep -f x)"	deny:kill
+"sh -c 'kill $0' $(pgrep -f x)"	deny:kill
+"sudo bash -c 'kill \"$@\"' _ $(pgrep -f x)"	deny:kill
+"bash -c 'echo \"$1\"' _ $(pgrep -f x)"	warn
+"bash -c 'kill 1'; echo $(pgrep -f x)"	warn

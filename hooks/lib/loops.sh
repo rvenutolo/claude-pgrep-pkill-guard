@@ -26,7 +26,9 @@
 #              ends a word of its command and not the command itself, so a loop keyword right after
 #              it is an argument (`echo $(true) done`, `cat <(echo x) done`) -- unless the word
 #              holding it is an assignment (`FOO=$(true) break`), which leaves command position as
-#              it was.
+#              it was. bash reads no reserved word behind a redirection, so a keyword behind a
+#              redirection's target is an argument too (`> >(cat) done`). A compound command
+#              behind the name of `coproc NAME` is in command position (`coproc P while ...`).
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
 # @arg $3 target index of the invocation token
@@ -35,10 +37,18 @@ function loops::loop_context() {
   local -r command="$1" tokens="$2" target="$3"
   local -a stack=()
   local idx=0 at_cmd=1 dollar=0 offset token redir='' kind closed_assign=0 tail_end=-1 glued_tail
+  local was_coproc after_coproc=0 prior_coproc after_name=0
   local -a word_assign=()
   local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
+    # Set for the token right behind `coproc` alone; a redirection between them clears it.
+    prior_coproc="${after_coproc}"
+    after_coproc=0
+    if ((after_name == 1)) && tokens::opens_compound "${token}"; then
+      at_cmd=1
+    fi
+    after_name=0
     if ((idx == target)); then
       local i="$((${#stack[@]} - 1))" found='none'
       while ((i >= 0)); do
@@ -150,15 +160,22 @@ function loops::loop_context() {
     fi
     # The close of a substitution ends a word, not a command, unless the word is an assignment
     # (`FOO=$(true) break`): that leaves command position where it was.
+    was_coproc=0
+    ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]] && was_coproc=1
     if [[ "${kind}" == 'close' ]]; then
       at_cmd="${closed_assign}"
-    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" \
-      || { ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]]; }; then
+    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" || ((was_coproc == 1)); then
       # `coproc while ...` is still a loop: the reserved word keeps command position.
       at_cmd=1
+    elif ((prior_coproc == 1)) && [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      # `coproc NAME while ...`: the name ends nothing, and a compound command behind it is
+      # in command position (see the top of the loop). Any other word there is an argument.
+      at_cmd=0
+      after_name=1
     else
       at_cmd=0
     fi
+    after_coproc="${was_coproc}"
     idx="$((idx + 1))"
   done <<< "${tokens}"
   printf 'none\n'
@@ -226,6 +243,8 @@ function loops::terminator_ends_body() {
 function loops::body_has_terminator() {
   local -r command="$1" tokens="$2" target="$3"
   local seen=0 at_cmd=1 idx=0 dollar=0 offset token redir='' kind closed_assign=0 tail_end=-1 glued_tail
+  local redir_pending after_target=0 prior_target was_coproc after_coproc=0 prior_coproc after_name=0
+  local after_term=0 prior_term
   local next_body=0 body='' pending='' count record
   local -a word_assign=()
   local -a barrier=()
@@ -238,6 +257,17 @@ function loops::body_has_terminator() {
   local -A region=()
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
+    # Each is set for the next token alone; a redirection between clears the coproc one.
+    prior_target="${after_target}"
+    prior_coproc="${after_coproc}"
+    prior_term="${after_term}"
+    after_target=0
+    after_coproc=0
+    if ((after_name == 1)) && tokens::opens_compound "${token}"; then
+      at_cmd=1
+    fi
+    after_name=0
+    after_term=0
     if [[ -n "${pending}" ]]; then
       # The word after a `break` is its count. An operator or a redirection there means it has
       # none. A count that is not a small literal number (`"2"`, `--`, `$n`, `0`, which bash
@@ -275,12 +305,21 @@ function loops::body_has_terminator() {
     tokens::region_step "${command}" "${offset}" "${token}" region kind
     closed_assign=0
     glued_tail=0
-    ((offset == tail_end && at_cmd == 1)) && glued_tail=1
+    ((offset == tail_end && (at_cmd == 1 || prior_term == 1))) && glued_tail=1
     tail_end=-1
     case "${kind}" in
       'P' | 'A' | 'B' | 'S')
-        if ((glued_tail == 1)) || tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
+        if ((glued_tail == 1 && prior_term == 1)); then
+          # A region glued to a target's close is part of that target (`> $(a)$(b) break`).
+          word_assign+=('t1')
+        elif ((glued_tail == 1)) || tokens::region_opens_assignment_value region "${kind}" "${offset}"; then
           word_assign+=(1)
+        elif ((prior_target == 1)) || [[ "${kind}" == 'B' && -n "${redir}" ]]; then
+          # A region that is a redirection's target (`2> >(cat) break`, ``> `f` break``) is no
+          # word at all. bash reads no reserved word behind a redirection, but a `break`,
+          # `exit` or `return` is a builtin: behind the close it is the command, if the
+          # redirection stood where one could be.
+          word_assign+=("t${at_cmd}")
         else
           word_assign+=(0)
         fi
@@ -294,6 +333,8 @@ function loops::body_has_terminator() {
     # A token touching the close of an assignment's substitution continues that word
     # (`FOO=$(true)$(true) break`, ``FOO=a`true` break``): it leaves command position as it was.
     if ((glued_tail == 1)) && [[ "${kind}" != 'close' ]] && ! tokens::is_operator "${token}"; then
+      # The closing quote of a target (`> "$(mktemp)" break`) is part of it as well.
+      after_term="${prior_term}"
       tail_end="${region[end]}"
       dollar=0
       [[ "${token}" == *'$' ]] && dollar=1
@@ -301,18 +342,27 @@ function loops::body_has_terminator() {
       continue
     fi
     # A redirection in front of a terminator (`>f break`) leaves command position as it was.
+    redir_pending="${redir}"
     if tokens::redirection_step "${token}" redir; then
+      # The token was a redirection's target, or the `<` or `>` of a process substitution
+      # that is one.
+      if [[ "${redir_pending}" == 'target' ]] \
+        || [[ "${redir_pending}" == 'glue' && "${token}" != '&' && "${token}" != '|' ]]; then
+        after_target=1
+      fi
       idx="$((idx + 1))"
       continue
     fi
-    if ((at_cmd == 1)); then
+    if ((at_cmd == 1 || prior_term == 1)); then
       case "${token}" in
         'do')
-          next_body="$((next_body + 1))"
-          open+=" ${next_body}"
+          if ((at_cmd == 1)); then
+            next_body="$((next_body + 1))"
+            open+=" ${next_body}"
+          fi
           ;;
         'done')
-          if [[ -n "${open}" ]]; then
+          if ((at_cmd == 1)) && [[ -n "${open}" ]]; then
             # The invocation's own body closing ends the search: nothing behind it is in the body.
             if ((seen == 1)) && [[ "${open##* }" == "${body}" ]]; then
               return 1
@@ -372,15 +422,25 @@ function loops::body_has_terminator() {
     fi
     # The close of a substitution ends a word, not a command, unless the word is an assignment
     # (`FOO=$(true) break`): that leaves command position where it was.
-    if [[ "${kind}" == 'close' ]]; then
+    was_coproc=0
+    ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]] && was_coproc=1
+    if [[ "${kind}" == 'close' && "${closed_assign}" == t* ]]; then
+      at_cmd=0
+      after_term="${closed_assign#t}"
+    elif [[ "${kind}" == 'close' ]]; then
       at_cmd="${closed_assign}"
-    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" \
-      || { ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]]; }; then
+    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" || ((was_coproc == 1)); then
       # `coproc while ...` is still a loop: the reserved word keeps command position.
       at_cmd=1
+    elif ((prior_coproc == 1)) && [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      # `coproc NAME while ...`: the name ends nothing, and a compound command behind it is
+      # in command position (see the top of the loop). Any other word there is an argument.
+      at_cmd=0
+      after_name=1
     else
       at_cmd=0
     fi
+    after_coproc="${was_coproc}"
     idx="$((idx + 1))"
   done <<< "${tokens}"
   # A `break` that is the last word of the command.
@@ -408,10 +468,16 @@ function loops::done_body_start() {
   local -n toks="$1"
   local -r tokens_var="$1" openers_var="$2" done_idx="$3"
   # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
-  local idx=0 token at_cmd=1 redir=''
+  local idx=0 token at_cmd=1 redir='' was_coproc after_coproc=0 prior_coproc after_name=0
   local -a starts=()
   while ((idx <= done_idx)); do
     token="${toks[idx]}"
+    prior_coproc="${after_coproc}"
+    after_coproc=0
+    if ((after_name == 1)) && tokens::opens_compound "${token}"; then
+      at_cmd=1
+    fi
+    after_name=0
     if tokens::redirection_step "${token}" redir; then
       idx="$((idx + 1))"
       continue
@@ -438,14 +504,21 @@ function loops::done_body_start() {
         fi
         ;;
     esac
+    was_coproc=0
+    ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]] && was_coproc=1
     if tokens::is_word_region_close "${tokens_var}" "${openers_var}" "${idx}"; then
       at_cmd=0
-    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" \
-      || { ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]]; }; then
+    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" || ((was_coproc == 1)); then
       at_cmd=1
+    elif ((prior_coproc == 1)) && [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      # `coproc NAME while ...`: the name ends nothing, and a compound command behind it is
+      # in command position (see the top of the loop). Any other word there is an argument.
+      at_cmd=0
+      after_name=1
     else
       at_cmd=0
     fi
+    after_coproc="${was_coproc}"
     idx="$((idx + 1))"
   done
   return 1
@@ -479,6 +552,7 @@ function loops::loop_body_has_kill() {
   local -r tokens_var="$1" openers_var="$2" head_idx="$4"
   # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
   local idx="$((head_idx + 1))" token found_do=0 body_depth=1 at_cmd=1 redir=''
+  local was_coproc after_coproc=0 prior_coproc after_name=0
   local -a pstack=()
 
   # Walk the condition/iterable list to the `do` that opens this loop's body,
@@ -509,6 +583,12 @@ function loops::loop_body_has_kill() {
 
   while ((idx < ${#toks[@]})); do
     token="${toks[idx]}"
+    prior_coproc="${after_coproc}"
+    after_coproc=0
+    if ((after_name == 1)) && tokens::opens_compound "${token}"; then
+      at_cmd=1
+    fi
+    after_name=0
     # A redirection in front of a loop keyword (`>f done`) leaves command position as it was.
     if tokens::redirection_step "${token}" redir; then
       idx="$((idx + 1))"
@@ -527,15 +607,22 @@ function loops::loop_body_has_kill() {
       esac
     fi
     # The close of a substitution ends a word, not a command, unless the word is an assignment.
+    was_coproc=0
+    ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]] && was_coproc=1
     if tokens::is_word_region_close "${tokens_var}" "${openers_var}" "${idx}"; then
       at_cmd=0
-    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" \
-      || { ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]]; }; then
+    elif tokens::is_operator "${token}" || tokens::is_keyword "${token}" || ((was_coproc == 1)); then
       # `coproc while ...` is still a loop: the reserved word keeps command position.
       at_cmd=1
+    elif ((prior_coproc == 1)) && [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      # `coproc NAME while ...`: the name ends nothing, and a compound command behind it is
+      # in command position (see the top of the loop). Any other word there is an argument.
+      at_cmd=0
+      after_name=1
     else
       at_cmd=0
     fi
+    after_coproc="${was_coproc}"
     idx="$((idx + 1))"
   done
   return 1

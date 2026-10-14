@@ -652,12 +652,20 @@ function wrappers::redirection_replaces_stdin() {
 # @arg $1 command the raw command string
 # @arg $2 stream the token stream from scanner::scan_command
 # @arg $3 outer_var name of the variable set to the stream with each outermost region cut out (set)
+# @arg $4 closes_var name of the caller's sparse array that receives, for each outermost region,
+#         the offset of its closing `)` or backtick, keyed by the offset of the token the outer
+#         stream keeps for it: the `<` or `>` of a process substitution, the `$` word of a `$(...)`
+#         (set).
+#         Never pass a variable called cut_outer or cut_closes, here or as `outer_var`.
+# @arg $5 mode the caller's mode, handed on to the read of each region
 # @stdout the payloads found inside the cut regions, as wrappers::shell_wrapper_payloads prints them
 # @exitcode 0 always; it ends on an assignment
-# shellcheck disable=SC2034 # cut_outer is the caller's variable, written through the nameref
+# shellcheck disable=SC2034 # cut_outer and cut_closes are the caller's variables, written through the namerefs
 function wrappers::cut_substitutions() {
   local -r command="$1" stream="$2"
-  local -n cut_outer="$3"
+  local -n cut_outer="$3" cut_closes="$4"
+  local -r mode="$5"
+  local opened_at=-1 last_outer_at=-1
   local -r heredoc_re='^[0-9]*<<([^<]|$)'
   local offset token kind depth
   local -A region=()
@@ -682,6 +690,7 @@ function wrappers::cut_substitutions() {
               fi
             fi
             outer+="${offset}"$'\t'"${token}"$'\n'
+            last_outer_at="${offset}"
           fi
         else
           inner+="${offset}"$'\t'"${token}"$'\n'
@@ -694,7 +703,12 @@ function wrappers::cut_substitutions() {
         ;;
       'close')
         if ((depth == 0)); then
-          wrappers::shell_wrapper_payloads "${command}" "${inner}"
+          if [[ "${region[closed]}" == 'S' ]]; then
+            cut_closes[opened_at]="${offset}"
+          elif ((last_outer_at >= 0)); then
+            cut_closes[last_outer_at]="${offset}"
+          fi
+          wrappers::shell_wrapper_payloads "${command}" "${inner}" "${mode}"
           inner=''
           glue_at="$((offset + 1))"
         else
@@ -708,7 +722,9 @@ function wrappers::cut_substitutions() {
           if [[ "${kind}" == 'B' ]] \
             && { ((region[prev_end] != offset)) || tokens::is_operator "${region[prev_token]}"; }; then
             outer+="${offset}"$'\t'$'\001'$'\n'
+            last_outer_at="${offset}"
           elif [[ "${kind}" == 'S' ]]; then
+            opened_at="$((offset - 1))"
             # The `<` or `>` just before the `(` is the word's first byte, not a redirection. A word
             # it touches (`FOO=<(...)`) already stands for the whole, so only a lone one needs a
             # stand-in.
@@ -724,7 +740,7 @@ function wrappers::cut_substitutions() {
     esac
   done <<< "${stream}"
   if ((${#region[kinds]} > 0)); then
-    wrappers::shell_wrapper_payloads "${command}" "${inner}"
+    wrappers::shell_wrapper_payloads "${command}" "${inner}" "${mode}"
   fi
   cut_outer="${outer}"
 }
@@ -928,6 +944,67 @@ function wrappers::literal_variant() {
   [[ "${variant_ref}" != "${spelled:1:${#spelled}-2}" ]]
 }
 
+# @description Print the payloads of a command written in place of one with a process
+#              substitution, each behind the given anchor. The rewritten text says in the pipe
+#              spelling what the substitution says (see wrappers::substitution_stage_payloads), and
+#              it is read by wrappers::shell_wrapper_payloads in its `rewritten` mode, which
+#              rewrites no more. Text the scanner cannot read yields nothing.
+# @arg $1 text the rewritten command
+# @arg $2 anchor the anchor to print each payload behind
+# @arg $3 from optional; the offset in the text where what was written in begins. A payload whose
+#         own anchor lies before it belongs to the rest of the command, which the caller reads
+#         itself, and is not printed. Defaults to 0.
+# @stdout `<anchor><TAB><payload>` records, NUL-terminated
+function wrappers::rewritten_payloads() {
+  local -r text="$1" anchor="$2" from="${3:-0}"
+  local rewritten_tokens record
+  # A rewritten text the scanner cannot read yields nothing: the command it came from was read,
+  # and an `inactive` from the rewrite alone would hide that command's own verdict.
+  rewritten_tokens="$(scanner::scan_command "${text}")" || return 0
+  while IFS= read -r -d '' record; do
+    ((${record%%$'\t'*} >= from)) || continue
+    printf '%s\t%s\0' "${anchor}" "${record#*$'\t'}"
+  done < <(wrappers::shell_wrapper_payloads "${text}" "${rewritten_tokens}" 'rewritten')
+}
+
+# @description Print the payloads a process substitution `>(...)` receives, by rewriting the command
+#              so the substitution's commands are the next stage of a pipe: the text from
+#              `cut_from` to `cut_to` goes, and the stage is put where the simple command ends, behind
+#              the joiner. `echo '...' > >(bash)` reads as `echo '...' | ( bash )`, and
+#              `| tee f >(bash)` as `| ( bash )`, since tee hands on what it reads.
+# @arg $1 command the raw command
+# @arg $2 cut_from offset of the first byte to drop
+# @arg $3 cut_to offset just past the last byte to drop
+# @arg $4 end offset where the simple command ends
+# @arg $5 open offset of the substitution's `>`
+# @arg $6 close offset of its closing `)`
+# @arg $7 joiner the text in front of the stage: ` | `, or empty when the stage replaces the command
+# @stdout `<open><TAB><payload>` records, NUL-terminated
+function wrappers::substitution_stage_payloads() {
+  local -r command="$1" cut_from="$2" cut_to="$3" end="$4" open="$5" close="$6" joiner="$7"
+  local -r body="${command:open+2:close-open-2}"
+  local stage="( ${body} )"
+  # A body that holds a newline or a comment needs its own line to end on.
+  [[ "${body}" == *[$'\n#']* ]] && stage="( ${body}"$'\n'')'
+  wrappers::rewritten_payloads \
+    "${command:0:cut_from}${command:cut_to:end-cut_to}${joiner}${stage}${command:end}" "${open}" \
+    "$((cut_from + end - cut_to + ${#joiner}))"
+}
+
+# @description True when the text of a process substitution names a command that could run what
+#              it reads as a script: a shell, `source` or `.`, `su`, `runuser` or `sudo`. Only then is
+#              the command rewritten to read it (see wrappers::substitution_stage_payloads), which
+#              costs a scan and a read of the whole command; a body such as `tee -a log` never could.
+# @arg $1 body the text between the substitution's parentheses
+# @exitcode 0 a word of the body names such a command
+# @exitcode 1 none does
+function wrappers::body_runs_shell() {
+  local -r body="$1"
+  local -r word_re='(^|[^A-Za-z0-9_.-])(bash|sh|zsh|dash|ksh|source|su|runuser|sudo)([^A-Za-z0-9_./-]|$)'
+  local -r dot_re='(^|[[:space:];&|(])\.([[:space:]]|$)'
+  [[ "${body}" =~ ${word_re} || "${body}" =~ ${dot_re} ]]
+}
+
 # @description Find the payloads of local shell wrappers and print each one's text,
 #              NUL-terminated, read by wrappers::word_text. Each is printed behind its
 #              anchor and a tab: the byte offset of a word of the simple command that runs it
@@ -1082,6 +1159,18 @@ function wrappers::literal_variant() {
 #              `env --split-string='...'`), found by wrappers::script_option for the segment's
 #              command word or for the prefix whose options are being read.
 #
+#              A process substitution is a payload source too. One that is a wrapper's script
+#              operand (`bash <(echo '...')`, `source <(...)`), or the target of a shell's stdin
+#              redirection (`bash < <(...)`), hands it what its commands print. One that names a
+#              command that can run a script (wrappers::body_runs_shell) and that the segment's
+#              stdout goes to (`echo '...' > >(bash)`, unless a later redirection of fd 1 takes
+#              stdout away) or that `tee` writes to (`| tee >(bash)`) runs the commands in it on
+#              what the segment prints. Each is read by rewriting the command in the pipe spelling
+#              (wrappers::rewritten_payloads, wrappers::substitution_stage_payloads), in a
+#              `rewritten` mode that rewrites no more. Not read: a segment whose stdout an earlier
+#              redirection also moves (`> f > >(bash)`), and what `tee` reads from its own stdin
+#              redirection.
+#
 #              Still not covered: content that is not on the command line at all
 #              (`printf '%s' "${script}" | bash`, `curl ... | bash`), a here-string that is not a
 #              literal, and a subshell closed inside a command substitution, where the region ends
@@ -1102,15 +1191,20 @@ function wrappers::literal_variant() {
 #              reader steps over a substitution region as part of a word.
 # @arg $1 command the raw command string
 # @arg $2 tokens the token stream from scanner::scan_command
+# @arg $3 mode optional; `rewritten` for a command wrappers::rewritten_payloads wrote, in which a
+#         process substitution a segment's stdout or a `tee` writes to is not rewritten again
 # @stdout one `<anchor><TAB><payload>` record per NUL; nothing if there are none
 function wrappers::shell_wrapper_payloads() {
-  local -r command="$1"
+  local -r command="$1" mode="${3:-}"
   local tokens="$2"
+  # The offset that closes each outermost region, indexed by the offset of the token standing for it, as
+  # wrappers::cut_substitutions found them; a process substitution's is keyed by its `<` or `>`.
+  local -a procsub_close=()
   # Regions are rare, and cutting them costs a pass over the stream, so the
   # raw text decides whether to look for any.
   if [[ "${command}" == *\$\(* || "${command}" == *'`'* ||
     "${command}" == *'<('* || "${command}" == *'>('* ]]; then
-    wrappers::cut_substitutions "${command}" "${tokens}" tokens
+    wrappers::cut_substitutions "${command}" "${tokens}" tokens procsub_close "${mode}"
   fi
   # A group can only own a heredoc or a here-string when the command has a `<<` operator at all.
   local has_heredoc_op=0
@@ -1173,6 +1267,13 @@ function wrappers::shell_wrapper_payloads() {
   # armed an operand capture or named a script option, and `hd_anchor` the anchor of the wrapper
   # that claimed each heredoc body, by ordinal.
   local anchor=0 watch_anchor=0 script_anchor=0 exec_word=0 exec_chain=0
+  # A process substitution the segment's stdout is redirected into (`> >(bash)`): the offset of its
+  # `>`, -1 for none, and of the redirection operator; `tee_subs` the ones a `tee` writes to;
+  # `seg_start` the offset of the first token of the segment that is no redirection, and
+  # `seg_end` the offset just past its last word; `redir_at` and `redir_stdin` the last
+  # redirection operator's offset and whether it redirects fd 0.
+  local outsub_open=-1 outsub_redir=-1 seg_start=-1 seg_end=-1 redir_at=-1 redir_stdin=0 tee_sub procsub_at
+  local -a tee_subs=()
   local -a hd_anchor=()
   local -a watch_rest=()
   # The same script read with each fully quoted operand's literal text (wrappers::literal_variant),
@@ -1213,6 +1314,13 @@ function wrappers::shell_wrapper_payloads() {
   # than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
+    # Where the segment's last word ends, for a stage written in behind it: in front of a
+    # comment, and in front of the `)` that closes the region this stream was cut from.
+    if [[ -n "${procsub_close[offset]:-}" ]]; then
+      seg_end="$((procsub_close[offset] + 1))"
+    elif ! tokens::is_operator "${token}" && [[ "${token}" != '<HD:'*'>' ]]; then
+      seg_end="$((offset + ${#token}))"
+    fi
     word="${token##*/}"
     # An option is no path: reduced, `--chdir=/tmp` would read as the word `tmp` and end the chain.
     # The one exception is the command line attached to `env -S` (see SPLIT_STRING_WORD_RE).
@@ -1320,12 +1428,35 @@ function wrappers::shell_wrapper_payloads() {
         esac
       fi
       dup_target=0
+      # A process substitution as the target. One that fd 0 reads from is the wrapper's script,
+      # as `<(...)` is as its operand (below). One that stdout goes to receives what the
+      # segment prints, unless a later redirection of fd 1 takes stdout away from it.
+      procsub_at=-1
+      [[ "${token}" == $'\001' && -n "${procsub_close[offset]:-}" ]] && procsub_at="${offset}"
+      # TODO: `source` and `.` are left out: `source /dev/stdin < <(...)` is pinned `allow` in
+      # tests/cases/verdicts.tsv, and changing a pinned row needs a decision on #438.
+      if ((procsub_at >= 0 && redir_stdin == 1 && in_wrapper == 1 && saw_c == 0)) \
+        && [[ "${command:offset:1}" == '<' && "${wrapper_kind}" != 'source' && "${mode}" != 'rewritten' ]]; then
+        wrappers::rewritten_payloads \
+          "( ${command:offset+2:procsub_close[offset]-offset-2}"$'\n'') | bash' "${anchor}"
+      fi
+      if ((stdout_redir == 1)); then
+        outsub_open=-1
+        if ((procsub_at >= 0)) && [[ "${command:offset:1}" == '>' ]] \
+          && wrappers::body_runs_shell "${command:offset+2:procsub_close[offset]-offset-2}"; then
+          outsub_open="${offset}"
+          outsub_redir="${redir_at}"
+        fi
+      fi
       # Any other operator here is no target. It ends the simple command and
       # must reach the flush below like any other.
       tokens::is_operator "${token}" || continue
     fi
     if [[ "${token}" =~ ${redir_re} ]]; then
       expect_redir_target=1
+      redir_at="${offset}"
+      redir_stdin=0
+      [[ "${token}" =~ ${stdin_redir_re} ]] && redir_stdin=1
       glue_at=-1
       if [[ "${token}" =~ ${redir_single_re} ]]; then
         glue_at="$((offset + ${#token}))"
@@ -1463,6 +1594,13 @@ function wrappers::shell_wrapper_payloads() {
           saw_s=1
           saw_s_operand=1
         fi
+        # A process substitution as the script operand (`bash <(...)`, `source <(...)`): the script
+        # is what its commands print, read as they would be on the left of a pipe into a shell.
+        if ((saw_s == 0 && operands == 0)) && [[ "${wrapper_kind}" != 'user' && "${token}" == $'\001' ]] \
+          && [[ -n "${procsub_close[offset]:-}" && "${command:offset:1}" == '<' && "${mode}" != 'rewritten' ]]; then
+          wrappers::rewritten_payloads \
+            "( ${command:offset+2:procsub_close[offset]-offset-2}"$'\n'') | bash' "${anchor}"
+        fi
         if ((operands > 0)); then
           operands="$((operands - 1))"
         elif ((saw_s == 0)); then
@@ -1488,6 +1626,11 @@ function wrappers::shell_wrapper_payloads() {
       && ! tokens::is_keyword "${token}"; then
       wrappers::word_text "${command:offset:${#token}}" raw || true # a word that expands is kept as written
       seg_words+=("${raw}")
+      if [[ "${seg_cmd}" == 'tee' && "${token}" == $'\001' && -n "${procsub_close[offset]:-}" ]] \
+        && [[ "${command:offset:1}" == '>' ]] \
+        && wrappers::body_runs_shell "${command:offset+2:procsub_close[offset]-offset-2}"; then
+        tee_subs+=("${offset}")
+      fi
     fi
 
     # Inside a group that is a pipe's producer, every command that ends here prints into that pipe, so
@@ -1623,6 +1766,21 @@ function wrappers::shell_wrapper_payloads() {
     esac
 
     if tokens::is_operator "${token}"; then
+      if [[ "${mode}" != 'rewritten' ]]; then
+        if ((outsub_open >= 0)); then
+          wrappers::substitution_stage_payloads "${command}" "${outsub_redir}" \
+            "$((procsub_close[outsub_open] + 1))" "${seg_end}" "${outsub_open}" \
+            "${procsub_close[outsub_open]}" ' | '
+        fi
+        for tee_sub in "${tee_subs[@]}"; do
+          wrappers::substitution_stage_payloads "${command}" "${seg_start}" "${seg_end}" "${seg_end}" \
+            "${tee_sub}" "${procsub_close[tee_sub]}" ''
+        done
+      fi
+      outsub_open=-1
+      tee_subs=()
+      seg_start=-1
+      seg_end=-1
       if ((watch_first_set == 1)); then
         wrappers::watch_payload "${watch_anchor}" "${watch_first}" "${watch_rest[@]}"
         if ((watch_variant == 1)); then
@@ -1890,6 +2048,9 @@ function wrappers::shell_wrapper_payloads() {
       produced_set=1
       closing_producer=0
     fi
+    if ((seg_start < 0)) && ! tokens::is_operator "${token}"; then
+      seg_start="${offset}"
+    fi
     at_cmd="${next_at_cmd}"
   done <<< "${tokens}"
 
@@ -1917,5 +2078,16 @@ function wrappers::shell_wrapper_payloads() {
     if ((watch_variant == 1)); then
       wrappers::watch_payload "${watch_anchor}" "${watch_variant_first}" "${watch_variant_rest[@]}"
     fi
+  fi
+  if [[ "${mode}" != 'rewritten' ]]; then
+    if ((outsub_open >= 0)); then
+      wrappers::substitution_stage_payloads "${command}" "${outsub_redir}" \
+        "$((procsub_close[outsub_open] + 1))" "${seg_end}" "${outsub_open}" \
+        "${procsub_close[outsub_open]}" ' | '
+    fi
+    for tee_sub in "${tee_subs[@]}"; do
+      wrappers::substitution_stage_payloads "${command}" "${seg_start}" "${seg_end}" "${seg_end}" \
+        "${tee_sub}" "${procsub_close[tee_sub]}" ''
+    done
   fi
 }

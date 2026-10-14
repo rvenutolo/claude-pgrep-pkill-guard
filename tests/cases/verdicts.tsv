@@ -2272,3 +2272,23 @@
 "while 2>/dev/null >(cat) do; pgrep --full x; do sleep 1; done"	deny:loop
 "while true; do coproc >f cat done; pgrep --full x && break; sleep 1; done"	deny:loop
 "while true; do coproc 2>/dev/null cat done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while read -r p; do kill $p; done 2> \"$(mktemp)\" < <(pgrep --full X)"	deny:kill
+"while read -r p; do kill $p; done > >(tee log) < <(pgrep --full X)"	deny:kill
+"xargs -I{} kill {} < <(pgrep --full X)"	deny:kill
+"xargs -I {} kill {} < <(pgrep --full X)"	deny:kill
+"< <(pgrep --full X) xargs kill"	deny:kill
+"xargs < <(pgrep --full X) kill"	deny:kill
+"xargs < <(pgrep --full X) -n 1 kill"	deny:kill
+"exec 3< <(pgrep --full X); while read -r -u 3 p; do kill $p; done"	deny:kill
+"exec 3< <(pgrep --full X)\nwhile read -r -u 3 p; do kill $p; done"	deny:kill
+"while read -r p && kill $p; do :; done < <(pgrep --full X)"	deny:kill
+"until ! read -r p || ! kill $p; do :; done < <(pgrep --full X)"	deny:kill
+"while read -r p; do pids+=(\"$p\"); done < <(pgrep --full X); kill \"${pids[@]}\""	warn
+"pgrep --full x | tee >(grep -c java)"	warn
+"grep -c java < <(pgrep --full x)"	warn
+"grep --count java < <(pgrep --full x)"	warn
+"exec 3< <(pgrep --full X); echo hi"	allow
+"sort < <(pgrep --full x)"	allow
+"grep java < <(pgrep --full x)"	allow
+"< <(pgrep --full X) sort"	allow
+"pgrep --full x | tee >(grep java)"	allow

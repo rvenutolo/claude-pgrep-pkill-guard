@@ -2237,3 +2237,9 @@
 "bash <(echo 'echo hi')"	allow
 "echo 'pkill --full X' | tee >(wc -l)"	allow
 "grep pkill <(echo 'pkill --full X')"	allow
+"x=$(echo 'pkill --full X' > >(bash))"	deny:kill
+"cat <(echo 'pkill --full X' > >(bash))"	deny:kill
+"echo 'pkill --full X' > >(bash) # note"	deny:kill
+"echo 'pkill --full X' > >(bash) 2> /dev/null # note"	deny:kill
+"x=$(echo hi > >(cat)); bash -c 'pgrep --full x'"	allow
+"make > >(tee -a build.log) 2> >(tee -a err.log >&2); bash -c 'pgrep --full x'"	allow

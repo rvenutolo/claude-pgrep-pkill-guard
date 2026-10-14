@@ -206,6 +206,40 @@ function classify::classify_position() {
   return 1
 }
 
+# @description Classify every `pgrep --full` and `pkill --full` invocation of a command, in order.
+#              The first deny ends the pass; a warn is reported when none denies.
+# @arg $1 tokens_var name of the command's token array
+# @arg $2 openers_var name of the array that maps each region-closing token's index to its opener's
+# @arg $3 kills_var name of the array that holds an entry at the index of every `kill` in
+#         command position, and at the anchor of every wrapper whose payload holds one
+# @arg $4 command the raw command
+# @arg $5 tokens the scanner's token stream for the command
+# @arg $6 invocations the lines scanner::find_invocations printed for the command
+# @stdout a `deny:...` verdict line, or `warn`
+# @exitcode 0 a verdict was printed
+# @exitcode 1 no invocation is denied or warned about; nothing printed
+function classify::classify_invocations() {
+  local -r tokens_var="$1" openers_var="$2" kills_var="$3" command="$4" tokens="$5" invocations="$6"
+  local idx offset name args finding warned=0
+  while IFS=$'\t' read -r idx offset name; do
+    [[ -z "${idx}" || "${name}" == 'kill' ]] && continue
+    args="$(scanner::invocation_args "${command}" "${tokens}" "${idx}")"
+    scanner::has_flag "${args}" '--full' 'f' || continue
+    if finding="$(classify::classify_invocation "${tokens_var}" "${openers_var}" "${kills_var}" "${command}" \
+      "${tokens}" "${idx}" "${name}" "${args}")"; then
+      case "${finding}" in
+        deny:*)
+          printf '%s\n' "${finding}"
+          return 0
+          ;;
+        'warn') warned=1 ;;
+      esac
+    fi
+  done <<< "${invocations}"
+  ((warned == 1)) || return 1
+  printf 'warn\n'
+}
+
 # @description Say what a wrapper payload holds that the command around its wrapper can consume:
 #              a `kill` in command position, and each `pgrep --full` whose pattern the bracket
 #              mitigation does not cover. The payload's own text is read, not a payload inside
@@ -352,47 +386,16 @@ function classify::classify_command() {
     fi
   done <<< "${invocations}"
 
-  # The payloads of the wrappers in this command, each with the token index of its anchor. A
-  # payload is run where its wrapper stands, so what it holds is read there: a `kill` in it marks
-  # the wrapper's anchor in cmd_kills with the value `payload`, which the walks of
-  # consumption::feeds_a_kill read as a `kill` (`pgrep --full x | bash -c 'xargs kill'`), and a
-  # `pgrep --full` in it is classified below at the wrapper's position
-  # (`while bash -c 'pgrep --full x'; do ...`). Collected before any invocation is classified,
-  # like the kills above.
-  #
-  # standins holds one row per such `pgrep`, in payload order:
-  # `<anchor index>:<ignores ancestors, 0 or 1>:<counts, 0 or 1>`.
-  local -a payload_texts=() standins=()
-  local record anchor_idx fact fact_ignores fact_counts
-  if ((depth < MAX_PAYLOAD_DEPTH)); then
-    while IFS= read -r -d '' record; do
-      payload_texts+=("${record#*$'\t'}")
-      anchor_idx="${offset_index["${record%%$'\t'*}"]:-}"
-      [[ -n "${anchor_idx}" ]] || continue
-      while IFS=$'\t' read -r fact fact_ignores fact_counts; do
-        case "${fact}" in
-          'kill') cmd_kills[anchor_idx]='payload' ;;
-          'pgrep') standins+=("${anchor_idx}:${fact_ignores}:${fact_counts}") ;;
-        esac
-      done <<< "$(classify::payload_facts "${record#*$'\t'}")"
-    done < <(wrappers::shell_wrapper_payloads "${command}" "${tokens}")
+  if invocation_finding="$(classify::classify_invocations cmd_tokens cmd_openers cmd_kills "${command}" \
+    "${tokens}" "${invocations}")"; then
+    case "${invocation_finding}" in
+      'warn') verdict='warn' ;;
+      *)
+        printf '%s\n' "${invocation_finding}"
+        return 0
+        ;;
+    esac
   fi
-
-  while IFS=$'\t' read -r idx offset name; do
-    [[ -z "${idx}" || "${name}" == 'kill' ]] && continue
-    args="$(scanner::invocation_args "${command}" "${tokens}" "${idx}")"
-    scanner::has_flag "${args}" '--full' 'f' || continue
-    if invocation_finding="$(classify::classify_invocation cmd_tokens cmd_openers cmd_kills "${command}" \
-      "${tokens}" "${idx}" "${name}" "${args}")"; then
-      case "${invocation_finding}" in
-        deny:*)
-          printf '%s\n' "${invocation_finding}"
-          return 0
-          ;;
-        'warn') verdict='warn' ;;
-      esac
-    fi
-  done <<< "${invocations}"
 
   # A loop on a harness task-output file is denied whatever the pgrep tier
   # thought of the command; a pgrep deny above has already returned.
@@ -402,6 +405,47 @@ function classify::classify_command() {
       printf 'deny:task-poll\t%s\n' "${polled}"
       return 0
     fi
+  fi
+
+  # The payloads of the wrappers in this command, each with the token index of its anchor. A
+  # payload is run where its wrapper stands, so what it holds is read there: a `kill` in it marks
+  # the wrapper's anchor in cmd_kills with the value `payload`, which the walks of
+  # consumption::feeds_a_kill read as a `kill` (`pgrep --full x | bash -c 'xargs kill'`), and a
+  # `pgrep --full` in it is classified below at the wrapper's position
+  # (`while bash -c 'pgrep --full x'; do ...`). The payloads are read only here, behind the
+  # tiers that need none, so a command those tiers deny costs no wrapper pass; when one marks
+  # a `kill`, the invocations are classified once more with it.
+  #
+  # standins holds one row per such `pgrep`, in payload order:
+  # `<anchor index>:<ignores ancestors, 0 or 1>:<counts, 0 or 1>`.
+  local -a payload_texts=() standins=()
+  local record anchor_idx fact fact_ignores fact_counts marked=0
+  if ((depth < MAX_PAYLOAD_DEPTH)); then
+    while IFS= read -r -d '' record; do
+      payload_texts+=("${record#*$'\t'}")
+      anchor_idx="${offset_index["${record%%$'\t'*}"]:-}"
+      [[ -n "${anchor_idx}" ]] || continue
+      while IFS=$'\t' read -r fact fact_ignores fact_counts; do
+        case "${fact}" in
+          'kill')
+            cmd_kills[anchor_idx]='payload'
+            marked=1
+            ;;
+          'pgrep') standins+=("${anchor_idx}:${fact_ignores}:${fact_counts}") ;;
+        esac
+      done <<< "$(classify::payload_facts "${record#*$'\t'}")"
+    done < <(wrappers::shell_wrapper_payloads "${command}" "${tokens}")
+  fi
+
+  if ((marked == 1)) && invocation_finding="$(classify::classify_invocations cmd_tokens cmd_openers cmd_kills \
+    "${command}" "${tokens}" "${invocations}")"; then
+    case "${invocation_finding}" in
+      'warn') verdict='warn' ;;
+      *)
+        printf '%s\n' "${invocation_finding}"
+        return 0
+        ;;
+    esac
   fi
 
   # Each `pgrep --full` a payload holds, read where its wrapper stands.

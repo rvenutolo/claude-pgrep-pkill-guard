@@ -2292,3 +2292,12 @@
 "grep java < <(pgrep --full x)"	allow
 "< <(pgrep --full X) sort"	allow
 "pgrep --full x | tee >(grep java)"	allow
+"while read -r p; do name=$(ps -o comm= -p $p); echo \"$p $name\"; done < <(pgrep --full X)"	allow
+"command exec 3< <(pgrep --full X); while read -r -u 3 p; do kill $p; done"	deny:kill
+"FOO=1 exec 3< <(pgrep --full X); while read -r -u 3 p; do kill $p; done"	deny:kill
+"< <(pgrep --full X) wc -l"	warn
+"< <(pgrep --full X) mapfile -t a"	warn
+"{ grep -c x; } < <(pgrep --full X)"	warn
+"cat < <(pgrep --full X) \"$(kill 1)\""	allow
+"grep x < <(pgrep --full X) 2> >(grep -c err)"	warn
+"pgrep --full X | tee >(grep x; echo -c)"	allow

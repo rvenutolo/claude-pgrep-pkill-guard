@@ -22,13 +22,12 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
 # do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`,
-# `exec`, `flock`, `entr`, `systemd-run` and the builtin `eval`. A wrapper that is not listed
-# hides what it runs: the guard sees nothing behind `strace`. `find` is no prefix: the command
-# it runs stands behind one of its `-exec` actions, which tokens::prefix_chain_step reads.
-# `watch` and `eval` also hand their operands to
-# a shell (`watch 'pkill --full X'`), and so do `sudo -s`, `sudo -i`, `entr -s` and `env -S`;
-# the chain cannot see into a quoted one, so wrappers::shell_wrapper_payloads reads it as a
-# payload.
+# `exec`, `flock`, `entr`, `systemd-run`, `runuser` (whose `-u` runs the command behind its options) and
+# the builtin `eval`. A wrapper that is not listed hides what it runs: the guard sees nothing behind
+# `strace`. `find` is no prefix: the command it runs stands behind one of its `-exec` actions,
+# which tokens::prefix_chain_step reads. `watch` and `eval` also hand their operands to a shell
+# (`watch 'pkill --full X'`), and so do `sudo -s`, `sudo -i`, `entr -s` and `env -S`; the chain
+# cannot see into a quoted one, so wrappers::shell_wrapper_payloads reads it as a payload.
 #
 # `coproc` is bash's reserved word and not a program, so it is a prefix only where bash reads
 # it as one, the first word of a command or the word behind the reserved word `time`, which is
@@ -38,6 +37,7 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 readonly -a PREFIX_COMMANDS=(
   'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
   'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval' 'entr' 'systemd-run'
+  'runuser'
 )
 
 # An option word that carries the command line of `env -S` in the same word (`-S/usr/bin/cmd`,
@@ -150,6 +150,15 @@ function tokens::prefix_value_spelling() {
     'flock')
       case "${word}" in
         '-w' | '--wait' | '--timeout' | '-E' | '--conflict-exit-code' | '-c' | '--command')
+          return 0
+          ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'runuser')
+      case "${word}" in
+        '-u' | '--user' | '-g' | '--group' | '-G' | '--supp-group' | '-s' | '--shell' | '-w' | \
+          '--whitelist-environment')
           return 0
           ;;
         *) return 1 ;;
@@ -290,6 +299,12 @@ function tokens::prefix_break_spelling() {
     'watch')
       case "${word}" in
         '-h' | '--help' | '-v' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    'runuser')
+      case "${word}" in
+        '-h' | '--help' | '-V' | '--version') return 0 ;;
         *) return 1 ;;
       esac
       ;;

@@ -458,6 +458,20 @@ function words() {
   assert_output 'echo a <NL> echo b ;'
 }
 
+@test "scanner: a hash behind a line continuation continues the word before it" {
+  # bash removes the backslash-newline and joins the lines, so `a\` then `#b` is
+  # the word `a#b` and opens no comment. Behind a blank it does.
+  run words $'echo a\\\n#b; x\necho a \\\n# b; y\nz'
+  assert_output 'echo a #b ; x <NL> echo a <NL> z'
+}
+
+@test "scanner: a pipe inside [[ ]] opens no comment" {
+  # Inside `[[ ... ]]` a `|` is part of a pattern, not a pipe, and a `#` behind it
+  # is a literal.
+  run words '[[ a =~ b|#c ]]; x'
+  assert_output '[[ a =~ b | #c ]] ; x'
+}
+
 @test "scanner: the token after a comment keeps its byte offset" {
   local out
   out="$(scan $'x # c\ny')"

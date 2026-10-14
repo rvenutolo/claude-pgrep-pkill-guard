@@ -2301,3 +2301,14 @@
 "cat < <(pgrep --full X) \"$(kill 1)\""	allow
 "grep x < <(pgrep --full X) 2> >(grep -c err)"	warn
 "pgrep --full X | tee >(grep x; echo -c)"	allow
+"echo a\\\n#b; pkill --full X"	deny:kill
+"echo a\\\n#b\npkill --full X"	deny:kill
+"echo \"a\"\\\n#b; pkill --full X"	deny:kill
+"echo a \\\n# b\npkill --full X"	deny:kill
+"echo a \\\n# b; pkill --full X"	allow
+"echo a\\\\\n#b; pkill --full X"	allow
+"[[ a =~ b|#c ]]; pkill --full X"	deny:kill
+"if [[ $x =~ a|#b ]]; then pkill --full X; fi"	deny:kill
+"[[ a ]] | # c\npkill --full X"	deny:kill
+"echo [[ x | # c; pkill --full X"	allow
+"[[ a == b ]] && echo x | # c; pkill --full X\npgrep --full y"	allow

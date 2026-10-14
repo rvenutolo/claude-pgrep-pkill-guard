@@ -2326,3 +2326,22 @@
 "echo $( [[ (a)]] ); echo $(echo z |# it's\ncat\n)\npkill --full X"	deny:kill
 "x=$(echo then [[ a); echo $(echo z |# it's\ncat\n)\npkill --full X"	deny:kill
 "echo hi # C:\\temp\\\n# then pkill --full X\nls"	allow
+"su --command='pkill --full X'"	deny:kill
+"su - root --command=\"pkill --full X\""	deny:kill
+"su --session-command='pkill --full X'"	deny:kill
+"su --session-command 'pkill --full X' root"	deny:kill
+"runuser -l bob --command='pkill --full X'"	deny:kill
+"runuser -u bob -- pkill --full X"	deny:kill
+"runuser -u bob pkill --full X"	deny:kill
+"runuser --user=bob -- pkill --full X"	deny:kill
+"runuser --user bob -- pkill --full X"	deny:kill
+"runuser -u bob -- bash -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | runuser -u bob -- sh"	deny:kill
+"runuser -u bob -- sh <<< 'pkill --full X'"	deny:kill
+"runuser bob -c 'pkill --full X'"	deny:kill
+"runuser -l bob -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | runuser bob"	deny:kill
+"runuser -u bob -- psql -c 'pkill --full X'"	allow
+"echo 'pkill --full X' | runuser -u bob -- cat"	allow
+"runuser -u bob -- echo pkill --full X"	allow
+"su --command='echo hi'"	allow

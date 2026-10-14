@@ -2171,3 +2171,19 @@
 "systemd-run -M box pkill --full X"	deny:kill
 "systemd-run --host root@h pkill --full X"	deny:kill
 "systemd-run echo pkill --full X"	allow
+"script -O -exec typescript -c 'pkill --full X'"	deny:kill
+"script -B -execdir f --command 'pkill --full X'"	deny:kill
+"script /dev/null -exec x -c 'pkill --full X'"	deny:kill
+"sg users -exec x -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | { foo -exec } ; bash; }"	deny:kill
+"{ echo 'pkill --full X'; foo -exec }; } | bash"	deny:kill
+"if foo -exec fi; then echo 'pkill --full X'; fi | bash"	deny:kill
+"echo 'pkill --full X' | while foo -exec done; do bash; done"	deny:kill
+"{ foo -exec } ; bash; } <<EOF\npkill --full X\nEOF"	deny:kill
+"{ foo -exec }; bash; } <<< 'pkill --full X'"	deny:kill
+"case x in x) foo -exec esac; echo 'pkill --full X';; esac | bash"	deny:kill
+"while foo -ok done; do bash; break; done <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | foo -exec { bash; }"	allow
+"systemd-run --root-directory /x pkill --full X"	deny:kill
+"systemd-run -M .host pkill --full X"	deny:kill
+"systemd-run --machine=box pkill --full X"	deny:kill

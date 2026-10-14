@@ -117,12 +117,26 @@ function wrappers::wrapper_operand_budget() {
 #              anything between them and the name, as wrappers::redirection_replaces_stdin
 #              matches them: `/dev//stdin`, `/dev/./fd/0` and `/proc/thread-self/fd/0` reach the
 #              same descriptor. A relative `./dev/stdin` matches too, which fails closed.
-# @arg $1 path the operand, with any surrounding quotes stripped
+#
+#              The operand is read with its quotes, backslashes and the `$` of an ANSI-C string
+#              removed, so a partly quoted spelling (`/dev/'stdin'`, `$'/dev/stdin'`) matches as well.
+#              One that holds a glob matches when the glob matches one of those paths
+#              (`/dev/stdi[n]`). `/dev/std*` matches too though bash expands it to `/dev/stderr`
+#              first, which fails closed.
+# @arg $1 spelled the operand as written
 # @exitcode 0 the operand names the command's own stdin
 # @exitcode 1 it names something else
 function wrappers::names_own_stdin() {
-  local -r path="$1"
-  [[ "${path}" == *dev/*stdin || "${path}" == *dev/*fd/*0 || "${path}" == *proc/*fd/*0 ]]
+  local -r spelled="$1"
+  local path="${spelled//\$\'/}" target
+  path="${path//[\'\"\\]/}"
+  [[ "${path}" == *dev/*stdin || "${path}" == *dev/*fd/*0 || "${path}" == *proc/*fd/*0 ]] && return 0
+  [[ "${path}" == *[][*?]* ]] || return 1
+  for target in '/dev/stdin' '/dev/fd/0' '/proc/self/fd/0'; do
+    # shellcheck disable=SC2053 # the operand is matched as the glob bash expands it as
+    [[ "${target}" == ${path} ]] && return 0
+  done
+  return 1
 }
 
 # @description What an option word of a local wrapper says: how many of the words after it are
@@ -544,7 +558,14 @@ function wrappers::group_stdin_kind() {
           here_text="${redirect_text}"
           here_set=1
           ;;
-        'maybe-pipe') ;;
+        'maybe-pipe')
+          # A here-string that cannot be shown to replace the pipe (see
+          # wrappers::redirection_replaces_stdin) is read beside it.
+          if [[ -n "${redirect_text}" ]]; then
+            here_text="${redirect_text}"
+            here_set=1
+          fi
+          ;;
         *)
           here_text=''
           here_set=0
@@ -583,12 +604,14 @@ function wrappers::group_stdin_kind() {
 #              asked about here: its operator is matched before any other redirection.
 #
 #              A literal here-string is the stdin itself, so its text, quotes stripped, is what the
-#              redirected command reads.
+#              redirected command reads. One whose word ends at a backtick is given too, with a no:
+#              the backtick may close the region the command is in (`echo \`bash <<< '...'\``), or
+#              open one that is part of the word, whose commands may read the pipe.
 # @arg $1 command the raw command string
 # @arg $2 offset the offset of the redirection operator's first byte, its fd included
 # @arg $3 text_var name of the variable that receives the here-string's text, empty otherwise (set)
 # @exitcode 0 the redirection replaces stdin with something that is not the pipe
-# @exitcode 1 it does not, or that cannot be told from the text
+# @exitcode 1 it does not, or that cannot be told from the text; a here-string's text may be set
 # shellcheck disable=SC2034 # the text_ref nameref is the caller's variable, which shellcheck cannot follow
 function wrappers::redirection_replaces_stdin() {
   local -r command="$1" offset="$2"
@@ -600,7 +623,7 @@ function wrappers::redirection_replaces_stdin() {
   # word to end there, so a literal glued to an expansion (`'a'"${b}"`) or to
   # another redirection does not pass as a literal.
   local -r quoted="'[^']*'|\"[^\"\$\`\\\\]*\""
-  local -r literal_re="^0?(<<<|<>|<)[[:blank:]]*(&-|${quoted}|[A-Za-z0-9_./~@%+=:,-]+)([[:space:];|&()]|\$)"
+  local -r literal_re="^0?(<<<|<>|<)[[:blank:]]*(&-|${quoted}|[A-Za-z0-9_./~@%+=:,-]+)([[:space:];|&()\`]|\$)"
   [[ "${command:offset}" =~ ${literal_re} ]] || return 1
   operator="${BASH_REMATCH[1]}"
   target="${BASH_REMATCH[2]}"
@@ -610,8 +633,10 @@ function wrappers::redirection_replaces_stdin() {
   # A here-string's word is the stdin itself, not a path to open.
   if [[ "${operator}" == '<<<' ]]; then
     text_ref="${target}"
+    [[ "${BASH_REMATCH[3]}" != '`' ]] || return 1
     return 0
   fi
+  [[ "${BASH_REMATCH[3]}" != '`' ]] || return 1
   if [[ "${target}" == '&-' ]]; then
     return 0
   fi
@@ -978,6 +1003,42 @@ function wrappers::rewritten_payloads() {
   done < <(wrappers::shell_wrapper_payloads "${text}" "${rewritten_tokens}" 'rewritten')
 }
 
+# @description Print the payloads a wrapper reads through a descriptor other than its stdin, named
+#              by its script operand (`bash /dev/fd/3 3<<< '...'`, `source /dev/fd/4 4<<EOF`). The
+#              command is read once more with each such descriptor's number written as a `0` in
+#              every redirection (`3<<<` as `0<<<`, `10<` as ` 0<`) and as zeros in the operand
+#              (`/dev/fd/00`), which makes it the stdin wrappers::shell_wrapper_payloads follows;
+#              the offsets of the words stay where they were. A later redirection of the stdin
+#              itself then wins over it (`bash /dev/fd/3 3<<< '...' < /dev/null`), which is a
+#              limit. Only a descriptor the command opens for reading (`3<`, `3<<<`) is renumbered,
+#              since one it never opens holds nothing written there. Each is renumbered wherever
+#              it stands in front of a `<`, so this may read more than the wrapper does (the pipe
+#              beside a `3< <(...)`), which fails closed.
+# @arg $1 command the raw command
+# @stdout `<anchor><TAB><payload>` records, NUL-terminated; nothing when no operand names such
+#         a descriptor
+# @exitcode 0 always
+function wrappers::descriptor_payloads() {
+  local -r command="$1"
+  local -r fd_re='fd/(0*[1-9][0-9]*)([^0-9]|$)'
+  local text="${command}" rest="${command}" fd zeros spaces renumbered=0 renumbered_tokens
+  while [[ "${rest}" =~ ${fd_re} ]]; do
+    fd="${BASH_REMATCH[1]}"
+    rest="${rest#*fd/"${fd}"}"
+    [[ "${text}" == *"${fd}<"* ]] || continue
+    zeros="${fd//[0-9]/0}"
+    spaces="${zeros:1}"
+    text="${text//fd\/${fd}/fd\/${zeros}}"
+    text="${text//${fd}</${spaces//0/ }0<}"
+    renumbered=1
+  done
+  ((renumbered == 1)) || return 0
+  # Text the scanner cannot read yields nothing: the command itself was read.
+  renumbered_tokens="$(scanner::scan_command "${text}")" || return 0
+  wrappers::shell_wrapper_payloads "${text}" "${renumbered_tokens}"
+  return 0
+}
+
 # @description Print the payloads a process substitution `>(...)` receives, by rewriting the command
 #              so the substitution's commands are the next stage of a pipe: the text from
 #              `cut_from` to `cut_to` goes, and the stage is put where the simple command ends, behind
@@ -1002,11 +1063,12 @@ function wrappers::substitution_stage_payloads() {
     "$((cut_from + end - cut_to + ${#joiner}))"
 }
 
-# @description True when the text of a process substitution names a command that could run what
-#              it reads as a script: a shell, `source` or `.`, `su`, `runuser` or `sudo`. Only then is
-#              the command rewritten to read it (see wrappers::substitution_stage_payloads), which
-#              costs a scan and a read of the whole command; a body such as `tee -a log` never could.
-# @arg $1 body the text between the substitution's parentheses
+# @description True when a text names a command that could run what it reads as a script: a
+#              shell, `source` or `.`, `su`, `runuser` or `sudo`. Only then is a process substitution's
+#              command rewritten to read it (see wrappers::substitution_stage_payloads), which costs a
+#              scan and a read of the whole command; a body such as `tee -a log` never could. Only
+#              then does a wrapper's `-c` string leave the wrapper's stdin read as a script.
+# @arg $1 body the text between the substitution's parentheses, or of the `-c` string
 # @exitcode 0 a word of the body names such a command
 # @exitcode 1 none does
 function wrappers::body_runs_shell() {
@@ -1044,8 +1106,10 @@ function wrappers::body_runs_shell() {
 #              heredoc operator may carry an explicit fd like any other redirection (`0<<EOF`,
 #              `3<<-EOF`); only fd 0 -- explicit or, far more commonly, the implicit default --
 #              feeds the wrapper's stdin, so `bash 3<<EOF` is skipped: it redirects a different fd,
-#              not the one the wrapper reads its script from. A heredoc counts when its operator is
-#              seen in the wrapper's simple command with no `-c` before it and the simple command
+#              not the one the wrapper reads its script from, unless the script operand names that
+#              fd (`bash /dev/fd/3 3<<EOF`, see wrappers::descriptor_payloads). A heredoc counts
+#              when its operator is seen in the wrapper's simple command with no `-c` before it, or
+#              only one whose string can run a script (see below), and the simple command
 #              then ends without an operand the budget does not cover -- such an operand makes the
 #              body that script's stdin instead, unless a `-s` in a short flag cluster already said stdin IS
 #              the script, in which case the operands are its positional parameters and the body
@@ -1098,12 +1162,17 @@ function wrappers::body_runs_shell() {
 #              follow (`{ cat |`, newline, `bash; }`) is read as reading the group's stdin.
 #              A script operand that names the wrapper's own stdin (`bash /dev/stdin`, see
 #              wrappers::names_own_stdin) displaces nothing, for a piped text and for a heredoc
-#              or here-string alike: it says what `-s` says. `source` and `.` are read as
-#              wrappers for that first operand alone, behind their `-p PATH` or `--` if any; with
-#              any other, or none, nothing of their stdin is read as a payload.
-#              Past the pipe nothing else changes: the payload is handed to the
-#              same machinery, so an operand still displaces stdin, a `-c` still claims the payload instead,
-#              `-s` still keeps stdin as the script, and the prefix chain is still followed.
+#              or here-string alike: it says what `-s` says. For `su` and `runuser` it is an
+#              operand behind the user name (`su root /dev/stdin`). So does a `-c` string that can run
+#              a script (`bash -c 'bash'`, `bash -c 'source /dev/stdin'`, see
+#              wrappers::body_runs_shell), since the payload is read on its own and cannot see the
+#              stdin it may run. `source` and `.` are read as wrappers for that first operand alone,
+#              behind their `-p PATH` or `--` if any; with any other, or none, nothing of their
+#              stdin is read as a payload.
+#              Past the pipe nothing else changes: the payload is handed to the same machinery, so
+#              an operand still displaces stdin, a `-c` still claims the payload instead unless its
+#              string can run a script, `-s` still keeps stdin as the script, and the prefix chain
+#              is still followed.
 #
 #              The pipe supplies the wrapper's stdin only when the wrapper's own simple command
 #              does not give fd 0 something else. A heredoc (`echo '...' | bash <<EOF`), a literal
@@ -1237,7 +1306,7 @@ function wrappers::shell_wrapper_payloads() {
   # reduction would cut a shell's `+o/x` down to an operand. `option_values` counts the words still to
   # come that are values of the wrapper's options (see wrappers::wrapper_option_facts).
   local wrapper_name='' wrapper_kind='' option_word option_values=0 option_c option_s
-  local offset token word next_at_cmd is_cmd_word raw budget pending_source
+  local offset token word next_at_cmd is_cmd_word raw c_text budget pending_source
   local chain_before opens_wrapper opened_kind source_builtin
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
@@ -1495,7 +1564,14 @@ function wrappers::shell_wrapper_payloads() {
             seg_here_text="${redirect_text}"
             seg_here_set=1
             ;;
-          'maybe-pipe') ;;
+          'maybe-pipe')
+            # A here-string that cannot be shown to replace the pipe (see
+            # wrappers::redirection_replaces_stdin) is read beside it.
+            if [[ -n "${redirect_text}" ]]; then
+              seg_here_text="${redirect_text}"
+              seg_here_set=1
+            fi
+            ;;
           *)
             seg_here_text=''
             seg_here_set=0
@@ -1592,16 +1668,28 @@ function wrappers::shell_wrapper_payloads() {
         if wrappers::word_text "${command:offset:${#token}}" raw; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
         fi
+        c_text="${raw}"
         if wrappers::literal_variant "${command:offset:${#token}}" raw; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
+          c_text+=$'\n'"${raw}"
         fi
-        in_wrapper=0
-        saw_c=0
-        saw_s=0
-        saw_s_operand=0
-        pending=''
-        pending_text=''
-        pending_text_set=0
+        # A string that names a command that can run a script may run what the wrapper's stdin
+        # holds (`echo '...' | bash -c 'bash'`): the payload is read on its own and cannot see
+        # that stdin. The wrapper then claims it as `-s` does, and the words behind the string
+        # are its parameters. A string that only names one (`bash -c 'echo bash'`) fails closed.
+        if wrappers::body_runs_shell "${c_text}"; then
+          saw_c=0
+          saw_s=1
+          saw_s_operand=1
+        else
+          in_wrapper=0
+          saw_c=0
+          saw_s=0
+          saw_s_operand=0
+          pending=''
+          pending_text=''
+          pending_text_set=0
+        fi
       elif [[ "${wrapper_kind}" != 'source' || "${option_word}" == '--' || "${option_word}" == -p* ]] \
         && [[ "${option_word}" == -* || ("${wrapper_kind}" == 'shell' && "${option_word}" == +*) ]]; then
         # An option, which a shell also spells with a `+`. `source` and `.` have only `--` and
@@ -1634,12 +1722,10 @@ function wrappers::shell_wrapper_payloads() {
         fi
         # A script operand that names the wrapper's own stdin (`bash /dev/stdin`) says what `-s`
         # says: stdin is the script, and the words after it are its parameters. For `source` and
-        # `.` it is the one operand that makes them a wrapper at all.
-        raw="${command:offset:${#token}}"
-        if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-          raw="${raw:1:${#raw}-2}"
-        fi
-        if ((saw_s == 0)) && [[ "${wrapper_kind}" != 'user' ]] && wrappers::names_own_stdin "${raw}"; then
+        # `.` it is the one operand that makes them a wrapper at all. `su` and `runuser` hand the
+        # operands behind the user name to the shell they start (`su root /dev/stdin`).
+        if ((saw_s == 0)) && { [[ "${wrapper_kind}" != 'user' ]] || ((operands == 0)); } \
+          && wrappers::names_own_stdin "${command:offset:${#token}}"; then
           saw_s=1
           saw_s_operand=1
         fi
@@ -2028,9 +2114,9 @@ function wrappers::shell_wrapper_payloads() {
         opened_kind='source'
         # A builtin runs only as the command word itself, spelled without a path, and never
         # behind a prefix that runs a program (`sudo source` looks for a file named `source`).
-        # `command`, the reserved word `time` and an assignment do reach it.
+        # `command`, `builtin`, the reserved word `time` and an assignment do reach it.
         if ((is_cmd_word == 0)) || [[ "${token}" != "${word}" ]] \
-          || [[ ! "${chain_before}" =~ ^(pipe|time-builtin|assignment|command)?$ ]]; then
+          || [[ ! "${chain_before}" =~ ^(pipe|time-builtin|assignment|command|builtin)?$ ]]; then
           opens_wrapper=0
         fi
       done

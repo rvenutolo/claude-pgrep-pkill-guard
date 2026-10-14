@@ -39,6 +39,63 @@
 # is no RT), so the CALLER TERMINATES THE INPUT WITH EXACTLY ONE NEWLINE and the
 # code below drops exactly one: a command's own trailing newline survives,
 # which is what a heredoc body's byte count depends on.
+
+# True when the word starting at a position is the first word of a command: only blanks stand
+# between it and the start of the input, a `;`, `&`, `|`, `(` or newline, a `{` that is itself
+# such a word, or a reserved word a command follows that is itself one. A `[[` anywhere else
+# is an argument (`test [[`, `echo then [[`).
+function starts_command(pos,    back, lead) {
+  back = pos - 1
+  while (back >= 1 && index(" \t", substr(cmd, back, 1)) > 0) back--
+  if (back < 1 || index(";&|(\n", substr(cmd, back, 1)) > 0) return 1
+  if (substr(cmd, back, 1) == "{") {
+    return (back == 1 || index(" \t\n;&|(", substr(cmd, back - 1, 1)) > 0) && starts_command(back)
+  }
+  lead = ""
+  while (back >= 1 && substr(cmd, back, 1) ~ /[a-z!]/) { lead = substr(cmd, back, 1) lead; back-- }
+  if (back >= 1 && index(" \t\n;&|(", substr(cmd, back, 1)) == 0) return 0
+  return lead ~ /^(if|elif|while|until|then|do|else|!)$/ && starts_command(back + 1)
+}
+
+# True when a `]]` at a position ends a word: a blank or `)` before it, and a blank, an operator
+# byte or the end of the line after it.
+function closes_bracket(pos) {
+  return substr(cmd, pos, 2) == "]]" && pos > 1 && index(" \t)", substr(cmd, pos - 1, 1)) > 0 \
+    && (pos + 2 > length(cmd) || index(" \t\n;&|)", substr(cmd, pos + 2, 1)) > 0)
+}
+
+# True when a position stands inside a `[[ ... ]]` written on one line: a `[[` that is the first
+# word of a command opens before it on its line with no `]]` closing between, and a `]]` closes
+# after it on the same line. Read from the raw text, so a bracket pair the scanner has not
+# reached yet counts; a `[[` that is never closed on its line opens nothing.
+function in_dbl_bracket(pos,    line_from, line_to, p, open) {
+  line_from = pos
+  while (line_from > 1 && substr(cmd, line_from - 1, 1) != "\n") line_from--
+  line_to = pos
+  while (line_to <= length(cmd) && substr(cmd, line_to, 1) != "\n") line_to++
+  open = 0
+  for (p = line_from; p < pos - 1; p++) {
+    if (substr(cmd, p, 2) == "[[" && index(" \t", substr(cmd, p + 2, 1)) > 0 && starts_command(p)) open = 1
+    else if (open && closes_bracket(p)) open = 0
+  }
+  if (!open) return 0
+  for (p = pos; p < line_to - 1; p++) if (closes_bracket(p)) return 1
+  return 0
+}
+
+# True when the rest of the line from a position holds a quote or a backtick. Read as code
+# rather than as a comment, such a line opens a quoted region that can run past the line and
+# hide what follows, so the readings below that keep a `#` from opening a comment are taken
+# only for a line without one: with one the `#` opens a comment, as it does anywhere else.
+function line_quotes(pos,    p, byte) {
+  for (p = pos; p <= length(cmd); p++) {
+    byte = substr(cmd, p, 1)
+    if (byte == "\n") return 0
+    if (byte == "'" || byte == "\"" || byte == "`") return 1
+  }
+  return 0
+}
+
 BEGIN {
   ORS = ""
   cmd = ""
@@ -151,10 +208,20 @@ BEGIN {
       # `(` is deliberately not a starter here: `$(#` would swallow the closing
       # paren this scanner counts depth with. Nor are `<` and `>`, where a `#`
       # is part of a filename far more often than it opens a comment.
-      # Inside `${...}` a `#` is part of the word.
+      # Inside `${...}` a `#` is part of the word. A `#` directly behind a line
+      # continuation the code below consumed continues the word before the
+      # backslash, which bash joins it to (`a\`, then `#b`), so the byte before
+      # the backslash decides; a backslash inside a comment or a heredoc body is
+      # no continuation. Inside `[[ ... ]]` (in_dbl_bracket) a `|` separates
+      # pattern alternatives (`=~ a|#b`), and the `#` behind it is a literal.
+      # Either reading applies only to a line that holds no quote (line_quotes).
+      if (ch == "#") {
+        wprev = prev
+        if (i == cont_end && !line_quotes(i)) wprev = (i > 3) ? substr(cmd, i - 3, 1) : ""
+      }
       if (ch == "#" && !(depth > 0 && opener[depth] == "V") \
-          && (i == 1 || prev == " " || prev == "\t" || prev == "\n" \
-          || prev == ";" || prev == "&" || prev == "|")) {
+          && (wprev == "" || wprev == " " || wprev == "\t" || wprev == "\n" \
+          || wprev == ";" || wprev == "&" || (wprev == "|" && (line_quotes(i) || !in_dbl_bracket(i))))) {
         while (i <= n && substr(cmd, i, 1) != "\n") { masked = masked " "; i++ }
         continue
       }
@@ -297,7 +364,7 @@ BEGIN {
         # two tokens.
         # Every other escaped character keeps its masking, so an escaped quote
         # still cannot flip parity for the rest of the command.
-        if (substr(cmd, i + 1, 1) == "\n") { masked = masked "  " }
+        if (substr(cmd, i + 1, 1) == "\n") { masked = masked "  "; cont_end = i + 2 }
         else { masked = masked "\001\001" }
         i += 2; continue
       }

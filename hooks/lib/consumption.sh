@@ -178,7 +178,7 @@ function consumption::construct_bounds() {
 #              that is a redirection's target (`2> >(cat)`) is no word at all. The one
 #              region that is read is a `>(...)`: the command inside it reads what the stage writes
 #              to it (`| tee >(wc -l)`, `| tee >(xargs kill)`), so the word looked for anywhere in it
-#              counts.
+#              counts, and so does a `grep` there that counts (`| tee >(grep -c x)`).
 #
 #              A group, a subshell or a compound command (`if`, `case`, `for`, `select`, `while`,
 #              `until`) that is a stage, in any position, is read inside: its stdin is the pipe,
@@ -270,6 +270,9 @@ function consumption::pipeline_feeds() {
         for ((inside = opener; inside < idx; inside++)); do
           case "${seek}:${toks[inside]##*/}" in
             'count:wc' | 'count:xargs') return 0 ;;
+            'count:grep' | 'count:egrep' | 'count:fgrep')
+              consumption::words_count "${tokens_var}" "$((inside + 1))" "$((idx - 1))" && return 0
+              ;;
             'kill:kill')
               if [[ -n "${kills[inside]:-}" ]]; then
                 return 0
@@ -677,14 +680,16 @@ function consumption::feeds_a_kill_backward() {
 #              spelling is the pipe written the other way round, and the one to use where a pipe
 #              into `while` would lose the loop's variables.
 #
-#              For `kill`: the substitution is redirected into a loop (`done < <(...)`) whose body
-#              holds a `kill` in command position, as scanner::find_invocations recorded them.
-#              A `kill` among the words of a simple command (`xargs kill < <(...)`) is not this
-#              function's: it stands before the invocation, where
-#              consumption::feeds_a_kill_backward looks. For `count`: the command word of the
-#              simple command in front of the redirection, behind any assignments, prefix
+#              For `kill`: the substitution is redirected into a loop (`done < <(...)`) that holds
+#              a `kill` in command position, in its body or its condition, as
+#              scanner::find_invocations recorded them; or the simple command the redirection
+#              belongs to has one among its words (`xargs kill < <(...)`, `xargs -I{} kill {} <
+#              <(...)`, `xargs < <(...) kill`); or the redirection is on `exec`, which opens the
+#              descriptor for the commands after it, and any `kill` behind it counts. For
+#              `count`: the command word of that simple command, behind any assignments, prefix
 #              commands and their flags, is `mapfile`, `readarray` or `read`, which capture the
-#              output, or `wc` or `xargs`.
+#              output, `wc` or `xargs`, or a `grep` that counts (consumption::words_count); or the
+#              loop keeps what it reads (consumption::loop_reads_as).
 #
 #              A group or subshell in front of the redirection (`{ xargs kill; } < <(...)`) reads
 #              the substitution as it reads a pipe: for `kill`, any `kill` in command position
@@ -693,9 +698,10 @@ function consumption::feeds_a_kill_backward() {
 #
 #              The substitution must be the innermost region around the invocation, and the target
 #              of an input redirection of any descriptor (`< <(...)`, `3< <(...)`). Redirections
-#              with a plain word as their target that stand between the command and that one are
-#              stepped over. A later redirection of the same descriptor is not looked at, and
-#              neither is what else runs inside the substitution (`< <(pgrep ... | sort)`); both
+#              that stand between the command and that one are stepped over, a region as their
+#              target included (`done 2> "$(mktemp)" < <(...)`, `done > >(tee log) < <(...)`). A
+#              later redirection of the same descriptor is not looked at, and neither is what
+#              else runs inside the substitution (`< <(pgrep ... | sort)`); both
 #              fail closed.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 openers_var name of the caller's array mapping the index of each token that closes a
@@ -712,35 +718,97 @@ function consumption::substitution_feeds() {
   local -n kills="$3"
   local -r tokens_var="$1" openers_var="$2" target="$4" seek="$5"
   local -r input_re='^[0-9]*<$'
-  local close opener enclosing=-1 k span start idx first word opened closer
+  local close opener enclosing=-1 enclosing_close=-1 k span start idx first last word opened closer
+  local -a closers_of=()
   for close in "${!openers[@]}"; do
     opener="${openers[close]}"
+    closers_of[opener]="${close}"
     if ((opener < target && close > target && opener > enclosing)); then
       enclosing="${opener}"
+      enclosing_close="${close}"
     fi
   done
   ((enclosing >= 1)) || return 1
   [[ "${toks[enclosing]}" == '<' && "${toks[enclosing - 1]}" =~ ${input_re} ]] || return 1
+  # The simple command the redirection belongs to, from the first word behind the operator or
+  # keyword it starts after to the last word before the operator that ends it. A region inside it
+  # is one word, and so are the braces of `{}` (`xargs -I{} kill {}`).
+  first="$((enclosing - 2))"
+  while ((first >= 0)); do
+    if [[ -n "${openers[first]:-}" ]]; then
+      first="$((openers[first] - 1))"
+      continue
+    fi
+    if [[ "${toks[first]}" == '}' ]] && ((first >= 1)) && [[ "${toks[first - 1]}" == '{' ]]; then
+      first="$((first - 2))"
+      continue
+    fi
+    if tokens::is_operator "${toks[first]}" || tokens::is_keyword "${toks[first]}"; then
+      break
+    fi
+    first="$((first - 1))"
+  done
+  first="$((first + 1))"
+  last="$((enclosing_close + 1))"
+  while ((last < ${#toks[@]})); do
+    if [[ -n "${closers_of[last]:-}" ]]; then
+      last="$((closers_of[last] + 1))"
+      continue
+    fi
+    if [[ "${toks[last]}" == '{' && "${toks[last + 1]:-}" == '}' ]]; then
+      last="$((last + 2))"
+      continue
+    fi
+    if tokens::is_operator "${toks[last]}"; then
+      break
+    fi
+    last="$((last + 1))"
+  done
+  last="$((last - 1))"
+  # The word in front of the redirection, past any other redirection; a region that is such a
+  # redirection's target (`2> "$(mktemp)"`, `> >(tee log)`) goes with it.
   k="$((enclosing - 2))"
   while ((k >= 0)); do
     tokens::redirection_span_back "${tokens_var}" "${k}" span
-    ((span > 0)) || break
-    k="$((k - span))"
+    if ((span > 0)); then
+      k="$((k - span))"
+      continue
+    fi
+    # The closing quote of `"$(...)"` belongs to the region it closes.
+    if ((k >= 1)) && [[ -n "${openers[k - 1]:-}" && "${toks[k]}" != *[!$'\001']* ]]; then
+      k="$((k - 1))"
+    fi
+    [[ -n "${openers[k]:-}" ]] || break
+    opener="${openers[k]}"
+    # A `$(` hangs off the `$` word in front of it; a process substitution's opener is its `<`
+    # or `>`, and a backtick region's its first backtick.
+    if [[ "${toks[opener]}" == '(' ]] && ((opener >= 1)) && [[ "${toks[opener - 1]}" == *'$' ]]; then
+      opener="$((opener - 1))"
+    fi
+    ((opener >= 1)) && [[ "${toks[opener - 1]}" =~ ${REDIRECTION_OPERATOR_RE} ]] || break
+    k="$((opener - 2))"
   done
-  ((k >= 0)) || return 1
-  # A `done` that closes no body is the last word of a simple command (`read -r done`).
-  if [[ "${toks[k]}" == 'done' ]] \
-    && start="$(loops::done_body_start "${tokens_var}" "${openers_var}" "${k}")"; then
-    [[ "${seek}" == 'kill' ]] || return 1
-    for ((idx = start + 1; idx < k; idx++)); do
-      if [[ -n "${kills[idx]:-}" ]]; then
-        return 0
-      fi
+  # `exec N< <(...)` opens the descriptor for the commands after it, which nothing here follows:
+  # any `kill` in command position behind it counts.
+  if [[ "${seek}" == 'kill' && "${toks[first]}" == 'exec' ]]; then
+    for ((idx = enclosing_close + 1; idx < ${#toks[@]}; idx++)); do
+      [[ -n "${kills[idx]:-}" ]] && return 0
     done
     return 1
   fi
+  # A `done` that closes no body is the last word of a simple command (`read -r done`).
+  if ((k >= 0)) && [[ "${toks[k]}" == 'done' ]] \
+    && start="$(loops::done_body_start "${tokens_var}" "${openers_var}" "${k}")"; then
+    # From the loop's keyword, so a `kill` in its condition counts (`while read p && kill $p`).
+    if consumption::construct_bounds "${tokens_var}" "${openers_var}" "${start}" opened closer \
+      && ((closer == k)); then
+      start="${opened}"
+    fi
+    consumption::loop_reads_as "${tokens_var}" "${kills_var}" "${start}" "${k}" "${seek}"
+    return
+  fi
   # A group or subshell reads the substitution as it reads a pipe: every command in it may.
-  if [[ "${toks[k]}" == '}' || "${toks[k]}" == ')' ]] && [[ -z "${openers[k]:-}" ]] && ((k > 0)) \
+  if ((k > 0)) && [[ "${toks[k]}" == '}' || "${toks[k]}" == ')' ]] && [[ -z "${openers[k]:-}" ]] \
     && consumption::construct_bounds "${tokens_var}" "${openers_var}" "$((k - 1))" opened closer \
     && ((closer == k)); then
     for ((idx = opened + 1; idx < k; idx++)); do
@@ -756,30 +824,108 @@ function consumption::substitution_feeds() {
     done
     return 1
   fi
-  [[ "${seek}" == 'count' ]] || return 1
-  # Back to the operator or keyword the simple command starts behind, then forward to its
-  # command word: a reader's name among the arguments (`grep read`) reads nothing.
-  first="${k}"
-  while ((first >= 0)); do
-    if [[ -n "${openers[first]:-}" ]]; then
-      first="$((openers[first] - 1))"
+  # A simple command: a `kill` in command position among its words (`xargs kill < <(...)`,
+  # `xargs -I{} kill {} < <(...)`, `xargs < <(...) kill`) reads what the substitution prints.
+  if [[ "${seek}" == 'kill' ]]; then
+    for ((idx = first; idx <= last; idx++)); do
+      [[ -n "${kills[idx]:-}" ]] && return 0
+    done
+    return 1
+  fi
+  # Its command word, behind any assignments, prefix commands and their flags: a reader's name
+  # among the arguments (`grep read`) reads nothing.
+  for ((idx = first; idx <= last; idx++)); do
+    word="${toks[idx]}"
+    if [[ "${word}" =~ ${REDIRECTION_OPERATOR_RE} ]]; then
+      idx="$((idx + 1))"
       continue
     fi
-    if tokens::is_operator "${toks[first]}" || tokens::is_keyword "${toks[first]}"; then
-      break
-    fi
-    first="$((first - 1))"
-  done
-  for ((idx = first + 1; idx <= k; idx++)); do
-    word="${toks[idx]}"
     if tokens::is_assignment_word "${word}" || [[ "${word}" == -* ]]; then
       continue
     fi
     # Before the prefix test: `xargs` is a prefix command as well as a reader.
     case "${word##*/}" in
       'mapfile' | 'readarray' | 'read' | 'wc' | 'xargs') return 0 ;;
+      'grep' | 'egrep' | 'fgrep')
+        consumption::words_count "${tokens_var}" "$((idx + 1))" "${last}"
+        return
+        ;;
     esac
     tokens::is_prefix_command "${word##*/}" || return 1
+  done
+  return 1
+}
+
+# @description True when a loop that reads a process substitution does what the caller asks
+#              about. For `kill`: a `kill` in command position anywhere from its keyword to its
+#              `done`, condition included. For `count`: a reader (`read`, `mapfile`,
+#              `readarray`) as the first word of a command in it, together with an assignment
+#              in command position (`pids+=("$p")`): the loop keeps what it reads. A loop that
+#              only prints it (`do echo "$p"`) displays it.
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 kills_var name of the caller's array holding an entry at the index of every `kill` in
+#         command position
+# @arg $3 from index of the loop's keyword or its `do`
+# @arg $4 to index of its `done`
+# @arg $5 seek `kill` or `count`
+# @exitcode 0 the loop does what was asked
+# @exitcode 1 it does not
+function consumption::loop_reads_as() {
+  local -n toks="$1"
+  local -n kills="$2"
+  local -r from="$3" to="$4" seek="$5"
+  local idx reads=0 keeps=0
+  for ((idx = from; idx < to; idx++)); do
+    if [[ "${seek}" == 'kill' ]]; then
+      [[ -n "${kills[idx]:-}" ]] && return 0
+      continue
+    fi
+    ((idx > from)) || continue
+    tokens::is_operator "${toks[idx - 1]}" || tokens::is_keyword "${toks[idx - 1]}" || continue
+    case "${toks[idx]##*/}" in
+      'mapfile' | 'readarray' | 'read') reads=1 ;;
+    esac
+    tokens::is_assignment_word "${toks[idx]}" && keeps=1
+  done
+  [[ "${seek}" == 'count' ]] && ((reads == 1 && keeps == 1))
+}
+
+# @description True when the words of a `grep` from one index to another make it print a count:
+#              `-c` or `--count` among its options, up to a `--`. A cluster is read as getopt reads
+#              it, so the letters behind one that takes a value are that value (`-ec`).
+# @arg $1 tokens_var name of the caller's token array
+# @arg $2 from index of the first word behind the command word
+# @arg $3 to index of the last word of the command
+# @exitcode 0 the grep counts
+# @exitcode 1 it does not
+function consumption::words_count() {
+  local -n toks="$1"
+  local -r from="$2" to="$3"
+  local idx i token skip=0
+  local -r value_re='^--(regexp|file|max-count|after-context|before-context|context|include|exclude|label)$'
+  for ((idx = from; idx <= to; idx++)); do
+    token="${toks[idx]}"
+    if ((skip == 1)); then
+      skip=0
+      continue
+    fi
+    case "${token}" in
+      '--') return 1 ;;
+      '--count') return 0 ;;
+    esac
+    if [[ "${token}" =~ ${value_re} ]]; then
+      skip=1
+    elif [[ "${token}" =~ ^-[A-Za-z0-9]+$ ]]; then
+      for ((i = 1; i < ${#token}; i++)); do
+        case "${token:i:1}" in
+          'c') return 0 ;;
+          [efmABCdD])
+            ((i == ${#token} - 1)) && skip=1
+            break
+            ;;
+        esac
+      done
+    fi
   done
   return 1
 }

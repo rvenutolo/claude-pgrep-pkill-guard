@@ -81,6 +81,6 @@ function assert_row() {
   done < "${CASES}"
 
   printf 'checked %s rows, %s failures\n' "${count}" "${failures}" >&3
-  [[ "${count}" -eq 2347 ]]
+  [[ "${count}" -eq 2364 ]]
   [[ "${failures}" -eq 0 ]]
 }

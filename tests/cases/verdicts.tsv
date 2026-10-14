@@ -2187,3 +2187,30 @@
 "systemd-run --root-directory /x pkill --full X"	deny:kill
 "systemd-run -M .host pkill --full X"	deny:kill
 "systemd-run --machine=box pkill --full X"	deny:kill
+"watch 'echo A' \\; pkill --full X"	deny:kill
+"eval 'echo A' \\; pkill --full X"	deny:kill
+"eval echo A \\; pkill --full X"	deny:kill
+"sh -c 'echo A' \\; pkill --full X"	allow
+"watch 'echo a'\"; pkill --full X\""	deny:kill
+"bash -c 'echo a'\"; pkill --full X\""	deny:kill
+"bash -c \"echo a\"'; pkill --full X'"	deny:kill
+"bash -c 'echo a; 'pkill' --full X'"	deny:kill
+"eval 'echo a'\"; pkill --full X\""	deny:kill
+"bash -c pkill\\ --full\\ X"	deny:kill
+"bash -c 'echo a'\\;\\ pkill\\ --full\\ X"	deny:kill
+"sudo -s 'echo a'\"; pkill --full X\""	deny:kill
+"script -c 'echo a'\"; pkill --full X\" /dev/null"	deny:kill
+"flock /tmp/l -c 'echo a'\"; pkill --full X\""	deny:kill
+"env --split-string='echo a'\"; pkill --full X\""	deny:kill
+"echo 'pkill'\" --full X\" | bash"	deny:kill
+"printf '%s\\n' 'pkill'\" --full X\" | bash"	deny:kill
+"bash -c 'echo '\\''pkill --full X'\\'''"	allow
+"bash -c 'echo a'$x"	allow
+"bash -c 'echo a'\"$(cat f)\""	allow
+"bash -c ls"	allow
+"echo 'pk'\"ill\" | grep pk"	allow
+"bash -c \"echo \\\"; pkill --full X\\\"\""	deny:kill
+"script -c \"echo \\\"; pkill --full X\\\"\" /dev/null"	deny:kill
+"watch 'echo a'\\\"' ; pkill --full X'"	deny:kill
+"env -S \"echo a\\\"; pkill --full X\""	deny:kill
+"echo \"echo \\\"; pkill --full X\\\"\" | bash"	deny:kill

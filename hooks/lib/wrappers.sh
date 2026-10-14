@@ -338,6 +338,10 @@ function wrappers::segment_pipe_carry() {
   if ((seg_ok == 1)) && [[ "${seg_cmd}" == 'cat' ]] && ((seg_here_set == 1)); then
     carry_text="${seg_here_text}"
     carry_text_set=1
+    # A heredoc a later here-string cannot be shown to displace is carried beside it.
+    if [[ -n "${seg_heredoc}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'heredoc'; then
+      carry_heredoc="${seg_heredoc}"
+    fi
   elif ((seg_ok == 1)) && [[ "${seg_cmd}" == 'cat' && -n "${seg_heredoc}" ]] \
     && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'heredoc'; then
     carry_heredoc="${seg_heredoc}"
@@ -405,12 +409,13 @@ function wrappers::stdin_reaches_wrapper() {
 #              vocabulary of wrappers::stdin_reaches_wrapper: `replaced` for a literal file or a closed
 #              stdin, `text` for a literal here-string, `maybe-pipe` for anything the command text does
 #              not resolve (see wrappers::redirection_replaces_stdin). The text of a literal here-string
-#              is what the command reads, so it comes back too.
+#              is what the command reads, so it comes back too, and so does that of a here-string glued
+#              to a backtick, whose kind is `maybe-pipe`.
 # @arg $1 command the raw command string
 # @arg $2 offset the offset of the redirection operator's first byte, its fd included
 # @arg $3 operator the operator token
 # @arg $4 kind_var name of the variable that receives the kind (set)
-# @arg $5 text_var name of the variable that receives the here-string's text, empty for any other kind (set)
+# @arg $5 text_var name of the variable that receives the here-string's text, empty when there is none (set)
 # @exitcode 0 always
 # shellcheck disable=SC2034 # the kind_ref nameref is the caller's variable, which shellcheck cannot follow
 function wrappers::redirection_stdin_kind() {
@@ -460,9 +465,10 @@ function wrappers::group_closer() {
 #              is redirected prints nothing into any pipe around it, and says so in the fourth field.
 #
 #              A literal here-string on the group (`{ bash; } <<< 'cmd'`) is its stdin as well, and its
-#              text comes back as the last field. A later redirection that may be that same descriptor
-#              (`<&0`, `< /dev/stdin`) leaves it in place, and only a later one that provably replaces
-#              fd 0 drops it.
+#              text comes back as the last field. One glued to a backtick comes back beside whatever
+#              else may be the group's stdin, joined to an earlier here-string's text. A later
+#              redirection that may be that same descriptor (`<&0`, `< /dev/stdin`) leaves it in
+#              place, and only a later one that provably replaces fd 0 drops it.
 # @arg $1 command the raw command string
 # @arg $2 stream the token stream after the group's opening token
 # @arg $3 first_closer the closing word the opening token expects
@@ -470,7 +476,7 @@ function wrappers::group_closer() {
 # @stdout `<kind>:<ordinal>:<piped>:<moved>:<here_set>:<text>`: the kind of the last fd 0 redirection after the closer,
 #         empty for none; when that kind is `heredoc`, the ordinal of its body (otherwise empty); 1 when
 #         the group's stdout is the pipe it sits on the left of, else 0; 1 when a redirection of fd 1
-#         after the closer may have taken its stdout elsewhere, else 0; 1 when a literal here-string may
+#         after the closer may have taken its stdout elsewhere, else 0; 1 when a here-string may
 #         still be the group's stdin, else 0; and that here-string's text (otherwise empty), which may
 #         hold colons and newlines and so comes last
 # @exitcode 0 always
@@ -560,8 +566,11 @@ function wrappers::group_stdin_kind() {
           ;;
         'maybe-pipe')
           # A here-string that cannot be shown to replace the pipe (see
-          # wrappers::redirection_replaces_stdin) is read beside it.
-          if [[ -n "${redirect_text}" ]]; then
+          # wrappers::redirection_replaces_stdin) is read beside it, and beside an earlier
+          # here-string, which the region glued to it may read.
+          if [[ -n "${redirect_text}" ]] && ((here_set == 1)); then
+            here_text+=$'\n'"${redirect_text}"
+          elif [[ -n "${redirect_text}" ]]; then
             here_text="${redirect_text}"
             here_set=1
           fi
@@ -606,7 +615,8 @@ function wrappers::group_stdin_kind() {
 #              A literal here-string is the stdin itself, so its text, quotes stripped, is what the
 #              redirected command reads. One whose word ends at a backtick is given too, with a no:
 #              the backtick may close the region the command is in (`echo \`bash <<< '...'\``), or
-#              open one that is part of the word, whose commands may read the pipe.
+#              open one that is part of the word, whose commands read whatever fd 0 was before: the
+#              pipe, or an earlier heredoc or here-string.
 # @arg $1 command the raw command string
 # @arg $2 offset the offset of the redirection operator's first byte, its fd included
 # @arg $3 text_var name of the variable that receives the here-string's text, empty otherwise (set)
@@ -621,7 +631,8 @@ function wrappers::redirection_replaces_stdin() {
   # ERE, evaluated unquoted in [[ =~ ]]. The operator group is followed by the
   # target group: `&-`, a quoted word, or a bare word. The tail requires the
   # word to end there, so a literal glued to an expansion (`'a'"${b}"`) or to
-  # another redirection does not pass as a literal.
+  # another redirection does not pass as a literal. A backtick may end it, and
+  # then the answer is no (below).
   local -r quoted="'[^']*'|\"[^\"\$\`\\\\]*\""
   local -r literal_re="^0?(<<<|<>|<)[[:blank:]]*(&-|${quoted}|[A-Za-z0-9_./~@%+=:,-]+)([[:space:];|&()\`]|\$)"
   [[ "${command:offset}" =~ ${literal_re} ]] || return 1
@@ -1021,15 +1032,16 @@ function wrappers::rewritten_payloads() {
 function wrappers::descriptor_payloads() {
   local -r command="$1"
   local -r fd_re='fd/(0*[1-9][0-9]*)([^0-9]|$)'
-  local text="${command}" rest="${command}" fd zeros spaces renumbered=0 renumbered_tokens
+  local text="${command}" rest="${command}" fd zeros padding renumbered=0 renumbered_tokens
   while [[ "${rest}" =~ ${fd_re} ]]; do
     fd="${BASH_REMATCH[1]}"
     rest="${rest#*fd/"${fd}"}"
     [[ "${text}" == *"${fd}<"* ]] || continue
     zeros="${fd//[0-9]/0}"
-    spaces="${zeros:1}"
-    text="${text//fd\/${fd}/fd\/${zeros}}"
-    text="${text//${fd}</${spaces//0/ }0<}"
+    padding="${zeros:1}"
+    padding="${padding//0/ }"
+    text="${text//fd\/"${fd}"/fd\/${zeros}}"
+    text="${text//"${fd}"</${padding}0<}"
     renumbered=1
   done
   ((renumbered == 1)) || return 0
@@ -1306,7 +1318,7 @@ function wrappers::shell_wrapper_payloads() {
   # reduction would cut a shell's `+o/x` down to an operand. `option_values` counts the words still to
   # come that are values of the wrapper's options (see wrappers::wrapper_option_facts).
   local wrapper_name='' wrapper_kind='' option_word option_values=0 option_c option_s
-  local offset token word next_at_cmd is_cmd_word raw c_text budget pending_source
+  local offset token word next_at_cmd is_cmd_word raw c_text budget pending_source action_ends
   local chain_before opens_wrapper opened_kind source_builtin
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
@@ -1566,8 +1578,11 @@ function wrappers::shell_wrapper_payloads() {
             ;;
           'maybe-pipe')
             # A here-string that cannot be shown to replace the pipe (see
-            # wrappers::redirection_replaces_stdin) is read beside it.
-            if [[ -n "${redirect_text}" ]]; then
+            # wrappers::redirection_replaces_stdin) is read beside it, and beside an earlier
+            # here-string, which the region glued to it may read.
+            if [[ -n "${redirect_text}" ]] && ((seg_here_set == 1)); then
+              seg_here_text+=$'\n'"${redirect_text}"
+            elif [[ -n "${redirect_text}" ]]; then
               seg_here_text="${redirect_text}"
               seg_here_set=1
             fi
@@ -1605,7 +1620,21 @@ function wrappers::shell_wrapper_payloads() {
         direct_word="${word}"
       fi
     fi
-    if ((in_wrapper == 1)) && { [[ -z "${direct_word}" ]] || tokens::is_operator "${token}"; }; then
+    # One of find's actions behind a wrapper whose options are over (`find . -exec bash -s \;
+    # -exec bash -c '...' \;`) starts the next command as an operator does, so it ends the wrapper
+    # the same way: the wrapper behind it is read in its own right. Before the options are over the
+    # word is a cluster of the wrapper's flags (`bash -exec '...'` holds a `-c`). A keyword there
+    # (`bash -c 'bash' ! bash -c '...'`) is read as restoring command position, and ends it too,
+    # which fails closed: bash hands those words to the script as its parameters.
+    action_ends=0
+    if ((in_wrapper == 1 && saw_s_operand == 1)) && tokens::is_keyword "${token}"; then
+      action_ends=1
+    elif ((in_wrapper == 1)) && { ((saw_s_operand == 1)) || [[ -n "${direct_word}" ]]; } \
+      && [[ "${token}" =~ ^-(exec|execdir|ok|okdir)$ ]]; then
+      action_ends=1
+    fi
+    if ((in_wrapper == 1)) \
+      && { [[ -z "${direct_word}" ]] || tokens::is_operator "${token}" || ((action_ends == 1)); }; then
       option_word="${word}"
       if [[ "${token}" == [-+]* ]]; then
         option_word="${token}"
@@ -1615,7 +1644,7 @@ function wrappers::shell_wrapper_payloads() {
       if ((option_values > 0)) && [[ "${option_word}" == -* ]]; then
         option_values=0
       fi
-      if tokens::is_operator "${token}"; then
+      if tokens::is_operator "${token}" || ((action_ends == 1)); then
         # What `runuser -u USER CMD` claimed from a pipe is CMD's input, and runs nothing, unless
         # CMD is `cat` or `tee` and hands it on down a pipe.
         if [[ -n "${direct_word}" ]] \
@@ -2103,7 +2132,8 @@ function wrappers::shell_wrapper_payloads() {
     fi
     # A wrapper opens only outside one: a keyword among a wrapper's operands restores command
     # position (`bash -s ! bash`), and a wrapper opened there would take over the payload the
-    # outer one is still to claim.
+    # outer one is still to claim. A keyword behind an operand that stood for the script ends the
+    # outer wrapper first (see action_ends above), and the wrapper behind it opens.
     opens_wrapper=0
     if ((at_cmd == 1 && in_wrapper == 0)) && budget="$(wrappers::wrapper_operand_budget "${word}")"; then
       opens_wrapper=1

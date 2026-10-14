@@ -38,7 +38,9 @@ jobs:
   gate:
     name: gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # The macOS leg runs the whole gate in about 25 minutes after a 4 minute setup, and the
+    # verdict table grows with every hook fix: the limit leaves room for both.
+    timeout-minutes: 45
     permissions:
       contents: read
     env:

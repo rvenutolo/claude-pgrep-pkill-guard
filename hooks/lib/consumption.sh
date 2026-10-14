@@ -716,9 +716,9 @@ function consumption::substitution_feeds() {
   local -n toks="$1"
   local -n openers="$2"
   local -n kills="$3"
-  local -r tokens_var="$1" openers_var="$2" target="$4" seek="$5"
+  local -r tokens_var="$1" openers_var="$2" kills_var="$3" target="$4" seek="$5"
   local -r input_re='^[0-9]*<$'
-  local close opener enclosing=-1 enclosing_close=-1 k span start idx first last word opened closer
+  local close opener enclosing=-1 enclosing_close=-1 k span start idx first last word opened closer cmd_word
   local -a closers_of=()
   for close in "${!openers[@]}"; do
     opener="${openers[close]}"
@@ -788,9 +788,26 @@ function consumption::substitution_feeds() {
     ((opener >= 1)) && [[ "${toks[opener - 1]}" =~ ${REDIRECTION_OPERATOR_RE} ]] || break
     k="$((opener - 2))"
   done
+  # The command word: past assignments, redirections with their targets, and `command` or
+  # `builtin` in front of a builtin.
+  cmd_word="${first}"
+  while ((cmd_word <= last)); do
+    if [[ "${toks[cmd_word]}" =~ ${REDIRECTION_OPERATOR_RE} ]]; then
+      cmd_word="$((cmd_word + 1))"
+      if [[ -n "${closers_of[cmd_word]:-}" ]]; then
+        cmd_word="${closers_of[cmd_word]}"
+      elif [[ "${toks[cmd_word + 1]:-}" == '(' && -n "${closers_of[cmd_word + 1]:-}" ]]; then
+        cmd_word="${closers_of[cmd_word + 1]}"
+      fi
+    elif ! tokens::is_assignment_word "${toks[cmd_word]}" \
+      && [[ "${toks[cmd_word]}" != 'command' && "${toks[cmd_word]}" != 'builtin' ]]; then
+      break
+    fi
+    cmd_word="$((cmd_word + 1))"
+  done
   # `exec N< <(...)` opens the descriptor for the commands after it, which nothing here follows:
   # any `kill` in command position behind it counts.
-  if [[ "${seek}" == 'kill' && "${toks[first]}" == 'exec' ]]; then
+  if [[ "${seek}" == 'kill' && "${toks[cmd_word]:-}" == 'exec' ]]; then
     for ((idx = enclosing_close + 1; idx < ${#toks[@]}; idx++)); do
       [[ -n "${kills[idx]:-}" ]] && return 0
     done
@@ -820,24 +837,37 @@ function consumption::substitution_feeds() {
       tokens::is_operator "${toks[idx - 1]}" || tokens::is_keyword "${toks[idx - 1]}" || continue
       case "${toks[idx]##*/}" in
         'mapfile' | 'readarray' | 'read' | 'wc' | 'xargs') return 0 ;;
+        'grep' | 'egrep' | 'fgrep')
+          consumption::words_count "${tokens_var}" "$((idx + 1))" "$((k - 1))" && return 0
+          ;;
       esac
     done
     return 1
   fi
   # A simple command: a `kill` in command position among its words (`xargs kill < <(...)`,
-  # `xargs -I{} kill {} < <(...)`, `xargs < <(...) kill`) reads what the substitution prints.
+  # `xargs -I{} kill {} < <(...)`, `xargs < <(...) kill`) reads what the substitution prints. One
+  # inside a region among them is that region's.
   if [[ "${seek}" == 'kill' ]]; then
     for ((idx = first; idx <= last; idx++)); do
+      if [[ -n "${closers_of[idx]:-}" ]]; then
+        idx="${closers_of[idx]}"
+        continue
+      fi
       [[ -n "${kills[idx]:-}" ]] && return 0
     done
     return 1
   fi
   # Its command word, behind any assignments, prefix commands and their flags: a reader's name
   # among the arguments (`grep read`) reads nothing.
-  for ((idx = first; idx <= last; idx++)); do
+  for ((idx = cmd_word; idx <= last; idx++)); do
     word="${toks[idx]}"
     if [[ "${word}" =~ ${REDIRECTION_OPERATOR_RE} ]]; then
       idx="$((idx + 1))"
+      if [[ -n "${closers_of[idx]:-}" ]]; then
+        idx="${closers_of[idx]}"
+      elif [[ "${toks[idx + 1]:-}" == '(' && -n "${closers_of[idx + 1]:-}" ]]; then
+        idx="${closers_of[idx + 1]}"
+      fi
       continue
     fi
     if tokens::is_assignment_word "${word}" || [[ "${word}" == -* ]]; then
@@ -859,9 +889,10 @@ function consumption::substitution_feeds() {
 # @description True when a loop that reads a process substitution does what the caller asks
 #              about. For `kill`: a `kill` in command position anywhere from its keyword to its
 #              `done`, condition included. For `count`: a reader (`read`, `mapfile`,
-#              `readarray`) as the first word of a command in it, together with an assignment
-#              in command position (`pids+=("$p")`): the loop keeps what it reads. A loop that
-#              only prints it (`do echo "$p"`) displays it.
+#              `readarray`) as the first word of a command in it, together with an append in
+#              command position (`pids+=("$p")`): the loop keeps what it reads. A loop that only
+#              prints it (`do echo "$p"`), or sets a variable on the way (`name=$(...)`),
+#              displays it.
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 kills_var name of the caller's array holding an entry at the index of every `kill` in
 #         command position
@@ -885,7 +916,7 @@ function consumption::loop_reads_as() {
     case "${toks[idx]##*/}" in
       'mapfile' | 'readarray' | 'read') reads=1 ;;
     esac
-    tokens::is_assignment_word "${toks[idx]}" && keeps=1
+    [[ "${toks[idx]}" =~ ^[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?\+= ]] && keeps=1
   done
   [[ "${seek}" == 'count' ]] && ((reads == 1 && keeps == 1))
 }
@@ -895,7 +926,7 @@ function consumption::loop_reads_as() {
 #              it, so the letters behind one that takes a value are that value (`-ec`).
 # @arg $1 tokens_var name of the caller's token array
 # @arg $2 from index of the first word behind the command word
-# @arg $3 to index of the last word of the command
+# @arg $3 to index of the last token to read at most; the words end at the first operator before it
 # @exitcode 0 the grep counts
 # @exitcode 1 it does not
 function consumption::words_count() {
@@ -905,6 +936,7 @@ function consumption::words_count() {
   local -r value_re='^--(regexp|file|max-count|after-context|before-context|context|include|exclude|label)$'
   for ((idx = from; idx <= to; idx++)); do
     token="${toks[idx]}"
+    tokens::is_operator "${token}" && return 1
     if ((skip == 1)); then
       skip=0
       continue
@@ -932,9 +964,10 @@ function consumption::words_count() {
 
 # @description True when the invocation's output feeds a kill: forward (`pgrep ... | xargs
 #              kill`, `... | while read p; do kill "$p"; done`), backward (`kill $(pgrep ...)`), or
-#              as the stdin of a loop or group that kills (`while read p; do kill "$p"; done < <(pgrep
-#              ...)`). The scans are independent; see consumption::pipeline_feeds,
-#              consumption::feeds_a_kill_backward and consumption::substitution_feeds.
+#              as the stdin of a loop, group or command that kills, or behind `exec N<`
+#              (`while read p; do kill "$p"; done < <(pgrep ...)`). The scans are independent;
+#              see consumption::pipeline_feeds, consumption::feeds_a_kill_backward and
+#              consumption::substitution_feeds.
 # @arg $1 tokens_var name of the caller's token array (built once by classify::classify_command; every
 #         invocation in the same command reuses it rather than re-parsing the token stream)
 # @arg $2 openers_var name of the caller's region-opener array, built alongside the token array
@@ -1063,8 +1096,9 @@ function consumption::next_command_reads_status() {
 #              or a counting `grep` (`-c`, `--count`) as the command of a later stage of the
 #              invocation's pipeline, or a `&&` or `||` behind
 #              that pipeline, which consumption::pipeline_feeds finds; standing in a process
-#              substitution that is the stdin of `mapfile`, `readarray`, `read`, `wc` or `xargs`,
-#              or of a group that holds one, which consumption::substitution_feeds finds; sitting
+#              substitution that is the stdin of `mapfile`, `readarray`, `read`, `wc`, `xargs` or a
+#              counting `grep`, of a group that holds one, or of a loop that keeps what it reads,
+#              which consumption::substitution_feeds finds; sitting
 #              inside a command substitution; and the next command in the list reading `$?`, which
 #              consumption::next_command_reads_status handles. A pipeline that only passes the output
 #              on (`| sort | head`) displays it, and a `&&` or `||` behind a lone `&` tests some

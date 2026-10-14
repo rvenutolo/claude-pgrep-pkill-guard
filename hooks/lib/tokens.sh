@@ -488,6 +488,21 @@ function tokens::is_assignment_word() {
   [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?\+?=.*$ ]]
 }
 
+# @description True when a token opens a compound command whose first part is a command list:
+#              `while`, `until`, `if`, `case`, a group or a subshell. bash reads one behind the
+#              name of `coproc NAME`, where nothing else is in command position. A `for` or
+#              `select` head holds words, not commands, so nothing a walker reads follows it there.
+# @arg $1 token the token to test
+# @exitcode 0 the token opens a compound command
+# @exitcode 1 it does not
+function tokens::opens_compound() {
+  local -r token="$1"
+  case "${token}" in
+    'while' | 'until' | 'if' | 'case' | '{' | '(') return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # @description True when a token is a shell keyword after which the next word is again in
 #              command position.
 # @arg $1 token the token to test

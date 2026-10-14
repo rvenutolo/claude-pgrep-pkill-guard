@@ -65,6 +65,7 @@ function consumption::construct_bounds() {
   local -n open_ref="$4" close_ref="$5"
   # shellcheck disable=SC2034 # written through tokens::redirection_step's nameref, which shellcheck cannot follow
   local idx token at_cmd=1 redir='' top closes pushed depth_at=-1 before=''
+  local was_coproc after_coproc=0 prior_coproc after_name=0
   # Index-aligned, innermost last: starts[i] is the index of the token that opened a construct
   # and ends[i] the word that closes it.
   local -a starts=() ends=()
@@ -74,6 +75,12 @@ function consumption::construct_bounds() {
       ((${#ends[@]} > 0)) || return 1
       depth_at="${#ends[@]}"
     fi
+    prior_coproc="${after_coproc}"
+    after_coproc=0
+    if ((after_name == 1)) && tokens::opens_compound "${token}"; then
+      at_cmd=1
+    fi
+    after_name=0
     if tokens::redirection_step "${token}" redir; then
       continue
     fi
@@ -120,6 +127,8 @@ function consumption::construct_bounds() {
       starts+=("${idx}")
       ends+=("${pushed}")
     fi
+    was_coproc=0
+    ((at_cmd == 1)) && [[ "${token}" == 'coproc' ]] && was_coproc=1
     if tokens::is_word_region_close "${tokens_var}" "${openers_var}" "${idx}"; then
       at_cmd=0
     elif [[ "${token}" == '{' || "${token}" == '}' ]] && ((at_cmd == 0)); then
@@ -130,6 +139,11 @@ function consumption::construct_bounds() {
       at_cmd=1
     elif ((at_cmd == 1)) && { tokens::is_keyword "${token}" || [[ "${token}" == 'coproc' ]]; }; then
       at_cmd=1
+    elif ((prior_coproc == 1)) && [[ "${token}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      # `coproc NAME while ...`: the name ends nothing, and a compound command behind it is
+      # in command position (see the top of the loop). Any other word there is an argument.
+      at_cmd=0
+      after_name=1
     elif [[ "${token}" == 'do' ]] && ((idx >= 2)) \
       && [[ "${toks[idx - 2]}" == 'for' || "${toks[idx - 2]}" == 'select' ]]; then
       # `for x do`: bash reads the keyword behind the loop variable.
@@ -137,6 +151,7 @@ function consumption::construct_bounds() {
     else
       at_cmd=0
     fi
+    after_coproc="${was_coproc}"
     before="${token}"
   done
   return 1

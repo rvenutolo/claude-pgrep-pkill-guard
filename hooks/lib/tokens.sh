@@ -22,8 +22,10 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # options, which is what tokens::prefix_chain_step below is for. `timeout` belongs here
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
 # do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`,
-# `exec`, `flock`, `entr` and the builtin `eval`. A wrapper that is not listed hides what it
-# runs: the guard sees nothing behind `strace`. `watch` and `eval` also hand their operands to
+# `exec`, `flock`, `entr`, `systemd-run` and the builtin `eval`. A wrapper that is not listed
+# hides what it runs: the guard sees nothing behind `strace`. `find` is no prefix: the command
+# it runs stands behind one of its `-exec` actions, which tokens::prefix_chain_step reads.
+# `watch` and `eval` also hand their operands to
 # a shell (`watch 'pkill --full X'`), and so do `sudo -s`, `sudo -i`, `entr -s` and `env -S`;
 # the chain cannot see into a quoted one, so wrappers::shell_wrapper_payloads reads it as a
 # payload.
@@ -35,7 +37,7 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # nothing more, since NAME ends the chain and the `{` restores command position.
 readonly -a PREFIX_COMMANDS=(
   'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
-  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval' 'entr'
+  'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval' 'entr' 'systemd-run'
 )
 
 # An option word that carries the command line of `env -S` in the same word (`-S/usr/bin/cmd`,
@@ -148,6 +150,21 @@ function tokens::prefix_value_spelling() {
     'flock')
       case "${word}" in
         '-w' | '--wait' | '--timeout' | '-E' | '--conflict-exit-code' | '-c' | '--command')
+          return 0
+          ;;
+        *) return 1 ;;
+      esac
+      ;;
+    # `-H` and `-M` name where the command runs, and `-M .host` is this machine: the command
+    # behind them is read as run here, which fails closed for another host.
+    'systemd-run')
+      case "${word}" in
+        '-u' | '--unit' | '-p' | '--property' | '--description' | '--slice' | '--expand-environment' | \
+          '--service-type' | '--uid' | '--gid' | '--nice' | '--working-directory' | '-E' | '--setenv' | \
+          '--path-property' | '--socket-property' | '--timer-property' | '--on-active' | '--on-boot' | \
+          '--on-startup' | '--on-unit-active' | '--on-unit-inactive' | '--on-calendar' | '-C' | \
+          '--capsule' | '--background' | '--json' | '--job-mode' | '--root-directory' | '-H' | '--host' | \
+          '-M' | '--machine')
           return 0
           ;;
         *) return 1 ;;
@@ -276,6 +293,12 @@ function tokens::prefix_break_spelling() {
         *) return 1 ;;
       esac
       ;;
+    'systemd-run')
+      case "${word}" in
+        '-h' | '--help' | '--version') return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
     *) return 1 ;;
   esac
 }
@@ -330,7 +353,9 @@ function tokens::prefix_breaks_chain() {
 #              in command position itself (`env -u pkill cmd` unsets a variable, it does not run
 #              one), `--` ends the flags, and the operands the prefix is entitled to are spent one
 #              per word. The first word that is none of those IS the command, so the chain ends
-#              there. An option that makes the prefix run nothing ends it too.
+#              there. An option that makes the prefix run nothing ends it too. Outside command
+#              position, `-exec`, `-execdir`, `-ok` and `-okdir` put the word after them in it,
+#              as `find` runs that word.
 # @arg $1 token the raw token
 # @arg $2 word the token reduced to its basename, or an option word as written
 # @arg $3 at_cmd 1 when this token is itself in command position
@@ -399,6 +424,13 @@ function tokens::prefix_chain_step() {
   fi
   if ((at_cmd != 1)); then
     chain_ref=''
+    # The word behind one of find's actions that run a command is that command
+    # (`find . -exec pkill --full x \;`). The action is read in any command, not only behind
+    # `find`: nothing here remembers the command word once a prefix behind an earlier action
+    # has replaced the chain, and a second action of the same `find` must still be read.
+    case "${word}" in
+      '-exec' | '-execdir' | '-ok' | '-okdir') return 0 ;;
+    esac
     return 1
   fi
   if tokens::is_assignment_word "${token}"; then

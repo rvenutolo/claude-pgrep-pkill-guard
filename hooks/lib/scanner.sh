@@ -66,6 +66,8 @@ function scanner::scan_command() {
 #              never recorded. A redirection anywhere in front of the command word
 #              (`2> /dev/null pkill ...`, `sudo >f pkill ...`, `FOO=1 >f pkill ...`) is skipped
 #              with its target, by tokens::redirection_step, for the same reason.
+#              The word behind `-exec`, `-execdir`, `-ok` or `-okdir` is in command position too,
+#              as tokens::prefix_chain_step reads it: `find` runs it.
 #
 #              A substitution (`$(...)`, `$((...))`, a backtick pair, or a process substitution
 #              `<(...)` / `>(...)`) is one word of the simple command around it, so

@@ -812,6 +812,93 @@ function wrappers::watch_payload() {
   printf '%s\t%s\0' "${anchor}" "${script}"
 }
 
+# @description The text bash makes of one word written as adjacent pieces: single-quoted,
+#              double-quoted and unquoted ones, with the quotes removed and each backslash
+#              escape resolved as bash resolves it in that piece (`'echo a'"; b"`, `pk''ill`,
+#              `a\ b\;`). A backslash-newline joins the lines.
+# @arg $1 spelled the word as written
+# @arg $2 text_var name of the caller's variable that receives the text (set). Never pass a
+#         variable called spelled, text_ref, out, i, n, c or close.
+# @exitcode 0 the word is literal text
+# @exitcode 1 a piece expands something (`$`, a backtick, an ANSI-C `$'...'`) or a quote is not
+#             closed; the variable is not set
+function wrappers::literal_word() {
+  local -r spelled="$1"
+  local -n text_ref="$2"
+  local out='' i=0 c close
+  local -r n="${#spelled}"
+  while ((i < n)); do
+    c="${spelled:i:1}"
+    case "${c}" in
+      "'")
+        close="${spelled:i+1}"
+        [[ "${close}" == *"'"* ]] || return 1
+        close="${close%%"'"*}"
+        out+="${close}"
+        i="$((i + ${#close} + 2))"
+        ;;
+      '"')
+        i="$((i + 1))"
+        while true; do
+          ((i < n)) || return 1
+          c="${spelled:i:1}"
+          case "${c}" in
+            '"') break ;;
+            '$' | '`') return 1 ;;
+            '\')
+              # Inside double quotes a backslash escapes only `$`, a backtick, `"`, `\` and a
+              # newline; before any other byte it stays.
+              case "${spelled:i+1:1}" in
+                '$' | '`' | '"' | '\') out+="${spelled:i+1:1}" ;;
+                $'\n') ;;
+                *) out+='\'"${spelled:i+1:1}" ;;
+              esac
+              i="$((i + 2))"
+              continue
+              ;;
+          esac
+          out+="${c}"
+          i="$((i + 1))"
+        done
+        i="$((i + 1))"
+        ;;
+      '\')
+        ((i + 1 < n)) || return 1
+        [[ "${spelled:i+1:1}" == $'\n' ]] || out+="${spelled:i+1:1}"
+        i="$((i + 2))"
+        ;;
+      '$' | '`') return 1 ;;
+      *)
+        out+="${c}"
+        i="$((i + 1))"
+        ;;
+    esac
+  done
+  text_ref="${out}"
+}
+
+# @description The text a word of a wrapper's command hands on: its literal text when
+#              wrappers::literal_word can tell it; otherwise a fully quoted word with its quotes
+#              stripped (`"pkill ${x}"`, whose expansion stays as written), or the word as written.
+# @arg $1 spelled the word as written
+# @arg $2 text_var name of the caller's variable that receives the text (set). Never pass a
+#         variable called spelled or word_text_ref.
+# @exitcode 0 the word is literal text or fully quoted
+# @exitcode 1 neither; the variable holds the word as written
+function wrappers::word_text() {
+  local -r spelled="$1"
+  local -n word_text_ref="$2"
+  if [[ "${spelled}" == *[\'\"\\]* ]] && wrappers::literal_word "${spelled}" "$2"; then
+    return 0
+  fi
+  if [[ ("${spelled}" == \"*\" || "${spelled}" == \'*\') && "${#spelled}" -ge 2 ]]; then
+    word_text_ref="${spelled:1:${#spelled}-2}"
+    return 0
+  fi
+  word_text_ref="${spelled}"
+  [[ "${spelled}" != *[\$\`]* ]]
+}
+
 # @description Find the payloads of local shell wrappers and print each one's raw text,
 #              NUL-terminated, with any surrounding quotes stripped. Each is printed behind its
 #              anchor and a tab: the byte offset of a word of the simple command that runs it
@@ -825,13 +912,15 @@ function wrappers::watch_payload() {
 #              within the wrapper's operand budget (see wrappers::wrapper_operand_budget -- this is what
 #              keeps `bash deploy.sh -c '...'`, where the `-c` belongs to the script, from being
 #              read as a payload; the value of an option, such as the `pipefail` of `-o pipefail`,
-#              is no operand, see wrappers::wrapper_option_facts); and the raw slice is a single
-#              fully quoted word. That last
+#              is no operand, see wrappers::wrapper_option_facts); and the word is literal text
+#              (wrappers::literal_word: adjacent quoted and escaped pieces, `'a'"; b"`, `a\ b`) or
+#              one fully quoted word. That last
 #              condition is what keeps the recursion honest -- a double-quoted payload containing
 #              a command substitution is NOT one opaque token, because the scanner deliberately
 #              re-enters code context inside `$(...)`, and the outer scan can already see the
 #              substitution for itself. Slicing a fragment of such a payload and recursing on it
-#              would classify text that is not a command.
+#              would classify text that is not a command. A word that expands something and is
+#              not fully quoted is not read.
 #
 #              A heredoc feeding the wrapper's stdin (`bash <<'EOF'`, `sudo sh <<EOF`, `0<<EOF
 #              bash`) is a payload too: the body is the script the wrapper runs, here. A
@@ -949,8 +1038,8 @@ function wrappers::watch_payload() {
 #
 #              `watch` is a payload source too: it joins its operands with spaces and runs the result
 #              through `sh -c`, so `watch 'pkill --full X'` runs the kill. The first operand after
-#              watch's options (and `--`) is read, quotes stripped from a fully quoted word and
-#              backslashes dropped from an escaped one (`watch pkill\ --full\ X`), and the words after it join it, as
+#              watch's options (and `--`) is read as wrappers::word_text reads it, quotes and escapes
+#              resolved (`watch pkill\ --full\ X`, `watch 'a' \; b`), and the words after it join it, as
 #              wrappers::watch_payload does; a plain unquoted operand yields the same verdict through
 #              the prefix chain as through the script. With `-x` or `--exec` the operand is a program
 #              name, not a script, and nothing is read; `watch $'...'` is not read either.
@@ -1290,9 +1379,9 @@ function wrappers::shell_wrapper_payloads() {
         fi
       elif ((saw_c == 1)) && [[ "${option_word}" != -* ]] \
         && [[ "${wrapper_kind}" != 'shell' || "${option_word}" != +* ]]; then
-        raw="${command:offset:${#token}}"
-        if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-          printf '%s\t%s\0' "${anchor}" "${raw:1:${#raw}-2}"
+        # The `-c` string, written as one word of any quoting (`'...'`, `'a'"b"`, `a\ b`).
+        if wrappers::word_text "${command:offset:${#token}}" raw; then
+          printf '%s\t%s\0' "${anchor}" "${raw}"
         fi
         in_wrapper=0
         saw_c=0
@@ -1361,12 +1450,8 @@ function wrappers::shell_wrapper_payloads() {
     # from the option when its value arrives here.
     if ((chain_skip == 0)) && ((at_cmd == 0 || exec_word == 1)) && ! tokens::is_operator "${token}" \
       && ! tokens::is_keyword "${token}"; then
-      raw="${command:offset:${#token}}"
-      if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-        seg_words+=("${raw:1:${#raw}-2}")
-      else
-        seg_words+=("${raw}")
-      fi
+      wrappers::word_text "${command:offset:${#token}}" raw || true # a word that expands is kept as written
+      seg_words+=("${raw}")
     fi
 
     # Inside a group that is a pipe's producer, every command that ends here prints into that pipe, so
@@ -1556,10 +1641,7 @@ function wrappers::shell_wrapper_payloads() {
     if ((script_next == 1)); then
       script_next=0
       if ! tokens::is_operator "${token}"; then
-        raw="${command:offset:${#token}}"
-        if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-          raw="${raw:1:${#raw}-2}"
-        fi
+        wrappers::word_text "${command:offset:${#token}}" raw || true # a word that expands is read as written
         printf '%s\t%s\0' "${script_anchor}" "${raw}"
       fi
     elif [[ "${token}" == -* ]]; then
@@ -1583,10 +1665,7 @@ function wrappers::shell_wrapper_payloads() {
           script_anchor="${offset}"
         else
           raw="${command:offset:${#token}}"
-          raw="${raw:${script_where#attached:}}"
-          if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-            raw="${raw:1:${#raw}-2}"
-          fi
+          wrappers::word_text "${raw:${script_where#attached:}}" raw || true # a word that expands is read as written
           printf '%s\t%s\0' "${offset}" "${raw}"
         fi
       fi
@@ -1594,10 +1673,7 @@ function wrappers::shell_wrapper_payloads() {
     # The operands after watch's first one. They are kept here and not in `seg_words`, which leaves out
     # a word still in command position (`watch sudo '...'`).
     if ((watch_first_set == 1)) && ! tokens::is_operator "${token}"; then
-      raw="${command:offset:${#token}}"
-      if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-        raw="${raw:1:${#raw}-2}"
-      fi
+      wrappers::word_text "${command:offset:${#token}}" raw || true # a word that expands is kept as written
       watch_rest+=("${raw}")
     fi
     # `watch` runs its operands through `sh -c`, so they are a script: a quoted word, or one with
@@ -1621,10 +1697,7 @@ function wrappers::shell_wrapper_payloads() {
         watch_active=0
         raw="${command:offset:${#token}}"
         if ((watch_exec == 0)); then
-          watch_first="${raw}"
-          if [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-            watch_first="${raw:1:${#raw}-2}"
-          elif [[ "${raw}" == *\\* ]]; then
+          if ! wrappers::word_text "${raw}" watch_first && [[ "${raw}" == *\\* ]]; then
             watch_first="${raw//\\/}"
           fi
           watch_first_set=1

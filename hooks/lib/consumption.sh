@@ -947,8 +947,15 @@ function consumption::result_is_consumed() {
   # `if sudo -u bob pgrep --full x`, `if timeout 5 pgrep --full x` and every
   # other prefix carrying an option or an operand (#132). The prefix-command test
   # stays ahead of the stop test because `time` is both a prefix and a keyword.
+  local -n openers="$2"
   local k="$((target - 1))" word
   while ((k >= 0)); do
+    # A region in front of the invocation is a word of its command, an assignment's value or a
+    # redirection's target (`if FOO=$(true) pgrep ...`, `if 2> >(cat) pgrep ...`): step over it.
+    if [[ -n "${openers[k]:-}" ]]; then
+      k="$((openers[k] - 1))"
+      continue
+    fi
     word="${toks[k]##*/}"
     # An option is no path: reduced, `--file=/x/if` would read as the keyword.
     [[ "${toks[k]}" == -* && ! "${toks[k]}" =~ ${SPLIT_STRING_WORD_RE} ]] && word="${toks[k]}"

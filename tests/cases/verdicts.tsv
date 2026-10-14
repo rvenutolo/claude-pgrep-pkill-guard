@@ -2261,3 +2261,14 @@
 "while true; do pgrep --full x && > \"$(mktemp)\" break; sleep 1; done"	deny:loop
 "while 2> >(cat) pgrep --full x; do sleep 1; done"	deny:loop
 "while true; do pgrep --full x; echo $(true) break; sleep 1; done"	allow
+"while true; do > >(cat) done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while true; do 2> >(cat) done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while true; do > \"$(mktemp)\" done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while true; do > `mktemp` done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while true; do <<< $(true) done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while true; do >f <(true) done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while true; do 2>&1 >(cat) done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while >f <(true) do; pgrep --full x; do sleep 1; done"	deny:loop
+"while 2>/dev/null >(cat) do; pgrep --full x; do sleep 1; done"	deny:loop
+"while true; do coproc >f cat done; pgrep --full x && break; sleep 1; done"	deny:loop
+"while true; do coproc 2>/dev/null cat done; pgrep --full x && break; sleep 1; done"	deny:loop

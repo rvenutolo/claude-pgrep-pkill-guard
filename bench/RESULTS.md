@@ -9,30 +9,31 @@ hook that runs on every Bash tool call.
 
 | field                 | value                                                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------- |
-| date                  | 2026-09-07T00:32:09+00:00                                                                                |
-| commit                | `8bfd204`                                                                                                |
-| kernel                | Linux 6.8.0-139-generic x86_64                                                                           |
+| date                  | 2026-10-15T20:52:16+00:00                                                                                |
+| commit                | `57bdafc`                                                                                                |
+| kernel                | Linux 6.8.0-146-generic x86_64                                                                           |
 | cpu                   | 12th Gen Intel(R) Core(TM) i9-12900HK                                                                    |
 | bash                  | 5.3.15(1)-release                                                                                        |
-| awk                   | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/bpy2ps3f0f3gvgvqjwgqriw1j1n840wd-gawk-5.4.1/bin/awk`) |
+| awk                   | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/63g104xwbzfpcq0h7c99w19m6j9ly3p1-gawk-5.4.1/bin/awk`) |
 | jq                    | jq-1.8.2                                                                                                 |
 | governor              | powersave (EPP balance_performance)                                                                      |
 | power                 | AC                                                                                                       |
-| load at start         | 0.41 0.37 0.22                                                                                           |
-| package temp at start | 36 C                                                                                                     |
+| load at start         | 0.16 0.14 0.14                                                                                           |
+| package temp at start | 96 C                                                                                                     |
 | repetitions           | 45                                                                                                       |
-| samples               | 16560                                                                                                    |
+| samples               | 115020                                                                                                   |
 
 ## Per-call cost
 
-| cohort     | path exercised                                                                           |    n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
-| ---------- | ---------------------------------------------------------------------------------------- | ---: | -------: | -------: | -------: | -------: |
-| `baseline` | process spawn and pipe only, no hook -- the floor                                        |  585 |     0.95 |     2.04 |     2.50 |     3.38 |
-| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                                  |  585 |     1.57 |     3.33 |     3.87 |     8.28 |
-| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus                   |  270 |     1.53 |     3.17 |     4.11 |     5.53 |
-| `quiet`    | bash startup, one `jq` spawn, one scanner pass                                           | 2745 |    10.30 |    35.12 |    43.24 |    57.93 |
-| `inspect`  | the above, plus a second scanner pass, `classify::probe_keys` and `repeat::repeat_check` | 4500 |    19.53 |    66.04 |    89.82 |   118.40 |
-| `deny`     | the stateless tiers plus `messages::deny_message`; no state                              | 7875 |    16.96 |    38.19 |    55.69 |    74.00 |
+| cohort     | path exercised                                                                                              |     n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | ----: | -------: | -------: | -------: | -------: |
+| `baseline` | process spawn and pipe only, no hook -- the floor                                                           |  3150 |     0.90 |     2.04 |     2.55 |     5.28 |
+| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                                                     |  3150 |     1.49 |     3.46 |     4.21 |     8.81 |
+| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus                                      |   270 |     1.55 |     3.40 |     4.09 |     5.22 |
+| `quiet`    | bash startup, one `jq` spawn, one scanner pass                                                              | 19485 |    13.84 |    54.68 |    78.65 |   219.06 |
+| `inspect`  | the above, plus a second scanner pass, `classify::probe_keys` and a `repeat::repeat_check` miss             |  3150 |    28.44 |    90.77 |   147.81 |   279.34 |
+| `repeat`   | the `inspect` path, where `repeat::repeat_check` finds a hit and `messages::repeat_message` writes the deny | 17325 |    35.57 |   108.41 |   150.71 |   228.43 |
+| `deny`     | the stateless tiers plus `messages::deny_message`; no state                                                 | 68490 |    23.93 |    66.96 |   108.45 |   178.37 |
 
 ## How to read this
 
@@ -47,13 +48,15 @@ between a row and that one.
 takes the same `skipped` short-circuit an ordinary command does, since none
 of `TYPICAL_COMMANDS` mentions `pgrep`, `kill`, or `.output`.
 
-The other four hook rows are driven by `tests/cases/verdicts.tsv`, which
+The other hook rows are driven by `tests/cases/verdicts.tsv`, which
 exists to be hard on the scanner: even its `allow` rows are quoting
 tricks, `bash -c` wrappers and `ssh host '...'` shapes, picked because
 they are awkward to tokenize rather than because anyone runs them. Read
 `quiet` as the adversarial ceiling on the path a command that merely
 mentions `kill` takes, and the gap between `skipped` and `quiet` as the
-cost of reaching the scanner at all.
+cost of reaching the scanner at all. `repeat` holds the `inspect` rows the
+repeat rule denied: the corpus probes some keys many times in one pass, so
+it times that rule's hit path apart from the calls it lets through.
 
 Percentiles are nearest-rank over every sample in the cohort. Regenerate
 with `just bench`.

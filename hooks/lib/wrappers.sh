@@ -840,7 +840,7 @@ function wrappers::script_option() {
 # @description True when an option word of `sudo` makes it run a shell (`-s`, `-i`, `--shell`,
 #              `--login`), which takes the words behind sudo's options as one command line. A
 #              cluster is read as getopt reads it: the letters behind the first one that takes a
-#              value are that value (`-uadmin`), not flags.
+#              value are that value (`-uadmin`, `-sD/tmp`), not flags.
 # @arg $1 word the option word as written
 # @exitcode 0 the option makes sudo run a shell
 # @exitcode 1 it does not
@@ -850,8 +850,8 @@ function wrappers::sudo_runs_shell() {
   if [[ "${word}" == '--shell' || "${word}" == '--login' ]]; then
     return 0
   fi
-  [[ "${word}" =~ ^-[A-Za-z]+$ ]] || return 1
-  for ((i = 1; i < ${#word}; i++)); do
+  [[ "${word}" =~ ^-[A-Za-z]+ ]] || return 1
+  for ((i = 1; i < ${#BASH_REMATCH[0]}; i++)); do
     if [[ "${word:i:1}" == [si] ]]; then
       return 0
     fi
@@ -860,6 +860,110 @@ function wrappers::sudo_runs_shell() {
     fi
   done
   return 1
+}
+
+# @description Print the command a command runs from its operands, NUL-terminated: `sg GROUP
+#              COMMAND`, which hands COMMAND to a shell, and `script FILE COMMAND...`, the BSD
+#              spelling, which runs COMMAND. The words behind the first operand are joined with
+#              spaces, as `watch` joins its operands, which reads more than `sg` does with more than
+#              one word and fails closed. Nothing is printed when a `-c` in front of the first
+#              operand names the command instead (wrappers::script_option reads that one) or no
+#              word follows the first operand. A `-c` behind it is printed with the command, which
+#              fails closed.
+#              `script`'s options that take a value, of util-linux and of BSD, are stepped over with
+#              it, as getopt reads them.
+# @arg $1 runner `sg` or `script`
+# @arg $2 anchor the anchor to print the command behind
+# @arg $@ words the command's words after its name, as wrappers::word_text reads them
+# @stdout an `<anchor><TAB><command>` record, NUL-terminated, or nothing
+# @exitcode 0 always
+function wrappers::operand_command_payload() {
+  local -r runner="$1" anchor="$2"
+  shift 2
+  local -a words=("$@")
+  local -r n="${#words[@]}"
+  local i=0 word letters flags script
+  while ((i < n)); do
+    word="${words[i]}"
+    i="$((i + 1))"
+    case "${word}" in
+      '--') break ;;
+      # `sg -` is a login; a `-c` is read by wrappers::script_option.
+      '-') ;;
+      -c* | --command | --command=*) return 0 ;;
+      --*)
+        if [[ "${runner}" == 'script' && "${word}" != *=* ]]; then
+          case "${word}" in
+            '--echo' | '--log-in' | '--log-out' | '--log-io' | '--log-timing' | '--logging-format' | \
+              '--output-limit')
+              i="$((i + 1))"
+              ;;
+            *) ;;
+          esac
+        fi
+        ;;
+      -?*)
+        if [[ "${runner}" == 'script' ]]; then
+          letters="${word:1}"
+          flags="${letters%%[cEIOBTmoFt]*}"
+          [[ "${letters:${#flags}:1}" != 'c' ]] || return 0
+          if [[ "${flags}" != "${letters}" ]] && ((${#flags} + 1 == ${#letters})); then
+            i="$((i + 1))"
+          fi
+        fi
+        ;;
+      *)
+        i="$((i - 1))"
+        break
+        ;;
+    esac
+  done
+  # The first operand is the group or the file; the command is behind it.
+  i="$((i + 1))"
+  ((i < n)) || return 0
+  script="${words[i]}"
+  for ((i = i + 1; i < n; i++)); do
+    script+=" ${words[i]}"
+  done
+  printf '%s\t%s\0' "${anchor}" "${script}"
+}
+
+# @description Print what a shell reads from its stdin as its script, when a `sudo -s` or
+#              `sudo -i` ran out of words before naming a command: a here-string, a heredoc, or
+#              what the pipe or the group around it carries, each when it is what fd 0 ends up
+#              reading (see wrappers::stdin_reaches_wrapper).
+# @arg $1 wanted_var name of the caller's space-delimited list of wanted heredoc ordinals (set)
+# @arg $2 bodies_var name of the caller's array of heredoc bodies by ordinal
+# @arg $3 seen_seq the number of body markers read so far
+# @arg $4 anchors_var name of the caller's array of heredoc anchors by ordinal (set)
+# @arg $5 anchor the anchor to print each payload behind
+# @arg $6 stdin_kind the kind of the segment's last fd 0 redirection
+# @arg $7 here_set 1 when the segment's literal here-string may still be fd 0
+# @arg $8 here_text that here-string's text
+# @arg $9 heredoc the ordinal of the segment's own stdin heredoc, or empty
+# @arg $10 carried_heredoc the heredoc ordinal the pipe or group carries, or empty
+# @arg $11 carried_set 1 when the pipe or group carries a literal text
+# @arg $12 carried_text that text
+# @stdout `<anchor><TAB><payload>` records, NUL-terminated
+# @exitcode 0 always
+function wrappers::bare_shell_stdin() {
+  local -r wanted_var="$1" bodies_var="$2" seen_seq="$3" anchors_var="$4" anchor="$5" stdin_kind="$6"
+  local -r here_set="$7" here_text="$8" heredoc="$9" carried_heredoc="${10}" carried_set="${11}"
+  local -r carried_text="${12}"
+  if ((here_set == 1)); then
+    printf '%s\t%s\0' "${anchor}" "${here_text}"
+  fi
+  if [[ -n "${heredoc}" ]] && wrappers::stdin_reaches_wrapper "${stdin_kind}" 'heredoc'; then
+    wrappers::claim_heredocs "${wanted_var}" "${bodies_var}" "${seen_seq}" "${heredoc}" "${anchors_var}" "${anchor}"
+  fi
+  if [[ -n "${carried_heredoc}" ]] && wrappers::stdin_reaches_wrapper "${stdin_kind}" 'pipe'; then
+    wrappers::claim_heredocs "${wanted_var}" "${bodies_var}" "${seen_seq}" "${carried_heredoc}" \
+      "${anchors_var}" "${anchor}"
+  fi
+  if ((carried_set == 1)) && wrappers::stdin_reaches_wrapper "${stdin_kind}" 'pipe'; then
+    printf '%s\t%s\0' "${anchor}" "${carried_text}"
+  fi
+  return 0
 }
 
 # @description Print the script a prefix runs for its operands, NUL-terminated. `watch` joins its
@@ -946,6 +1050,63 @@ function wrappers::literal_word() {
     esac
   done
   text_ref="${out}"
+}
+
+# @description The whole word a token of the outer stream starts, as written, when it is a
+#              double-quoted word that holds a `$(...)` or backtick region (`"pkill $(cat n)"`).
+#              The stream keeps such a word only up to the region (see wrappers::cut_substitutions),
+#              so it is read on from the region's close to the next double quote, which must end
+#              the word. Any other word is the token as the stream keeps it, and so is a word that
+#              goes on behind its closing quote, or one longer than LITERAL_WORD_MAX_BYTES: reading
+#              further would follow a guessed quote state into the words behind it.
+# @arg $1 command the raw command string
+# @arg $2 offset the offset of the token
+# @arg $3 length the length of the token
+# @arg $4 close the offset of the close of the last region glued to the token
+# @arg $5 word_var name of the caller's variable that receives the word (set). Never pass a variable
+#         called whole_ref.
+# @exitcode 0 always
+# shellcheck disable=SC2034 # whole_ref is the caller's variable, written through the nameref
+function wrappers::whole_word() {
+  local -r command="$1" offset="$2" length="$3" close="$4"
+  local -n whole_ref="$5"
+  local i in_dq=0 c rest quoted_len end
+  whole_ref="${command:offset:length}"
+  # The region opens right behind the token: a `$(` whose `$` is the token's last byte, or a
+  # backtick.
+  if [[ "${command:offset+length-1:1}" == '$' && "${command:offset+length:1}" == '(' ]]; then
+    quoted_len="$((length - 1))"
+  elif [[ "${command:offset+length:1}" == '`' ]]; then
+    quoted_len="${length}"
+  else
+    return 0
+  fi
+  for ((i = offset; i < offset + quoted_len; i++)); do
+    c="${command:i:1}"
+    case "${c}" in
+      \\) i="$((i + 1))" ;;
+      '"') in_dq="$((1 - in_dq))" ;;
+      "'")
+        if ((in_dq == 0)); then
+          rest="${command:i+1}"
+          [[ "${rest}" == *"'"* ]] || return 0
+          rest="${rest%%"'"*}"
+          i="$((i + ${#rest} + 1))"
+        fi
+        ;;
+      *) ;;
+    esac
+  done
+  ((in_dq == 1)) || return 0
+  rest="${command:close+1}"
+  [[ "${rest}" == *'"'* ]] || return 0
+  rest="${rest%%'"'*}"
+  end="$((close + ${#rest} + 2))"
+  ((end - offset <= LITERAL_WORD_MAX_BYTES)) || return 0
+  if ((end < ${#command})) && [[ "${command:end:1}" != [[:space:]\;\&\|\<\>\(\)] ]]; then
+    return 0
+  fi
+  whole_ref="${command:offset:end-offset}"
 }
 
 # @description The text a word of a wrapper's command hands on. A word that starts and ends with
@@ -1242,9 +1403,13 @@ function wrappers::body_runs_shell() {
 #              the prefix chain as through the script. With `-x` or `--exec` the operand is a program
 #              name, not a script, and nothing is read; `watch $'...'` is not read either.
 #              `eval` is read the same way, and so are the words behind the options of `sudo -s`
-#              and `sudo -i`, the operands of `entr -s`, and the words behind `env -S`. A capture
-#              under way is not restarted by a prefix among its operands: the script is
-#              classified again on its own, that prefix included.
+#              and `sudo -i`, the operands of `entr -s`, and the words behind `env -S`, its value
+#              attached or not. A capture under way is not restarted by a prefix among its
+#              operands: the script is classified again on its own, that prefix included. A
+#              `sudo -s` or `sudo -i` with no words behind its options runs the shell on its stdin,
+#              which is read as a wrapper's is (wrappers::bare_shell_stdin). The operands of `sg
+#              GROUP` and of `script FILE` behind that first operand are a command too
+#              (wrappers::operand_command_payload).
 #
 #              So is the value of the option that names a command line for the commands in
 #              SCRIPT_OPTION_COMMANDS (`script -c '...'`, `flock FILE -c '...'`,
@@ -1281,7 +1446,9 @@ function wrappers::body_runs_shell() {
 #              An expansion inside a word of the wrapper's simple command (`FOO=$(true) bash`,
 #              `FOO=${x} bash`, `bash > "$(mktemp)" <<EOF`) is part of that word: the scanner keeps the
 #              braces of `${...}` inside the word, and wrappers::cut_substitutions takes a command
-#              substitution out of the stream. An expansion as an operand (`bash ${x} <<EOF`) is an
+#              substitution out of the stream. A word that holds a cut region is read whole where
+#              its text is a payload (`eval "pkill ... $(cat f)"`, see wrappers::whole_word), its
+#              expansions as written. An expansion as an operand (`bash ${x} <<EOF`) is an
 #              operand like a quoted one, so the body is that script's stdin; its value is not on the
 #              command line, which is a limit.
 #
@@ -1318,7 +1485,11 @@ function wrappers::shell_wrapper_payloads() {
   # reduction would cut a shell's `+o/x` down to an operand. `option_values` counts the words still to
   # come that are values of the wrapper's options (see wrappers::wrapper_option_facts).
   local wrapper_name='' wrapper_kind='' option_word option_values=0 option_c option_s
-  local offset token word next_at_cmd is_cmd_word raw c_text budget pending_source action_ends
+  local carried_heredoc carried_text carried_set
+  # The words behind an `env -S` whose value is attached: `split_first` is that value.
+  local split_set=0 split_anchor=0 split_first=''
+  local -a split_rest=()
+  local offset token spelled word next_at_cmd is_cmd_word raw c_text budget pending_source action_ends
   local chain_before opens_wrapper opened_kind source_builtin
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
   local chain='' chain_skip=0 chain_operands=0
@@ -1335,7 +1506,7 @@ function wrappers::shell_wrapper_payloads() {
   # is kept only if its own source is what fd 0 ends up reading: bash applies the last redirection,
   # so any other source is never read. `seg_here_text` is the text of the segment's literal
   # here-string and `seg_here_set` says it may still be fd 0, which makes it the wrapper's own payload.
-  local seg_cmd='' seg_heredoc='' seg_stdout_moved=0 seg_stdin_kind='' seg_piped=0
+  local seg_cmd='' seg_cmd_at=0 seg_heredoc='' seg_stdout_moved=0 seg_stdin_kind='' seg_piped=0
   local seg_here_text='' seg_here_set=0 redirect_text=''
   local stdout_before=0 stdout_redir=0 dup_target=0
   # Groups and compound commands. `grp_*` is what the stdin of the innermost
@@ -1416,6 +1587,11 @@ function wrappers::shell_wrapper_payloads() {
   # than the block.
   while IFS=$'\t' read -r offset token; do
     [[ -z "${token}" ]] && continue
+    # The word as written. One that holds a cut region is read whole (see wrappers::whole_word).
+    spelled="${command:offset:${#token}}"
+    if [[ -n "${procsub_close[offset]:-}" && "${token}" != $'\001' ]]; then
+      wrappers::whole_word "${command}" "${offset}" "${#token}" "${procsub_close[offset]}" spelled
+    fi
     # Where the segment's last word ends, for a stage written in behind it: in front of a
     # comment, and in front of the `)` that closes the region this stream was cut from.
     if [[ -n "${procsub_close[offset]:-}" ]]; then
@@ -1524,7 +1700,7 @@ function wrappers::shell_wrapper_payloads() {
       fi
       # `>&1` duplicates fd 1 onto itself, which moves nothing.
       if ((dup_target == 1)); then
-        case "${command:offset:${#token}}" in
+        case "${spelled}" in
           '1' | "'1'" | '"1"') seg_stdout_moved="${stdout_before}" ;;
           *) ;;
         esac
@@ -1615,7 +1791,7 @@ function wrappers::shell_wrapper_payloads() {
     if ((in_wrapper == 1 && user_direct == 1 && option_values == 0 && saw_c == 0)) && [[ "${token}" != -* ]] \
       && ! tokens::is_operator "${token}"; then
       user_direct=0
-      if [[ "${command:offset:${#token}}" =~ ^[A-Za-z0-9_./+-]+$ ]] \
+      if [[ "${spelled}" =~ ^[A-Za-z0-9_./+-]+$ ]] \
         && ! wrappers::wrapper_operand_budget "${word}" > /dev/null; then
         direct_word="${word}"
       fi
@@ -1693,7 +1869,12 @@ function wrappers::shell_wrapper_payloads() {
         fi
       elif ((saw_c == 1)) && [[ "${option_word}" != -* ]] \
         && [[ "${wrapper_kind}" != 'shell' || "${option_word}" != +* ]]; then
-        # The `-c` string, written as one word of any quoting (`'...'`, `'a'"b"`, `a\ b`).
+        # The `-c` string, written as one word of any quoting (`'...'`, `'a'"b"`, `a\ b`). It is
+        # read as the stream keeps it, up to a cut region in it, and not whole as an operand
+        # capture reads it: `bash -c "pkill --full java $(date)"` is allowed, since the pattern
+        # completed at run time does not hold the text of the command line it is written on.
+        # TODO: whether a `-c` string with a substitution is read whole, as `eval "..."` is,
+        # is open; reading it so denies the shape above.
         if wrappers::word_text "${command:offset:${#token}}" raw; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
         fi
@@ -1754,7 +1935,7 @@ function wrappers::shell_wrapper_payloads() {
         # `.` it is the one operand that makes them a wrapper at all. `su` and `runuser` hand the
         # operands behind the user name to the shell they start (`su root /dev/stdin`).
         if ((saw_s == 0)) && { [[ "${wrapper_kind}" != 'user' ]] || ((operands == 0)); } \
-          && wrappers::names_own_stdin "${command:offset:${#token}}"; then
+          && wrappers::names_own_stdin "${spelled}"; then
           saw_s=1
           saw_s_operand=1
         fi
@@ -1788,7 +1969,7 @@ function wrappers::shell_wrapper_payloads() {
     # from the option when its value arrives here.
     if ((chain_skip == 0)) && ((at_cmd == 0 || exec_word == 1)) && ! tokens::is_operator "${token}" \
       && ! tokens::is_keyword "${token}"; then
-      wrappers::word_text "${command:offset:${#token}}" raw || true # a word that expands is kept as written
+      wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
       seg_words+=("${raw}")
       if [[ "${seg_cmd}" == 'tee' && "${token}" == $'\001' && -n "${procsub_close[offset]:-}" ]] \
         && [[ "${command:offset:1}" == '>' ]] \
@@ -1945,11 +2126,33 @@ function wrappers::shell_wrapper_payloads() {
       tee_subs=()
       seg_start=-1
       seg_end=-1
+      if ((watch_active == 1)) && [[ "${watch_kind}" == 'sudo' ]]; then
+        # `sudo -s` and `sudo -i` with no command run the shell on its stdin: what the pipe carries,
+        # or else, behind no pipe of its own, what the group around it does.
+        carried_heredoc="${pipe_heredoc}"
+        carried_text="${pipe_text}"
+        carried_set="${pipe_text_set}"
+        if ((seg_piped == 0)) && [[ -z "${pipe_heredoc}" ]] && ((pipe_text_set == 0)); then
+          carried_heredoc="${grp_heredoc}"
+          carried_text="${grp_text}"
+          carried_set="${grp_text_set}"
+        fi
+        wrappers::bare_shell_stdin wanted hd_body "${body_seq}" hd_anchor "${watch_anchor}" "${seg_stdin_kind}" \
+          "${seg_here_set}" "${seg_here_text}" "${seg_heredoc}" "${carried_heredoc}" "${carried_set}" \
+          "${carried_text}"
+      fi
       if ((watch_first_set == 1)); then
         wrappers::watch_payload "${watch_anchor}" "${watch_first}" "${watch_rest[@]}"
         if ((watch_variant == 1)); then
           wrappers::watch_payload "${watch_anchor}" "${watch_variant_first}" "${watch_variant_rest[@]}"
         fi
+      fi
+      if [[ "${seg_cmd}" == 'sg' || "${seg_cmd}" == 'script' ]]; then
+        wrappers::operand_command_payload "${seg_cmd}" "${seg_cmd_at}" "${seg_words[@]}"
+      fi
+      if ((split_set == 1)); then
+        wrappers::watch_payload "${split_anchor}" "${split_first}" "${split_rest[@]}"
+        split_set=0
       fi
       watch_active=0
       watch_first_set=0
@@ -2004,9 +2207,9 @@ function wrappers::shell_wrapper_payloads() {
     if ((script_next == 1)); then
       script_next=0
       if ! tokens::is_operator "${token}"; then
-        wrappers::word_text "${command:offset:${#token}}" raw || true # a word that expands is read as written
+        wrappers::word_text "${spelled}" raw || true # a word that expands is read as written
         printf '%s\t%s\0' "${script_anchor}" "${raw}"
-        if wrappers::literal_variant "${command:offset:${#token}}" raw; then
+        if wrappers::literal_variant "${spelled}" raw; then
           printf '%s\t%s\0' "${script_anchor}" "${raw}"
         fi
       fi
@@ -2037,22 +2240,35 @@ function wrappers::shell_wrapper_payloads() {
           script_next=1
           script_anchor="${offset}"
         else
-          raw="${command:offset:${#token}}"
+          raw="${spelled}"
           raw="${raw:${script_where#attached:}}"
           if wrappers::literal_variant "${raw}" script_variant; then
             printf '%s\t%s\0' "${offset}" "${script_variant}"
           fi
           wrappers::word_text "${raw}" raw || true # a word that expands is read as written
           printf '%s\t%s\0' "${offset}" "${raw}"
+          # `env -SSTRING ARG...` appends the ARGs as the separate spelling does: the value is
+          # the first word of the script the words behind it make up. They are collected apart
+          # from an operand capture, which a prefix among them may still start.
+          if [[ "${script_runner}" == 'env' ]] && ((split_set == 0)); then
+            split_set=1
+            split_anchor="${offset}"
+            split_first="${raw}"
+            split_rest=()
+          fi
         fi
       fi
     fi
     # The operands after watch's first one. They are kept here and not in `seg_words`, which leaves out
     # a word still in command position (`watch sudo '...'`).
+    if ((split_set == 1 && offset > split_anchor)) && ! tokens::is_operator "${token}"; then
+      wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
+      split_rest+=("${raw}")
+    fi
     if ((watch_first_set == 1)) && ! tokens::is_operator "${token}"; then
-      wrappers::word_text "${command:offset:${#token}}" raw || true # a word that expands is kept as written
+      wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
       watch_rest+=("${raw}")
-      if wrappers::literal_variant "${command:offset:${#token}}" raw; then
+      if wrappers::literal_variant "${spelled}" raw; then
         watch_variant=1
       fi
       watch_variant_rest+=("${raw}")
@@ -2076,7 +2292,7 @@ function wrappers::shell_wrapper_payloads() {
         fi
       elif ! tokens::is_assignment_word "${token}"; then
         watch_active=0
-        raw="${command:offset:${#token}}"
+        raw="${spelled}"
         if ((watch_exec == 0)); then
           if ! wrappers::word_text "${raw}" watch_first && [[ "${raw}" == *\\* ]]; then
             watch_first="${raw//\\/}"
@@ -2128,6 +2344,7 @@ function wrappers::shell_wrapper_payloads() {
       # command that merely has such a word among its own (`script -O -exec f -c '...'`).
       if ((exec_chain == 0)) || [[ -z "${seg_cmd}" ]]; then
         seg_cmd="${word}"
+        seg_cmd_at="${offset}"
       fi
     fi
     # A wrapper opens only outside one: a keyword among a wrapper's operands restores command
@@ -2254,11 +2471,32 @@ function wrappers::shell_wrapper_payloads() {
   if ((pending_text_set == 1)) && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" 'pipe'; then
     printf '%s\t%s\0' "${anchor}" "${pending_text}"
   fi
+  if ((watch_active == 1)) && [[ "${watch_kind}" == 'sudo' ]]; then
+    # `sudo -s` and `sudo -i` with no command run the shell on its stdin: what the pipe carries,
+    # or else, behind no pipe of its own, what the group around it does.
+    carried_heredoc="${pipe_heredoc}"
+    carried_text="${pipe_text}"
+    carried_set="${pipe_text_set}"
+    if ((seg_piped == 0)) && [[ -z "${pipe_heredoc}" ]] && ((pipe_text_set == 0)); then
+      carried_heredoc="${grp_heredoc}"
+      carried_text="${grp_text}"
+      carried_set="${grp_text_set}"
+    fi
+    wrappers::bare_shell_stdin wanted hd_body "${body_seq}" hd_anchor "${watch_anchor}" "${seg_stdin_kind}" \
+      "${seg_here_set}" "${seg_here_text}" "${seg_heredoc}" "${carried_heredoc}" "${carried_set}" \
+      "${carried_text}"
+  fi
   if ((watch_first_set == 1)); then
     wrappers::watch_payload "${watch_anchor}" "${watch_first}" "${watch_rest[@]}"
     if ((watch_variant == 1)); then
       wrappers::watch_payload "${watch_anchor}" "${watch_variant_first}" "${watch_variant_rest[@]}"
     fi
+  fi
+  if [[ "${seg_cmd}" == 'sg' || "${seg_cmd}" == 'script' ]]; then
+    wrappers::operand_command_payload "${seg_cmd}" "${seg_cmd_at}" "${seg_words[@]}"
+  fi
+  if ((split_set == 1)); then
+    wrappers::watch_payload "${split_anchor}" "${split_first}" "${split_rest[@]}"
   fi
   if [[ "${mode}" != 'rewritten' ]]; then
     if ((outsub_open >= 0)); then

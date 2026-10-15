@@ -158,11 +158,11 @@ function main() {
   # lands, which is the accepted cost: a green compat leg should mean what a
   # green gate leg means, and a compat leg running a different bats-assert does
   # not (#101).
-  # bench/run --smoke drives one payload per cohort through the hook and checks
-  # every response parses as JSON. It asserts NOTHING about timing -- a timing
-  # assertion would be flaky on a shared runner. Its only job is that the
-  # benchmark harness cannot rot silently when the hook's interface or the
-  # corpus's shape changes.
+  # bench/run --smoke drives one payload of each kind of row through the hook
+  # and checks every response parses as JSON. It asserts NOTHING about timing
+  # -- a timing assertion would be flaky on a shared runner. Its only job is
+  # that the benchmark harness cannot rot silently when the hook's interface or
+  # the corpus's shape changes.
   # Deliberately excluded from this list: .ci/run-plugin-validate. This gate is
   # hermetic -- every tool in it comes from the flake -- and a step whose
   # behaviour depends on an ambient `claude` would make the gate

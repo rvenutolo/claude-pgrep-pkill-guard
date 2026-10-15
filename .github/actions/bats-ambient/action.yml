@@ -45,4 +45,4 @@ runs:
         # renovate: datasource=git-refs depName=bats-core/bats-support
         BATS_SUPPORT_SHA: '0954abb9925cad550424cebca2b99255d4eabe96'
         # renovate: datasource=git-refs depName=bats-core/bats-assert
-        BATS_ASSERT_SHA: '697471b7a89d3ab38571f38c6c7c4b460d1f5e35'
+        BATS_ASSERT_SHA: '48b8731443e9287ae8b4668d0539c951a0e253b3'

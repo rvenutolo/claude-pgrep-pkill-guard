@@ -2362,3 +2362,46 @@
 "runuser -u bob -- env -S 'pkill --full X'"	deny:kill
 "runuser -u bob -- flock /tmp/l -c 'pkill --full X'"	deny:kill
 "runuser -u bob -- sg users -c 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | bash /dev/'stdin'"	deny:kill
+"echo 'pkill --full X' | bash /dev/\"stdin\""	deny:kill
+"echo 'pkill --full X' | bash $'/dev/stdin'"	deny:kill
+"echo 'pkill --full X' | bash /dev/stdi[n]"	deny:kill
+"echo 'pkill --full X' | builtin source /dev/stdin"	deny:kill
+"echo 'pkill --full X' | builtin . /dev/stdin"	deny:kill
+"builtin kill $(pgrep --full X)"	deny:kill
+"bash /dev/fd/3 3<<< 'pkill --full X'"	deny:kill
+"3<<< 'pkill --full X' bash /dev/fd/3"	deny:kill
+"source /dev/fd/3 3<<< 'pkill --full X'"	deny:kill
+"bash /dev/fd/4 4<<EOF\npkill --full X\nEOF"	deny:kill
+"bash /dev/fd/3 3< <(echo 'pkill --full X')"	deny:kill
+"echo 'pkill --full X' | bash -c 'source /dev/stdin'"	deny:kill
+"echo 'pkill --full X' | bash -c '. /dev/stdin'"	deny:kill
+"echo 'pkill --full X' | bash -c 'bash'"	deny:kill
+"echo 'pkill --full X' | sh -c 'sh -s'"	deny:kill
+"bash -c 'bash' <<< 'pkill --full X'"	deny:kill
+"bash -c 'bash' <<EOF\npkill --full X\nEOF"	deny:kill
+"echo 'pkill --full X' | su root /dev/stdin"	deny:kill
+"echo 'pkill --full X' | su root /dev/'stdin'"	deny:kill
+"echo `bash <<< 'pkill --full X'`"	deny:kill
+"echo `bash <<< \"pkill --full X\"`"	deny:kill
+"`bash <<< 'pkill --full X'`"	deny:kill
+"bash /dev/fd/3 3<<< 'echo hi'"	allow
+"echo 'echo hi' | bash -c 'bash'"	allow
+"echo 'pkill --full X' | bash -c 'echo hi'"	allow
+"echo `bash <<< 'echo hi'`"	allow
+"builtin echo pkill --full X"	allow
+"builtin source ./setup.sh"	allow
+"bash /dev/fd/03 03<<< 'pkill --full X'"	deny:kill
+"bash /dev/fd/10 10<<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | bash /dev/fd/3 3< /tmp/f"	allow
+"bash <<< 'pkill --full X' <<< 'true;'`cat`"	deny:kill
+"bash <<< 'pkill --full X' <<< x`cat`"	deny:kill
+"{ bash; } <<< 'pkill --full X' <<< 'true;'`cat`"	deny:kill
+"cat <<< 'pkill --full X' <<< 'true;'`cat` | bash"	deny:kill
+"cat <<EOF <<< 'true;'`cat` | bash\npkill --full X\nEOF"	deny:kill
+"find . -exec bash -c 'bash' \\; -exec bash -c 'pkill --full X' \\;"	deny:kill
+"find . -exec bash /dev/'stdin' \\; -exec bash -c 'pkill --full X' \\;"	deny:kill
+"find . -exec bash -s \\; -exec bash -c 'pkill --full X' \\;"	deny:kill
+"find . -exec su root /dev/stdin \\; -ok bash -c 'pkill --full X' \\;"	deny:kill
+"find . -exec runuser -u bob -- cat \\; -exec bash -c 'pkill --full X' \\;"	deny:kill
+"bash -c 'bash' ! bash -c 'pkill --full X'"	deny:kill

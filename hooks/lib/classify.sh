@@ -434,7 +434,10 @@ function classify::classify_command() {
           'pgrep') standins+=("${anchor_idx}:${fact_ignores}:${fact_counts}") ;;
         esac
       done <<< "$(classify::payload_facts "${record#*$'\t'}")"
-    done < <(wrappers::shell_wrapper_payloads "${command}" "${tokens}")
+    done < <(
+      wrappers::shell_wrapper_payloads "${command}" "${tokens}"
+      [[ "${command}" != *fd/* ]] || wrappers::descriptor_payloads "${command}"
+    )
   fi
 
   if ((marked == 1)) && invocation_finding="$(classify::classify_invocations cmd_tokens cmd_openers cmd_kills \

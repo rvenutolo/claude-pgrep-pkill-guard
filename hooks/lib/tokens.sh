@@ -23,8 +23,8 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 # for the same reason the others do: `timeout 5 pkill --full java` runs the kill, and so
 # do `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, `taskset`, `unbuffer`, `watch`, `xargs`,
 # `exec`, `flock`, `entr`, `systemd-run`, `runuser` (whose `-u` runs the command behind its options) and
-# the builtin `eval`. A wrapper that is not listed hides what it runs: the guard sees nothing behind
-# `strace`. `find` is no prefix: the command it runs stands behind one of its `-exec` actions,
+# the builtins `eval` and `builtin`. A wrapper that is not listed hides what it runs: the guard sees
+# nothing behind `strace`. `find` is no prefix: the command it runs stands behind one of its `-exec` actions,
 # which tokens::prefix_chain_step reads. `watch` and `eval` also hand their operands to a shell
 # (`watch 'pkill --full X'`), and so do `sudo -s`, `sudo -i`, `entr -s` and `env -S`; the chain
 # cannot see into a quoted one, so wrappers::shell_wrapper_payloads reads it as a payload.
@@ -37,7 +37,7 @@ readonly -a COMMAND_POSITION_KEYWORDS=(
 readonly -a PREFIX_COMMANDS=(
   'sudo' 'doas' 'env' 'nohup' 'command' 'time' 'timeout' 'nice' 'ionice' 'stdbuf' 'setsid'
   'chrt' 'taskset' 'unbuffer' 'watch' 'xargs' 'exec' 'coproc' 'flock' 'eval' 'entr' 'systemd-run'
-  'runuser'
+  'runuser' 'builtin'
 )
 
 # An option word that carries the command line of `env -S` in the same word (`-S/usr/bin/cmd`,

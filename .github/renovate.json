@@ -5,7 +5,13 @@
   "lockFileMaintenance": { "enabled": true },
   "packageRules": [
     {
-      "matchUpdateTypes": ["digest", "pin", "patch", "lockFileMaintenance"],
+      "matchUpdateTypes": [
+        "digest",
+        "pin",
+        "patch",
+        "minor",
+        "lockFileMaintenance"
+      ],
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "merge-commit"

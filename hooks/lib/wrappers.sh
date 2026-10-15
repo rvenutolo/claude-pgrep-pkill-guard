@@ -866,8 +866,10 @@ function wrappers::sudo_runs_shell() {
 #              COMMAND`, which hands COMMAND to a shell, and `script FILE COMMAND...`, the BSD
 #              spelling, which runs COMMAND. The words behind the first operand are joined with
 #              spaces, as `watch` joins its operands, which reads more than `sg` does with more than
-#              one word and fails closed. Nothing is printed when a `-c` names the command instead
-#              (wrappers::script_option reads that one) or no word follows the first operand.
+#              one word and fails closed. Nothing is printed when a `-c` in front of the first
+#              operand names the command instead (wrappers::script_option reads that one) or no
+#              word follows the first operand. A `-c` behind it is printed with the command, which
+#              fails closed.
 #              `script`'s options that take a value, of util-linux and of BSD, are stepped over with
 #              it, as getopt reads them.
 # @arg $1 runner `sg` or `script`
@@ -886,10 +888,9 @@ function wrappers::operand_command_payload() {
     i="$((i + 1))"
     case "${word}" in
       '--') break ;;
-      '-' | -c* | --command | --command=*)
-        # `sg -` is a login; a `-c` is read by wrappers::script_option.
-        [[ "${word}" == '-' ]] || return 0
-        ;;
+      # `sg -` is a login; a `-c` is read by wrappers::script_option.
+      '-') ;;
+      -c* | --command | --command=*) return 0 ;;
       --*)
         if [[ "${runner}" == 'script' && "${word}" != *=* ]]; then
           case "${word}" in
@@ -1051,16 +1052,17 @@ function wrappers::literal_word() {
   text_ref="${out}"
 }
 
-# @description The whole word a token of the outer stream starts, as written. A word that holds a
-#              `$(...)` or backtick region is kept in that stream only up to the region (`"pk $` of
-#              `"pk $(cat n)"`, see wrappers::cut_substitutions), so it is read on from the region's
-#              close to where the word ends: past the double quote the region sat in, and past any
-#              further region. A later region is skipped to its first `)` or backtick, which may end
-#              the word late; that only reads more text.
+# @description The whole word a token of the outer stream starts, as written, when it is a
+#              double-quoted word that holds a `$(...)` or backtick region (`"pkill $(cat n)"`).
+#              The stream keeps such a word only up to the region (see wrappers::cut_substitutions),
+#              so it is read on from the region's close to the next double quote, which must end
+#              the word. Any other word is the token as the stream keeps it, and so is a word that
+#              goes on behind its closing quote, or one longer than LITERAL_WORD_MAX_BYTES: reading
+#              further would follow a guessed quote state into the words behind it.
 # @arg $1 command the raw command string
 # @arg $2 offset the offset of the token
 # @arg $3 length the length of the token
-# @arg $4 close the offset of the close of the region the token stands in front of
+# @arg $4 close the offset of the close of the last region glued to the token
 # @arg $5 word_var name of the caller's variable that receives the word (set). Never pass a variable
 #         called whole_ref.
 # @exitcode 0 always
@@ -1068,10 +1070,18 @@ function wrappers::literal_word() {
 function wrappers::whole_word() {
   local -r command="$1" offset="$2" length="$3" close="$4"
   local -n whole_ref="$5"
-  local -r n="${#command}"
-  local i in_dq=0 c rest
-  # The quote state where the region opens: a double quote the region sits in is still open.
-  for ((i = offset; i < offset + length - 1; i++)); do
+  local i in_dq=0 c rest quoted_len end
+  whole_ref="${command:offset:length}"
+  # The region opens right behind the token: a `$(` whose `$` is the token's last byte, or a
+  # backtick.
+  if [[ "${command:offset+length-1:1}" == '$' && "${command:offset+length:1}" == '(' ]]; then
+    quoted_len="$((length - 1))"
+  elif [[ "${command:offset+length:1}" == '`' ]]; then
+    quoted_len="${length}"
+  else
+    return 0
+  fi
+  for ((i = offset; i < offset + quoted_len; i++)); do
     c="${command:i:1}"
     case "${c}" in
       \\) i="$((i + 1))" ;;
@@ -1079,7 +1089,7 @@ function wrappers::whole_word() {
       "'")
         if ((in_dq == 0)); then
           rest="${command:i+1}"
-          [[ "${rest}" == *"'"* ]] || break
+          [[ "${rest}" == *"'"* ]] || return 0
           rest="${rest%%"'"*}"
           i="$((i + ${#rest} + 1))"
         fi
@@ -1087,41 +1097,16 @@ function wrappers::whole_word() {
       *) ;;
     esac
   done
-  for ((i = close + 1; i < n; i++)); do
-    c="${command:i:1}"
-    if ((in_dq == 0)) && [[ "${c}" == [[:space:]\;\&\|\<\>\(\)] ]]; then
-      break
-    fi
-    case "${c}" in
-      \\) i="$((i + 1))" ;;
-      '"') in_dq="$((1 - in_dq))" ;;
-      '`')
-        rest="${command:i+1}"
-        [[ "${rest}" == *'`'* ]] || break
-        rest="${rest%%'`'*}"
-        i="$((i + ${#rest} + 1))"
-        ;;
-      '$')
-        if [[ "${command:i+1:1}" == '(' ]]; then
-          rest="${command:i+2}"
-          [[ "${rest}" == *')'* ]] || break
-          rest="${rest%%')'*}"
-          i="$((i + ${#rest} + 2))"
-        fi
-        ;;
-      "'")
-        if ((in_dq == 0)); then
-          rest="${command:i+1}"
-          [[ "${rest}" == *"'"* ]] || break
-          rest="${rest%%"'"*}"
-          i="$((i + ${#rest} + 1))"
-        fi
-        ;;
-      *) ;;
-    esac
-  done
-  ((i <= n)) || i="${n}"
-  whole_ref="${command:offset:i-offset}"
+  ((in_dq == 1)) || return 0
+  rest="${command:close+1}"
+  [[ "${rest}" == *'"'* ]] || return 0
+  rest="${rest%%'"'*}"
+  end="$((close + ${#rest} + 2))"
+  ((end - offset <= LITERAL_WORD_MAX_BYTES)) || return 0
+  if ((end < ${#command})) && [[ "${command:end:1}" != [[:space:]\;\&\|\<\>\(\)] ]]; then
+    return 0
+  fi
+  whole_ref="${command:offset:end-offset}"
 }
 
 # @description The text a word of a wrapper's command hands on. A word that starts and ends with
@@ -1501,6 +1486,9 @@ function wrappers::shell_wrapper_payloads() {
   # come that are values of the wrapper's options (see wrappers::wrapper_option_facts).
   local wrapper_name='' wrapper_kind='' option_word option_values=0 option_c option_s
   local carried_heredoc carried_text carried_set
+  # The words behind an `env -S` whose value is attached: `split_first` is that value.
+  local split_set=0 split_anchor=0 split_first=''
+  local -a split_rest=()
   local offset token spelled word next_at_cmd is_cmd_word raw c_text budget pending_source action_ends
   local chain_before opens_wrapper opened_kind source_builtin
   # shellcheck disable=SC2034 # written through tokens::prefix_chain_step's namerefs, which shellcheck cannot follow
@@ -2162,6 +2150,10 @@ function wrappers::shell_wrapper_payloads() {
       if [[ "${seg_cmd}" == 'sg' || "${seg_cmd}" == 'script' ]]; then
         wrappers::operand_command_payload "${seg_cmd}" "${seg_cmd_at}" "${seg_words[@]}"
       fi
+      if ((split_set == 1)); then
+        wrappers::watch_payload "${split_anchor}" "${split_first}" "${split_rest[@]}"
+        split_set=0
+      fi
       watch_active=0
       watch_first_set=0
       watch_rest=()
@@ -2256,20 +2248,24 @@ function wrappers::shell_wrapper_payloads() {
           wrappers::word_text "${raw}" raw || true # a word that expands is read as written
           printf '%s\t%s\0' "${offset}" "${raw}"
           # `env -SSTRING ARG...` appends the ARGs as the separate spelling does: the value is
-          # the first word of the script the words behind it make up.
-          if [[ "${script_runner}" == 'env' ]] && ((watch_active == 0 && watch_first_set == 0)); then
-            watch_kind='env'
-            watch_anchor="${offset}"
-            watch_first="${raw}"
-            watch_variant_first="${raw}"
-            watch_first_set=1
+          # the first word of the script the words behind it make up. They are collected apart
+          # from an operand capture, which a prefix among them may still start.
+          if [[ "${script_runner}" == 'env' ]] && ((split_set == 0)); then
+            split_set=1
+            split_anchor="${offset}"
+            split_first="${raw}"
+            split_rest=()
           fi
         fi
       fi
     fi
     # The operands after watch's first one. They are kept here and not in `seg_words`, which leaves out
     # a word still in command position (`watch sudo '...'`).
-    if ((watch_first_set == 1 && offset > watch_anchor)) && ! tokens::is_operator "${token}"; then
+    if ((split_set == 1 && offset > split_anchor)) && ! tokens::is_operator "${token}"; then
+      wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
+      split_rest+=("${raw}")
+    fi
+    if ((watch_first_set == 1)) && ! tokens::is_operator "${token}"; then
       wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
       watch_rest+=("${raw}")
       if wrappers::literal_variant "${spelled}" raw; then
@@ -2498,6 +2494,9 @@ function wrappers::shell_wrapper_payloads() {
   fi
   if [[ "${seg_cmd}" == 'sg' || "${seg_cmd}" == 'script' ]]; then
     wrappers::operand_command_payload "${seg_cmd}" "${seg_cmd_at}" "${seg_words[@]}"
+  fi
+  if ((split_set == 1)); then
+    wrappers::watch_payload "${split_anchor}" "${split_first}" "${split_rest[@]}"
   fi
   if [[ "${mode}" != 'rewritten' ]]; then
     if ((outsub_open >= 0)); then

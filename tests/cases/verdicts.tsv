@@ -2469,3 +2469,12 @@
 "echo 'pkill --full X' | sed s/a/b/ | bash"	allow
 "echo 'echo hi' | cat | bash"	allow
 "echo 'pkill --full X' | tee > /tmp/f | bash"	allow
+"{ { echo hi; sed p; } | cat |\nbash; } <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | { { echo hi; sed p; } | cat |\nbash; }"	deny:kill
+"{ { echo hi; grep .; } | tee f |\nbash; } <<< 'pkill --full X'"	deny:kill
+"{ if true; then echo hi; sed p; fi | cat |\nbash; } <<< 'pkill --full X'"	deny:kill
+"{ { echo hi; sed p; } | cat |\nbash; } <<EOF\npkill --full X\nEOF"	deny:kill
+"{ { echo hi; sed p; } | cat | # c\nbash; } <<< 'pkill --full X'"	deny:kill
+"{ echo hi | cat |\nbash; } <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | { echo hi | tee f |\nbash; }"	deny:kill
+"echo 'pkill --full X' | { cat <<< hi | cat |\nsudo -s; }"	deny:kill

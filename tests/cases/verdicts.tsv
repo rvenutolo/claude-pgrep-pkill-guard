@@ -2405,3 +2405,33 @@
 "find . -exec su root /dev/stdin \\; -ok bash -c 'pkill --full X' \\;"	deny:kill
 "find . -exec runuser -u bob -- cat \\; -exec bash -c 'pkill --full X' \\;"	deny:kill
 "bash -c 'bash' ! bash -c 'pkill --full X'"	deny:kill
+"sg users 'pkill --full X'"	deny:kill
+"sg users pkill --full X"	deny:kill
+"sg - users 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | sudo -s"	deny:kill
+"echo 'pkill --full X' | sudo -i"	deny:kill
+"echo 'pkill --full X' | sudo -u root -s"	deny:kill
+"sudo -s <<< 'pkill --full X'"	deny:kill
+"sudo -s <<EOF\npkill --full X\nEOF"	deny:kill
+"script -q /dev/null pkill --full X"	deny:kill
+"script /dev/null pkill --full X"	deny:kill
+"env -Spkill --full X"	deny:kill
+"env --split-string=pkill --full X"	deny:kill
+"env -S'pkill' --full X"	deny:kill
+"sudo -sD/tmp 'pkill --full X'"	deny:kill
+"sudo -iD/tmp 'pkill --full X'"	deny:kill
+"eval \"pkill --full $(cat name)\""	deny:kill
+"eval \"pkill --full $(cat name) now\""	deny:kill
+"eval \"pkill --full `cat name`\""	deny:kill
+"watch \"pkill --full $(cat name)\""	deny:kill
+"sudo -s \"pkill --full $(cat name)\""	deny:kill
+"script -c \"pkill --full $(cat name)\""	deny:kill
+"env -S \"pkill --full $(cat name)\""	deny:kill
+"echo \"pkill --full $(cat name)\" | bash"	deny:kill
+"sg users 'echo hi'"	allow
+"script -q /dev/null echo hi"	allow
+"script log.txt"	allow
+"echo hi | sudo -s"	allow
+"echo 'pkill --full X' | sudo ls"	allow
+"eval \"echo $(cat name)\""	allow
+"env -Secho --full X"	allow

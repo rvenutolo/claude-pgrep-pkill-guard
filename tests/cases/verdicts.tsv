@@ -2435,3 +2435,19 @@
 "echo 'pkill --full X' | sudo ls"	allow
 "eval \"echo $(cat name)\""	allow
 "env -Secho --full X"	allow
+"eval \"pkill --full X\"`true`"	deny:kill
+"eval 'pkill --full X'`true`"	deny:kill
+"watch 'pkill --full X'`true`"	deny:kill
+"sudo -s 'pkill --full X'`true`"	deny:kill
+"env -S'pkill --full X'`true`"	deny:kill
+"script -c 'pkill --full X'`true`"	deny:kill
+"flock f -c 'pkill --full X'`true`"	deny:kill
+"echo 'pkill --full X'`true` | bash"	deny:kill
+"printf '%s\\n' 'pkill --full X'`true` | bash"	deny:kill
+"echo 'pkill --full X' | bash /dev/stdin`true`"	deny:kill
+"bash /dev/fd/0`true` <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | su root /dev/stdin`true`"	deny:kill
+"echo 'pkill --full X' >&1`true` | bash"	deny:kill
+"env -Secho watch 'pkill --full X'"	deny:kill
+"env -Secho eval 'pkill --full X'"	deny:kill
+"env -Secho sudo -s 'pkill --full X'"	deny:kill

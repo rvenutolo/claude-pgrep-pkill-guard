@@ -262,7 +262,7 @@
 "cat <<EOF | bash -c 'echo hi'\npkill --full x\nEOF"	allow
 "cat file <<EOF | bash\npkill --full x\nEOF"	allow
 "sed <<EOF | bash\npkill --full x\nEOF"	allow
-"cat <<EOF | tee /tmp/f | bash\npkill --full x\nEOF"	allow
+"cat <<EOF | tee /tmp/f | bash\npkill --full x\nEOF"	deny:kill
 "cat <<EOF | ssh host bash\npkill --full x\nEOF"	allow
 "cat <<EOF | grep x\npkill --full x\nEOF"	allow
 "echo 'pkill --full x' | cat"	allow
@@ -384,7 +384,7 @@
 "sudo -u root echo x 'pkill --full zzpfvtwowords' | bash"	allow
 "sudo -u root cat f <<EOF | bash\npkill --full zzpfvcatfile\nEOF"	allow
 "echo 'pkill --full zzpfvvalue' | sudo -u bash cat"	allow
-"echo 'pkill --full zzpfvstage' | sudo -u root cat | bash"	allow
+"echo 'pkill --full zzpfvstage' | sudo -u root cat | bash"	deny:kill
 "echo 'pkill --full X' | bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
 "echo 'pkill --full X' | <<'EOF' bash\necho PAYLOAD_RAN\nEOF"	allow
 "echo 'echo PAYLOAD_RAN' | bash <<'EOF'\npkill --full X\nEOF"	deny:kill
@@ -554,7 +554,7 @@
 "echo 'pkill --full X' | bash >| /tmp/log <&-"	allow
 "echo 'pkill --full X' | bash 2>&1 script.sh"	allow
 "echo 'pkill --full X' 2>&1 & bash"	allow
-"echo 'pkill --full X' | cat 2>&1 | bash"	allow
+"echo 'pkill --full X' | cat 2>&1 | bash"	deny:kill
 "echo 'pkill --full X' | bash 2>&1&"	deny:kill
 "echo 'pkill --full X' |&>/tmp/f bash"	deny:kill
 "bash 3<&0-<<'EOF'\npkill --full X\nEOF"	deny:kill
@@ -997,7 +997,7 @@
 "echo 'pkill --full X' | { { bash; } < /tmp/f; }"	allow
 "echo 'pkill --full X' | { { bash; }; } < /tmp/f"	allow
 "echo 'pkill --full X' | { curl http://x | bash; }"	allow
-"echo 'pkill --full X' | { cat | bash; }"	allow
+"echo 'pkill --full X' | { cat | bash; }"	deny:kill
 "echo 'pkill --full X' | { echo PAYLOAD_RAN | bash; }"	allow
 "echo 'pkill --full X' | case x in x) bash;; esac"	deny:kill
 "echo 'pkill --full X' | case x in x) bash;; esac < /tmp/f"	allow
@@ -1065,11 +1065,11 @@
 "{ echo 'pkill --full X' > /tmp/f; } | bash"	allow
 "{ echo 'pkill --full X'; } > /tmp/f | bash"	allow
 "{ echo 'pkill --full X'; } &> /tmp/f | bash"	allow
-"{ echo 'pkill --full X' | cat; } | bash"	allow
+"{ echo 'pkill --full X' | cat; } | bash"	deny:kill
 "{ echo 'pkill --full X'; } || bash"	allow
 "{ echo 'pkill --full X'; }; bash"	allow
 "{ echo 'pkill --full X'; } & bash"	allow
-"{ echo 'pkill --full X'; } | cat | bash"	allow
+"{ echo 'pkill --full X'; } | cat | bash"	deny:kill
 "{ echo 'pkill --full X'; } | bash -c 'echo PAYLOAD_RAN'"	allow
 "{ echo 'pkill --full X'; } | bash < /tmp/f"	allow
 "{ echo 'pkill --full X'; } | bash <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
@@ -1092,7 +1092,7 @@
 "{ for i in 1; do echo 'pkill --full X'; done > /tmp/f; } | bash"	allow
 "{ if true; then echo 'pkill --full X'; fi > /dev/null; } | bash"	allow
 "{ { echo 'pkill --full X'; } 2>&1; } | bash"	deny:kill
-"{ { echo 'pkill --full X'; } | cat; } | bash"	allow
+"{ { echo 'pkill --full X'; } | cat; } | bash"	deny:kill
 "bash <<< 'pkill --full X'"	deny:kill
 "bash -s <<< 'pkill --full X'"	deny:kill
 "bash 0<<< 'pkill --full X'"	deny:kill
@@ -1125,7 +1125,7 @@
 "if true; then bash; fi <<< 'pkill --full X'"	deny:kill
 "{ { bash; }; } <<< 'pkill --full X'"	deny:kill
 "cat - <<< 'pkill --full X' | bash"	deny:kill
-"cat <<< 'pkill --full X' | tee /tmp/f | bash"	allow
+"cat <<< 'pkill --full X' | tee /tmp/f | bash"	deny:kill
 "cat <<< 'pkill --full X' > /tmp/f | bash"	allow
 "bash <<< $'pkill --full X'"	allow
 "{ bash; } <<< 'pkill --full X' <<'EOF'\necho PAYLOAD_RAN\nEOF"	allow
@@ -2451,3 +2451,21 @@
 "env -Secho watch 'pkill --full X'"	deny:kill
 "env -Secho eval 'pkill --full X'"	deny:kill
 "env -Secho sudo -s 'pkill --full X'"	deny:kill
+"{ cat | bash; } <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | { cat | cat; } | bash"	deny:kill
+"echo 'pkill --full X' | cat | bash"	deny:kill
+"echo 'pkill --full X' | cat | cat | bash"	deny:kill
+"echo 'pkill --full X' | cat - | bash"	deny:kill
+"echo 'pkill --full X' | tee /tmp/log | bash"	deny:kill
+"echo 'pkill --full X' | tee -a /tmp/log | bash"	deny:kill
+"echo 'pkill --full X' | { tee /tmp/log | bash; }"	deny:kill
+"echo 'pkill --full X' | tee /tmp/a /tmp/b | bash"	deny:kill
+"cat <<EOF | cat | bash\npkill --full X\nEOF"	deny:kill
+"( cat | bash ) <<< 'pkill --full X'"	deny:kill
+"echo 'pkill --full X' | ( cat | bash )"	deny:kill
+"{ cat > /dev/null | bash; } <<< 'pkill --full X'"	allow
+"echo 'pkill --full X' | cat /etc/hosts | bash"	allow
+"echo 'pkill --full X' | cat < /tmp/f | bash"	allow
+"echo 'pkill --full X' | sed s/a/b/ | bash"	allow
+"echo 'echo hi' | cat | bash"	allow
+"echo 'pkill --full X' | tee > /tmp/f | bash"	allow

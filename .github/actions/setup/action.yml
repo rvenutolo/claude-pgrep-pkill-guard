@@ -6,6 +6,12 @@ runs:
   using: composite
   steps:
     - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa  # v23
+      with:
+        # Both off: nothing in this repo reads the job-summary build timeline
+        # or the installer's diagnostics report, and producing them is time
+        # on every run of every job that uses this action.
+        summarize: false
+        diagnostic-endpoint: ''
     - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569  # v7
       with:
         # `-v2-` is a generation marker, not tidiness. Garbage collection (below)

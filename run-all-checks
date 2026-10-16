@@ -4,23 +4,29 @@
 #              governance lints, the benchmark smoke run, the lint suite, and
 #              the BATS suite -- the last under gawk and again under
 #              one-true-awk, because the hook must behave identically on both
-#              (#7). Verify-only
+#              (#7), unless `--awk` picks one. Verify-only
 #              — it never rewrites the tree, which is why `nix fmt` is a separate
 #              step run before it. Exit codes are AGGREGATED rather than failing
 #              fast, so a single run surfaces every failing category instead of
 #              only the first.
 #
-#              `--report DIR` is forwarded to the suite runs as
-#              `--report DIR/gawk` and `--report DIR/bwk`, so each gets its own
+#              `--awk=gawk` or `--awk=bwk` runs the suite under that awk
+#              alone. CI uses it to give each gate leg one awk -- gawk on
+#              Linux, one-true-awk on macOS, where it is the stock awk -- so
+#              neither leg pays for the suite twice. Without it, as in a local
+#              run, the suite runs under both.
+#
+#              `--report DIR` is forwarded to each suite run as
+#              `--report DIR/<awk>` (`gawk` or `bwk`), so each gets its own
 #              JUnit report rather than one overwriting the other (#83).
 #              Nothing else in the gate emits a report; the flag exists so CI
 #              can upload the suite's results as an artifact when a leg fails.
-# @arg $1 --report optional literal `--report`; must be followed by exactly one
-#         non-empty directory, or the call is rejected
-# @arg $2 dir directory to write the per-awk report subdirectories under
+# @arg $@ args optional `--awk=gawk` or `--awk=bwk`, and optional `--report DIR`
+#         with exactly one non-empty directory not starting with `--`, each at
+#         most once, in either order
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
-# @exitcode 2 any arguments other than none or `--report DIR`
+# @exitcode 2 any arguments other than those
 # @exitcode * otherwise the failing git status, when the repository root cannot
 #             be resolved
 # @stderr a `[<script>] <message>` banner before each step, a warning naming
@@ -63,25 +69,50 @@ function warn_untracked() {
   done
 }
 
-function main() {
-  # Anything but no arguments or exactly `--report DIR` is a typo -- a bare
-  # --report, a misspelt flag, a stray extra argument -- and silently running
-  # the gate with no report would hand a caller who asked for one a green run
-  # and nothing to upload. Exit 2 rather than 1: 1 is the gate's verdict, and
-  # "you called it wrong" must stay distinguishable from it (#216). The ERR trap
-  # is dropped first only for symmetry with the verdict returns (#43,
-  # invariant 6); exit itself never fires it.
-  local report_dir=''
-  if (($# == 2)) && [[ "$1" == '--report' && -n "$2" ]]; then
-    report_dir="$2"
-  elif (($# != 0)); then
-    printf 'usage: %s [--report DIR]\n' "${0##*/}" >&2
-    trap - ERR
-    exit 2
-  fi
+# @description Print the usage line and exit 2. Exit 2 rather than 1: 1 is the
+#              gate's verdict, and "you called it wrong" must stay
+#              distinguishable from it (#216). The ERR trap is dropped first
+#              only for symmetry with the verdict returns (#43, invariant 6);
+#              exit itself never fires it.
+# @noargs
+# @stderr the usage line
+# @exitcode 2 always
+function usage() {
+  printf 'usage: %s [--awk=gawk|--awk=bwk] [--report DIR]\n' "${0##*/}" >&2
+  trap - ERR
+  exit 2
+}
 
-  # Each suite run gets its own subdirectory. run-all-checks runs the suite
-  # under gawk and AGAIN under one-true-awk, and a shared output directory
+function main() {
+  # Anything outside the documented arguments is a typo -- a bare --report, a
+  # --report whose directory is the next flag, a misspelt flag or awk name, a
+  # repeated flag, a stray extra argument -- and
+  # silently running the gate without it would hand a caller who asked for a
+  # report a green run and nothing to upload, or a caller who asked for one awk
+  # a run under both.
+  local report_dir='' awk=''
+  while (($# > 0)); do
+    case "$1" in
+      '--awk=gawk' | '--awk=bwk')
+        if [[ -n "${awk}" ]]; then
+          usage
+        fi
+        awk="${1#--awk=}"
+        shift
+        ;;
+      '--report')
+        if [[ -n "${report_dir}" ]] || (($# < 2)) || [[ -z "$2" || "$2" == --* ]]; then
+          usage
+        fi
+        report_dir="$2"
+        shift 2
+        ;;
+      *) usage ;;
+    esac
+  done
+
+  # Each suite run gets its own subdirectory. Without --awk, run-all-checks runs
+  # the suite under gawk and AGAIN under one-true-awk, and a shared output directory
   # means the later run overwrites the earlier. Losing the gawk report
   # when the bwk run also failed is exactly the case the artifact exists for.
   local -a gawk_report=() bwk_report=()
@@ -187,11 +218,15 @@ function main() {
   log 'running lint checks'
   "${REPO_DIR}/.ci/run-lint-checks" || rc=1
 
-  log 'running tests (gawk)'
-  "${REPO_DIR}/run-tests" "${gawk_report[@]}" || rc=1
+  if [[ "${awk}" != 'bwk' ]]; then
+    log 'running tests (gawk)'
+    "${REPO_DIR}/run-tests" "${gawk_report[@]}" || rc=1
+  fi
 
-  log 'running tests (one-true-awk)'
-  "${REPO_DIR}/run-tests" --awk=bwk "${bwk_report[@]}" || rc=1
+  if [[ "${awk}" != 'gawk' ]]; then
+    log 'running tests (one-true-awk)'
+    "${REPO_DIR}/run-tests" --awk=bwk "${bwk_report[@]}" || rc=1
+  fi
 
   if ((rc != 0)); then
     log 'one or more checks failed'

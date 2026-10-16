@@ -38,8 +38,8 @@ jobs:
   gate:
     name: gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # The macOS leg runs the whole gate in about 25 minutes after a 4 minute setup, and the
-    # verdict table grows with every hook fix: the limit leaves room for both.
+    # The macOS leg is the slower one, and the verdict table grows with every
+    # hook fix: the limit leaves room for both.
     timeout-minutes: 45
     permissions:
       contents: read
@@ -54,6 +54,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        # One awk per leg, so neither pays for the suite twice: gawk on Linux,
+        # and one-true-awk on macOS, where it is the stock awk. A local
+        # run-all-checks, the pre-push hook's included, runs both.
+        include:
+          - os: ubuntu-latest
+            awk: gawk
+          - os: macos-latest
+            awk: bwk
     steps:
       # harden-runner is Linux-only, so it cannot be "first in every job" here.
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25  # v2.22.1
@@ -124,10 +132,15 @@ jobs:
         # written under the checkout would be an untracked file in the tree the
         # gate grades. It is already in .ci/in-devshell's KEEP_VARS, so it
         # resolves to the same path inside and outside the hermetic boundary.
-        run: ./.ci/in-devshell ./run-all-checks --report "${RUNNER_TEMP}/bats-junit"
+        #
+        # The awk arrives through env rather than a `${{ }}` expansion inside
+        # `run:`, which zizmor flags as template injection whatever the source.
+        env:
+          GATE_AWK: ${{ matrix.awk }}
+        run: ./.ci/in-devshell ./run-all-checks --awk="${GATE_AWK}" --report "${RUNNER_TEMP}/bats-junit"
       # if: failure() -- the report is only interesting when something went red,
       # and uploading ~22 KB of green XML on every push is noise. run-all-checks
-      # writes gawk/ and bwk/ subdirectories, so both suite runs survive (#83).
+      # writes a gawk/ or bwk/ subdirectory, named for the leg's awk (#83).
       # The name must be unique across the whole workflow run, hence the matrix
       # OS: two legs uploading `bats-junit-gate` would collide.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2

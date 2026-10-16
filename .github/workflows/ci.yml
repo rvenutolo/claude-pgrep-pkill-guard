@@ -136,22 +136,42 @@ jobs:
           name: bats-junit-gate-${{ matrix.os }}
           path: ${{ runner.temp }}/bats-junit
           retention-days: 7
+
+  coverage:
+    name: coverage
+    # Linux only: nixpkgs' kcov names no darwin platform at all, so the devShell
+    # does not carry it on macos-latest and `run-tests --coverage` would die
+    # there by design (#91).
+    #
+    # Its own job, in parallel with the gate, rather than a step after the gate:
+    # the kcov run is a full extra pass of the suite, and as a step it would add
+    # its whole length to the Linux gate leg. It is also a SEPARATE run of the
+    # suite rather than a wrapper around the gate's own, so the gate's
+    # authoritative pass/fail never depends on kcov working: a kcov regression
+    # -- or a nixpkgs bump that breaks its bash support -- would otherwise read
+    # as a test failure and send the next reader into hooks/.
+    runs-on: ubuntu-latest
+    # One Linux pass of the suite under kcov plus setup, like compat-linux's.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25  # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >-
+            api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
+            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
+            releases.nixos.org:443 tarballs.nixos.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
+      # would resolve the same tree. Full rationale at the gate job's
+      # `uses: ./.github/actions/setup` (#137).
+      - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
       - name: Measure hook line coverage
-        # Linux only: nixpkgs' kcov names no darwin platform at all, so the
-        # devShell does not carry it on macos-latest and `run-tests --coverage`
-        # would die there by design (#91).
-        #
-        # A SEPARATE run of the suite rather than wrapping the gate's own: the
-        # gate's authoritative pass/fail must not depend on kcov working, or a
-        # kcov regression -- or a nixpkgs bump that breaks its bash support --
-        # reads as a test failure and sends the next reader into hooks/. It
-        # costs ~30 s on top of a ~2 min suite, on one leg.
-        #
-        # Not `if: failure()`, unlike the JUnit upload above: the number IS the
-        # deliverable here, so it is wanted on every green run and useless on a
-        # red one.
-        if: runner.os == 'Linux'
-        # See the gate step above for why the interpreter is the flake's bash.
+        # See the gate job's gate step for why the interpreter is the flake's bash.
         shell: nix develop --command bash -e {0}
         # RUNNER_TEMP, not the workspace: a report written under the checkout
         # would be an untracked tree in the repo the suite runs from. It is
@@ -174,7 +194,6 @@ jobs:
             exit 1
           }
       - name: Summarise coverage
-        if: runner.os == 'Linux'
         shell: nix develop --command bash -e {0}
         # .ci/report-coverage locates kcov's report (the directory name embeds a
         # per-run hash, so it cannot be hardcoded), fails loudly when it does not
@@ -182,10 +201,10 @@ jobs:
         # in KEEP_VARS, so it survives --ignore-environment.
         run: ./.ci/in-devshell ./.ci/report-coverage "${RUNNER_TEMP}/coverage"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
-        # Unconditional on this leg, and only this leg: the HTML is ~1.4 MB and
-        # is the part of the coverage run actually worth reading -- the per-line
-        # hit counts, which the job summary's single percentage cannot carry.
-        if: runner.os == 'Linux'
+        # Not `if: failure()`, unlike the gate's JUnit upload: the coverage
+        # figures ARE the deliverable, wanted on every green run. The HTML is
+        # ~1.4 MB and is the part worth reading -- the per-line hit counts,
+        # which the job summary's single percentage cannot carry.
         with:
           name: coverage-html
           path: ${{ runner.temp }}/coverage

@@ -160,8 +160,9 @@ matters on a machine below the floor — that the guard says so out loud rather
 than quietly doing nothing.
 
 The table lists only the jobs that exercise a platform, bash or awk, so some CI
-jobs are deliberately absent from it. `commitlint` and `validate` sit in
-`ci.yml` and exercise none of those.
+jobs are deliberately absent from it. `commitlint`, `coverage` and `validate`
+sit in `ci.yml` and exercise none of those: `coverage` reruns the suite in the
+same Linux devShell as `gate (ubuntu-latest)`, under kcov.
 [`links.yml`](.github/workflows/links.yml) checks every link in the tracked tree
 on each pull request and again every Monday, but it lives outside `ci.yml`,
 exercises no platform, bash or awk, and is advisory rather than required — link

@@ -26,8 +26,8 @@ test *ARGS:
 # Expect thousands of lines of noise on stderr. kcov forwards every trace line it
 # cannot parse, which is every continuation line of a multi-line traced command,
 # and the suite's JSON payloads are full of them. bats' TAP is on stdout and is
-# unaffected. Redirect stderr if it bothers you; the gate's own coverage step
-# does exactly that.
+# unaffected. Redirect stderr if it bothers you; CI's `coverage` job does exactly
+# that.
 coverage DIR="coverage":
     ./.ci/in-devshell ./run-tests --coverage {{ DIR }}
     ./.ci/in-devshell ./.ci/report-coverage {{ DIR }}

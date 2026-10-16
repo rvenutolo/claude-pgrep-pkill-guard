@@ -678,9 +678,9 @@ of which goes unnoticed (`Hdoc` and `Array` among them).
 ### Line coverage
 
 `run-tests --coverage DIR` runs the suite under [kcov][kcov] and writes an HTML
-report to `DIR`; `just coverage` is the wrapper a person types. The `gate` job
-runs it on the Linux leg only, uploads the report as an artifact and prints the
-percentage in the job summary. There is no threshold and no badge: the number is
+report to `DIR`; `just coverage` is the wrapper a person types. CI's `coverage`
+job runs it on Linux only, in parallel with the `gate` jobs, uploads the report
+as an artifact and prints the percentage in the job summary. There is no threshold and no badge: the number is
 something to look at, not something to pass.
 
 Several things about it are not obvious.
@@ -719,7 +719,7 @@ annotation the parser does not recognise is a failure, not a silent pass.
 line of the trace stream it cannot parse — which is every continuation line of a
 multi-line traced command, and the suite's JSON payloads produce a great many —
 to its own stderr: thousands of lines for the suite. bats writes its TAP to stdout, so the test results are unaffected; the
-gate's coverage step redirects stderr to a file and prints the tail of it only when the step
+`coverage` job's measuring step redirects stderr to a file and prints the tail of it only when the step
 fails. kcov's `--bash-method=DEBUG`, which traces through a `DEBUG` trap writing
 to a private fd, is silent — and reports **0.00%**. It looks like the right knob
 and is the wrong one; the noisy default method is the only one that produces

@@ -63,7 +63,7 @@ export GIT_CEILING_DIRECTORIES="${REPO_DIR}"
 #
 # COVERAGE has exactly one caller, `run-tests --coverage`, which exports it
 # immediately before starting kcov. Any other run of the suite -- a bare `bats`,
-# `just test`, every CI leg but the coverage step -- leaves it unset, so the
+# `just test`, every CI job but `coverage` -- leaves it unset, so the
 # unset still happens and the hardening above is never relaxed by accident.
 if [[ -z "${COVERAGE:-}" ]]; then
   unset BASH_ENV

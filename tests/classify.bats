@@ -69,18 +69,91 @@ function assert_row() {
   esac
 }
 
-@test "classify: every recorded verdict still holds" {
-  local cmd_json command expected failures=0 count=0
+# @description Print how many shards to grade the rows in: the CPU count, or one
+#              under `run-tests --coverage`. kcov reads every child bash's
+#              xtrace from one shared pipe and tracks quote state across its
+#              lines, so concurrent hooks interleaving their traces would lose
+#              coverage at random. `nproc` is GNU (the devShell and ambient
+#              Linux); stock macOS has `getconf` and `sysctl` instead. One shard
+#              is always correct, only slower, so it is the last resort rather
+#              than a failure.
+# @noargs
+# @stdout the shard count
+function shard_count() {
+  if [[ -n "${COVERAGE:-}" ]]; then
+    printf '1\n'
+    return 0
+  fi
+  nproc 2> /dev/null \
+    || getconf _NPROCESSORS_ONLN 2> /dev/null \
+    || sysctl -n hw.ncpu 2> /dev/null \
+    || printf '1\n'
+}
+
+# @description Grade one contiguous slice of the table's non-empty rows, writing
+#              its diagnostics to <dir>/<shard>.log and `<rows> <failures>` to
+#              <dir>/<shard>.verdict. The verdict is written last, so a shard
+#              that dies early leaves none and the caller can tell.
+# @arg $1 shard this shard's index, from 0
+# @arg $2 shards the number of shards
+# @arg $3 total the number of non-empty rows in the table
+# @arg $4 dir the directory to write the log and verdict into
+function grade_shard() {
+  local -r shard="$1"
+  local -r shards="$2"
+  local -r total="$3"
+  local -r dir="$4"
+  local -r first="$((shard * total / shards))"
+  local -r last="$(((shard + 1) * total / shards))"
+  local cmd_json command expected row=0 count=0 failures=0
   while IFS=$'\t' read -r cmd_json expected; do
     [[ -z "${cmd_json}" ]] && continue
+    row="$((row + 1))"
+    ((row > first && row <= last)) || continue
     count="$((count + 1))"
     command="$(jq --raw-output '.' <<< "${cmd_json}")"
-    if ! assert_row "${command}" "${expected}"; then
+    if ! assert_row "${command}" "${expected}" 2>> "${dir}/${shard}.log"; then
       failures="$((failures + 1))"
     fi
   done < "${CASES}"
+  printf '%s %s\n' "${count}" "${failures}" > "${dir}/${shard}.verdict"
+}
 
-  printf 'checked %s rows, %s failures\n' "${count}" "${failures}" >&3
+# Each row is a whole hook subprocess, so the rows are graded in parallel shards.
+# The shards are contiguous slices, and their logs are printed in shard order, so
+# failures come out in table order whatever the CPU count.
+@test "classify: every recorded verdict still holds" {
+  local -r dir="${BATS_TEST_TMPDIR}/shards"
+  local shards total shard verdict rows bad count=0 failures=0
+  shards="$(shard_count)"
+  total="$(grep --count --invert-match '^$' "${CASES}")"
+  mkdir "${dir}"
+  for ((shard = 0; shard < shards; shard++)); do
+    # fd 3 closed: bats waits on it, and a job holding it open hangs the run.
+    grade_shard "${shard}" "${shards}" "${total}" "${dir}" 3>&- &
+  done
+  wait
+
+  for ((shard = 0; shard < shards; shard++)); do
+    if [[ -s "${dir}/${shard}.log" ]]; then
+      cat -- "${dir}/${shard}.log" >&2
+    fi
+    verdict=''
+    if [[ -f "${dir}/${shard}.verdict" ]]; then
+      read -r verdict < "${dir}/${shard}.verdict" || true # a verdict with no newline still reads
+    fi
+    if [[ ! "${verdict}" =~ ^[0-9]+\ [0-9]+$ ]]; then
+      # The shard died before it could say. Never a silent pass.
+      printf 'shard %s of %s left no verdict\n' "${shard}" "${shards}" >&2
+      failures="$((failures + 1))"
+      continue
+    fi
+    read -r rows bad <<< "${verdict}"
+    count="$((count + rows))"
+    failures="$((failures + bad))"
+  done
+
+  printf 'checked %s rows in %s shards, %s failures\n' "${count}" "${shards}" "${failures}" >&3
   [[ "${count}" -eq 2480 ]]
   [[ "${failures}" -eq 0 ]]
 }

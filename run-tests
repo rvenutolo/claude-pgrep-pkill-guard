@@ -6,9 +6,11 @@
 #              itself exited 0 — the repeat-tier cases create state dirs,
 #              symlinks and large fixture files, so fixture escape is a real risk.
 #
-#              Deliberately serial: `bats --jobs` needs flock and GNU parallel,
-#              both Linux-only in nixpkgs, and referencing them would break
-#              evaluation of the devShell on aarch64-darwin.
+#              bats itself runs serially: `bats --jobs` needs flock and GNU
+#              parallel, both Linux-only in nixpkgs, and referencing them would
+#              break evaluation of the devShell on aarch64-darwin.
+#              `tests/classify.bats` shards its rows across plain background
+#              jobs instead, which need neither.
 #
 #              `--awk=bwk` runs the suite with `awk` resolving to one-true-awk
 #              (the nawk the devShell provides), which is the stock awk on macOS.

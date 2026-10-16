@@ -14,13 +14,13 @@ embedded test code was deleted.
 
 ## Buckets
 
-| Bucket                                                                                               | Count  | Disposition                                                                                                    |
-| ---------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| Token stream                                                                                         | 31     | `tests/scanner.bats`, driving `printf '%s\n' cmd \| LC_ALL=C awk -f hooks/pgrep-scan.awk` directly             |
-| Bash internals (`flag_probe`, `pattern_probe`, `bracket_probe`, `context_probe`, `terminator_probe`) | 30     | Re-encoded as end-to-end rows in `tests/cases/verdicts.tsv`, consumed by `classify.bats` and `deny-sweep.bats` |
-| `tsv_roundtrip_probe`                                                                                | 1      | One end-to-end `@test` in `tests/scanner.bats`                                                                 |
-| `inactive_probe`                                                                                     | 2      | `tests/scanner.bats`, PATH stub dir rebuilt in bats                                                            |
-| **Total**                                                                                            | **64** |                                                                                                                |
+| Bucket                                                                                               | Count  | Disposition                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| Token stream                                                                                         | 31     | `tests/scanner.bats`, driving `printf '%s\n' cmd \| LC_ALL=C awk -f hooks/pgrep-scan.awk` directly |
+| Bash internals (`flag_probe`, `pattern_probe`, `bracket_probe`, `context_probe`, `terminator_probe`) | 30     | Re-encoded as end-to-end rows in `tests/cases/verdicts.tsv`, consumed by `classify.bats`           |
+| `tsv_roundtrip_probe`                                                                                | 1      | One end-to-end `@test` in `tests/scanner.bats`                                                     |
+| `inactive_probe`                                                                                     | 2      | `tests/scanner.bats`, PATH stub dir rebuilt in bats                                                |
+| **Total**                                                                                            | **64** |                                                                                                    |
 
 ## Discriminating power
 

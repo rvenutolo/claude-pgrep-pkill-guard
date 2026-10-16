@@ -351,8 +351,8 @@ The tab-separated tables below drive the suites named beside them, each with she
 strings stored as JSON so quoting and whitespace survive:
 
 - `verdicts.tsv` — `<command>\t<verdict>`, read by `tests/classify.bats` (which
-  asserts the decision plus the mitigation needle that identifies the kind),
-  by `tests/deny-sweep.bats`, and by `tests/prefilter.bats`, which asserts that
+  asserts the decision plus the mitigation needle that identifies the kind)
+  and by `tests/prefilter.bats`, which asserts that
   every non-`allow` row carries one of the prefilter's trigger tokens and that
   the token set is minimal (dropping any one leaves some row uncovered).
 - `messages.tsv` — `<command>\t<field>\t<mode>\t<needle>`, read by

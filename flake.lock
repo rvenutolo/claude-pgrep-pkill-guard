@@ -3,11 +3,11 @@
     "bats-assert": {
       "flake": false,
       "locked": {
-        "lastModified": 1762432057,
-        "narHash": "sha256-eap1BIyJCiTlAWCyWGEQt0240ytLQZ532luWOBL7dws=",
+        "lastModified": 1792006550,
+        "narHash": "sha256-5I40kv+v5XqxazEekjTI8M9HwOFTqi9DpciMQ4zeGmc=",
         "owner": "bats-core",
         "repo": "bats-assert",
-        "rev": "697471b7a89d3ab38571f38c6c7c4b460d1f5e35",
+        "rev": "48b8731443e9287ae8b4668d0539c951a0e253b3",
         "type": "github"
       },
       "original": {

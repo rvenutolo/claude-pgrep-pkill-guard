@@ -427,10 +427,13 @@ and a small corpus. `tests/run-tests-cli.bats` grades `run-tests`' own leading-f
 trivial always-passing fixture suite rather than against the real one, so the
 cases measure argument parsing and not the suite's runtime. It is the only bats
 file that runs `bats` inside `bats`. `tests/run-all-checks.bats` grades
-`run-all-checks`' argument handling: anything but no arguments or exactly
-`--report DIR` exits 2 before any check runs. It runs a copy of the gate in a
-throwaway repo where every check is missing, because the real gate runs
-`run-tests`, which would run that same file again.
+`run-all-checks`' argument handling: anything but an optional `--awk=gawk` or
+`--awk=bwk` and an optional `--report DIR` whose directory does not start with
+`--`, each at most once, exits 2 before
+any check runs, and a well-formed call runs the suite under the awks `--awk`
+asks for. It runs a copy of the gate in a throwaway repo where every check is
+missing and `run-tests` is a stub that records its arguments, because the real
+gate runs `run-tests`, which would run that same file again.
 
 ## Fail open, loudly
 

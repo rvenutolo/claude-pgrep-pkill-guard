@@ -66,7 +66,7 @@
 #
 # The corpus is scanned once newline-terminated and once raw, and every
 # property is asserted from each single `awk` run per case. That matters more
-# than it looks: the gate runs the whole suite under gawk and again under
+# than it looks: a local gate runs the whole suite under gawk and again under
 # one-true-awk, so every spawn here is paid for under each. Costs that are NOT
 # the awk spawns dominate a naive version of this file and are worth knowing
 # about before changing anything here -- bats traps DEBUG to track line numbers,

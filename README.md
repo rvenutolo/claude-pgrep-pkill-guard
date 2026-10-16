@@ -139,16 +139,17 @@ job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 | Platform                     | bash                                     | awk                                  | CI job                           |
 | ---------------------------- | ---------------------------------------- | ------------------------------------ | -------------------------------- |
-| Linux, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk            | `gate (ubuntu-latest)`           |
-| macOS, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk **and** one-true-awk            | `gate (macos-latest)`            |
+| Linux, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk                                 | `gate (ubuntu-latest)`           |
+| macOS, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | one-true-awk                         | `gate (macos-latest)`            |
 | Linux, ambient distro tools  | the runner image's own bash              | whatever the image resolves `awk` to | `compat (ubuntu, ambient)`       |
 | macOS, `brew install bash`   | Homebrew bash                            | stock `/usr/bin/awk` (one-true-awk)  | `compat (macos, homebrew bash)`  |
 | macOS, stock bash 3.2        | 3.2 — the guard reports itself INACTIVE  | not reached                          | `compat (macos, stock bash 3.2)` |
 
 The `gate` legs run the whole gate — formatting, lints, the governance
-checks and the bats suite twice, once under gawk and once under one-true-awk —
-inside the flake's devShell, so both the bash and both awks come from
-`flake.lock` rather than from the runner. The `compat (ubuntu, ambient)` and
+checks and the bats suite, under gawk on Linux and under one-true-awk on macOS,
+where it is the stock awk — inside the flake's devShell, so the bash and the awk
+come from `flake.lock` rather than from the runner. A local `./run-all-checks`
+runs the suite under both awks. The `compat (ubuntu, ambient)` and
 `compat (macos, homebrew bash)` legs run the test suite only, against the tools
 the runner ships: `compat (ubuntu, ambient)`
 takes the image's own bash, `jq` and `awk`, and prints which awk it got, since

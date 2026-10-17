@@ -696,14 +696,17 @@ its own `bats` under its own `kcov`, as many at once as there are CPUs, and
 `tests/classify.bats` — most of the suite's time under kcov — is split into
 twice as many slices through its `CLASSIFY_SLICE` variable. `kcov --merge`
 then writes the one report `.ci/report-coverage` reads,
-`DIR/kcov-merged/coverage.json`. Merging loses nothing: kcov reads one trace
-pipe per process, so separate processes never interleave their traces, and
-the merged report records the same lines and the same hits as one kcov over
-the whole suite. Within one process the trace pipe is shared by every child
+`DIR/kcov-merged/coverage.json`. kcov reads one trace pipe per process, so
+separate processes never interleave their traces. The merged report is still
+not the report one kcov over the whole suite would write: the apostrophe
+swallow windows described below fall wherever each process's trace puts them,
+so which lines they hide depends on how the suite is split — and the split
+follows the CPU count — and the figure moves by about a point between splits.
+Within one process the trace pipe is shared by every child
 bash, which is why `tests/classify.bats` grades in a single shard under
 `COVERAGE` rather than in its usual parallel shards.
 
-One kcov behaviour does depend on which files share a process. kcov credits
+A second kcov behaviour also depends on which files share a process. kcov credits
 a run of a temporary copy of a hook file — same file name, same bytes, outside
 `hooks/` — to the in-tree file, but only once the in-tree file has been traced
 earlier in the same process. `tests/scanner.bats`' orphan probes run such

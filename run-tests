@@ -44,9 +44,9 @@
 #              Under --coverage each .bats file runs as its own bats under its
 #              own kcov, as many at once as there are CPUs, and `kcov --merge`
 #              combines them into DIR/kcov-merged/. kcov reads one trace pipe per
-#              process, so separate processes never interleave their traces and
-#              the merged report matches what one kcov over the whole suite
-#              records. A file named classify.bats is split into twice as many
+#              process, so separate processes never interleave their traces;
+#              see docs/architecture.md, "Line coverage", for how the split
+#              still moves the figure. A file named classify.bats is split into twice as many
 #              CLASSIFY_SLICE slices as there are CPUs, because its rows are most
 #              of the suite's time under kcov. Each file's output is printed
 #              once every file has finished, in queue order, and with --report

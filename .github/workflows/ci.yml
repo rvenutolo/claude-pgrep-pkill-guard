@@ -209,10 +209,10 @@ jobs:
           }
       - name: Summarise coverage
         shell: nix develop --command bash -e {0}
-        # .ci/report-coverage locates kcov's report (the directory name embeds a
-        # per-run hash, so it cannot be hardcoded), fails loudly when it does not
-        # find exactly one, and writes the summary itself. GITHUB_STEP_SUMMARY is
-        # in KEEP_VARS, so it survives --ignore-environment.
+        # .ci/report-coverage reads the merged report run-tests writes, fails
+        # loudly when it is absent or incomplete, and writes the summary itself.
+        # GITHUB_STEP_SUMMARY is in KEEP_VARS, so it survives
+        # --ignore-environment.
         run: ./.ci/in-devshell ./.ci/report-coverage "${RUNNER_TEMP}/coverage"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         # Not `if: failure()`, unlike the gate's JUnit upload: the coverage

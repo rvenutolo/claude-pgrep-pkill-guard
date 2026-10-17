@@ -75,8 +75,8 @@ function assert_row() {
 }
 
 # @description Print how many shards to grade the rows in: the CPU count, or one
-#              under `run-tests --coverage`, which parallelises across kcov
-#              processes through CLASSIFY_SLICE instead. kcov reads every child bash's
+#              under COVERAGE (`run-tests --coverage` sets CLASSIFY_SLICE
+#              instead, and never asks). kcov reads every child bash's
 #              xtrace from one shared pipe and tracks quote state across its
 #              lines, so concurrent hooks interleaving their traces would lose
 #              coverage at random. `nproc` is GNU (the devShell and ambient

@@ -423,9 +423,10 @@ repo" would pass just as well against a script that unconditionally returned 0.
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives
 `bench/run`, in the real repo and in a fixture repo holding a copy of the hook
 and a small corpus. `tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
-`--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — against a
-trivial always-passing fixture suite rather than against the real one, so the
-cases measure argument parsing and not the suite's runtime. It and
+`--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — and the
+`--coverage` fan-out across files, against small fixture suites rather than
+against the real one, so the cases measure `run-tests` and not the suite's
+runtime. It and
 `tests/classify-slice.bats`, which pins the `CLASSIFY_SLICE` contract
 `run-tests --coverage` uses to split `tests/classify.bats` into slices, are
 the only bats files that run `bats` inside `bats`. `tests/run-all-checks.bats` grades
@@ -823,7 +824,7 @@ hook's bash files — the entry script, the loader, and every part under
 covered-line count, or the step dies naming the file. That catches the
 odd-count shape exactly, and the `"files": []` shape with it. It does **not**
 catch the resync shape, where every file is present and some windows are
-missing, and no gate here does: a canary suite ordered last records hits both in
+missing, and no gate here does: a canary suite records hits both in
 a healthy run and in a full-suite run that is known to be lossy, and a check
 with no discriminating power is worse than none.
 
@@ -932,7 +933,10 @@ tools, exactly like a `.bats` file. It gets away with it only because every
 GNU long option in it sits on a devShell-only path: `use_bwk_awk`'s
 `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
 under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
-them. The lines that are _not_ devShell-only — the `mkdir -p` that creates
+them; `run_coverage`'s and `run_item`'s are reachable only under `--coverage`
+once its kcov check has passed, and kcov is a Linux-only devShell package; and
+`remove_temp_dirs` runs only once one of those paths has armed the EXIT trap.
+The lines that are _not_ devShell-only — the `mkdir -p` that creates
 `--report`'s output directory, and the `uname -s` and `mkdir -p` on the
 `--coverage` path — carry a POSIX short flag and a comment saying why: BSD
 `mkdir` rejects `--parents` with `mkdir: illegal option -- -` before a single

@@ -1,5 +1,6 @@
-# run-tests' argument handling: --report, --coverage and --awk=bwk, graded
-# against a trivial fixture suite rather than the real one.
+# run-tests' argument handling -- --report, --coverage and --awk=bwk -- and the
+# --coverage fan-out across files, graded against small fixture suites rather
+# than the real one.
 #
 # setup sets RUN_TESTS, the path of the runner under test.
 
@@ -158,6 +159,14 @@ function require_kcov() {
   [[ -f "${out}/index.html" ]]
 }
 
+@test "run-tests: --coverage with flags but no test file is rejected" {
+  require_kcov
+  # Without the check this ran nothing, merged nothing and still passed.
+  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov17" --filter 'nothing'
+  assert_failure
+  assert_output --partial '[run-tests] FATAL: --coverage found no .bats file'
+}
+
 @test "run-tests: --coverage runs every given file and prints each one's output" {
   require_kcov
   local -r dir="${BATS_TEST_TMPDIR}/suite12"
@@ -200,7 +209,7 @@ BATS
   refute_output --partial 'SLICE=unset'
   local -a slices=()
   mapfile -t slices < <(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort --unique)
-  # Every index from 0 to count-1 exactly once, all naming the same count.
+  # Every index from 0 to count-1, all naming the same count.
   local -r count="${slices[0]#*/}"
   [[ "${#slices[@]}" -eq "${count}" ]]
   local i
@@ -307,9 +316,8 @@ BATS
 
 @test "run-tests: --awk=bwk removes its shim directory when TMPDIR holds a quote" {
   require_bwk_awk
-  # Same leak check as the case above, with an apostrophe in TMPDIR. The EXIT
-  # trap is built from the shim path, and a single quote in that path must not
-  # turn the trap string into a syntax error that leaves the shim behind.
+  # Same leak check as the case above, with an apostrophe in TMPDIR. A single
+  # quote in the shim path must not keep the EXIT trap from removing it.
   local -r suite="${BATS_TEST_TMPDIR}/suite10/ok.bats"
   local -r tmp="${BATS_TEST_TMPDIR}/it's tmpdir"
   make_trivial_suite "${suite}"
@@ -321,9 +329,8 @@ BATS
 
 @test "run-tests: a repeated --awk=bwk leaves no shim directory behind" {
   require_bwk_awk
-  # Same leak check again, with the flag given more than once. The EXIT trap
-  # holds a single command, so a shim built per occurrence of the flag would
-  # leave every one but the last behind.
+  # Same leak check again, with the flag given more than once: however many
+  # times it is given, no shim directory survives the run.
   local -r suite="${BATS_TEST_TMPDIR}/suite11/ok.bats"
   local -r tmp="${BATS_TEST_TMPDIR}/tmpdir-repeated"
   make_trivial_suite "${suite}"

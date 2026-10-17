@@ -2,6 +2,11 @@
 # the hook as a subprocess (invariant 3), and the response is graded against
 # the verdict the row records.
 #
+# With CLASSIFY_SLICE set to `<index>/<count>`, the verdict case grades only
+# that contiguous slice of the table, in one shard: `run-tests --coverage` sets
+# it to spread the table across parallel kcov processes, each with its own
+# trace pipe. tests/classify-slice.bats pins the contract.
+#
 # setup sets CASES, the path of that table.
 
 function setup() {
@@ -70,7 +75,8 @@ function assert_row() {
 }
 
 # @description Print how many shards to grade the rows in: the CPU count, or one
-#              under `run-tests --coverage`. kcov reads every child bash's
+#              under COVERAGE (`run-tests --coverage` sets CLASSIFY_SLICE
+#              instead, and never asks). kcov reads every child bash's
 #              xtrace from one shared pipe and tracks quote state across its
 #              lines, so concurrent hooks interleaving their traces would lose
 #              coverage at random. `nproc` is GNU (the devShell and ambient
@@ -121,20 +127,41 @@ function grade_shard() {
 
 # Each row is a whole hook subprocess, so the rows are graded in parallel shards.
 # The shards are contiguous slices, and their logs are printed in shard order, so
-# failures come out in table order whatever the CPU count.
+# failures come out in table order whatever the CPU count. Under CLASSIFY_SLICE
+# the one shard graded is that slice, out of as many shards as the value names.
 @test "classify: every recorded verdict still holds" {
   local -r dir="${BATS_TEST_TMPDIR}/shards"
-  local shards total shard verdict rows bad count=0 failures=0
-  shards="$(shard_count)"
+  local shards first_shard end_shard total shard verdict rows bad count=0 failures=0 expected label
   total="$(grep --count --invert-match '^$' "${CASES}")"
+  # Checked whether or not a slice is set: a slice's own count is derived from
+  # the table, so only this line notices rows going missing from it.
+  [[ "${total}" -eq 2480 ]]
+  if [[ -n "${CLASSIFY_SLICE:-}" ]]; then
+    if [[ ! "${CLASSIFY_SLICE}" =~ ^(0|[1-9][0-9]*)/([1-9][0-9]*)$ ]] \
+      || ((BASH_REMATCH[1] >= BASH_REMATCH[2])); then
+      printf "CLASSIFY_SLICE must be <index>/<count>, got '%s'\n" "${CLASSIFY_SLICE}" >&2
+      return 1
+    fi
+    first_shard="${BASH_REMATCH[1]}"
+    shards="${BASH_REMATCH[2]}"
+    end_shard="$((first_shard + 1))"
+    expected="$(((first_shard + 1) * total / shards - first_shard * total / shards))"
+    label="slice ${CLASSIFY_SLICE}"
+  else
+    shards="$(shard_count)"
+    first_shard=0
+    end_shard="${shards}"
+    expected="${total}"
+    label="${shards} shards"
+  fi
   mkdir "${dir}"
-  for ((shard = 0; shard < shards; shard++)); do
+  for ((shard = first_shard; shard < end_shard; shard++)); do
     # fd 3 closed: bats waits on it, and a job holding it open hangs the run.
     grade_shard "${shard}" "${shards}" "${total}" "${dir}" 3>&- &
   done
   wait
 
-  for ((shard = 0; shard < shards; shard++)); do
+  for ((shard = first_shard; shard < end_shard; shard++)); do
     if [[ -s "${dir}/${shard}.log" ]]; then
       cat -- "${dir}/${shard}.log" >&2
     fi
@@ -153,7 +180,7 @@ function grade_shard() {
     failures="$((failures + bad))"
   done
 
-  printf 'checked %s rows in %s shards, %s failures\n' "${count}" "${shards}" "${failures}" >&3
-  [[ "${count}" -eq 2480 ]]
+  printf 'checked %s rows in %s, %s failures\n' "${count}" "${label}" "${failures}" >&3
+  [[ "${count}" -eq "${expected}" ]]
   [[ "${failures}" -eq 0 ]]
 }

@@ -1,5 +1,6 @@
-# run-tests' argument handling: --report, --coverage and --awk=bwk, graded
-# against a trivial fixture suite rather than the real one.
+# run-tests' argument handling -- --report, --coverage and --awk=bwk -- and the
+# --coverage fan-out across files, graded against small fixture suites rather
+# than the real one.
 #
 # setup sets RUN_TESTS, the path of the runner under test.
 
@@ -152,13 +153,86 @@ function require_kcov() {
   run "${RUN_TESTS}" --coverage "${out}" "${suite}"
   assert_success
   assert_output --partial 'trivial fixture case'
-  [[ -d "${out}" ]]
-  # Exactly the shape .ci/report-coverage looks for: one level down, and not the
-  # empty kcov-merged/ kcov leaves beside it.
-  local coverage_json
-  coverage_json="$(find "${out}" -mindepth 2 -maxdepth 2 -path '*/kcov-merged/*' -prune \
-    -o -name 'coverage.json' -print -quit)"
-  [[ -n "${coverage_json}" ]]
+  # Exactly the shape .ci/report-coverage reads: the merged report, and the HTML
+  # index a person opens.
+  [[ -f "${out}/kcov-merged/coverage.json" ]]
+  [[ -f "${out}/index.html" ]]
+}
+
+@test "run-tests: --coverage with flags but no test file is rejected" {
+  require_kcov
+  # Without the check this ran nothing, merged nothing and still passed.
+  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov17" --filter 'nothing'
+  assert_failure
+  assert_output --partial '[run-tests] FATAL: --coverage found no .bats file'
+}
+
+@test "run-tests: --coverage runs every given file and prints each one's output" {
+  require_kcov
+  local -r dir="${BATS_TEST_TMPDIR}/suite12"
+  mkdir -p "${dir}"
+  printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
+  printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
+  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov12" "${dir}/first.bats" "${dir}/second.bats"
+  assert_success
+  assert_output --partial 'ok 1 first fixture case'
+  assert_output --partial 'ok 1 second fixture case'
+  [[ -f "${BATS_TEST_TMPDIR}/cov12/kcov-merged/coverage.json" ]]
+}
+
+@test "run-tests: --coverage fails when any one file fails" {
+  require_kcov
+  local -r dir="${BATS_TEST_TMPDIR}/suite13"
+  mkdir -p "${dir}"
+  printf '@test "passing fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/pass.bats"
+  printf '@test "failing fixture case" {\n  [[ 1 -eq 2 ]]\n}\n' > "${dir}/fail.bats"
+  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov13" "${dir}/pass.bats" "${dir}/fail.bats"
+  assert_failure
+  # The failing file's report and the passing file's both reach the reader.
+  assert_output --partial 'not ok 1 failing fixture case'
+  assert_output --partial 'ok 1 passing fixture case'
+}
+
+@test "run-tests: --coverage splits a classify.bats into slices that cover the table" {
+  require_kcov
+  # A stand-in classify.bats that only reports the slice it was handed, so the
+  # case grades how run-tests divides the work and not the real table's runtime.
+  local -r dir="${BATS_TEST_TMPDIR}/suite14"
+  mkdir -p "${dir}"
+  cat > "${dir}/classify.bats" << 'BATS'
+@test "slice probe" {
+  printf 'SLICE=%s\n' "${CLASSIFY_SLICE:-unset}" >&3
+}
+BATS
+  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov14" "${dir}/classify.bats"
+  assert_success
+  refute_output --partial 'SLICE=unset'
+  local -a slices=()
+  mapfile -t slices < <(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort --unique)
+  # Every index from 0 to count-1, all naming the same count.
+  local -r count="${slices[0]#*/}"
+  [[ "${#slices[@]}" -eq "${count}" ]]
+  local i
+  for ((i = 0; i < count; i++)); do
+    assert_output --partial "SLICE=${i}/${count}"
+  done
+}
+
+@test "run-tests: --coverage leaves no per-file kcov output behind" {
+  require_kcov
+  # Each file runs under its own kcov, whose output lives in a temporary
+  # directory until the merge. Point TMPDIR at a fixture dir and a leak becomes
+  # visible as a coverage.json anywhere beneath it; DIR itself carries only the
+  # merged report, not one per file.
+  local -r suite="${BATS_TEST_TMPDIR}/suite15/ok.bats"
+  local -r tmp="${BATS_TEST_TMPDIR}/tmpdir-coverage"
+  local -r out="${BATS_TEST_TMPDIR}/cov15"
+  make_trivial_suite "${suite}"
+  mkdir -p "${tmp}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --coverage "${out}" "${suite}"
+  assert_success
+  [[ -z "$(find "${tmp}" -name 'coverage.json' -print -quit)" ]]
+  [[ -z "$(find "${out}" -name 'coverage.json' -not -path "${out}/kcov-merged/*" -print -quit)" ]]
 }
 
 @test "run-tests: --coverage creates a directory that does not exist yet" {
@@ -181,6 +255,22 @@ function require_kcov() {
   run "${RUN_TESTS}" --report "${BATS_TEST_TMPDIR}/r4" --coverage "${BATS_TEST_TMPDIR}/c2" "${suite}"
   assert_success
   [[ -n "$(find "${BATS_TEST_TMPDIR}/r4" -name '*.xml' -print -quit)" ]]
+}
+
+@test "run-tests: --coverage with --report writes a JUnit file per test file" {
+  require_kcov
+  # Each file runs as its own bats, so each needs its own report; a shared
+  # directory would leave only the last one to finish.
+  local -r dir="${BATS_TEST_TMPDIR}/suite16"
+  mkdir -p "${dir}"
+  printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
+  printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
+  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/c16" --report "${BATS_TEST_TMPDIR}/r16" \
+    "${dir}/first.bats" "${dir}/second.bats"
+  assert_success
+  run grep --recursive --files-with-matches --include='*.xml' 'fixture case' "${BATS_TEST_TMPDIR}/r16"
+  assert_success
+  assert_equal "${#lines[@]}" 2
 }
 
 @test "run-tests: COVERAGE is not exported when --coverage is absent" {
@@ -226,9 +316,8 @@ BATS
 
 @test "run-tests: --awk=bwk removes its shim directory when TMPDIR holds a quote" {
   require_bwk_awk
-  # Same leak check as the case above, with an apostrophe in TMPDIR. The EXIT
-  # trap is built from the shim path, and a single quote in that path must not
-  # turn the trap string into a syntax error that leaves the shim behind.
+  # Same leak check as the case above, with an apostrophe in TMPDIR. A single
+  # quote in the shim path must not keep the EXIT trap from removing it.
   local -r suite="${BATS_TEST_TMPDIR}/suite10/ok.bats"
   local -r tmp="${BATS_TEST_TMPDIR}/it's tmpdir"
   make_trivial_suite "${suite}"
@@ -240,9 +329,8 @@ BATS
 
 @test "run-tests: a repeated --awk=bwk leaves no shim directory behind" {
   require_bwk_awk
-  # Same leak check again, with the flag given more than once. The EXIT trap
-  # holds a single command, so a shim built per occurrence of the flag would
-  # leave every one but the last behind.
+  # Same leak check again, with the flag given more than once: however many
+  # times it is given, no shim directory survives the run.
   local -r suite="${BATS_TEST_TMPDIR}/suite11/ok.bats"
   local -r tmp="${BATS_TEST_TMPDIR}/tmpdir-repeated"
   make_trivial_suite "${suite}"

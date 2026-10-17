@@ -44,16 +44,16 @@ readonly HEALTHY_FILES
 
 # @description Build a fabricated kcov output directory. Fabricated rather than
 #              produced by a real kcov run for the usual reason: kcov is
-#              Linux-only, a real run costs two and a half minutes, and neither
-#              of those is what these cases are grading. What they grade is the
-#              LOCATION rule -- exactly one coverage.json, one level down, with
-#              kcov's empty kcov-merged/ excluded -- and, since #128, the
-#              INTEGRITY rule: every required hooks/ file present in files[]
-#              with a non-zero covered-line count. Both are pure
-#              JSON-and-filesystem shape and need no kcov at all. A short flag
-#              only where macOS has no long form, on purpose: a compat CI leg
-#              runs this suite against macOS BSD coreutils, whose mkdir has no
-#              --parents.
+#              Linux-only, a real run costs minutes, and neither of those is
+#              what these cases are grading. What they grade is the LOCATION
+#              rule -- the merged report `run-tests --coverage` writes with
+#              `kcov --merge`, at kcov-merged/coverage.json, and nothing else --
+#              and, since #128, the INTEGRITY rule: every required hooks/ file
+#              present in files[] with a non-zero covered-line count. Both are
+#              pure JSON-and-filesystem shape and need no kcov at all. A short
+#              flag only where macOS has no long form, on purpose: a compat CI
+#              leg runs this suite against macOS BSD coreutils, whose mkdir has
+#              no --parents.
 #
 #              The healthy fixture carries a files[] array because the
 #              INTEGRITY rule requires one: a report with no files[] is
@@ -66,59 +66,64 @@ readonly HEALTHY_FILES
 #         Pass a doctored array to plant the defect the integrity rule catches.
 function make_report() {
   local -r root="$1" percent="$2" files="${3:-${HEALTHY_FILES}}"
-  # The hashed directory name is the point: kcov derives it per run, which is
-  # why the reporter searches with find instead of hardcoding a path.
-  mkdir -p "${root}/bats.deadbeefdeadbeef"
-  # kcov creates this alongside the real report and leaves it EMPTY for a
-  # single-binary run. Every fixture has it, because a reporter that reached for
-  # it would find nothing and, written the obvious way, would say nothing.
   mkdir -p "${root}/kcov-merged"
   if [[ -n "${percent}" ]]; then
     printf '{"percent_covered": "%s", "covered_lines": 387, "total_lines": 514, "files": %s}\n' \
-      "${percent}" "${files}" > "${root}/bats.deadbeefdeadbeef/coverage.json"
+      "${percent}" "${files}" > "${root}/kcov-merged/coverage.json"
   else
     printf '{"covered_lines": 387, "total_lines": 514, "files": %s}\n' \
-      "${files}" > "${root}/bats.deadbeefdeadbeef/coverage.json"
+      "${files}" > "${root}/kcov-merged/coverage.json"
   fi
 }
 
-@test "report-coverage: prints the percentage from the one report it finds" {
+# @description Plant a single-run kcov report: a `<binary>.<hash>` directory
+#              holding a coverage.json, which is the layout one kcov process
+#              writes before any merge. A short flag only where macOS has no
+#              long form, for the reason make_report gives.
+# @arg $1 root directory to plant it in
+# @arg $2 percent the percent_covered value to record
+function make_single_run_report() {
+  local -r root="$1" percent="$2"
+  mkdir -p "${root}/bats.deadbeefdeadbeef"
+  printf '{"percent_covered": "%s", "files": %s}\n' "${percent}" "${HEALTHY_FILES}" \
+    > "${root}/bats.deadbeefdeadbeef/coverage.json"
+}
+
+@test "report-coverage: prints the percentage from the merged report" {
   make_report "${BATS_TEST_TMPDIR}/cov" '76.42'
   run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
   assert_success
   assert_output '76.42'
 }
 
-@test "report-coverage: an empty kcov-merged is not a second match" {
+@test "report-coverage: a single-run report beside the merged one is ignored" {
+  # A directory reused across runs can hold an older single-run report, and a
+  # part that escaped its own directory would look the same. Only the merged
+  # report describes the whole suite.
   make_report "${BATS_TEST_TMPDIR}/cov" '76.42'
-  # Belt and braces: even a POPULATED kcov-merged must be pruned, because a
-  # future kcov that fills it in would otherwise turn every run into the
-  # two-matches failure below.
-  printf '{"percent_covered": "0.00"}\n' > "${BATS_TEST_TMPDIR}/cov/kcov-merged/coverage.json"
+  make_single_run_report "${BATS_TEST_TMPDIR}/cov" '12.34'
   run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
   assert_success
   assert_output '76.42'
+}
+
+@test "report-coverage: a single-run report with no merged one fails loudly" {
+  # The layout of a lone kcov run, whose own kcov-merged/ is empty. Its number
+  # describes one process's share of the suite at best, so it is refused rather
+  # than reported.
+  make_single_run_report "${BATS_TEST_TMPDIR}/cov" '12.34'
+  mkdir -p "${BATS_TEST_TMPDIR}/cov/kcov-merged"
+  run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
+  assert_failure
+  assert_output --partial "no coverage.json at ${BATS_TEST_TMPDIR}/cov/kcov-merged"
+  refute_output --partial '12.34'
 }
 
 @test "report-coverage: no report at all fails loudly" {
-  mkdir -p "${BATS_TEST_TMPDIR}/empty/kcov-merged"
+  mkdir -p "${BATS_TEST_TMPDIR}/empty"
   run "${REPORTER}" "${BATS_TEST_TMPDIR}/empty"
   assert_failure
   assert_output --partial 'no coverage.json'
-}
-
-@test "report-coverage: two reports fail rather than picking one" {
-  make_report "${BATS_TEST_TMPDIR}/cov" '76.42'
-  mkdir -p "${BATS_TEST_TMPDIR}/cov/bats.0123456789abcdef"
-  printf '{"percent_covered": "12.34"}\n' \
-    > "${BATS_TEST_TMPDIR}/cov/bats.0123456789abcdef/coverage.json"
-  run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
-  assert_failure
-  assert_output --partial 'exactly one'
-  # Every path found rides on the one FATAL line, so the message reads whole.
-  local -r cov="${BATS_TEST_TMPDIR}/cov"
-  assert_line --partial \
-    "found 2: ${cov}/bats.0123456789abcdef/coverage.json ${cov}/bats.deadbeefdeadbeef/coverage.json"
 }
 
 @test "report-coverage: a report with no percent_covered fails" {

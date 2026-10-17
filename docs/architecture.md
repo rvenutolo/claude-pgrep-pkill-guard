@@ -423,10 +423,13 @@ repo" would pass just as well against a script that unconditionally returned 0.
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives
 `bench/run`, in the real repo and in a fixture repo holding a copy of the hook
 and a small corpus. `tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
-`--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — against a
-trivial always-passing fixture suite rather than against the real one, so the
-cases measure argument parsing and not the suite's runtime. It is the only bats
-file that runs `bats` inside `bats`. `tests/run-all-checks.bats` grades
+`--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — and the
+`--coverage` fan-out across files, against small fixture suites rather than
+against the real one, so the cases measure `run-tests` and not the suite's
+runtime. It and
+`tests/classify-slice.bats`, which pins the `CLASSIFY_SLICE` contract
+`run-tests --coverage` uses to split `tests/classify.bats` into slices, are
+the only bats files that run `bats` inside `bats`. `tests/run-all-checks.bats` grades
 `run-all-checks`' argument handling: anything but an optional `--awk=gawk` or
 `--awk=bwk` and an optional `--report DIR` whose directory does not start with
 `--`, each at most once, exits 2 before
@@ -688,6 +691,29 @@ something to look at, not something to pass.
 
 Several things about it are not obvious.
 
+**The suite runs as many kcov processes, merged.** Each `.bats` file runs as
+its own `bats` under its own `kcov`, as many at once as there are CPUs, and
+`tests/classify.bats` — most of the suite's time under kcov — is split into
+twice as many slices through its `CLASSIFY_SLICE` variable. `kcov --merge`
+then writes the one report `.ci/report-coverage` reads,
+`DIR/kcov-merged/coverage.json`. kcov reads one trace pipe per process, so
+separate processes never interleave their traces. The merged report is still
+not the report one kcov over the whole suite would write: the apostrophe
+swallow windows described below fall wherever each process's trace puts them,
+so which lines they hide depends on how the suite is split — and the split
+follows the CPU count — and the figure moves by about a point between splits.
+Within one process the trace pipe is shared by every child
+bash, which is why `tests/classify.bats` grades in a single shard under
+`COVERAGE` rather than in its usual parallel shards.
+
+A second kcov behaviour also depends on which files share a process. kcov credits
+a run of a temporary copy of a hook file — same file name, same bytes, outside
+`hooks/` — to the in-tree file, but only once the in-tree file has been traced
+earlier in the same process. `tests/scanner.bats`' orphan probes run such
+copies to reach the entry script's and the loader's fail-open branches, and
+with every file in its own process nothing traces the in-tree files before
+them, so those branches read as uncovered although the suite drives them.
+
 **kcov instruments bash through `BASH_ENV`.** It exports
 `BASH_ENV=<outdir>/bash-helper.sh` into the traced environment; every child bash
 sources that helper on startup, which sets `PS4` and turns on `set -x`.
@@ -801,16 +827,16 @@ hook's bash files — the entry script, the loader, and every part under
 covered-line count, or the step dies naming the file. That catches the
 odd-count shape exactly, and the `"files": []` shape with it. It does **not**
 catch the resync shape, where every file is present and some windows are
-missing, and no gate here does: a canary suite ordered last records hits both in
+missing, and no gate here does: a canary suite records hits both in
 a healthy run and in a full-suite run that is known to be lossy, and a check
 with no discriminating power is worse than none.
 
 **Debugging recipe for a suspicious zero.** Before believing that a function is
-unreached, append a throwaway `tests/zz-probe.bats` that drives the shape you
-think should reach it and run `just coverage` again. bats runs files in order, so
-a canary at the end sits outside most swallow windows: if the function's hit
-count rises with the probe appended, the zero was a collection artifact and not
-a gap in the suite.
+unreached, add a throwaway `tests/zz-probe.bats` that drives the shape you
+think should reach it and run `just coverage` again. Each file runs under its
+own kcov process, so the probe sits outside every other file's swallow windows:
+if the function's hit count rises with the probe added, the zero was a
+collection artifact and not a gap in the suite.
 
 **Some zeros past the prefilter are neither artifact nor gap: they are
 unreachable.** `loops::loop_context`'s closing `printf 'none\n'` in
@@ -910,7 +936,10 @@ tools, exactly like a `.bats` file. It gets away with it only because every
 GNU long option in it sits on a devShell-only path: `use_bwk_awk`'s
 `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
 under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
-them. The lines that are _not_ devShell-only — the `mkdir -p` that creates
+them; `run_coverage`'s and `run_item`'s are reachable only under `--coverage`
+once its kcov check has passed, and kcov is a Linux-only devShell package; and
+`remove_temp_dirs` runs only once one of those paths has armed the EXIT trap.
+The lines that are _not_ devShell-only — the `mkdir -p` that creates
 `--report`'s output directory, and the `uname -s` and `mkdir -p` on the
 `--coverage` path — carry a POSIX short flag and a comment saying why: BSD
 `mkdir` rejects `--parents` with `mkdir: illegal option -- -` before a single

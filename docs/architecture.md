@@ -690,6 +690,26 @@ something to look at, not something to pass.
 
 Several things about it are not obvious.
 
+**The suite runs as many kcov processes, merged.** Each `.bats` file runs as
+its own `bats` under its own `kcov`, as many at once as there are CPUs, and
+`tests/classify.bats` — most of the suite's time under kcov — is split into
+twice as many slices through its `CLASSIFY_SLICE` variable. `kcov --merge`
+then writes the one report `.ci/report-coverage` reads,
+`DIR/kcov-merged/coverage.json`. Merging loses nothing: kcov reads one trace
+pipe per process, so separate processes never interleave their traces, and
+the merged report records the same lines and the same hits as one kcov over
+the whole suite. Within one process the trace pipe is shared by every child
+bash, which is why `tests/classify.bats` grades in a single shard under
+`COVERAGE` rather than in its usual parallel shards.
+
+One kcov behaviour does depend on which files share a process. kcov credits
+a run of a temporary copy of a hook file — same file name, same bytes, outside
+`hooks/` — to the in-tree file, but only once the in-tree file has been traced
+earlier in the same process. `tests/scanner.bats`' orphan probes run such
+copies to reach the entry script's and the loader's fail-open branches, and
+with every file in its own process nothing traces the in-tree files before
+them, so those branches read as uncovered although the suite drives them.
+
 **kcov instruments bash through `BASH_ENV`.** It exports
 `BASH_ENV=<outdir>/bash-helper.sh` into the traced environment; every child bash
 sources that helper on startup, which sets `PS4` and turns on `set -x`.
@@ -808,11 +828,11 @@ a healthy run and in a full-suite run that is known to be lossy, and a check
 with no discriminating power is worse than none.
 
 **Debugging recipe for a suspicious zero.** Before believing that a function is
-unreached, append a throwaway `tests/zz-probe.bats` that drives the shape you
-think should reach it and run `just coverage` again. bats runs files in order, so
-a canary at the end sits outside most swallow windows: if the function's hit
-count rises with the probe appended, the zero was a collection artifact and not
-a gap in the suite.
+unreached, add a throwaway `tests/zz-probe.bats` that drives the shape you
+think should reach it and run `just coverage` again. Each file runs under its
+own kcov process, so the probe sits outside every other file's swallow windows:
+if the function's hit count rises with the probe added, the zero was a
+collection artifact and not a gap in the suite.
 
 **Some zeros past the prefilter are neither artifact nor gap: they are
 unreachable.** `loops::loop_context`'s closing `printf 'none\n'` in

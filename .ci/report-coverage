@@ -5,21 +5,15 @@
 #              a caveat on how to read it -- to ${GITHUB_STEP_SUMMARY} when that
 #              variable is set.
 #
-#              Exists because locating kcov's report is not obvious and getting
-#              it wrong fails silently. kcov writes the real JSON to
-#              `<dir>/<binary>.<hash>/coverage.json`, where the hash varies from
-#              run to run, so the path cannot be hardcoded. Next to it kcov also
-#              creates `<dir>/kcov-merged/`, which for a single-binary run --
-#              which is every run here, since run-tests invokes kcov around one
-#              `bats` -- is EMPTY. A summariser that reached for the
-#              obvious-looking merged directory would find nothing and, written
-#              the obvious way, would print nothing and exit 0.
-#
-#              So the rule is exactly one match, and anything else is a failure
-#              with a message naming what it found. A coverage step that quietly
-#              reports no number is worse than one that goes red: the number is
-#              the entire deliverable, and CI would otherwise keep passing while
-#              the summary went blank.
+#              The report is the merged one, `<dir>/kcov-merged/coverage.json`:
+#              `run-tests --coverage` runs the suite as several kcov processes,
+#              each writing its own `<binary>.<hash>/` report, and merges them
+#              with `kcov --merge`. Each single-run report describes one
+#              process's share of the suite, so only the merged report is read,
+#              and its absence is a failure with a message naming the path. A
+#              coverage step that quietly reports no number is worse than one
+#              that goes red: the number is the entire deliverable, and CI would
+#              otherwise keep passing while the summary went blank.
 #
 #              Reporting an INCOMPLETE number is refused for the same reason,
 #              and this half is not hypothetical. kcov 43 desynchronises on a
@@ -41,13 +35,12 @@
 #         was wrong; when jq fails or ${GITHUB_STEP_SUMMARY} cannot be appended
 #         to, the failing command's own message and the ERR trap's
 #         `[<script>] ERROR: line <n> (exit <status>): <command>` report instead
-# @exitcode 0 exactly one complete report was found and its percentage printed
-# @exitcode 1 not exactly one argument given, the directory is missing, the
-#             number of reports found was not exactly one, the one report
-#             found is missing a hooks/ file, records zero covered lines for
-#             one, or has no percent_covered field, or ${GITHUB_STEP_SUMMARY}
-#             is set and cannot be appended to
-# @exitcode * otherwise the failing jq status, when the one report found is not
+# @exitcode 0 the merged report was complete and its percentage printed
+# @exitcode 1 not exactly one argument given, the directory is missing, there
+#             is no merged report, the merged report is missing a hooks/ file,
+#             records zero covered lines for one, or has no percent_covered
+#             field, or ${GITHUB_STEP_SUMMARY} is set and cannot be appended to
+# @exitcode * otherwise the failing jq status, when the merged report is not
 #             valid JSON or holds a files[] entry jq cannot process
 
 set -Eeuo pipefail
@@ -84,26 +77,9 @@ function main() {
     die "not a directory: ${coverage_dir}"
   fi
 
-  # -mindepth 2 -maxdepth 2 rather than a recursive walk: the report sits exactly
-  # one level down, and kcov's HTML tree further in contains no coverage.json but
-  # a deep walk would still have to be filtered. The kcov-merged prune is what
-  # keeps an empty merged directory from ever becoming a second match on a future
-  # kcov that decides to populate it.
-  local -a reports=()
-  mapfile -t reports < <(
-    find "${coverage_dir}" -mindepth 2 -maxdepth 2 -path '*/kcov-merged/*' -prune -o -name 'coverage.json' -print | sort
-  )
-
-  if ((${#reports[@]} == 0)); then
-    die "no coverage.json under ${coverage_dir} — did kcov actually run?"
-  fi
-  if ((${#reports[@]} > 1)); then
-    # Joined under a space of its own, inside the substitution so the rest of
-    # `main` keeps the script-wide IFS, which would put each path on its own
-    # line of what die prints as one FATAL line.
-    die "expected exactly one coverage.json under ${coverage_dir}, found ${#reports[@]}: $(
-      IFS=' ' && printf '%s' "${reports[*]}"
-    )"
+  local -r report="${coverage_dir}/kcov-merged/coverage.json"
+  if [[ ! -f "${report}" ]]; then
+    die "no coverage.json at ${coverage_dir}/kcov-merged — did run-tests --coverage run to its merge?"
   fi
 
   # Report integrity, before anything is printed. See the header: kcov 43 can
@@ -144,26 +120,26 @@ function main() {
       jq --raw-output --arg name "${required_hook_file}" '
         [ .files[]? | select((.file | split("/") | last) == $name) ] as $hits
         | "\($hits | length) \([ $hits[] | (.covered_lines | tonumber? ) // 0 ] | add // 0)"
-      ' "${reports[0]}"
+      ' "${report}"
     )"
     if [[ "${matched%% *}" == '0' ]]; then
       no_entry_msg="coverage report lists no entry for hooks/${required_hook_file} — kcov 43 drops a"
-      no_entry_msg+=" traced file outright when it loses xtrace sync, so the percentage in ${reports[0]}"
+      no_entry_msg+=" traced file outright when it loses xtrace sync, so the percentage in ${report}"
       no_entry_msg+=' describes a different codebase; see #128'
       die "${no_entry_msg}"
     fi
     if [[ "${matched##* }" == '0' ]]; then
       zero_covered_msg="coverage report records zero covered lines for hooks/${required_hook_file} — the"
       zero_covered_msg+=' suite drives that file on every case, so a zero means collection failed, not that'
-      zero_covered_msg+=" the code is untested; see #128 and ${reports[0]}"
+      zero_covered_msg+=" the code is untested; see #128 and ${report}"
       die "${zero_covered_msg}"
     fi
   done
 
   local percent
-  percent="$(jq --raw-output '.percent_covered' "${reports[0]}")"
+  percent="$(jq --raw-output '.percent_covered' "${report}")"
   if [[ -z "${percent}" || "${percent}" == 'null' ]]; then
-    die "coverage report has no percent_covered field: ${reports[0]}"
+    die "coverage report has no percent_covered field: ${report}"
   fi
 
   printf '%s\n' "${percent}"

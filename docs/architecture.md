@@ -425,8 +425,10 @@ drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives
 and a small corpus. `tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
 `--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — against a
 trivial always-passing fixture suite rather than against the real one, so the
-cases measure argument parsing and not the suite's runtime. It is the only bats
-file that runs `bats` inside `bats`. `tests/run-all-checks.bats` grades
+cases measure argument parsing and not the suite's runtime. It and
+`tests/classify-slice.bats`, which pins the `CLASSIFY_SLICE` contract
+`run-tests --coverage` uses to split `tests/classify.bats` into slices, are
+the only bats files that run `bats` inside `bats`. `tests/run-all-checks.bats` grades
 `run-all-checks`' argument handling: anything but an optional `--awk=gawk` or
 `--awk=bwk` and an optional `--report DIR` whose directory does not start with
 `--`, each at most once, exits 2 before

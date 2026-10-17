@@ -17,7 +17,7 @@ runs:
         # never replaced, and the GC setting would be dead config for it. Bump
         # the marker whenever a change to this action must invalidate every
         # cache it ever saved.
-        primary-key: nix-${{ runner.os }}-v2-${{ hashFiles('flake.lock') }}
+        primary-key: nix-${{ runner.os }}-v2-probe521-${{ hashFiles('flake.lock') }}
         restore-prefixes-first-match: nix-${{ runner.os }}-v2-
         # Collect ALL garbage before saving. Without this the cache is the
         # union of every store the runner ever restored: a flake.lock bump

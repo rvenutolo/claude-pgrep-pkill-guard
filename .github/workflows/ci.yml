@@ -38,9 +38,10 @@ jobs:
   gate:
     name: gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # The macOS leg is the slower one, and the verdict table grows with every
-    # hook fix: the limit leaves room for both.
-    timeout-minutes: 45
+    # About twice the slower macOS leg's warm-cache run (~12 min), which leaves
+    # room for a cold Nix store and a growing verdict table while still failing
+    # a hang before it burns most of an hour.
+    timeout-minutes: 25
     permissions:
       contents: read
     env:

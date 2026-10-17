@@ -38,9 +38,10 @@ jobs:
   gate:
     name: gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # The macOS leg is the slower one, and the verdict table grows with every
-    # hook fix: the limit leaves room for both.
-    timeout-minutes: 45
+    # About twice the slower macOS leg's warm-cache run (~12 min), which leaves
+    # room for a cold Nix store and a growing verdict table while still failing
+    # a hang before it burns most of an hour.
+    timeout-minutes: 25
     permissions:
       contents: read
     env:
@@ -164,8 +165,8 @@ jobs:
     # -- or a nixpkgs bump that breaks its bash support -- would otherwise read
     # as a test failure and send the next reader into hooks/.
     runs-on: ubuntu-latest
-    # One Linux pass of the suite under kcov plus setup, like compat-linux's.
-    timeout-minutes: 20
+    # About twice the job's ~6 min run, rounded up to fail a hang early.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -208,10 +209,10 @@ jobs:
           }
       - name: Summarise coverage
         shell: nix develop --command bash -e {0}
-        # .ci/report-coverage locates kcov's report (the directory name embeds a
-        # per-run hash, so it cannot be hardcoded), fails loudly when it does not
-        # find exactly one, and writes the summary itself. GITHUB_STEP_SUMMARY is
-        # in KEEP_VARS, so it survives --ignore-environment.
+        # .ci/report-coverage reads the merged report run-tests writes, fails
+        # loudly when it is absent or incomplete, and writes the summary itself.
+        # GITHUB_STEP_SUMMARY is in KEEP_VARS, so it survives
+        # --ignore-environment.
         run: ./.ci/in-devshell ./.ci/report-coverage "${RUNNER_TEMP}/coverage"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         # Not `if: failure()`, unlike the gate's JUnit upload: the coverage

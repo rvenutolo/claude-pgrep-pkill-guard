@@ -165,8 +165,8 @@ jobs:
     # -- or a nixpkgs bump that breaks its bash support -- would otherwise read
     # as a test failure and send the next reader into hooks/.
     runs-on: ubuntu-latest
-    # One Linux pass of the suite under kcov plus setup, like compat-linux's.
-    timeout-minutes: 20
+    # About twice the job's ~6 min run, rounded up to fail a hang early.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

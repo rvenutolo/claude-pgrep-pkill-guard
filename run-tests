@@ -46,9 +46,9 @@
 #              combines them into DIR/kcov-merged/. kcov reads one trace pipe per
 #              process, so separate processes never interleave their traces;
 #              see docs/architecture.md, "Line coverage", for how the split
-#              still moves the figure. A file named classify.bats is split into twice as many
-#              CLASSIFY_SLICE slices as there are CPUs, because its rows are most
-#              of the suite's time under kcov. Each file's output is printed
+#              still moves the figure. A file named classify.bats is split into
+#              CLASSIFY_SLICES slices through its CLASSIFY_SLICE variable,
+#              because its rows are most of the suite's time under kcov. Each file's output is printed
 #              once every file has finished, in queue order, and with --report
 #              each writes its JUnit file to its own subdirectory of the report
 #              DIR. Arguments that name a file or directory are the files to
@@ -102,6 +102,11 @@ TEMP_DIRS=()
 # failing mktemp, mkdir or `kcov --merge` inside it still trips errexit and the
 # ERR trap instead of passing silently.
 SUITE_STATUS=0
+# How many slices --coverage splits a classify.bats into. Fixed rather than
+# derived from the CPU count: the split decides which lines kcov's apostrophe
+# swallow windows hide (#128), so it must be the same on every machine for the
+# figure to be. Twice CI's 4 CPUs, so the slices even out the finish there.
+readonly CLASSIFY_SLICES=8
 
 # @description Print one fatal diagnostic to stderr and exit 1.
 # @arg $1 message the diagnostic text
@@ -277,10 +282,9 @@ function run_coverage() {
     item_labels+=("${#item_paths[@]}-${name%.bats}")
   done
   if [[ -n "${slice_file}" ]]; then
-    local -r slices="$((2 * workers))"
-    for ((i = 0; i < slices; i++)); do
+    for ((i = 0; i < CLASSIFY_SLICES; i++)); do
       item_paths+=("${slice_file}")
-      item_slices+=("${i}/${slices}")
+      item_slices+=("${i}/${CLASSIFY_SLICES}")
       item_labels+=("${#item_paths[@]}-classify-${i}")
     done
   fi

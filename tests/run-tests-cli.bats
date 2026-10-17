@@ -218,6 +218,30 @@ BATS
   done
 }
 
+@test "run-tests: --coverage splits a classify.bats the same way on any CPU count" {
+  require_kcov
+  # The split decides which lines kcov's apostrophe swallow windows hide (#128),
+  # so a split that followed the CPU count would give each machine its own
+  # figure. GNU nproc reads OMP_NUM_THREADS, which stands in for a smaller or
+  # larger machine here.
+  local -r dir="${BATS_TEST_TMPDIR}/suite18"
+  mkdir -p "${dir}"
+  cat > "${dir}/classify.bats" << 'BATS'
+@test "slice probe" {
+  printf 'SLICE=%s\n' "${CLASSIFY_SLICE:-unset}" >&3
+}
+BATS
+  local one three
+  OMP_NUM_THREADS=1 run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov18a" "${dir}/classify.bats"
+  assert_success
+  one="$(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort)"
+  OMP_NUM_THREADS=3 run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov18b" "${dir}/classify.bats"
+  assert_success
+  three="$(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort)"
+  [[ -n "${one}" ]]
+  assert_equal "${one}" "${three}"
+}
+
 @test "run-tests: --coverage leaves no per-file kcov output behind" {
   require_kcov
   # Each file runs under its own kcov, whose output lives in a temporary

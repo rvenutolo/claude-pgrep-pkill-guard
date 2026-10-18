@@ -59,3 +59,59 @@ function make_bench_repo() {
   assert_line --regexp '^\| `inspect` \| [^|]+ \| 2 \| '
   assert_line --regexp '^\| `repeat` \| [^|]+ \| 2 \| '
 }
+
+@test "bench run: --sample caps the rows a corpus cohort times on each pass" {
+  make_bench_repo \
+    $'"while pgrep -f a >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f b >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f c >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f d >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f e >/dev/null; do sleep 1; done"\tdeny:loop'
+  cd "${FIXTURE}"
+  run "${FIXTURE}/bench/run" --reps 2 --sample 2
+  assert_success
+  assert_line --regexp '^\| `deny` \| [^|]+ \| 4 \| '
+}
+
+@test "bench run: a cohort smaller than --sample is timed in full on each pass" {
+  make_bench_repo $'"echo PAYLOAD_RAN"\tallow'
+  cd "${FIXTURE}"
+  run "${FIXTURE}/bench/run" --reps 2 --sample 3
+  assert_success
+  assert_line --regexp '^\| `skipped` \| [^|]+ \| 2 \| '
+  assert_line --regexp '^\| `baseline` \| [^|]+ \| 2 \| '
+}
+
+@test "bench run: --sample never thins the typical cohort" {
+  make_bench_repo $'"echo PAYLOAD_RAN"\tallow'
+  cd "${FIXTURE}"
+  run "${FIXTURE}/bench/run" --reps 2 --sample 1
+  assert_success
+  # TYPICAL_COMMANDS holds six commands: six per pass, two passes.
+  assert_line --regexp '^\| `typical` \| [^|]+ \| 12 \| '
+}
+
+@test "bench run: the report records the --sample value" {
+  make_bench_repo $'"echo PAYLOAD_RAN"\tallow'
+  cd "${FIXTURE}"
+  run "${FIXTURE}/bench/run" --reps 1 --sample 7
+  assert_success
+  assert_line --regexp '^\| rows per cohort per pass \| 7 \|$'
+}
+
+@test "bench run: --sample rejects a value that is not a positive integer" {
+  cd "${REPO_DIR}"
+  local value
+  for value in 0 x -3 ''; do
+    run "${REPO_DIR}/bench/run" --sample "${value}"
+    assert_failure 1
+    assert_output --partial '--sample must be a positive integer'
+  done
+}
+
+@test "bench run: --sample with no value is rejected" {
+  cd "${REPO_DIR}"
+  run "${REPO_DIR}/bench/run" --sample
+  assert_failure 1
+  assert_output --partial '--sample needs a value'
+}

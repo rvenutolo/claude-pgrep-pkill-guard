@@ -316,8 +316,8 @@ state file — has a median of 90.77 ms, or 108.41 ms when the repeat rule denie
 it, and a denied command 66.96 ms. Those figures, and the 54.68 ms alongside
 them, are for a command the guard actually
 inspects — one carrying `pgrep`, `kill` or a task-output path, past the
-prefilter and into the `jq` spawn and scanner pass. They come from
-`tests/cases/verdicts.tsv`, which exists to be hard on the scanner rather than
+prefilter and into the `jq` spawn and scanner pass. They come from a seeded
+sample of `tests/cases/verdicts.tsv`, drawn afresh on each pass, which exists to be hard on the scanner rather than
 to be representative — read them as a ceiling, not as what a session pays.
 
 The benchmark's payloads carry no `cwd` or `transcript_path`, so a real

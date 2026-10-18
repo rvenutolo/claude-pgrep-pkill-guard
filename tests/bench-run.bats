@@ -1,5 +1,7 @@
-# bench/run's cohorts: the report lists every cohort, and an `inspect` row the
-# repeat rule denies is timed under `repeat` rather than `inspect`. Driven
+# bench/run's cohorts: the report lists every cohort, an `inspect` row the
+# repeat rule denies is timed under `repeat` rather than `inspect`, and
+# --sample caps the rows each corpus cohort times per pass, spares `typical`, is
+# recorded in the report and rejects a bad value. Driven
 # through the script's command line, against the real repo and against a
 # fixture repo holding a copy of bench/run, the hook and a small corpus.
 #
@@ -85,10 +87,24 @@ function make_bench_repo() {
 @test "bench run: --sample never thins the typical cohort" {
   make_bench_repo $'"echo PAYLOAD_RAN"\tallow'
   cd "${FIXTURE}"
-  run "${FIXTURE}/bench/run" --reps 2 --sample 1
-  assert_success
-  # TYPICAL_COMMANDS holds six commands: six per pass, two passes.
-  assert_line --regexp '^\| `typical` \| [^|]+ \| 12 \| '
+  local -r row_re='^\| `typical` \| [^|]+ \| ([0-9]+) \| '
+  local -a typical_n=()
+  local sample line
+  for sample in 1 1000; do
+    run "${FIXTURE}/bench/run" --reps 2 --sample "${sample}"
+    assert_success
+    for line in "${lines[@]}"; do
+      if [[ "${line}" =~ ${row_re} ]]; then
+        typical_n+=("${BASH_REMATCH[1]}")
+      fi
+    done
+  done
+  assert_equal "${#typical_n[@]}" 2
+  # More typical commands than one per pass, so a cap of 1 would show.
+  if ((typical_n[0] <= 2)); then
+    fail "typical n is ${typical_n[0]}; too few to show a cap of 1"
+  fi
+  assert_equal "${typical_n[0]}" "${typical_n[1]}"
 }
 
 @test "bench run: the report records the --sample value" {

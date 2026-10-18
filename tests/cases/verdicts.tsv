@@ -2248,6 +2248,9 @@
 "env --split-string='pkill --full X'\"$(date)\""	deny:kill
 "watch 'pkill --full X'\"$(date)\""	deny:kill
 "sudo -s 'pkill --full X'\"$(date)\""	deny:kill
+"bash -c 'pkill --full '\"${x}\""	deny:kill
+"bash -c 'pkill --full '$x"	deny:kill
+"eval 'pkill --full '\"${x}\""	deny:kill
 "eval $(ssh-agent -s)"	allow
 "eval \"$(dircolors)\"x"	allow
 "bash -c \"echo hi\"$(date)"	allow

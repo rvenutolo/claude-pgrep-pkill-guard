@@ -1912,23 +1912,21 @@ function wrappers::shell_wrapper_payloads() {
         # payload all the same (`bash -co '...'`, where the option's name is missing): an option
         # name is not written quoted, so this only fails closed.
         option_values="$((option_values - 1))"
-        raw="${command:offset:${#token}}"
+        raw="${spelled}"
         if ((saw_c == 1)) && [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
           printf '%s\t%s\0' "${anchor}" "${raw:1:${#raw}-2}"
         fi
       elif ((saw_c == 1)) && [[ "${option_word}" != -* ]] \
         && [[ "${wrapper_kind}" != 'shell' || "${option_word}" != +* ]]; then
-        # The `-c` string, written as one word of any quoting (`'...'`, `'a'"b"`, `a\ b`). It is
-        # read as the stream keeps it, up to a cut region in it, and not whole as an operand
-        # capture reads it: `bash -c "pkill --full java $(date)"` is allowed, since the pattern
-        # completed at run time does not hold the text of the command line it is written on.
-        # TODO: whether a `-c` string with a substitution is read whole, as `eval "..."` is,
-        # is open; reading it so denies the shape above.
-        if wrappers::word_text "${command:offset:${#token}}" raw; then
+        # The `-c` string, written as one word of any quoting (`'...'`, `'a'"b"`, `a\ b`). One that
+        # holds a substitution is read whole, as `eval "..."` is (see wrappers::whole_word): a
+        # pattern completed at run time is no safer than one written out, and the commands behind
+        # the substitution (`bash -c "echo $(date); pkill ..."`) are the string's too.
+        if wrappers::word_text "${spelled}" raw; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
         fi
         c_text="${raw}"
-        if wrappers::literal_variant "${command:offset:${#token}}" raw; then
+        if wrappers::literal_variant "${spelled}" raw; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
           c_text+=$'\n'"${raw}"
         fi

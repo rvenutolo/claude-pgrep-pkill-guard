@@ -63,8 +63,10 @@ readonly DEFAULT_REPS=45
 # The most rows each corpus cohort times on one pass; see sample_indices. Without
 # a cap the run time grows with tests/cases/verdicts.tsv, which every hook fix
 # adds rows to, and the corpus cohorts would carry far more samples than their
-# percentiles need. 40 rows over 45 reps is 1800 samples per cohort, and a
-# default run finishes in minutes rather than hours.
+# percentiles need. 40 rows over 45 reps is 1800 samples per corpus cohort,
+# which `inspect` and `repeat` split between them -- most `inspect` rows share
+# a probe key, so the larger share lands in `repeat` -- and a default run
+# finishes in minutes rather than hours.
 readonly DEFAULT_SAMPLE=40
 
 # Report order, and the only cohort names recognised anywhere in this script.
@@ -135,8 +137,10 @@ asserts on -- grouped into the code paths the hook's `main` actually takes:
 Options:
   --reps N        repetitions over the corpus (default 45)
   --sample N      the most rows each corpus cohort times on one pass, drawn
-                  afresh on every pass from a seed of the pass number, so a
-                  run is reproducible (default 40). `typical` is never sampled
+                  afresh on every pass from a seed of the pass number, so the
+                  rows a run times are reproducible (default 40). `inspect`
+                  and `repeat` share one cohort's draw. `typical` is never
+                  sampled
   --output PATH   write the markdown report to PATH instead of stdout
   --smoke         one repetition over one payload of each kind of row,
                   validating every response as JSON; `repeat` stays empty, as
@@ -517,9 +521,11 @@ function write_report() {
   printf 'cost of reaching the scanner at all. `repeat` holds the `inspect` rows the\n'
   printf 'repeat rule denied: the corpus probes some keys many times in one pass, so\n'
   printf 'it times that rule'\''s hit path apart from the calls it lets through.\n\n'
-  printf 'Each pass times at most the rows-per-cohort figure of each corpus cohort,\n'
-  printf 'drawn afresh per pass from a seed of the pass number; `typical` runs in\n'
-  printf 'full on every pass.\n\n'
+  if [[ "${smoke}" == '0' ]]; then
+    printf 'Each pass times at most the rows-per-cohort figure of each corpus cohort,\n'
+    printf 'drawn afresh per pass from a seed of the pass number; `inspect` and\n'
+    printf '`repeat` share one draw. `typical` runs in full on every pass.\n\n'
+  fi
   printf 'Percentiles are nearest-rank over every sample in the cohort. Regenerate\n'
   printf 'with `just bench`.\n\n'
   printf 'Compare two of these reports by their **min** column first, then their\n'

@@ -135,7 +135,7 @@ function grade_shard() {
   total="$(grep --count --invert-match '^$' "${CASES}")"
   # Checked whether or not a slice is set: a slice's own count is derived from
   # the table, so only this line notices rows going missing from it.
-  [[ "${total}" -eq 2492 ]]
+  [[ "${total}" -eq 2506 ]]
   if [[ -n "${CLASSIFY_SLICE:-}" ]]; then
     if [[ ! "${CLASSIFY_SLICE}" =~ ^(0|[1-9][0-9]*)/([1-9][0-9]*)$ ]] \
       || ((BASH_REMATCH[1] >= BASH_REMATCH[2])); then

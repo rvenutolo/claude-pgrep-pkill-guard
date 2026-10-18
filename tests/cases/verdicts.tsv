@@ -115,7 +115,21 @@
 "bash 'pkill --full java'"	allow
 "bash --posix 'pkill --full java'"	allow
 "bash --version; grep -c 'pkill --full java' /tmp/log"	allow
-"bash -c \"pkill --full java $(date)\""	allow
+"bash -c \"pkill --full java $(date)\""	deny:kill
+"sh -c \"pkill --full $(cat name)\""	deny:kill
+"bash -c \"pkill --full $(cat name) now\""	deny:kill
+"bash -c \"pkill --full `cat name`\""	deny:kill
+"bash -lc \"pkill --full $(cat name)\""	deny:kill
+"bash -co \"pkill --full $(cat name)\""	deny:kill
+"sudo bash -c \"pkill --full $(cat name)\""	deny:kill
+"bash -c \"echo $(date); pkill --full java\""	deny:kill
+"bash -c \"kill $(pgrep --full java)\""	deny:kill
+"bash -c \"while pgrep --full java $(date); do sleep 1; done\""	deny:task-poll
+"bash -c \"pgrep --full java $(date) | wc -l\""	warn
+"bash -c \"echo $(date)\""	allow
+"bash -c \"ls $(pwd)\""	allow
+"bash -c \"pgrep --ignore-ancestors -f $(cat name)\""	allow
+"ssh host bash -c \"pkill --full java $(date)\""	allow
 "pgrep --full x | wc -l; bash -c 'echo hi'"	warn
 "bash script.sh -c 'pkill --full java'"	allow
 "bash /tmp/deploy.sh --verbose -c 'pkill --full java'"	allow

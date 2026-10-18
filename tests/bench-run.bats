@@ -1,5 +1,7 @@
-# bench/run's cohorts: the report lists every cohort, and an `inspect` row the
-# repeat rule denies is timed under `repeat` rather than `inspect`. Driven
+# bench/run's cohorts: the report lists every cohort, an `inspect` row the
+# repeat rule denies is timed under `repeat` rather than `inspect`, and
+# --sample caps the rows each corpus cohort times per pass, spares `typical`, is
+# recorded in the report and rejects a bad value. Driven
 # through the script's command line, against the real repo and against a
 # fixture repo holding a copy of bench/run, the hook and a small corpus.
 #
@@ -58,4 +60,74 @@ function make_bench_repo() {
   assert_success
   assert_line --regexp '^\| `inspect` \| [^|]+ \| 2 \| '
   assert_line --regexp '^\| `repeat` \| [^|]+ \| 2 \| '
+}
+
+@test "bench run: --sample caps the rows a corpus cohort times on each pass" {
+  make_bench_repo \
+    $'"while pgrep -f a >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f b >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f c >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f d >/dev/null; do sleep 1; done"\tdeny:loop' \
+    $'"while pgrep -f e >/dev/null; do sleep 1; done"\tdeny:loop'
+  cd "${FIXTURE}"
+  run "${FIXTURE}/bench/run" --reps 2 --sample 2
+  assert_success
+  assert_line --regexp '^\| `deny` \| [^|]+ \| 4 \| '
+}
+
+@test "bench run: a cohort smaller than --sample is timed in full on each pass" {
+  make_bench_repo $'"echo PAYLOAD_RAN"\tallow'
+  cd "${FIXTURE}"
+  run "${FIXTURE}/bench/run" --reps 2 --sample 3
+  assert_success
+  assert_line --regexp '^\| `skipped` \| [^|]+ \| 2 \| '
+  assert_line --regexp '^\| `baseline` \| [^|]+ \| 2 \| '
+}
+
+@test "bench run: --sample never thins the typical cohort" {
+  make_bench_repo $'"echo PAYLOAD_RAN"\tallow'
+  cd "${FIXTURE}"
+  local -r row_re='^\| `typical` \| [^|]+ \| ([0-9]+) \| '
+  local -a typical_n=()
+  local sample line
+  for sample in 1 1000; do
+    run "${FIXTURE}/bench/run" --reps 2 --sample "${sample}"
+    assert_success
+    for line in "${lines[@]}"; do
+      if [[ "${line}" =~ ${row_re} ]]; then
+        typical_n+=("${BASH_REMATCH[1]}")
+      fi
+    done
+  done
+  assert_equal "${#typical_n[@]}" 2
+  # More typical commands than one per pass, so a cap of 1 would show.
+  if ((typical_n[0] <= 2)); then
+    fail "typical n is ${typical_n[0]}; too few to show a cap of 1"
+  fi
+  assert_equal "${typical_n[0]}" "${typical_n[1]}"
+}
+
+@test "bench run: the report records the --sample value" {
+  make_bench_repo $'"echo PAYLOAD_RAN"\tallow'
+  cd "${FIXTURE}"
+  run "${FIXTURE}/bench/run" --reps 1 --sample 7
+  assert_success
+  assert_line --regexp '^\| rows per cohort per pass \| 7 \|$'
+}
+
+@test "bench run: --sample rejects a value that is not a positive integer" {
+  cd "${REPO_DIR}"
+  local value
+  for value in 0 x -3 ''; do
+    run "${REPO_DIR}/bench/run" --sample "${value}"
+    assert_failure 1
+    assert_output --partial '--sample must be a positive integer'
+  done
+}
+
+@test "bench run: --sample with no value is rejected" {
+  cd "${REPO_DIR}"
+  run "${REPO_DIR}/bench/run" --sample
+  assert_failure 1
+  assert_output --partial '--sample needs a value'
 }

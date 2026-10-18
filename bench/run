@@ -18,7 +18,7 @@
 #              suite asserts on, so the benchmark cannot drift from the tests
 #              and no second corpus has to be maintained. This script never
 #              asserts a verdict -- that is tests/classify.bats's job.
-# @arg $@ args optional --reps N, --output PATH, --smoke, --help or -h
+# @arg $@ args optional --reps N, --sample N, --output PATH, --smoke, --help or -h
 # @stdout the markdown report, unless --output PATH is given; the usage text
 #         under --help
 # @stderr a `[<script>] <message>` line naming the file written under --output,
@@ -55,10 +55,19 @@ readonly CASES="${REPO_DIR}/tests/cases/verdicts.tsv"
 # 45 rather than 15. `typical` is only the short TYPICAL_COMMANDS list, so at 15
 # reps it carries too few samples: its p50 swung 10.3-13.5 ms across two
 # back-to-back runs -- too noisy for the figure the README quotes as what a
-# session actually pays. 45 triples its sample count. The whole run costs a few
-# minutes and nothing in CI calls it: run-all-checks uses --smoke, which is one
-# repetition of one payload of each kind of row.
+# session actually pays. 45 triples its sample count. Nothing in CI calls a full
+# run: run-all-checks uses --smoke, which is one repetition of one payload of
+# each kind of row.
 readonly DEFAULT_REPS=45
+
+# The most rows each corpus cohort times on one pass; see sample_indices. Without
+# a cap the run time grows with tests/cases/verdicts.tsv, which every hook fix
+# adds rows to, and the corpus cohorts would carry far more samples than their
+# percentiles need. 40 rows over 45 reps is 1800 samples per corpus cohort,
+# which `inspect` and `repeat` split between them -- most `inspect` rows share
+# a probe key, so the larger share lands in `repeat` -- and a default run
+# finishes in minutes rather than hours.
+readonly DEFAULT_SAMPLE=40
 
 # Report order, and the only cohort names recognised anywhere in this script.
 readonly -a COHORTS=('baseline' 'skipped' 'typical' 'quiet' 'inspect' 'repeat' 'deny')
@@ -100,7 +109,7 @@ declare -rA COHORT_PATH=(
 # @stdout the usage text
 function usage() {
   cat << 'USAGE'
-Usage: bench/run [--reps N] [--output PATH] [--smoke] [--help]
+Usage: bench/run [--reps N] [--sample N] [--output PATH] [--smoke] [--help]
 
 Measure the per-call wall-clock cost of the pgrep-pkill-guard PreToolUse hook.
 
@@ -127,6 +136,11 @@ asserts on -- grouped into the code paths the hook's `main` actually takes:
 
 Options:
   --reps N        repetitions over the corpus (default 45)
+  --sample N      the most rows each corpus cohort times on one pass, drawn
+                  afresh on every pass from a seed of the pass number, so the
+                  rows a run times are reproducible (default 40). `inspect`
+                  and `repeat` share one cohort's draw. `typical` is never
+                  sampled
   --output PATH   write the markdown report to PATH instead of stdout
   --smoke         one repetition over one payload of each kind of row,
                   validating every response as JSON; `repeat` stays empty, as
@@ -220,6 +234,49 @@ function time_one() {
   printf '%s' "${payload}" | "${target}" > "${response_file}"
   end="${EPOCHREALTIME}"
   printf '%s\n' "$((10#${end/./} - 10#${start/./}))" >> "${sample_file}"
+}
+
+# @description Print the corpus indices one pass times: at most `sample` rows of
+#              each corpus cohort, plus every `typical` row, in corpus order.
+#
+#              The draw is seeded with the pass number, so a run is
+#              reproducible under the devShell's pinned bash (RANDOM's sequence
+#              for a given seed is bash's own) while each pass still covers a
+#              different subset, and the run as a whole reaches far more of the
+#              corpus than one fixed subset would. Corpus order is kept rather
+#              than the draw's order: `inspect` rows sharing a probe key are
+#              what drive the repeat rule within a pass, and their order is part
+#              of what the corpus records. Rows are drawn per cohort before
+#              main's `inspect`/`repeat` split, which is only known once the
+#              hook has answered. `typical` is exempt: it is the short list the
+#              README quotes, and thinning it is the noise DEFAULT_REPS exists to
+#              prevent.
+# @arg $1 seed the RANDOM seed, the pass number
+# @arg $2 sample the most rows to take from each corpus cohort
+# @arg $@ cohorts the remaining arguments, the cohort of each index in order
+# @stdout one index per line, ascending
+function sample_indices() {
+  local -r seed="$1" sample="$2"
+  shift 2
+  local -ra cohorts=("$@")
+  local -A taken=()
+  local -a keyed=() picked=()
+  local i cohort count
+  RANDOM="${seed}"
+  for i in "${!cohorts[@]}"; do
+    keyed+=("${RANDOM}"$'\t'"${i}")
+  done
+  # Ties on the 15-bit key fall back to the index, so the order, and with it the
+  # draw, never depends on how sort breaks them.
+  while IFS=$'\t' read -r _ i; do
+    cohort="${cohorts[i]}"
+    count="${taken["${cohort}"]:-0}"
+    if [[ "${cohort}" == 'typical' ]] || ((count < sample)); then
+      taken["${cohort}"]="$((count + 1))"
+      picked+=("${i}")
+    fi
+  done < <(printf '%s\n' "${keyed[@]}" | sort --numeric-sort --key=1,1 --key=2,2)
+  printf '%s\n' "${picked[@]}" | sort --numeric-sort
 }
 
 # @description Assert the hook answers one payload with parseable JSON. Used
@@ -386,9 +443,10 @@ function package_temp() {
 #              provenance table, the cohort table, and how to read it.
 # @arg $1 samples_dir the directory holding one sample file per cohort
 # @arg $2 reps the repetition count the run used
-# @arg $3 smoke 1 when this was a --smoke run, 0 otherwise
-# @arg $4 load_at_start the load average read before the measurement loop
-# @arg $5 temp_at_start the package temperature read before the measurement loop
+# @arg $3 sample the most rows each corpus cohort timed on one pass
+# @arg $4 smoke 1 when this was a --smoke run, 0 otherwise
+# @arg $5 load_at_start the load average read before the measurement loop
+# @arg $6 temp_at_start the package temperature read before the measurement loop
 # @stdout the full markdown report
 #
 # Single quotes throughout, and the backticks inside them are markdown code
@@ -396,7 +454,7 @@ function package_temp() {
 # would turn every one of them into one; hence the function-wide SC2016 disable.
 # shellcheck disable=SC2016 # function-wide: the backticks are markdown spans in the report
 function write_report() {
-  local -r samples_dir="$1" reps="$2" smoke="$3" load_at_start="$4" temp_at_start="$5"
+  local -r samples_dir="$1" reps="$2" sample="$3" smoke="$4" load_at_start="$5" temp_at_start="$6"
   local cohort n min p50 p95 max total=0
 
   printf '# Hook benchmark results\n\n'
@@ -427,6 +485,7 @@ function write_report() {
   printf '| load at start | %s |\n' "${load_at_start}"
   printf '| package temp at start | %s |\n' "${temp_at_start}"
   printf '| repetitions | %s |\n' "${reps}"
+  printf '| rows per cohort per pass | %s |\n' "${sample}"
   for cohort in "${COHORTS[@]}"; do
     IFS=$'\t' read -r n _ _ _ _ < <(cohort_stats "${samples_dir}/${cohort}")
     total="$((total + n))"
@@ -462,6 +521,11 @@ function write_report() {
   printf 'cost of reaching the scanner at all. `repeat` holds the `inspect` rows the\n'
   printf 'repeat rule denied: the corpus probes some keys many times in one pass, so\n'
   printf 'it times that rule'\''s hit path apart from the calls it lets through.\n\n'
+  if [[ "${smoke}" == '0' ]]; then
+    printf 'Each pass times at most the rows-per-cohort figure of each corpus cohort,\n'
+    printf 'drawn afresh per pass from a seed of the pass number; `inspect` and\n'
+    printf '`repeat` share one draw. `typical` runs in full on every pass.\n\n'
+  fi
   printf 'Percentiles are nearest-rank over every sample in the cohort. Regenerate\n'
   printf 'with `just bench`.\n\n'
   printf 'Compare two of these reports by their **min** column first, then their\n'
@@ -475,7 +539,7 @@ function write_report() {
 }
 
 function main() {
-  local reps="${DEFAULT_REPS}" output='' smoke=0 arg
+  local reps="${DEFAULT_REPS}" sample="${DEFAULT_SAMPLE}" output='' smoke=0 arg
 
   # clig.dev: --help wins over every other argument and prints on stdout.
   for arg in "$@"; do
@@ -490,6 +554,11 @@ function main() {
       --reps)
         (($# >= 2)) || die '--reps needs a value'
         reps="$2"
+        shift 2
+        ;;
+      --sample)
+        (($# >= 2)) || die '--sample needs a value'
+        sample="$2"
         shift 2
         ;;
       --output)
@@ -507,6 +576,7 @@ function main() {
     esac
   done
   [[ "${reps}" =~ ^[1-9][0-9]*$ ]] || die "--reps must be a positive integer, got: ${reps}"
+  [[ "${sample}" =~ ^[1-9][0-9]*$ ]] || die "--sample must be a positive integer, got: ${sample}"
   [[ -r "${CASES}" ]] || die "corpus not readable: ${CASES}"
   [[ -x "${HOOK}" ]] || die "hook not executable: ${HOOK}"
 
@@ -564,6 +634,7 @@ function main() {
     # One payload of each kind of row, and validate rather than trust: the smoke run
     # exists to prove this script still drives the hook's real contract.
     reps=1
+    sample=1
     for i in "${!payload_of[@]}"; do
       case "${cohort_of[i]}" in
         'typical') ((seen_typical++ > 0)) && continue ;;
@@ -575,10 +646,6 @@ function main() {
       esac
       indices+=("${i}")
       validate_one "${payload_of[i]}"
-    done
-  else
-    for i in "${!payload_of[@]}"; do
-      indices+=("${i}")
     done
   fi
 
@@ -600,6 +667,9 @@ function main() {
     # which is most of that function's cost.
     rm --recursive --force -- "${state_dir}"
 
+    if ((smoke == 0)); then
+      mapfile -t indices < <(sample_indices "${rep}" "${sample}" "${cohort_of[@]}")
+    fi
     for i in "${indices[@]}"; do
       cohort="${cohort_of[i]}"
       if ((recording == 1)) && [[ "${cohort}" == 'inspect' ]]; then
@@ -631,11 +701,11 @@ function main() {
   done
 
   if [[ -n "${output}" ]]; then
-    write_report "${samples_dir}" "${reps}" "${smoke}" \
+    write_report "${samples_dir}" "${reps}" "${sample}" "${smoke}" \
       "${load_at_start}" "${temp_at_start}" > "${output}"
     log "wrote ${output}"
   else
-    write_report "${samples_dir}" "${reps}" "${smoke}" "${load_at_start}" "${temp_at_start}"
+    write_report "${samples_dir}" "${reps}" "${sample}" "${smoke}" "${load_at_start}" "${temp_at_start}"
   fi
 }
 

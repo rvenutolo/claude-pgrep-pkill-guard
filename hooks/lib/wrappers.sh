@@ -1455,11 +1455,12 @@ function wrappers::body_runs_shell() {
 #
 #              A process substitution is a payload source too. One that is a wrapper's script
 #              operand (`bash <(echo '...')`, `source <(...)`), or the target of a shell's stdin
-#              redirection (`bash < <(...)`), hands it what its commands print. One that names a
-#              command that can run a script (wrappers::body_runs_shell) and that the segment's
-#              stdout goes to (`echo '...' > >(bash)`, unless a later redirection of fd 1 takes
-#              stdout away) or that `tee` writes to (`| tee >(bash)`) runs the commands in it on
-#              what the segment prints. Each is read by rewriting the command in the pipe spelling
+#              redirection (`bash < <(...)`, `source /dev/stdin < <(...)`), hands it what its
+#              commands print. One that names a command that can run a script
+#              (wrappers::body_runs_shell) and that the segment's stdout goes to
+#              (`echo '...' > >(bash)`, unless a later redirection of fd 1 takes stdout away) or
+#              that `tee` writes to (`| tee >(bash)`) runs the commands in it on what the segment
+#              prints. Each is read by rewriting the command in the pipe spelling
 #              (wrappers::rewritten_payloads, wrappers::substitution_stage_payloads), in a
 #              `rewritten` mode that rewrites no more. Not read: a segment whose stdout an earlier
 #              redirection also moves (`> f > >(bash)`), and what `tee` reads from its own stdin
@@ -1578,6 +1579,9 @@ function wrappers::shell_wrapper_payloads() {
   # `seg_end` the offset just past its last word; `redir_at` and `redir_stdin` the last
   # redirection operator's offset and whether it redirects fd 0.
   local outsub_open=-1 outsub_redir=-1 seg_start=-1 seg_end=-1 redir_at=-1 redir_stdin=0 tee_sub procsub_at
+  # The offset of the `<` of a process substitution a `source` or `.` reads on fd 0, held until
+  # its simple command ends; -1 for none.
+  local pending_procsub=-1
   local -a tee_subs=()
   local -a hd_anchor=()
   local -a watch_rest=()
@@ -1746,12 +1750,16 @@ function wrappers::shell_wrapper_payloads() {
       # segment prints, unless a later redirection of fd 1 takes stdout away from it.
       procsub_at=-1
       [[ "${token}" == $'\001' && -n "${procsub_close[offset]:-}" ]] && procsub_at="${offset}"
-      # TODO: `source` and `.` are left out: `source /dev/stdin < <(...)` is pinned `allow` in
-      # tests/cases/verdicts.tsv, and changing a pinned row needs a decision on #438.
+      # `source` and `.` run their stdin only behind an operand that names it, which may still
+      # come (`source < <(...) /dev/stdin`), so theirs is held for the flush.
       if ((procsub_at >= 0 && redir_stdin == 1 && in_wrapper == 1 && saw_c == 0)) \
-        && [[ "${command:offset:1}" == '<' && "${wrapper_kind}" != 'source' && "${mode}" != 'rewritten' ]]; then
-        wrappers::rewritten_payloads \
-          "( ${command:offset+2:procsub_close[offset]-offset-2}"$'\n'') | bash' "${anchor}"
+        && [[ "${command:offset:1}" == '<' && "${mode}" != 'rewritten' ]]; then
+        if [[ "${wrapper_kind}" == 'source' ]]; then
+          pending_procsub="${offset}"
+        else
+          wrappers::rewritten_payloads \
+            "( ${command:offset+2:procsub_close[offset]-offset-2}"$'\n'') | bash' "${anchor}"
+        fi
       fi
       if ((stdout_redir == 1)); then
         outsub_open=-1
@@ -1879,6 +1887,12 @@ function wrappers::shell_wrapper_payloads() {
         elif ((seg_here_set == 1)); then
           printf '%s\t%s\0' "${anchor}" "${seg_here_text}"
         fi
+        if ((pending_procsub >= 0 && saw_s == 1)); then
+          wrappers::rewritten_payloads \
+            "( ${command:pending_procsub+2:procsub_close[pending_procsub]-pending_procsub-2}"$'\n'') | bash' \
+            "${anchor}"
+        fi
+        pending_procsub=-1
         if [[ -n "${pending}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" "${pending_source}"; then
           wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}" hd_anchor "${anchor}"
         fi
@@ -1898,23 +1912,21 @@ function wrappers::shell_wrapper_payloads() {
         # payload all the same (`bash -co '...'`, where the option's name is missing): an option
         # name is not written quoted, so this only fails closed.
         option_values="$((option_values - 1))"
-        raw="${command:offset:${#token}}"
+        raw="${spelled}"
         if ((saw_c == 1)) && [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
           printf '%s\t%s\0' "${anchor}" "${raw:1:${#raw}-2}"
         fi
       elif ((saw_c == 1)) && [[ "${option_word}" != -* ]] \
         && [[ "${wrapper_kind}" != 'shell' || "${option_word}" != +* ]]; then
-        # The `-c` string, written as one word of any quoting (`'...'`, `'a'"b"`, `a\ b`). It is
-        # read as the stream keeps it, up to a cut region in it, and not whole as an operand
-        # capture reads it: `bash -c "pkill --full java $(date)"` is allowed, since the pattern
-        # completed at run time does not hold the text of the command line it is written on.
-        # TODO: whether a `-c` string with a substitution is read whole, as `eval "..."` is,
-        # is open; reading it so denies the shape above.
-        if wrappers::word_text "${command:offset:${#token}}" raw; then
+        # The `-c` string, written as one word of any quoting (`'...'`, `'a'"b"`, `a\ b`). One that
+        # holds a substitution is read whole, as `eval "..."` is (see wrappers::whole_word): a
+        # pattern completed at run time is no safer than one written out, and the commands behind
+        # the substitution (`bash -c "echo $(date); pkill ..."`) are the string's too.
+        if wrappers::word_text "${spelled}" raw; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
         fi
         c_text="${raw}"
-        if wrappers::literal_variant "${command:offset:${#token}}" raw; then
+        if wrappers::literal_variant "${spelled}" raw; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
           c_text+=$'\n'"${raw}"
         fi
@@ -2425,6 +2437,7 @@ function wrappers::shell_wrapper_payloads() {
       option_values=0
       wrapper_name="${word}"
       wrapper_kind="${opened_kind}"
+      pending_procsub=-1
       pending="${leading_pending}"
       leading_pending=''
       pending_text=''
@@ -2522,6 +2535,11 @@ function wrappers::shell_wrapper_payloads() {
     pending_text_set=0
   elif ((in_wrapper == 1 && seg_here_set == 1)); then
     printf '%s\t%s\0' "${anchor}" "${seg_here_text}"
+  fi
+  if ((in_wrapper == 1 && pending_procsub >= 0 && saw_s == 1)); then
+    wrappers::rewritten_payloads \
+      "( ${command:pending_procsub+2:procsub_close[pending_procsub]-pending_procsub-2}"$'\n'') | bash' \
+      "${anchor}"
   fi
   if [[ -n "${pending}" ]] && wrappers::stdin_reaches_wrapper "${seg_stdin_kind}" "${pending_source}"; then
     wrappers::claim_heredocs wanted hd_body "${body_seq}" "${pending}" hd_anchor "${anchor}"

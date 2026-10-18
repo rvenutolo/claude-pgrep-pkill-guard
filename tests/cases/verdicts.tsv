@@ -1760,7 +1760,19 @@
 "echo 'pkill --full X' | { source /dev/stdin; }"	deny:kill
 "echo 'pkill --full X' | source -- /dev/stdin"	deny:kill
 "echo 'pkill --full X' | sudo source /dev/stdin"	allow
-"source /dev/stdin < <(echo 'pkill --full X')"	allow
+"source /dev/stdin < <(echo 'pkill --full X')"	deny:kill
+". /dev/stdin < <(echo 'pkill --full X')"	deny:kill
+"source -- /dev/stdin < <(echo 'pkill --full X')"	deny:kill
+"source /dev/stdin arg < <(echo 'pkill --full X')"	deny:kill
+"source /dev/stdin 0< <(echo 'pkill --full X')"	deny:kill
+"source < <(echo 'pkill --full X') /dev/stdin"	deny:kill
+"source script.sh < <(echo 'pkill --full X')"	allow
+". script.sh < <(echo 'pkill --full X')"	allow
+"source < <(echo 'pkill --full X')"	allow
+"source < <(echo 'pkill --full X'); source /dev/stdin"	allow
+"source /dev/stdin 3< <(echo 'pkill --full X')"	allow
+"source /dev/stdin < <(echo hi)"	allow
+". /dev/stdin < <(echo hi)"	allow
 "source ./x.sh; echo 'pkill --full X' | bash"	deny:kill
 "echo 'pkill --full X' | bash -s ! ."	deny:kill
 "echo 'pkill --full X' | bash -s -- time source"	deny:kill

@@ -2233,6 +2233,26 @@
 "bash -c 'echo '\\''pkill --full X'\\'''"	allow
 "bash -c 'echo a'$x"	allow
 "bash -c 'echo a'\"$(cat f)\""	allow
+"eval 'pkill --full X'\"$(date)\""	deny:kill
+"eval pkill' --full X'$(date)"	deny:kill
+"bash -c 'pkill --full X'\"$(date)\""	deny:kill
+"bash -c \"pkill --full X\"$(date)"	deny:kill
+"bash -c 'pkill --full X'$(date)"	deny:kill
+"bash -c 'pkill --full '\"$(cat name)\""	deny:kill
+"bash -c pkill\\ --full\\ \"$(cat name)\""	deny:kill
+"bash -c \"pkill --full $(cat name)\"x"	deny:kill
+"bash -c 'pkill --full '\"$(cat a)\"' X'\"$(cat b)\""	deny:kill
+"bash -c 'pkill --full '\"$(printf '%s' ')')\""	deny:kill
+"bash -co 'pkill --full X'\"$(date)\""	deny:kill
+"script -c 'pkill --full X'\"$(date)\" /dev/null"	deny:kill
+"env --split-string='pkill --full X'\"$(date)\""	deny:kill
+"watch 'pkill --full X'\"$(date)\""	deny:kill
+"sudo -s 'pkill --full X'\"$(date)\""	deny:kill
+"eval $(ssh-agent -s)"	allow
+"eval \"$(dircolors)\"x"	allow
+"bash -c \"echo hi\"$(date)"	allow
+"bash -c 'echo '\"$(echo 'pkill --full X')\""	allow
+"watch 'echo '\"$(date)\""	allow
 "bash -c ls"	allow
 "echo 'pk'\"ill\" | grep pk"	allow
 "bash -c \"echo \\\"; pkill --full X\\\"\""	deny:kill

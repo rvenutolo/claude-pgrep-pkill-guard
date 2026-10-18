@@ -7,33 +7,34 @@ hook that runs on every Bash tool call.
 
 ## Provenance
 
-| field                 | value                                                                                                    |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| date                  | 2026-10-15T20:52:16+00:00                                                                                |
-| commit                | `57bdafc`                                                                                                |
-| kernel                | Linux 6.8.0-146-generic x86_64                                                                           |
-| cpu                   | 12th Gen Intel(R) Core(TM) i9-12900HK                                                                    |
-| bash                  | 5.3.15(1)-release                                                                                        |
-| awk                   | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/63g104xwbzfpcq0h7c99w19m6j9ly3p1-gawk-5.4.1/bin/awk`) |
-| jq                    | jq-1.8.2                                                                                                 |
-| governor              | powersave (EPP balance_performance)                                                                      |
-| power                 | AC                                                                                                       |
-| load at start         | 0.16 0.14 0.14                                                                                           |
-| package temp at start | 96 C                                                                                                     |
-| repetitions           | 45                                                                                                       |
-| samples               | 115020                                                                                                   |
+| field                    | value                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| date                     | 2026-10-18T18:20:26+00:00                                                                                |
+| commit                   | `d19bbc9`                                                                                                |
+| kernel                   | Linux 6.8.0-147-generic x86_64                                                                           |
+| cpu                      | 12th Gen Intel(R) Core(TM) i9-12900HK                                                                    |
+| bash                     | 5.3.15(1)-release                                                                                        |
+| awk                      | GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1 (`/nix/store/63g104xwbzfpcq0h7c99w19m6j9ly3p1-gawk-5.4.1/bin/awk`) |
+| jq                       | jq-1.8.2                                                                                                 |
+| governor                 | powersave (EPP balance_performance)                                                                      |
+| power                    | AC                                                                                                       |
+| load at start            | 0.76 0.54 0.24                                                                                           |
+| package temp at start    | 54 C                                                                                                     |
+| repetitions              | 45                                                                                                       |
+| rows per cohort per pass | 40                                                                                                       |
+| samples                  | 9270                                                                                                     |
 
 ## Per-call cost
 
-| cohort     | path exercised                                                                                              |     n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
-| ---------- | ----------------------------------------------------------------------------------------------------------- | ----: | -------: | -------: | -------: | -------: |
-| `baseline` | process spawn and pipe only, no hook -- the floor                                                           |  3150 |     0.90 |     2.04 |     2.55 |     5.28 |
-| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                                                     |  3150 |     1.49 |     3.46 |     4.21 |     8.81 |
-| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus                                      |   270 |     1.55 |     3.40 |     4.09 |     5.22 |
-| `quiet`    | bash startup, one `jq` spawn, one scanner pass                                                              | 19485 |    13.84 |    54.68 |    78.65 |   219.06 |
-| `inspect`  | the above, plus a second scanner pass, `classify::probe_keys` and a `repeat::repeat_check` miss             |  3150 |    28.44 |    90.77 |   147.81 |   279.34 |
-| `repeat`   | the `inspect` path, where `repeat::repeat_check` finds a hit and `messages::repeat_message` writes the deny | 17325 |    35.57 |   108.41 |   150.71 |   228.43 |
-| `deny`     | the stateless tiers plus `messages::deny_message`; no state                                                 | 68490 |    23.93 |    66.96 |   108.45 |   178.37 |
+| cohort     | path exercised                                                                                              |    n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | ---: | -------: | -------: | -------: | -------: |
+| `baseline` | process spawn and pipe only, no hook -- the floor                                                           | 1800 |     0.70 |     2.06 |     2.66 |     3.58 |
+| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                                                     | 1800 |     1.52 |     3.46 |     4.37 |     6.21 |
+| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus                                      |  270 |     1.54 |     2.81 |     4.06 |     4.90 |
+| `quiet`    | bash startup, one `jq` spawn, one scanner pass                                                              | 1800 |    16.78 |    54.88 |    78.47 |   240.58 |
+| `inspect`  | the above, plus a second scanner pass, `classify::probe_keys` and a `repeat::repeat_check` miss             |  530 |    29.17 |    97.55 |   147.47 |   274.56 |
+| `repeat`   | the `inspect` path, where `repeat::repeat_check` finds a hit and `messages::repeat_message` writes the deny | 1270 |    49.46 |   108.75 |   149.68 |   197.93 |
+| `deny`     | the stateless tiers plus `messages::deny_message`; no state                                                 | 1800 |    26.61 |    68.23 |   111.28 |   154.52 |
 
 ## How to read this
 
@@ -57,6 +58,10 @@ mentions `kill` takes, and the gap between `skipped` and `quiet` as the
 cost of reaching the scanner at all. `repeat` holds the `inspect` rows the
 repeat rule denied: the corpus probes some keys many times in one pass, so
 it times that rule's hit path apart from the calls it lets through.
+
+Each pass times at most the rows-per-cohort figure of each corpus cohort,
+drawn afresh per pass from a seed of the pass number; `inspect` and
+`repeat` share one draw. `typical` runs in full on every pass.
 
 Percentiles are nearest-rank over every sample in the cohort. Regenerate
 with `just bench`.

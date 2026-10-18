@@ -56,9 +56,10 @@ readonly -a SCRIPT_OPTION_COMMANDS=(
   'su:c=:command' 'su::session-command' 'runuser:c=:command' 'runuser::session-command'
 )
 
-# The longest word wrappers::literal_word reads. It walks the word a byte at a time, which grows
-# faster than the word, and the hook has a few seconds in all: a longer word is read the way
-# wrappers::word_text reads one it cannot tell the literal text of.
+# The longest word wrappers::literal_word, wrappers::expanded_text and wrappers::whole_word read.
+# The first two walk the word a byte at a time, which grows faster than the word, and the hook has
+# a few seconds in all: a longer word is read the way wrappers::word_text reads one it cannot tell
+# the literal text of.
 readonly LITERAL_WORD_MAX_BYTES=4096
 
 # How many wrapper payloads deep to follow. `bash -c 'bash -c "..."'` resolves at
@@ -722,16 +723,26 @@ function wrappers::redirection_replaces_stdin() {
 #         the offset of its closing `)` or backtick, keyed by the offset of the token the outer
 #         stream keeps for it: the `<` or `>` of a process substitution, the `$` word of a `$(...)`
 #         (set).
-#         Never pass a variable called cut_outer or cut_closes, here or as `outer_var`.
-# @arg $5 mode the caller's mode, handed on to the read of each region
+# @arg $5 ends_var name of the caller's sparse array that receives, for each token the outer stream
+#         keeps that a `$(...)`, `$((...))` or backtick region is glued to, the offset just past
+#         the word the token starts: past the last region or glued token that word is written as
+#         (set). Keyed as `closes_var` is.
+# @arg $6 spans_var name of the caller's sparse array that receives, for each outermost region, the
+#         offset of its close keyed by the offset of its first byte: the `$`, the backtick, the `<`
+#         or `>` (set).
+#         Never pass a variable that shares a name with a local of this function, as any of
+#         `outer_var`, `closes_var`, `ends_var` or `spans_var`.
+# @arg $7 mode the caller's mode, handed on to the read of each region
 # @stdout the payloads found inside the cut regions, as wrappers::shell_wrapper_payloads prints them
 # @exitcode 0 always; it ends on an assignment
-# shellcheck disable=SC2034 # cut_outer and cut_closes are the caller's variables, written through the namerefs
+# shellcheck disable=SC2034 # the namerefs are the caller's variables, written through them
 function wrappers::cut_substitutions() {
   local -r command="$1" stream="$2"
-  local -n cut_outer="$3" cut_closes="$4"
-  local -r mode="$5"
-  local opened_at=-1 last_outer_at=-1
+  local -n cut_outer="$3" cut_closes="$4" cut_ends="$5" cut_spans="$6"
+  local -r mode="$7"
+  # `span_at` is the first byte of the outermost region open now, and `word_at` the kept token whose
+  # word a token glued at `glue_at` goes on, -1 when no kept token's word is open.
+  local opened_at=-1 last_outer_at=-1 span_at=-1 word_at=-1
   local -r heredoc_re='^[0-9]*<<([^<]|$)'
   local offset token kind depth
   local -A region=()
@@ -757,6 +768,8 @@ function wrappers::cut_substitutions() {
             fi
             outer+="${offset}"$'\t'"${token}"$'\n'
             last_outer_at="${offset}"
+          elif ((word_at >= 0)); then
+            cut_ends[word_at]="$((offset + ${#token}))"
           fi
         else
           inner+="${offset}"$'\t'"${token}"$'\n'
@@ -769,10 +782,14 @@ function wrappers::cut_substitutions() {
         ;;
       'close')
         if ((depth == 0)); then
+          cut_spans[span_at]="${offset}"
+          word_at=-1
           if [[ "${region[closed]}" == 'S' ]]; then
             cut_closes[opened_at]="${offset}"
           elif ((last_outer_at >= 0)); then
             cut_closes[last_outer_at]="${offset}"
+            cut_ends[last_outer_at]="$((offset + 1))"
+            word_at="${last_outer_at}"
           fi
           wrappers::shell_wrapper_payloads "${command}" "${inner}" "${mode}"
           inner=''
@@ -783,6 +800,8 @@ function wrappers::cut_substitutions() {
         ;;
       *)
         if ((depth == 1)); then
+          span_at="${offset}"
+          [[ "${kind}" == 'B' ]] || span_at="$((offset - 1))"
           # A backtick that follows whitespace or touches an operator has no word
           # of its own to hang off, so one stands in for it.
           if [[ "${kind}" == 'B' ]] \
@@ -1078,84 +1097,255 @@ function wrappers::literal_word() {
   text_ref="${out}"
 }
 
-# @description The whole word a token of the outer stream starts, as written, when it is a
-#              double-quoted word that holds a `$(...)` or backtick region (`"pkill $(cat n)"`).
-#              The stream keeps such a word only up to the region (see wrappers::cut_substitutions),
-#              so it is read on from the region's close to the next double quote, which must end
-#              the word. Any other word is the token as the stream keeps it, and so is a word that
-#              goes on behind its closing quote, or one longer than LITERAL_WORD_MAX_BYTES: reading
-#              further would follow a guessed quote state into the words behind it.
+# @description The whole word a token of the outer stream starts, as written, when a `$(...)`,
+#              `$((...))` or backtick region is glued to it (`"pkill $(cat n)"`,
+#              `'pkill --full X'"$(date)"`, `pkill\ "$(cat n)"x`), and where each region sits in it.
+#              The stream keeps such a word only up to its first region (see
+#              wrappers::cut_substitutions), which also found where the word ends, by the scanner's
+#              own rules: behind the last region or glued token it is written as. A word longer than
+#              LITERAL_WORD_MAX_BYTES is the token as the stream keeps it, with no regions.
 # @arg $1 command the raw command string
 # @arg $2 offset the offset of the token
 # @arg $3 length the length of the token
-# @arg $4 close the offset of the close of the last region glued to the token
-# @arg $5 word_var name of the caller's variable that receives the word (set). Never pass a variable
-#         called whole_ref.
+# @arg $4 end the offset just past the word
+# @arg $5 spans_var name of the caller's sparse array holding the close of each outermost region,
+#         keyed by the offset of its first byte
+# @arg $6 word_var name of the caller's variable that receives the word (set)
+# @arg $7 regions_var name of the caller's variable that receives the word's regions (set): a
+#         space-separated `<first>:<close>` pair of byte indexes into the word for each one, in order,
+#         empty for none.
+#         Never pass a variable that shares a name with a local of this function, as any of
+#         `spans_var`, `word_var` or `regions_var`.
 # @exitcode 0 always
-# shellcheck disable=SC2034 # whole_ref is the caller's variable, written through the nameref
+# shellcheck disable=SC2034 # whole_ref and regions_ref are the caller's variables, written through the namerefs
 function wrappers::whole_word() {
-  local -r command="$1" offset="$2" length="$3" close="$4"
-  local -n whole_ref="$5"
-  local i in_dq=0 c rest quoted_len end
+  local -r command="$1" offset="$2" length="$3" end="$4"
+  local -n spans_ref="$5" whole_ref="$6" regions_ref="$7"
+  local first
   whole_ref="${command:offset:length}"
-  # The region opens right behind the token: a `$(` whose `$` is the token's last byte, or a
-  # backtick.
-  if [[ "${command:offset+length-1:1}" == '$' && "${command:offset+length:1}" == '(' ]]; then
-    quoted_len="$((length - 1))"
-  elif [[ "${command:offset+length:1}" == '`' ]]; then
-    quoted_len="${length}"
-  else
-    return 0
+  regions_ref=''
+  ((end > offset + length && end - offset <= LITERAL_WORD_MAX_BYTES)) || return 0
+  whole_ref="${command:offset:end-offset}"
+  for first in "${!spans_ref[@]}"; do
+    ((first >= offset && first < end)) || continue
+    regions_ref+="${regions_ref:+ }$((first - offset)):$((spans_ref[first] - offset))"
+  done
+}
+
+# @description The text bash makes of one word by quote removal alone, with every expansion in it
+#              kept as written: quotes come off and backslash escapes resolve as in
+#              wrappers::literal_word, while each region, `${...}`, `$name` and `$'...'` stays as
+#              written (`'pkill --full X'"$(date)"` reads `pkill --full X$(date)`). A region's own
+#              quotes are its own and stay with it, so where each one sits comes from the scanner
+#              (see wrappers::whole_word) rather than from this read.
+# @arg $1 spelled the word as written
+# @arg $2 regions the word's regions, as wrappers::whole_word lists them
+# @arg $3 text_var name of the caller's variable that receives the text (set). Never pass a
+#         variable that shares a name with a local of this function.
+# @exitcode 0 the variable holds the text
+# @exitcode 1 the word is not one bash reads the way the regions say (a quote or a `${` is not
+#             closed, it ends in an unquoted backslash, a region sits where none is listed, a listed
+#             one opens inside single quotes), or it is longer than LITERAL_WORD_MAX_BYTES; the
+#             variable is not set
+# shellcheck disable=SC2034 # text_ref is the caller's variable, written through the nameref
+function wrappers::expanded_text() {
+  local -r spelled="$1" regions="$2"
+  local -n text_ref="$3"
+  local out='' i=0 c quote='' next_first=-1 next_close=-1 region rest="${regions}" depth close
+  local -r n="${#spelled}"
+  ((n <= LITERAL_WORD_MAX_BYTES)) || return 1
+  if [[ -n "${rest}" ]]; then
+    region="${rest%% *}"
+    next_first="${region%:*}"
+    next_close="${region#*:}"
   fi
-  for ((i = offset; i < offset + quoted_len; i++)); do
-    c="${command:i:1}"
+  while ((i < n)); do
+    if ((i == next_first)); then
+      [[ "${quote}" != "'" ]] || return 1
+      out+="${spelled:i:next_close-i+1}"
+      i="$((next_close + 1))"
+      next_first=-1
+      if [[ "${rest}" == *' '* ]]; then
+        rest="${rest#* }"
+        region="${rest%% *}"
+        next_first="${region%:*}"
+        next_close="${region#*:}"
+      fi
+      continue
+    fi
+    c="${spelled:i:1}"
+    if [[ "${quote}" == "'" ]]; then
+      if [[ "${c}" == "'" ]]; then
+        quote=''
+      else
+        out+="${c}"
+      fi
+      i="$((i + 1))"
+      continue
+    fi
     case "${c}" in
-      \\) i="$((i + 1))" ;;
-      '"') in_dq="$((1 - in_dq))" ;;
       "'")
-        if ((in_dq == 0)); then
-          rest="${command:i+1}"
-          [[ "${rest}" == *"'"* ]] || return 0
-          rest="${rest%%"'"*}"
-          i="$((i + ${#rest} + 1))"
+        if [[ -n "${quote}" ]]; then
+          out+="${c}"
+        else
+          quote="'"
         fi
         ;;
-      *) ;;
+      '"')
+        if [[ -n "${quote}" ]]; then
+          quote=''
+        else
+          quote='"'
+        fi
+        ;;
+      \\)
+        ((i + 1 < n)) || return 1
+        c="${spelled:i+1:1}"
+        if [[ -z "${quote}" ]]; then
+          [[ "${c}" == $'\n' ]] || out+="${c}"
+        else
+          case "${c}" in
+            '$' | '`' | '"' | \\) out+="${c}" ;;
+            $'\n') ;;
+            *) out+="\\${c}" ;;
+          esac
+        fi
+        i="$((i + 2))"
+        continue
+        ;;
+      '`') return 1 ;;
+      '<' | '>')
+        [[ -n "${quote}" || "${spelled:i+1:1}" != '(' ]] || return 1
+        out+="${c}"
+        ;;
+      '$')
+        case "${spelled:i+1:1}" in
+          '(') return 1 ;;
+          '{')
+            # The braces nest as the scanner reads them; their text, quotes included, is the
+            # expansion's.
+            depth=0
+            for ((close = i + 1; close < n; close++)); do
+              case "${spelled:close:1}" in
+                '{') depth="$((depth + 1))" ;;
+                '}')
+                  depth="$((depth - 1))"
+                  ((depth > 0)) || break
+                  ;;
+                *) ;;
+              esac
+            done
+            ((close < n)) || return 1
+            out+="${spelled:i:close-i+1}"
+            i="$((close + 1))"
+            continue
+            ;;
+          "'")
+            if [[ -z "${quote}" ]]; then
+              for ((close = i + 2; close < n; close++)); do
+                case "${spelled:close:1}" in
+                  \\) close="$((close + 1))" ;;
+                  "'") break ;;
+                  *) ;;
+                esac
+              done
+              ((close < n)) || return 1
+              out+="${spelled:i:close-i+1}"
+              i="$((close + 1))"
+              continue
+            fi
+            out+="${c}"
+            ;;
+          *) out+="${c}" ;;
+        esac
+        ;;
+      *) out+="${c}" ;;
     esac
+    i="$((i + 1))"
   done
-  ((in_dq == 1)) || return 0
-  rest="${command:close+1}"
-  [[ "${rest}" == *'"'* ]] || return 0
-  rest="${rest%%'"'*}"
-  end="$((close + ${#rest} + 2))"
-  ((end - offset <= LITERAL_WORD_MAX_BYTES)) || return 0
-  if ((end < ${#command})) && [[ "${command:end:1}" != [[:space:]\;\&\|\<\>\(\)] ]]; then
-    return 0
-  fi
-  whole_ref="${command:offset:end-offset}"
+  [[ -z "${quote}" ]] || return 1
+  text_ref="${out}"
+}
+
+# @description A word's regions, as wrappers::whole_word lists them, for the text of the word from
+#              one byte on (the value of an attached option, `--split-string='...'"$(date)"`): each
+#              index moves back by that many bytes, and a region that starts before it is left out.
+# @arg $1 regions the word's regions
+# @arg $2 skip the number of leading bytes of the word the text leaves out
+# @arg $3 regions_var name of the caller's variable that receives the regions (set). Never pass a
+#         variable that shares a name with a local of this function.
+# @exitcode 0 always
+# shellcheck disable=SC2034 # from_ref is the caller's variable, written through the nameref
+function wrappers::regions_from() {
+  local -r regions="$1" skip="$2"
+  local -n from_ref="$3"
+  local rest="${regions}" region first close
+  from_ref=''
+  while [[ -n "${rest}" ]]; do
+    region="${rest%% *}"
+    rest="${rest#"${region}"}"
+    rest="${rest# }"
+    first="${region%:*}"
+    close="${region#*:}"
+    ((first >= skip)) || continue
+    from_ref+="${from_ref:+ }$((first - skip)):$((close - skip))"
+  done
+}
+
+# @description A word as written with each of its regions left out (`/dev/stdin$(true)` reads
+#              `/dev/stdin`), for a reader that tests what the word names rather than reading it as
+#              a payload: a region may print nothing, so a name the rest of the word spells is a name
+#              it can make.
+# @arg $1 spelled the word as written
+# @arg $2 regions the word's regions, as wrappers::whole_word lists them
+# @arg $3 bare_var name of the caller's variable that receives the word (set). Never pass a
+#         variable that shares a name with a local of this function.
+# @exitcode 0 always
+# shellcheck disable=SC2034 # bare_ref is the caller's variable, written through the nameref
+function wrappers::without_regions() {
+  local -r spelled="$1" regions="$2"
+  local -n bare_ref="$3"
+  local rest="${regions}" region first close at=0
+  bare_ref=''
+  while [[ -n "${rest}" ]]; do
+    region="${rest%% *}"
+    rest="${rest#"${region}"}"
+    rest="${rest# }"
+    first="${region%:*}"
+    close="${region#*:}"
+    bare_ref+="${spelled:at:first-at}"
+    at="$((close + 1))"
+  done
+  bare_ref+="${spelled:at}"
 }
 
 # @description The text a word of a wrapper's command hands on. A word that starts and ends with
 #              the same quote has those quotes stripped and is otherwise kept as written
 #              (`"pkill ${x}"`, whose expansion stays as written); wrappers::literal_variant gives
 #              its literal text beside that. Any other word is its literal text when
-#              wrappers::literal_word can tell it, and the word as written when not.
+#              wrappers::literal_word can tell it, and when not, a word with quotes or escapes is
+#              its text with the expansions kept as written (`'pkill '"$(cat n)"`, see
+#              wrappers::expanded_text). Any other word is kept as written.
 # @arg $1 spelled the word as written
 # @arg $2 text_var name of the caller's variable that receives the text (set). Never pass a
-#         variable that shares a name with a local of this function or of wrappers::literal_word.
-# @exitcode 0 the text is that of a fully quoted word, the literal text, or a word as written that
-#             expands nothing
+#         variable that shares a name with a local of this function, of wrappers::literal_word or
+#         of wrappers::expanded_text.
+# @arg $3 word_regions optional; the word's regions, as wrappers::whole_word lists them. A word that
+#         holds a region not listed is kept as written.
+# @exitcode 0 the text is that of a fully quoted word, the literal text, the text with its
+#             expansions as written, or a word as written that expands nothing
 # @exitcode 1 the variable holds a word as written that expands something
 # shellcheck disable=SC2034 # word_text_ref is the caller's variable, written through the nameref
 function wrappers::word_text() {
-  local -r spelled="$1" text_var="$2"
+  local -r spelled="$1" text_var="$2" word_regions="${3:-}"
   local -n word_text_ref="$2"
   if [[ ("${spelled}" == \"*\" || "${spelled}" == \'*\') && "${#spelled}" -ge 2 ]]; then
     word_text_ref="${spelled:1:${#spelled}-2}"
     return 0
   fi
-  if [[ "${spelled}" == *[\'\"\\]* ]] && wrappers::literal_word "${spelled}" "${text_var}"; then
-    return 0
+  if [[ "${spelled}" == *[\'\"\\]* ]]; then
+    wrappers::literal_word "${spelled}" "${text_var}" && return 0
+    wrappers::expanded_text "${spelled}" "${word_regions}" "${text_var}" && return 0
   fi
   word_text_ref="${spelled}"
   [[ "${spelled}" != *[\$\`]* ]]
@@ -1291,14 +1481,15 @@ function wrappers::body_runs_shell() {
 #              keeps `bash deploy.sh -c '...'`, where the `-c` belongs to the script, from being
 #              read as a payload; the value of an option, such as the `pipefail` of `-o pipefail`,
 #              is no operand, see wrappers::wrapper_option_facts); and the word is literal text
-#              (wrappers::literal_word: adjacent quoted and escaped pieces, `'a'"; b"`, `a\ b`) or
-#              one fully quoted word. That last
+#              (wrappers::literal_word: adjacent quoted and escaped pieces, `'a'"; b"`, `a\ b`), one
+#              fully quoted word, or a word with quotes or escapes, read with its expansions as
+#              written (wrappers::expanded_text: `'pkill '"$(cat n)"`). That last
 #              condition is what keeps the recursion honest -- a double-quoted payload containing
 #              a command substitution is NOT one opaque token, because the scanner deliberately
 #              re-enters code context inside `$(...)`, and the outer scan can already see the
 #              substitution for itself. Slicing a fragment of such a payload and recursing on it
-#              would classify text that is not a command. A word that expands something and is
-#              not fully quoted is not read.
+#              would classify text that is not a command. A word that expands something and has
+#              no quote or escape is not read.
 #
 #              A heredoc feeding the wrapper's stdin (`bash <<'EOF'`, `sudo sh <<EOF`, `0<<EOF
 #              bash`) is a payload too: the body is the script the wrapper runs, here. A
@@ -1497,11 +1688,18 @@ function wrappers::shell_wrapper_payloads() {
   # The offset that closes each outermost region, indexed by the offset of the token standing for it, as
   # wrappers::cut_substitutions found them; a process substitution's is keyed by its `<` or `>`.
   local -a procsub_close=()
+  # Where the word of each such token ends, and the close of each region by its first byte, as
+  # wrappers::cut_substitutions found them; `spelled_regions` lists the regions of the word being read
+  # (see wrappers::whole_word).
+  # shellcheck disable=SC2034 # region_spans is written and read through namerefs, which shellcheck cannot follow
+  local -a word_ends=() region_spans=()
+  # `bare` is the word with those regions left out (see wrappers::without_regions).
+  local spelled_regions='' bare
   # Regions are rare, and cutting them costs a pass over the stream, so the
   # raw text decides whether to look for any.
   if [[ "${command}" == *\$\(* || "${command}" == *'`'* ||
     "${command}" == *'<('* || "${command}" == *'>('* ]]; then
-    wrappers::cut_substitutions "${command}" "${tokens}" tokens procsub_close "${mode}"
+    wrappers::cut_substitutions "${command}" "${tokens}" tokens procsub_close word_ends region_spans "${mode}"
   fi
   # A group can only own a heredoc or a here-string when the command has a `<<` operator at all.
   local has_heredoc_op=0
@@ -1564,7 +1762,7 @@ function wrappers::shell_wrapper_payloads() {
   local watch_active=0 watch_exec=0 watch_dd=0 watch_first='' watch_first_set=0 watch_kind=''
   # `script_next` says the next word is the value of an option that wrappers::script_option
   # found, and so a script.
-  local script_next=0 script_runner script_where watch_armed
+  local script_next=0 script_runner script_where script_regions watch_armed
   # Each payload is printed behind its anchor: the offset of a word of the simple command that
   # runs it. `anchor` is the wrapper being read, `watch_anchor` and `script_anchor` the word that
   # armed an operand capture or named a script option, and `hd_anchor` the anchor of the wrapper
@@ -1627,9 +1825,13 @@ function wrappers::shell_wrapper_payloads() {
     [[ -z "${token}" ]] && continue
     # The word as written. One that holds a cut region is read whole (see wrappers::whole_word).
     spelled="${command:offset:${#token}}"
-    if [[ -n "${procsub_close[offset]:-}" && "${token}" != $'\001' ]]; then
-      wrappers::whole_word "${command}" "${offset}" "${#token}" "${procsub_close[offset]}" spelled
+    spelled_regions=''
+    if [[ -n "${word_ends[offset]:-}" && "${token}" != $'\001' ]]; then
+      wrappers::whole_word "${command}" "${offset}" "${#token}" "${word_ends[offset]}" region_spans \
+        spelled spelled_regions
     fi
+    bare="${spelled}"
+    [[ -z "${spelled_regions}" ]] || wrappers::without_regions "${spelled}" "${spelled_regions}" bare
     # Where the segment's last word ends, for a stage written in behind it: in front of a
     # comment, and in front of the `)` that closes the region this stream was cut from.
     if [[ -n "${procsub_close[offset]:-}" ]]; then
@@ -1739,7 +1941,7 @@ function wrappers::shell_wrapper_payloads() {
       fi
       # `>&1` duplicates fd 1 onto itself, which moves nothing.
       if ((dup_target == 1)); then
-        case "${spelled}" in
+        case "${bare}" in
           '1' | "'1'" | '"1"') seg_stdout_moved="${stdout_before}" ;;
           *) ;;
         esac
@@ -1908,13 +2110,13 @@ function wrappers::shell_wrapper_payloads() {
         pending_text_set=0
       elif ((option_values > 0)); then
         # The value of an option (`-o pipefail`, `--rcfile f`, `su -s /bin/sh`): no operand, and
-        # not the `-c` string either. A fully quoted word there behind a `-c` is read as a
+        # not the `-c` string either. A word with a quote in it there behind a `-c` is read as a
         # payload all the same (`bash -co '...'`, where the option's name is missing): an option
         # name is not written quoted, so this only fails closed.
         option_values="$((option_values - 1))"
-        raw="${spelled}"
-        if ((saw_c == 1)) && [[ ("${raw}" == \"*\" || "${raw}" == \'*\') && "${#raw}" -ge 2 ]]; then
-          printf '%s\t%s\0' "${anchor}" "${raw:1:${#raw}-2}"
+        if ((saw_c == 1)) && [[ "${spelled}" == *[\'\"]* ]] \
+          && wrappers::word_text "${spelled}" raw "${spelled_regions}"; then
+          printf '%s\t%s\0' "${anchor}" "${raw}"
         fi
       elif ((saw_c == 1)) && [[ "${option_word}" != -* ]] \
         && [[ "${wrapper_kind}" != 'shell' || "${option_word}" != +* ]]; then
@@ -1922,7 +2124,7 @@ function wrappers::shell_wrapper_payloads() {
         # holds a substitution is read whole, as `eval "..."` is (see wrappers::whole_word): a
         # pattern completed at run time is no safer than one written out, and the commands behind
         # the substitution (`bash -c "echo $(date); pkill ..."`) are the string's too.
-        if wrappers::word_text "${spelled}" raw; then
+        if wrappers::word_text "${spelled}" raw "${spelled_regions}"; then
           printf '%s\t%s\0' "${anchor}" "${raw}"
         fi
         c_text="${raw}"
@@ -1982,7 +2184,7 @@ function wrappers::shell_wrapper_payloads() {
         # `.` it is the one operand that makes them a wrapper at all. `su` and `runuser` hand the
         # operands behind the user name to the shell they start (`su root /dev/stdin`).
         if ((saw_s == 0)) && { [[ "${wrapper_kind}" != 'user' ]] || ((operands == 0)); } \
-          && wrappers::names_own_stdin "${spelled}"; then
+          && wrappers::names_own_stdin "${bare}"; then
           saw_s=1
           saw_s_operand=1
         fi
@@ -2016,7 +2218,7 @@ function wrappers::shell_wrapper_payloads() {
     # from the option when its value arrives here.
     if ((chain_skip == 0)) && ((at_cmd == 0 || exec_word == 1)) && ! tokens::is_operator "${token}" \
       && ! tokens::is_keyword "${token}"; then
-      wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
+      wrappers::word_text "${spelled}" raw "${spelled_regions}" || true # an unreadable expansion stays as written
       seg_words+=("${raw}")
       if [[ "${seg_cmd}" == 'tee' && "${token}" == $'\001' && -n "${procsub_close[offset]:-}" ]] \
         && [[ "${command:offset:1}" == '>' ]] \
@@ -2264,7 +2466,7 @@ function wrappers::shell_wrapper_payloads() {
     if ((script_next == 1)); then
       script_next=0
       if ! tokens::is_operator "${token}"; then
-        wrappers::word_text "${spelled}" raw || true # a word that expands is read as written
+        wrappers::word_text "${spelled}" raw "${spelled_regions}" || true # an unreadable expansion stays as written
         printf '%s\t%s\0' "${script_anchor}" "${raw}"
         if wrappers::literal_variant "${spelled}" raw; then
           printf '%s\t%s\0' "${script_anchor}" "${raw}"
@@ -2302,7 +2504,8 @@ function wrappers::shell_wrapper_payloads() {
           if wrappers::literal_variant "${raw}" script_variant; then
             printf '%s\t%s\0' "${offset}" "${script_variant}"
           fi
-          wrappers::word_text "${raw}" raw || true # a word that expands is read as written
+          wrappers::regions_from "${spelled_regions}" "${script_where#attached:}" script_regions
+          wrappers::word_text "${raw}" raw "${script_regions}" || true # an unreadable expansion stays as written
           printf '%s\t%s\0' "${offset}" "${raw}"
           # `env -SSTRING ARG...` appends the ARGs as the separate spelling does: the value is
           # the first word of the script the words behind it make up. They are collected apart
@@ -2319,11 +2522,11 @@ function wrappers::shell_wrapper_payloads() {
     # The operands after watch's first one. They are kept here and not in `seg_words`, which leaves out
     # a word still in command position (`watch sudo '...'`).
     if ((split_set == 1 && offset > split_anchor)) && ! tokens::is_operator "${token}"; then
-      wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
+      wrappers::word_text "${spelled}" raw "${spelled_regions}" || true # an unreadable expansion stays as written
       split_rest+=("${raw}")
     fi
     if ((watch_first_set == 1)) && ! tokens::is_operator "${token}"; then
-      wrappers::word_text "${spelled}" raw || true # a word that expands is kept as written
+      wrappers::word_text "${spelled}" raw "${spelled_regions}" || true # an unreadable expansion stays as written
       watch_rest+=("${raw}")
       if wrappers::literal_variant "${spelled}" raw; then
         watch_variant=1
@@ -2351,7 +2554,7 @@ function wrappers::shell_wrapper_payloads() {
         watch_active=0
         raw="${spelled}"
         if ((watch_exec == 0)); then
-          if ! wrappers::word_text "${raw}" watch_first && [[ "${raw}" == *\\* ]]; then
+          if ! wrappers::word_text "${raw}" watch_first "${spelled_regions}" && [[ "${raw}" == *\\* ]]; then
             watch_first="${raw//\\/}"
           fi
           watch_variant_first="${watch_first}"

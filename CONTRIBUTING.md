@@ -92,10 +92,14 @@ certificate should not be able to block an unrelated merge.
 A PR is ready when `just format`, `just check` and `just validate` are all
 green.
 
-These status checks are **required** by the `protect-main` ruleset and a pull
-request cannot merge without all of them green:
+The `protect-main` ruleset requires one status check, `ci-ok`, and a pull
+request cannot merge without it green. `ci-ok` is an aggregate job that depends
+on every job below and passes only when each one succeeded. The one exception is
+`commitlint`, which runs on pull requests only and counts as passing when it is
+skipped. Adding, splitting or renaming a CI job means editing `needs:` on
+`ci-ok`, not the ruleset.
 
-| Check                            | What it covers                                              |
+| Job                              | What it covers                                              |
 | -------------------------------- | ----------------------------------------------------------- |
 | `gate (ubuntu-latest)`           | the full hermetic gate on Linux                             |
 | `gate (macos-latest)`            | the same gate on macOS                                      |

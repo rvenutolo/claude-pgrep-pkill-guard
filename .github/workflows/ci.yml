@@ -413,3 +413,52 @@ jobs:
           set -Eeuo pipefail
           claude plugin validate --strict .claude-plugin/plugin.json
           claude plugin validate --strict .claude-plugin/marketplace.json
+
+  ci-ok:
+    name: ci-ok
+    # The one check the `protect-main` ruleset requires. Every other job feeds
+    # it through `needs`, so jobs can be added, split or renamed here without
+    # editing the ruleset.
+    #
+    # always(): without it a failed or cancelled dependency would skip this
+    # job, and a skipped required check counts as passing.
+    if: always()
+    needs:
+      - gate
+      - coverage
+      - commitlint
+      - compat-linux
+      - compat-macos-brew-bash
+      - compat-macos-stock-bash
+      - validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    env:
+      NEEDS_JSON: ${{ toJSON(needs) }}
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25  # v2.22.1
+        with:
+          egress-policy: block
+          disable-sudo: true
+          # No network calls: the job only inspects its own `needs` context.
+          allowed-endpoints: ''
+      - name: Require every needed job to have succeeded
+        # commitlint is pull_request-only, so `skipped` is its normal result on
+        # a push. Any other skipped job, and every cancelled or failed one,
+        # fails the check.
+        run: |
+          set -Eeuo pipefail
+          # Assigned on its own line, not read through process substitution:
+          # a jq failure there would leave the loop empty and the job green.
+          results="$(jq --raw-output 'to_entries[] | [.key, .value.result] | @tsv' <<< "${NEEDS_JSON}")"
+          [[ -n "${results}" ]]
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            printf '%s: %s\n' "${job}" "${result}"
+            case "${job}:${result}" in
+              *:success | commitlint:skipped) ;;
+              *) failed=1 ;;
+            esac
+          done <<< "${results}"
+          exit "${failed}"

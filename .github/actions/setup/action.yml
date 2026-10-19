@@ -50,8 +50,10 @@ runs:
       # checkout would be an untracked file in the tree the gate grades.
       #
       # Flake inputs (the nixpkgs source tree among them) are NOT rooted and
-      # are collected. They are re-fetched from the cache.nixos.org tarball
-      # mirror on the next run at a cost of a few seconds, which is cheaper
-      # than carrying them in the tarball.
+      # are collected, so the next run re-fetches them from cache.nixos.org.
+      # Carrying them in the tarball does not pay: the nixpkgs tree is over a
+      # hundred thousand small files, and `gtar` extracting them adds as much
+      # to the restore as substituting them costs `nix develop` on Linux, and
+      # about twice as much on macOS.
       shell: bash
       run: nix develop --profile "${RUNNER_TEMP}/devshell-profile" --command true

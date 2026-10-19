@@ -550,7 +550,7 @@ The workflows under `.github/workflows/`, and one piece of repository
 configuration that lives outside the tree.
 
 `ci.yml` runs the gate and the compat legs and is the only workflow whose
-contexts are required for a merge. `links.yml` checks link rot on every pull
+context is required for a merge: its `ci-ok` job, which aggregates the rest. `links.yml` checks link rot on every pull
 request and again weekly, and is deliberately advisory. `release.yml` drives
 release-please. `labels.yml` is the odd one out: it changes the repository
 rather than reporting on it.

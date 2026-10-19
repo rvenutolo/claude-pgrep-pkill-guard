@@ -9,8 +9,8 @@ hook that runs on every Bash tool call.
 
 | field                    | value                                                                                                    |
 | ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| date                     | 2026-10-18T18:20:26+00:00                                                                                |
-| commit                   | `d19bbc9`                                                                                                |
+| date                     | 2026-10-19T01:22:30+00:00                                                                                |
+| commit                   | `0360746`                                                                                                |
 | kernel                   | Linux 6.8.0-147-generic x86_64                                                                           |
 | cpu                      | 12th Gen Intel(R) Core(TM) i9-12900HK                                                                    |
 | bash                     | 5.3.15(1)-release                                                                                        |
@@ -18,8 +18,8 @@ hook that runs on every Bash tool call.
 | jq                       | jq-1.8.2                                                                                                 |
 | governor                 | powersave (EPP balance_performance)                                                                      |
 | power                    | AC                                                                                                       |
-| load at start            | 0.76 0.54 0.24                                                                                           |
-| package temp at start    | 54 C                                                                                                     |
+| load at start            | 0.85 0.30 0.11                                                                                           |
+| package temp at start    | 86 C                                                                                                     |
 | repetitions              | 45                                                                                                       |
 | rows per cohort per pass | 40                                                                                                       |
 | samples                  | 9270                                                                                                     |
@@ -28,13 +28,13 @@ hook that runs on every Bash tool call.
 
 | cohort     | path exercised                                                                                              |    n | min (ms) | p50 (ms) | p95 (ms) | max (ms) |
 | ---------- | ----------------------------------------------------------------------------------------------------------- | ---: | -------: | -------: | -------: | -------: |
-| `baseline` | process spawn and pipe only, no hook -- the floor                                                           | 1800 |     0.70 |     2.06 |     2.66 |     3.58 |
-| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                                                     | 1800 |     1.52 |     3.46 |     4.37 |     6.21 |
-| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus                                      |  270 |     1.54 |     2.81 |     4.06 |     4.90 |
-| `quiet`    | bash startup, one `jq` spawn, one scanner pass                                                              | 1800 |    16.78 |    54.88 |    78.47 |   240.58 |
-| `inspect`  | the above, plus a second scanner pass, `classify::probe_keys` and a `repeat::repeat_check` miss             |  530 |    29.17 |    97.55 |   147.47 |   274.56 |
-| `repeat`   | the `inspect` path, where `repeat::repeat_check` finds a hit and `messages::repeat_message` writes the deny | 1270 |    49.46 |   108.75 |   149.68 |   197.93 |
-| `deny`     | the stateless tiers plus `messages::deny_message`; no state                                                 | 1800 |    26.61 |    68.23 |   111.28 |   154.52 |
+| `baseline` | process spawn and pipe only, no hook -- the floor                                                           | 1800 |     0.83 |     1.95 |     2.34 |     3.02 |
+| `skipped`  | the prefilter short-circuit -- no `jq`, no scanner pass                                                     | 1800 |     1.44 |     3.28 |     3.85 |     4.84 |
+| `typical`  | the `skipped` path, driven by ordinary commands rather than the corpus                                      |  270 |     1.55 |     2.51 |     3.76 |     4.46 |
+| `quiet`    | bash startup, one `jq` spawn, one scanner pass                                                              | 1800 |    16.46 |    54.05 |    76.71 |   217.57 |
+| `inspect`  | the above, plus a second scanner pass, `classify::probe_keys` and a `repeat::repeat_check` miss             |  539 |    28.15 |    94.65 |   141.02 |   256.48 |
+| `repeat`   | the `inspect` path, where `repeat::repeat_check` finds a hit and `messages::repeat_message` writes the deny | 1261 |    50.24 |   104.09 |   145.94 |   197.99 |
+| `deny`     | the stateless tiers plus `messages::deny_message`; no state                                                 | 1800 |    26.32 |    65.40 |   107.21 |   148.42 |
 
 ## How to read this
 

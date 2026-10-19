@@ -1,5 +1,5 @@
 name: bats-ambient
-description: Install bats-core, bats-support and bats-assert at pinned SHAs, without Nix.
+description: Install bats-core, bats-support and bats-assert without Nix, the libraries at flake.lock's SHAs.
 runs:
   using: composite
   steps:
@@ -21,19 +21,41 @@ runs:
         set -Eeuo pipefail
         libdir="${RUNNER_TEMP}/bats-libs"
         mkdir -p "${libdir}"
-        # Pinned to commit SHAs, same policy as the actions themselves. Renovate
-        # tracks these through .github/renovate.json, on datasource=git-refs and
-        # not github-tags: every pin follows a default-branch head, and
-        # github-tags resolves tag names only, so it failed every lookup with
-        # "Tag master not found" and left the SHAs silently frozen.
-        clone_at() {
+        # @description Clone a GitHub repository and check out one commit.
+        # @arg $1 repo owner/name on github.com
+        # @arg $2 sha the commit to check out
+        # @arg $3 dest the directory to clone into
+        function clone_at() {
           local repo="$1" sha="$2" dest="$3"
           git clone --quiet "https://github.com/${repo}.git" "${dest}"
           git -C "${dest}" checkout --quiet "${sha}"
         }
-        clone_at bats-core/bats-core    "${BATS_CORE_SHA}"    "${RUNNER_TEMP}/bats-core"
-        clone_at bats-core/bats-support "${BATS_SUPPORT_SHA}" "${libdir}/bats-support"
-        clone_at bats-core/bats-assert  "${BATS_ASSERT_SHA}"  "${libdir}/bats-assert"
+        # The libraries take the SHAs flake.lock pins for the hermetic gate, so
+        # a compat leg loads the same bats-support and bats-assert a gate leg
+        # does. A separate pin here cannot move with flake.lock: Renovate
+        # updates flake.lock only as a whole, through lockFileMaintenance, while
+        # a custom-manager pin arrives in a PR of its own, so the two would
+        # disagree between merges.
+        # @description Print the commit flake.lock pins for one input.
+        # @arg $1 node the flake.lock node name
+        # @stdout the locked commit SHA
+        # @exitcode 1 the node has no locked rev. --exit-status makes a missing
+        #   node fail here rather than at a `git checkout null` after a full
+        #   clone.
+        function locked_rev() {
+          jq --raw-output --exit-status --arg node "$1" '.nodes[$node].locked.rev' "${GITHUB_WORKSPACE}/flake.lock"
+        }
+        support_sha="$(locked_rev bats-support)"
+        assert_sha="$(locked_rev bats-assert)"
+        # bats-core has no flake input -- the devShell takes it from nixpkgs --
+        # so it keeps a pin of its own, same policy as the actions themselves.
+        # Renovate tracks it through .github/renovate.json, on
+        # datasource=git-refs and not github-tags: the pin follows a
+        # default-branch head, and github-tags resolves tag names only, so it
+        # cannot look the pin up at all.
+        clone_at bats-core/bats-core    "${BATS_CORE_SHA}" "${RUNNER_TEMP}/bats-core"
+        clone_at bats-core/bats-support "${support_sha}"   "${libdir}/bats-support"
+        clone_at bats-core/bats-assert  "${assert_sha}"    "${libdir}/bats-assert"
         "${RUNNER_TEMP}/bats-core/install.sh" "${RUNNER_TEMP}/bats-install"
         echo "${RUNNER_TEMP}/bats-install/bin" >> "${GITHUB_PATH}"
         # tests/test_helper/common.bash honours an externally-set BATS_LIB_PATH,
@@ -42,7 +64,3 @@ runs:
       env:
         # renovate: datasource=git-refs depName=bats-core/bats-core
         BATS_CORE_SHA: 'f2a9f7449df1701429a2541499e925a5fa6966d2'
-        # renovate: datasource=git-refs depName=bats-core/bats-support
-        BATS_SUPPORT_SHA: '0954abb9925cad550424cebca2b99255d4eabe96'
-        # renovate: datasource=git-refs depName=bats-core/bats-assert
-        BATS_ASSERT_SHA: '48b8731443e9287ae8b4668d0539c951a0e253b3'

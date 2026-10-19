@@ -399,10 +399,7 @@ templates and fixture label files), `tests/commit-payload.bats` (`.ci/build-comm
 fabricated package inventory), `tests/invariant-markers.bats`
 (`.ci/check-invariant-markers`, against a fabricated source tree),
 `tests/bench-fresh.bats` (`.ci/check-bench-fresh`, against a purpose-built
-throwaway repository), `tests/bats-libs-in-sync.bats`
-(`.ci/check-bats-libs-in-sync`, against copied fixtures of
-`.github/actions/bats-ambient/action.yml` and `flake.lock` carrying planted SHA
-mismatches), `tests/report-coverage.bats` (`.ci/report-coverage`, against a
+throwaway repository), `tests/report-coverage.bats` (`.ci/report-coverage`, against a
 fabricated kcov output directory), `tests/shell-shebangs.bats`
 (`.ci/check-shell-shebangs`, against a fabricated source tree),
 `tests/executable-bit.bats` (`.ci/check-executable-bit`, against a

@@ -247,12 +247,12 @@ every command in a session does.
 
 On the author's machine — a 12th Gen Intel(R) Core(TM) i9-12900HK running Linux
 6.8.0-147-generic x86_64 and bash 5.3.15(1)-release — such a command costs a
-median of **2.81 ms**, p95 4.06 ms. Driven by the wider verdicts corpus instead
-of a handful of curated ordinary commands, the same path costs 3.46 ms; those
+median of **2.51 ms**, p95 3.76 ms. Driven by the wider verdicts corpus instead
+of a handful of curated ordinary commands, the same path costs 3.28 ms; those
 rows are longer and more awkward strings than anything a session types, so read
 the pair as the range that one path spans rather than as a single number. The
-empty-hook baseline on that same run is 2.06 ms, so the guard costs about
-**0.8 ms** above the bare process-spawn floor.
+empty-hook baseline on that same run is 1.95 ms, so the guard costs about
+**0.6 ms** above the bare process-spawn floor.
 
 Absolute figures move with the state of the machine from one run to the next,
 and the empty-hook baseline — the control, which runs no hook at all — moves
@@ -306,14 +306,14 @@ and a comparison is worth quoting only when the control moves in no direction
 across the runs.
 
 What an ordinary command pays is not `jq`, not the scanner, not a helper
-process, and not the parse of the whole guard. About 2.06 ms of the 3.46 is
+process, and not the parse of the whole guard. About 1.95 ms of the 3.28 is
 process spawn, which any hook at all would pay, and the 0.13 ms of parse named
 above is most of what the entry script adds on top of it.
 
 Commands that reach the deeper paths cost more, and only they pay it: one the
 guard has to look at closely — a `pgrep`/`pkill` shape, a loop, the `repeat`
-state file — has a median of 97.55 ms, or 108.75 ms when the repeat rule denies
-it, and a denied command 68.23 ms. Those figures, and the 54.88 ms alongside
+state file — has a median of 94.65 ms, or 104.09 ms when the repeat rule denies
+it, and a denied command 65.40 ms. Those figures, and the 54.05 ms alongside
 them, are for a command the guard actually
 inspects — one carrying `pgrep`, `kill` or a task-output path, past the
 prefilter and into the `jq` spawn and scanner pass. They come from

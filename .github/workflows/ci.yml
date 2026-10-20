@@ -89,10 +89,11 @@ jobs:
     # awk, and the checks whose verdict depends on the host -- see
     # run-all-checks' --scope. The checks job runs the rest once.
     runs-on: ${{ matrix.os }}
-    # About twice the slowest leg's warm-cache run (~6 min, a macOS slice),
-    # which leaves room for a cold Nix store and a growing verdict table while
-    # still failing a hang early.
-    timeout-minutes: 12
+    # The slowest leg's warm-cache run is ~6 min (a macOS slice). A flake.lock
+    # bump misses the Nix cache, which adds a slow macOS setup and a slow
+    # post-step cache save to that slice; 15 covers both while still failing a
+    # hang early.
+    timeout-minutes: 15
     permissions:
       contents: read
     strategy:

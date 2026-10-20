@@ -39,13 +39,13 @@ jobs:
   checks:
     name: checks
     # The half of run-all-checks whose verdict cannot differ between platforms
-    # -- formatting, the governance lints, the lint suite -- run once, on Linux,
+    # -- formatting, the governance lints, the lint suite -- runs once, on Linux,
     # rather than on both gate legs. It reports in a few minutes, so a lint or
     # governance failure surfaces long before the suite finishes. The gate legs
     # run the other half.
     runs-on: ubuntu-latest
-    # The warm run is ~3 min, most of it Nix setup; 15 leaves room for a cold
-    # store while still failing a hang early.
+    # The warm run is ~2 min; 15 leaves room for a cold Nix store while still
+    # failing a hang early.
     timeout-minutes: 15
     permissions:
       contents: read
@@ -89,10 +89,10 @@ jobs:
     # awk, and the checks whose verdict depends on the host -- see
     # run-all-checks' --scope. The checks job runs the rest once.
     runs-on: ${{ matrix.os }}
-    # About twice the slower macOS leg's warm-cache run (~11 min), which leaves
+    # About twice the slower macOS leg's warm-cache run (~9 min), which leaves
     # room for a cold Nix store and a growing verdict table while still failing
     # a hang before it burns most of an hour.
-    timeout-minutes: 22
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:

@@ -1,7 +1,8 @@
-# run-all-checks' argument handling, in a throwaway repo with `nix` and
-# `run-tests` stubs: a malformed invocation is rejected with exit 2 and the
-# usage line, and a well-formed one runs the gate, with the suite under the awks
-# --awk asks for and the checks --scope selects.
+# run-all-checks' argument handling, in a throwaway repo with `nix`,
+# `run-tests`, `.ci/check-devshell-provides` and `bench/run` stubs: a malformed
+# invocation is rejected with exit 2 and the usage line, and a well-formed one
+# runs the gate, with the suite under the awks --awk asks for and the checks
+# --scope selects.
 #
 # `run --separate-stderr` is a bats 1.5.0 flag: the usage line belongs on
 # stderr, and a merged capture cannot tell it apart from a stray stdout write.

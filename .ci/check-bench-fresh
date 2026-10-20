@@ -45,7 +45,7 @@
 #
 #              Strict only on a release. Every verdict is computed the same
 #              way in both modes; what BENCH_FRESH_STRICT changes is whether
-#              verdicts 2 and 3 convict. ci.yml sets it on the gate job when
+#              verdicts 2 and 3 convict. ci.yml sets it on the checks job when
 #              the PR branch is release-please's, so a release with stale
 #              numbers is red until `just bench` runs on main and merges, and
 #              an ordinary hooks/ PR sees a WARN it can read and move past.
@@ -66,7 +66,7 @@
 #              get a red gate over history they never asked for. Nothing about
 #              their tree is wrong; the question is unanswerable, and a gate
 #              that cannot ask its question must not convict. In this repo's own
-#              CI the question IS answerable -- ci.yml's gate job sets
+#              CI the question IS answerable -- ci.yml's checks job sets
 #              `fetch-depth: 0` for exactly this reason -- so the skip is a
 #              safety net for other people's clones rather than the normal path.
 #
@@ -334,7 +334,7 @@ function main() {
     printf 'SKIP: %s records commit %s, which is not in this clone\n' "${REPORT}" "${recorded}" >&2
     printf '      A shallow or partial clone cannot see it, so the freshness\n' >&2
     printf '      comparison is unanswerable here. Nothing is wrong with the\n' >&2
-    printf '      tree. For a real answer: git fetch --unshallow. The gate job\n' >&2
+    printf '      tree. For a real answer: git fetch --unshallow. The checks job\n' >&2
     printf '      in this repo checks out with fetch-depth: 0 so it runs there.\n' >&2
     return 0
   fi

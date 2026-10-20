@@ -145,11 +145,14 @@ job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 | macOS, `brew install bash`   | Homebrew bash                            | stock `/usr/bin/awk` (one-true-awk)  | `compat (macos, homebrew bash)`  |
 | macOS, stock bash 3.2        | 3.2 — the guard reports itself INACTIVE  | not reached                          | `compat (macos, stock bash 3.2)` |
 
-The `gate` legs run the whole gate — formatting, lints, the governance
-checks and the bats suite, under gawk on Linux and under one-true-awk on macOS,
-where it is the stock awk — inside the flake's devShell, so the bash and the awk
-come from `flake.lock` rather than from the runner. A local `./run-all-checks`
-runs the suite under both awks. The `compat (ubuntu, ambient)` and
+The `gate` legs run the bats suite, under gawk on Linux and under one-true-awk
+on macOS, where it is the stock awk, plus the checks whose verdict depends on the
+host: the devShell's tool list and the benchmark smoke run. They run inside
+the flake's devShell, so the bash and the awk come from `flake.lock` rather than
+from the runner. The rest of the gate — formatting, lints and the governance
+checks — cannot differ between platforms, so a separate `checks` job runs it
+once, on Linux. A local `./run-all-checks` runs all of it, the suite under both
+awks. The `compat (ubuntu, ambient)` and
 `compat (macos, homebrew bash)` legs run the test suite only, against the tools
 the runner ships: `compat (ubuntu, ambient)`
 takes the image's own bash, `jq` and `awk`, and prints which awk it got, since

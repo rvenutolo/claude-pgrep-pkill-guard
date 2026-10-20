@@ -1,5 +1,5 @@
 name: setup
-# Caller must run harden-runner (Linux only) and actions/checkout before this
+# Caller must run harden-runner and actions/checkout before this
 # composite: a local action cannot perform its own initial checkout.
 description: Install Nix and restore the Nix store cache.
 runs:

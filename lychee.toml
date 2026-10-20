@@ -79,10 +79,11 @@ host_concurrency = 4
 # than against the source line.
 exclude = [
   # RFC 2606's reserved example host. Appears in fixtures in
-  # tests/manifest.bats, tests/issue-forms.bats and tests/bash-style.bats;
-  # `https?` because one occurrence is deliberately plain http. Belt and
-  # braces under 0.24.2, which already drops RFC 2606 reserved domains on its
-  # own -- kept so the intent survives a lychee that stops doing that for us.
+  # tests/manifest.bats, tests/issue-forms.bats and
+  # tests/bash-style-comments.bats; `https?` because one occurrence is
+  # deliberately plain http. Belt and braces under 0.24.2, which already drops
+  # RFC 2606 reserved domains on its own -- kept so the intent survives a
+  # lychee that stops doing that for us.
   '^https?://example\.com',
   # A fake CI host inside a corpus payload in tests/cases/verdicts.tsv. Same
   # belt-and-braces note as above: `.example` is RFC 2606 reserved too.

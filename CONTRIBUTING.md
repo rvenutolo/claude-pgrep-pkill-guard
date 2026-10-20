@@ -166,13 +166,13 @@ The suite is bats only, under `tests/`. The rules:
 Run the suite with `./.ci/in-devshell ./run-tests` (`just test`), or a single
 file with `./.ci/in-devshell ./run-tests tests/scanner.bats`. `run-tests` runs
 the files concurrently, one per CPU, and prints each file's output whole once
-all have finished; `--jobs 1` runs one at a time. `--slice I/N` runs only
-slice I of N of the files, as the macOS gate legs do; the slices are balanced
-by the measured times in `FILE_WEIGHTS` in `run-tests`, so give a slow new file
-an entry there. Files running at once means a test keeps its fixtures under
-`BATS_TEST_TMPDIR`, never at a fixed path that another file could share. `run-tests` snapshots the repo's HEAD, config and
-index before and after, and fails loudly if the suite mutated the real repo
-even when every file passed.
+all have finished; `--jobs 1` runs one at a time. `--slice I/N` runs only slice
+I of N of the files, as the macOS gate legs do; the slices are balanced by the
+measured times in `FILE_WEIGHTS` in `run-tests`, so give a slow new file an
+entry there. Files running at once means a test keeps its fixtures under
+`BATS_TEST_TMPDIR`, never at a fixed path that another file could share.
+`run-tests` snapshots the repo's HEAD, config and index before and after, and
+fails loudly if the suite mutated the real repo even when every file passed.
 
 ## Style
 

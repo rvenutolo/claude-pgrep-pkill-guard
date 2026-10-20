@@ -445,7 +445,8 @@ and the other two so the platform scope can run to a pass in the fixture.
 `run-tests` runs every `.bats` file as its own `bats`, as many at once as the
 host has CPUs (`--jobs N` sets the number), in a pool of plain background jobs:
 `bats --jobs` needs flock and GNU parallel, both Linux-only in nixpkgs. Files
-are queued largest first, and each file's output is held back and printed
+are queued largest first (heaviest first by `FILE_WEIGHTS` under `--slice`,
+below), and each file's output is held back and printed
 whole, in queue order, once the pool drains, so a failing file reads as one
 block. Because files run concurrently, no test may share state with another
 file's: fixtures live under `BATS_TEST_TMPDIR`, never at a fixed path under

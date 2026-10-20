@@ -10,7 +10,8 @@
 # hits an exception marker covers, and prints one line per remaining hit.
 #
 # Adding a rule: write the function, add its id to `rule_ids`, add it to
-# `hits`. tests/bash-style.bats names every id, so an id is never renamed.
+# `hits`. The tests/bash-style*.bats files name every id, so an id is never
+# renamed.
 
 def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr", "comment-line-ref", "comment-untracked-ref", "comment-missing-path", "comment-missing-function", "comment-commit-relative", "todo-form", "mktemp-exit-trap"];
 

@@ -407,7 +407,9 @@ fabricated tree of tracked modes), `tests/guard-parts.bats`
 (`.ci/check-guard-parts`, against a fabricated loader and parts),
 `tests/bats-no-shebang.bats` (`.ci/check-bats-no-shebang`,
 against throwaway repos of fixture `.bats` files), `tests/bash-style.bats`
-(`.ci/check-bash-style`, against fixture scripts written per case) and
+and the `tests/bash-style-*.bats` files beside it (`.ci/check-bash-style`,
+against fixture scripts written per case, spread over several files so the
+suite's file pool runs them side by side) and
 `tests/lint-checks.bats` (`.ci/run-lint-checks`, against a throwaway repo with
 stub linters on `PATH`). Every one of them drives its
 script over a fabricated input — most through optional fixture-path arguments,

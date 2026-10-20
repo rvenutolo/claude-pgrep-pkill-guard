@@ -1,8 +1,13 @@
-# run-tests' argument handling -- --report, --coverage and --awk=bwk -- and the
-# --coverage fan-out across files, graded against small fixture suites rather
-# than the real one.
+# run-tests' argument handling -- --report, --jobs, --coverage and --awk=bwk --
+# and its fan-out of files across concurrent workers, with and without
+# --coverage, graded against small fixture suites rather than the real one.
+#
+# `run --separate-stderr` is a bats 1.5.0 flag: the --jobs rejections assert on
+# run-tests' own stderr.
 #
 # setup sets RUN_TESTS, the path of the runner under test.
+
+bats_require_minimum_version 1.5.0
 
 function setup() {
   load 'test_helper/common'
@@ -221,9 +226,8 @@ BATS
 @test "run-tests: --coverage splits a classify.bats the same way on any CPU count" {
   require_kcov
   # The split decides which lines kcov's apostrophe swallow windows hide (#128),
-  # so a split that followed the CPU count would give each machine its own
-  # figure. GNU nproc reads OMP_NUM_THREADS, which stands in for a smaller or
-  # larger machine here.
+  # so a split that followed the worker count would give each machine its own
+  # figure. --jobs stands in for a smaller or larger machine here.
   local -r dir="${BATS_TEST_TMPDIR}/suite18"
   mkdir -p "${dir}"
   cat > "${dir}/classify.bats" << 'BATS'
@@ -232,10 +236,10 @@ BATS
 }
 BATS
   local one three
-  OMP_NUM_THREADS=1 run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov18a" "${dir}/classify.bats"
+  run "${RUN_TESTS}" --jobs 1 --coverage "${BATS_TEST_TMPDIR}/cov18a" "${dir}/classify.bats"
   assert_success
   one="$(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort)"
-  OMP_NUM_THREADS=3 run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov18b" "${dir}/classify.bats"
+  run "${RUN_TESTS}" --jobs 3 --coverage "${BATS_TEST_TMPDIR}/cov18b" "${dir}/classify.bats"
   assert_success
   three="$(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort)"
   [[ -n "${one}" ]]
@@ -362,4 +366,233 @@ BATS
   TMPDIR="${tmp}" run "${RUN_TESTS}" --awk=bwk --awk=bwk "${suite}"
   assert_success
   [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
+}
+
+@test "run-tests: runs every given file and prints each one's output" {
+  local -r dir="${BATS_TEST_TMPDIR}/suite19"
+  mkdir -p "${dir}"
+  printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
+  printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
+  run "${RUN_TESTS}" "${dir}"
+  assert_success
+  assert_output --partial 'first fixture case'
+  assert_output --partial 'second fixture case'
+}
+
+@test "run-tests: fails when any one file fails" {
+  local -r dir="${BATS_TEST_TMPDIR}/suite20"
+  mkdir -p "${dir}"
+  printf '@test "passing fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/pass.bats"
+  printf '@test "failing fixture case" {\n  [[ 1 -eq 2 ]]\n}\n' > "${dir}/fail.bats"
+  run "${RUN_TESTS}" "${dir}/pass.bats" "${dir}/fail.bats"
+  assert_failure
+  assert_output --partial 'not ok'
+}
+
+@test "run-tests: prints each file's output whole, in queue order" {
+  # Each test sleeps so both files are mid-run at once under --jobs 2; output
+  # written straight to the terminal would then interleave their lines.
+  local -r dir="${BATS_TEST_TMPDIR}/suite21"
+  mkdir -p "${dir}"
+  local file i
+  for file in 'alpha' 'beta'; do
+    for i in 1 2 3; do
+      printf '@test "%s case %s" {\n  sleep 0.2\n}\n' "${file}" "${i}"
+    done > "${dir}/${file}.bats"
+  done
+  run "${RUN_TESTS}" --jobs 2 "${dir}/alpha.bats" "${dir}/beta.bats"
+  assert_success
+  local -a alpha_lines=() beta_lines=()
+  for i in "${!lines[@]}"; do
+    case "${lines[i]}" in
+      *'alpha case'*) alpha_lines+=("${i}") ;;
+      *'beta case'*) beta_lines+=("${i}") ;;
+      *) ;;
+    esac
+  done
+  assert_equal "${#alpha_lines[@]}" 3
+  assert_equal "${#beta_lines[@]}" 3
+  # Either file may be queued first; what matters is that one file's lines all
+  # come before the other's.
+  local -r alpha_first="${alpha_lines[0]}" alpha_last="${alpha_lines[2]}"
+  local -r beta_first="${beta_lines[0]}" beta_last="${beta_lines[2]}"
+  [[ "${alpha_last}" -lt "${beta_first}" || "${beta_last}" -lt "${alpha_first}" ]]
+}
+
+# @description Write a .bats file whose one test marks itself started, then waits
+#              up to 10 s for a sibling file's test to do the same. Two such
+#              files pass together only when both run at once.
+# @arg $1 dir the directory both files live in
+# @arg $2 own this file's name, without .bats
+# @arg $3 other the sibling's name, without .bats
+function make_rendezvous_file() {
+  local -r dir="$1" own="$2" other="$3"
+  cat > "${dir}/${own}.bats" << BATS
+@test "${own} meets ${other}" {
+  touch "\${BATS_TEST_FILENAME%/*}/${own}.started"
+  local i
+  for ((i = 0; i < 100; i++)); do
+    if [[ -f "\${BATS_TEST_FILENAME%/*}/${other}.started" ]]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+BATS
+}
+
+@test "run-tests: --jobs 2 runs two files at once" {
+  local -r dir="${BATS_TEST_TMPDIR}/suite22"
+  mkdir -p "${dir}"
+  make_rendezvous_file "${dir}" 'one' 'two'
+  make_rendezvous_file "${dir}" 'two' 'one'
+  run "${RUN_TESTS}" --jobs 2 "${dir}/one.bats" "${dir}/two.bats"
+  assert_success
+}
+
+@test "run-tests: --jobs 1 runs one file at a time" {
+  # mkdir is atomic: a second file taking the lock while the first holds it
+  # fails its test.
+  local -r dir="${BATS_TEST_TMPDIR}/suite23"
+  mkdir -p "${dir}"
+  local file
+  for file in 'one' 'two'; do
+    cat > "${dir}/${file}.bats" << 'BATS'
+@test "holds the lock alone" {
+  mkdir "${BATS_TEST_FILENAME%/*}/lock"
+  sleep 0.3
+  rmdir "${BATS_TEST_FILENAME%/*}/lock"
+}
+BATS
+  done
+  run "${RUN_TESTS}" --jobs 1 "${dir}/one.bats" "${dir}/two.bats"
+  assert_success
+}
+
+@test "run-tests: --jobs with no value is rejected" {
+  # The `[run-tests] FATAL:` prefix pins who rejected it: bats has a --jobs of
+  # its own and would fail too, with the flag name in its own error.
+  run --separate-stderr "${RUN_TESTS}" --jobs
+  assert_failure 1
+  [[ "${stderr}" == *'[run-tests] FATAL:'*'--jobs'* ]]
+}
+
+@test "run-tests: --jobs 0 is rejected" {
+  local -r suite="${BATS_TEST_TMPDIR}/suite24/ok.bats"
+  make_trivial_suite "${suite}"
+  run --separate-stderr "${RUN_TESTS}" --jobs 0 "${suite}"
+  assert_failure 1
+  [[ "${stderr}" == *'[run-tests] FATAL:'*'--jobs'* ]]
+}
+
+@test "run-tests: --jobs that is not a number is rejected" {
+  local -r suite="${BATS_TEST_TMPDIR}/suite25/ok.bats"
+  make_trivial_suite "${suite}"
+  run --separate-stderr "${RUN_TESTS}" --jobs 'many' "${suite}"
+  assert_failure 1
+  [[ "${stderr}" == *'[run-tests] FATAL:'*'--jobs'* ]]
+}
+
+@test "run-tests: --report writes a JUnit file per test file" {
+  # Each file runs as its own bats, so each needs its own report; a shared
+  # directory would leave only the last one to finish.
+  local -r dir="${BATS_TEST_TMPDIR}/suite26"
+  mkdir -p "${dir}"
+  printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
+  printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
+  run "${RUN_TESTS}" --report "${BATS_TEST_TMPDIR}/r26" "${dir}/first.bats" "${dir}/second.bats"
+  assert_success
+  local -a reports=()
+  mapfile -t reports < <(find "${BATS_TEST_TMPDIR}/r26" -name '*.xml' -type f)
+  assert_equal "${#reports[@]}" 2
+}
+
+@test "run-tests: forwards bats arguments to every file" {
+  local -r dir="${BATS_TEST_TMPDIR}/suite27"
+  mkdir -p "${dir}"
+  local file
+  for file in 'first' 'second'; do
+    printf '@test "keep case" {\n  [[ 1 -eq 1 ]]\n}\n@test "drop case" {\n  [[ 1 -eq 1 ]]\n}\n' \
+      > "${dir}/${file}.bats"
+  done
+  run "${RUN_TESTS}" --filter 'keep' "${dir}/first.bats" "${dir}/second.bats"
+  assert_success
+  local -a kept=()
+  mapfile -t kept < <(grep --fixed-strings 'keep case' <<< "${output}")
+  assert_equal "${#kept[@]}" 2
+  refute_output --partial 'drop case'
+}
+
+@test "run-tests: runs with one worker when the CPU count is unknown" {
+  local -r dir="${BATS_TEST_TMPDIR}/suite28"
+  local -r stub="${BATS_TEST_TMPDIR}/stub28"
+  mkdir -p "${dir}" "${stub}"
+  printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
+  printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
+  local tool
+  for tool in 'nproc' 'getconf' 'sysctl'; do
+    printf '#!/usr/bin/env bash\nexit 1\n' > "${stub}/${tool}"
+    chmod +x "${stub}/${tool}"
+  done
+  # PATH carries the failing probes first, so run-tests cannot learn the CPU
+  # count from any of them.
+  PATH="${stub}:${PATH}" run "${RUN_TESTS}" "${dir}/first.bats" "${dir}/second.bats"
+  assert_success
+  assert_output --partial 'first fixture case'
+  assert_output --partial 'second fixture case'
+}
+
+@test "run-tests: TERM stops every worker" {
+  # The fixture's test runs a loop that records its own process id and its
+  # parent's, the fixture file's bats, then polls for 30 s; `kill -0` on those
+  # ids shows whether either outlived run-tests. Not ps: the devShell carries
+  # none. The loop gives up on its own, so a failing case leaks nothing for
+  # long.
+  local -r dir="${BATS_TEST_TMPDIR}/suite29"
+  mkdir -p "${dir}"
+  cat > "${dir}/sleeper" << 'SH'
+#!/usr/bin/env bash
+printf '%s\n%s\n' "$$" "${PPID}" > "${0%/*}/running.tmp"
+mv -f -- "${0%/*}/running.tmp" "${0%/*}/running"
+for ((i = 0; i < 300; i++)); do
+  sleep 0.1
+done
+SH
+  chmod +x "${dir}/sleeper"
+  cat > "${dir}/slow.bats" << 'BATS'
+@test "slow fixture case" {
+  "${BATS_TEST_FILENAME%/*}/sleeper"
+}
+BATS
+  # fd 3 closed: bats waits on it, and a background job holding it open hangs
+  # the run.
+  "${RUN_TESTS}" "${dir}/slow.bats" > "${dir}/run.log" 2>&1 3>&- &
+  local -r pid="$!"
+  local i
+  for ((i = 0; i < 100; i++)); do
+    if [[ -f "${dir}/running" ]]; then
+      break
+    fi
+    sleep 0.1
+  done
+  local -a watched=()
+  mapfile -t watched < "${dir}/running"
+  assert_equal "${#watched[@]}" 2
+  kill -TERM "${pid}"
+  local watched_pid survivors=''
+  for ((i = 0; i < 50; i++)); do
+    survivors=''
+    for watched_pid in "${watched[@]}"; do
+      if kill -0 "${watched_pid}" 2> /dev/null; then
+        survivors+="${watched_pid} "
+      fi
+    done
+    if [[ -z "${survivors}" ]]; then
+      break
+    fi
+    sleep 0.1
+  done
+  wait "${pid}" || true # run-tests' own status is not the subject
+  assert_equal "${survivors}" ''
 }

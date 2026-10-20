@@ -40,7 +40,7 @@ jobs:
     name: checks
     # The half of run-all-checks whose verdict cannot differ between platforms
     # -- formatting, the governance lints, the lint suite -- runs once, on Linux,
-    # rather than on both gate legs. It reports in a few minutes, so a lint or
+    # rather than on every gate leg. It reports in a few minutes, so a lint or
     # governance failure surfaces long before the suite finishes. The gate legs
     # run the other half.
     runs-on: ubuntu-latest
@@ -84,29 +84,39 @@ jobs:
         run: ./.ci/in-devshell ./run-all-checks --scope=shared
 
   gate:
-    name: gate (${{ matrix.os }})
+    name: gate (${{ matrix.os }}${{ matrix.slice && format(', {0}', matrix.slice) || '' }})
     # The platform-sensitive half of run-all-checks: the suite, under the leg's
     # awk, and the checks whose verdict depends on the host -- see
     # run-all-checks' --scope. The checks job runs the rest once.
     runs-on: ${{ matrix.os }}
-    # About twice the slower macOS leg's warm-cache run (~9 min), which leaves
-    # room for a cold Nix store and a growing verdict table while still failing
-    # a hang before it burns most of an hour.
-    timeout-minutes: 20
+    # About twice the slowest leg's warm-cache run (~6 min, a macOS slice),
+    # which leaves room for a cold Nix store and a growing verdict table while
+    # still failing a hang early.
+    timeout-minutes: 12
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        # One awk per leg, so neither pays for the suite twice: gawk on Linux,
-        # and one-true-awk on macOS, where it is the stock awk. A local
+        # One awk per platform, so no leg pays for the suite twice: gawk on
+        # Linux, and one-true-awk on macOS, where it is the stock awk. A local
         # run-all-checks, the pre-push hook's included, runs both.
+        #
+        # macOS is split across runners by run-all-checks' --slice, because its
+        # leg is otherwise the slowest job in CI: each slice runs its share of
+        # the files, weighed by run-tests' FILE_WEIGHTS, and slice 0 also runs
+        # the platform checks. Every extra runner pays the Nix setup again, so
+        # Linux, which finishes sooner, stays one leg. ci-ok needs `gate` as a
+        # whole, so a slice added or removed here needs no ruleset change.
         include:
           - os: ubuntu-latest
             awk: gawk
           - os: macos-latest
             awk: bwk
+            slice: 0/2
+          - os: macos-latest
+            awk: bwk
+            slice: 1/2
     steps:
       # harden-runner is Linux-only, so it cannot be "first in every job" here.
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
@@ -172,20 +182,30 @@ jobs:
         # gate grades. It is already in .ci/in-devshell's KEEP_VARS, so it
         # resolves to the same path inside and outside the hermetic boundary.
         #
-        # The awk arrives through env rather than a `${{ }}` expansion inside
-        # `run:`, which zizmor flags as template injection whatever the source.
+        # The awk and the slice arrive through env rather than a `${{ }}`
+        # expansion inside `run:`, which zizmor flags as template injection
+        # whatever the source. A leg with no slice passes no --slice.
         env:
           GATE_AWK: ${{ matrix.awk }}
-        run: ./.ci/in-devshell ./run-all-checks --scope=platform --awk="${GATE_AWK}" --report "${RUNNER_TEMP}/bats-junit"
+          GATE_SLICE: ${{ matrix.slice }}
+        run: |
+          slice_args=()
+          if [[ -n "${GATE_SLICE}" ]]; then
+            slice_args=(--slice "${GATE_SLICE}")
+          fi
+          ./.ci/in-devshell ./run-all-checks --scope=platform --awk="${GATE_AWK}" "${slice_args[@]}" \
+            --report "${RUNNER_TEMP}/bats-junit"
       # if: failure() -- the report is only interesting when something went red,
       # and uploading ~22 KB of green XML on every push is noise. run-all-checks
       # writes a gawk/ or bwk/ subdirectory, named for the leg's awk (#83).
-      # The name must be unique across the whole workflow run, hence the matrix
-      # OS: two legs uploading `bats-junit-gate` would collide.
+      # The name must be unique across the whole workflow run: two legs
+      # uploading `bats-junit-gate` would collide. The OS alone is not unique
+      # once a platform is sliced, and the slice itself holds a `/`, which an
+      # artifact name may not, so the leg's matrix index completes it.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: failure()
         with:
-          name: bats-junit-gate-${{ matrix.os }}
+          name: bats-junit-gate-${{ matrix.os }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/bats-junit
           retention-days: 7
 

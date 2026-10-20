@@ -137,17 +137,19 @@ The guard is bash and awk with no network calls, so "supported" means one thing
 here: the shells and awks CI actually runs it under. Every row below is a real
 job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-| Platform                     | bash                                     | awk                                  | CI job                           |
-| ---------------------------- | ---------------------------------------- | ------------------------------------ | -------------------------------- |
-| Linux, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk                                 | `gate (ubuntu-latest)`           |
-| macOS, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | one-true-awk                         | `gate (macos-latest)`            |
-| Linux, ambient distro tools  | the runner image's own bash              | whatever the image resolves `awk` to | `compat (ubuntu, ambient)`       |
-| macOS, `brew install bash`   | Homebrew bash                            | stock `/usr/bin/awk` (one-true-awk)  | `compat (macos, homebrew bash)`  |
-| macOS, stock bash 3.2        | 3.2 — the guard reports itself INACTIVE  | not reached                          | `compat (macos, stock bash 3.2)` |
+| Platform                     | bash                                     | awk                                  | CI job                                                 |
+| ---------------------------- | ---------------------------------------- | ------------------------------------ | ------------------------------------------------------ |
+| Linux, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | gawk                                 | `gate (ubuntu-latest)`                                 |
+| macOS, hermetic Nix devShell | the flake's bash, pinned by `flake.lock` | one-true-awk                         | `gate (macos-latest, 0/2)`, `gate (macos-latest, 1/2)` |
+| Linux, ambient distro tools  | the runner image's own bash              | whatever the image resolves `awk` to | `compat (ubuntu, ambient)`                             |
+| macOS, `brew install bash`   | Homebrew bash                            | stock `/usr/bin/awk` (one-true-awk)  | `compat (macos, homebrew bash)`                        |
+| macOS, stock bash 3.2        | 3.2 — the guard reports itself INACTIVE  | not reached                          | `compat (macos, stock bash 3.2)`                       |
 
 The `gate` legs run the bats suite, under gawk on Linux and under one-true-awk
 on macOS, where it is the stock awk, plus the checks whose verdict depends on the
-host: the devShell's tool list and the benchmark smoke run. They run inside
+host: the devShell's tool list and the benchmark smoke run. On macOS the suite
+is split across legs, each running one slice of the files, with the host
+checks in slice 0, so together they run all of it. They run inside
 the flake's devShell, so the bash and the awk come from `flake.lock` rather than
 from the runner. The rest of the gate — formatting, lints and the governance
 checks — cannot differ between platforms, so a separate `checks` job runs it

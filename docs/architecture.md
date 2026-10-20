@@ -422,19 +422,21 @@ repo" would pass just as well against a script that unconditionally returned 0.
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives
 `bench/run`, in the real repo and in a fixture repo holding a copy of the hook
 and a small corpus. `tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
-`--awk=bwk`, `--report DIR`, `--jobs N` and `--coverage DIR`, in any order —
-and its fan-out of files across concurrent workers, with and without
-`--coverage`, against small fixture suites rather than against the real one,
+`--awk=bwk`, `--report DIR`, `--jobs N`, `--slice I/N` and `--coverage DIR`,
+in any order — and its fan-out of files across concurrent workers, with and
+without `--coverage`, against small fixture suites rather than against the real one,
 so the cases measure `run-tests` and not the suite's runtime. It and
 `tests/classify-slice.bats`, which pins the `CLASSIFY_SLICE` contract
 `run-tests --coverage` uses to split `tests/classify.bats` into slices, are
 the only bats files that run `bats` inside `bats`. `tests/run-all-checks.bats` grades
 `run-all-checks`' argument handling: anything but an optional
-`--scope=shared` or `--scope=platform`, an optional `--awk=gawk` or `--awk=bwk`
-and an optional `--report DIR` whose directory does not start with `--`, each
-at most once and neither of the last two beside `--scope=shared`, exits 2
-before any check runs, and a well-formed call runs the checks `--scope` selects
-and the suite under the awks `--awk` asks for. It runs a copy of the gate in a
+`--scope=shared` or `--scope=platform`, an optional `--awk=gawk` or `--awk=bwk`,
+an optional `--report DIR` whose directory does not start with `--` and an
+optional `--slice I/N`, each at most once, neither `--awk` nor `--report` beside
+`--scope=shared` and `--slice` only beside `--scope=platform`, exits 2 before
+any check runs, and a well-formed call runs the checks `--scope` selects and
+the suite under the awks `--awk` asks for, sliced as `--slice` asks, with the
+platform checks in slice 0 alone. It runs a copy of the gate in a
 throwaway repo where every check is missing but `run-tests`,
 `.ci/check-devshell-provides` and `bench/run`, which are stubs that record
 their calls: `run-tests` because the real one would run that same file again,
@@ -443,12 +445,24 @@ and the other two so the platform scope can run to a pass in the fixture.
 `run-tests` runs every `.bats` file as its own `bats`, as many at once as the
 host has CPUs (`--jobs N` sets the number), in a pool of plain background jobs:
 `bats --jobs` needs flock and GNU parallel, both Linux-only in nixpkgs. Files
-are queued largest first, and each file's output is held back and printed
+are queued largest first (heaviest first by `FILE_WEIGHTS` under `--slice`,
+below), and each file's output is held back and printed
 whole, in queue order, once the pool drains, so a failing file reads as one
 block. Because files run concurrently, no test may share state with another
 file's: fixtures live under `BATS_TEST_TMPDIR`, never at a fixed path under
 `/tmp` or `HOME`. The repo-mutation snapshot brackets the whole pool, so a
 fixture that escaped onto the real repo from any worker still fails the run.
+
+`run-tests --slice I/N` runs only slice I of N of the files, for a CI leg split
+across runners. The files are dealt heaviest first, each into the slice whose
+weight so far is lowest, by a table of measured per-file times in `run-tests`
+(`FILE_WEIGHTS`) rather than by size: `tests/classify.bats` and
+`tests/prefilter.bats` are among the smallest files and the slowest, because
+the rows they grade live in `tests/cases/`. The deal depends only on the file
+list, so every runner computes the same partition, and a file the table does
+not name gets a default weight rather than no slice: the slices together run
+every file exactly once, which `tests/run-tests-cli.bats` checks. A stale
+weight costs balance, never coverage.
 
 ## Fail open, loudly
 

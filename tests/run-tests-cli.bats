@@ -1,9 +1,10 @@
-# run-tests' argument handling -- --report, --jobs, --coverage and --awk=bwk --
-# and its fan-out of files across concurrent workers, with and without
-# --coverage, graded against small fixture suites rather than the real one.
+# run-tests' argument handling -- --report, --jobs, --slice, --coverage and
+# --awk=bwk -- and its fan-out of files across concurrent workers, with and
+# without --coverage, graded against small fixture suites rather than the real
+# one.
 #
-# `run --separate-stderr` is a bats 1.5.0 flag: the --jobs rejections assert on
-# run-tests' own stderr.
+# `run --separate-stderr` is a bats 1.5.0 flag: the --jobs and --slice
+# rejections assert on run-tests' own stderr.
 #
 # setup sets RUN_TESTS, the path of the runner under test.
 
@@ -598,4 +599,113 @@ BATS
   done
   wait "${pid}" || true # run-tests' own status is not the subject
   assert_equal "${survivors}" ''
+}
+
+# @description Write a .bats file whose one test names its file, so a run's
+#              output says which files it ran.
+# @arg $1 dir the directory to write it into
+# @arg $2 name the file's name, without .bats
+function make_named_file() {
+  local -r dir="$1" name="$2"
+  printf '@test "%s fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' "${name}" > "${dir}/${name}.bats"
+}
+
+# @description Print the names of the fixture files a run's output shows ran,
+#              one per line, sorted, a file run twice listed twice.
+# @arg $1 run_output the output of one or more runs over make_named_file files
+# @stdout the names, sorted
+function ran_files() {
+  local -r run_output="$1"
+  local -a cases=()
+  mapfile -t cases < <(grep --only-matching '[a-z]* fixture case' <<< "${run_output}")
+  printf '%s\n' "${cases[@]% fixture case}" | sort
+}
+
+# Files named after real suites as well as made-up ones: a name the run-tests
+# weight table knows and a name it does not must both land in exactly one slice.
+readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
+
+@test "run-tests: --slice partitions the files with none dropped or repeated" {
+  local -r dir="${BATS_TEST_TMPDIR}/suite30"
+  mkdir -p "${dir}"
+  local name
+  for name in "${SLICE_FIXTURE_NAMES[@]}"; do
+    make_named_file "${dir}" "${name}"
+  done
+  local all
+  all="$(printf '%s\n' "${SLICE_FIXTURE_NAMES[@]}" | sort)"
+  local count index outputs
+  for count in 2 3; do
+    outputs=''
+    for ((index = 0; index < count; index++)); do
+      run "${RUN_TESTS}" --slice "${index}/${count}" "${dir}"
+      assert_success
+      outputs+="${output}"$'\n'
+    done
+    # Duplicates kept: a file run by two slices shows up twice and fails the
+    # comparison, as does a file no slice ran.
+    assert_equal "$(ran_files "${outputs}")" "${all}"
+  done
+}
+
+@test "run-tests: --slice picks the same files whatever the worker count" {
+  # The slices of one suite run on separate machines, each with its own CPU
+  # count, so a partition that followed the worker count could drop a file
+  # between them. --jobs stands in for a smaller or larger machine.
+  local -r dir="${BATS_TEST_TMPDIR}/suite31"
+  mkdir -p "${dir}"
+  local name
+  for name in "${SLICE_FIXTURE_NAMES[@]}"; do
+    make_named_file "${dir}" "${name}"
+  done
+  local one three
+  run "${RUN_TESTS}" --jobs 1 --slice 0/2 "${dir}"
+  assert_success
+  one="$(ran_files "${output}")"
+  run "${RUN_TESTS}" --jobs 3 --slice 0/2 "${dir}"
+  assert_success
+  three="$(ran_files "${output}")"
+  [[ -n "${one}" ]]
+  assert_equal "${one}" "${three}"
+}
+
+@test "run-tests: a malformed --slice is rejected" {
+  # The `[run-tests] FATAL:` prefix pins who rejected it, as for --jobs: a
+  # run-tests that did not know --slice would hand it to bats, which fails too.
+  local -r suite="${BATS_TEST_TMPDIR}/suite32/ok.bats"
+  make_trivial_suite "${suite}"
+  local value
+  for value in '2/2' 'x/2' '1/0' '01/2' '1' '-1/2'; do
+    run --separate-stderr "${RUN_TESTS}" --slice "${value}" "${suite}"
+    assert_failure 1
+    [[ "${stderr}" == *'[run-tests] FATAL:'*'--slice'* ]]
+  done
+  run --separate-stderr "${RUN_TESTS}" --slice
+  assert_failure 1
+  [[ "${stderr}" == *'[run-tests] FATAL:'*'--slice'* ]]
+}
+
+@test "run-tests: --slice with --coverage is rejected" {
+  # No require_kcov: this is parsing, and it must hold on a leg with no kcov.
+  # Coverage splits the suite its own fixed way (#128), so a slice of it would
+  # be a figure no other run reproduces.
+  local -r suite="${BATS_TEST_TMPDIR}/suite33/ok.bats"
+  make_trivial_suite "${suite}"
+  run --separate-stderr "${RUN_TESTS}" --slice 0/2 --coverage "${BATS_TEST_TMPDIR}/cov33" "${suite}"
+  assert_failure 1
+  [[ "${stderr}" == *'[run-tests] FATAL:'*'--slice'* ]]
+}
+
+@test "run-tests: a slice that holds no file warns and passes" {
+  # More slices than files leaves some empty. That is no failure -- the other
+  # slices still run every file -- but a leg that ran nothing says so, so a
+  # file walk that found nothing cannot pass unnoticed.
+  local -r dir="${BATS_TEST_TMPDIR}/suite34"
+  mkdir -p "${dir}"
+  make_named_file "${dir}" 'alpha'
+  make_named_file "${dir}" 'beta'
+  run --separate-stderr "${RUN_TESTS}" --slice 3/4 "${dir}"
+  assert_success
+  [[ "${stderr}" == *'[run-tests] WARN: slice 3/4 holds none of the 2 files'* ]]
+  refute_output --partial 'fixture case'
 }

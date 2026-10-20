@@ -420,10 +420,10 @@ repo" would pass just as well against a script that unconditionally returned 0.
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives
 `bench/run`, in the real repo and in a fixture repo holding a copy of the hook
 and a small corpus. `tests/run-tests-cli.bats` grades `run-tests`' own leading-flag handling —
-`--awk=bwk`, `--report DIR` and `--coverage DIR`, in any order — and the
-`--coverage` fan-out across files, against small fixture suites rather than
-against the real one, so the cases measure `run-tests` and not the suite's
-runtime. It and
+`--awk=bwk`, `--report DIR`, `--jobs N` and `--coverage DIR`, in any order —
+and its fan-out of files across concurrent workers, with and without
+`--coverage`, against small fixture suites rather than against the real one,
+so the cases measure `run-tests` and not the suite's runtime. It and
 `tests/classify-slice.bats`, which pins the `CLASSIFY_SLICE` contract
 `run-tests --coverage` uses to split `tests/classify.bats` into slices, are
 the only bats files that run `bats` inside `bats`. `tests/run-all-checks.bats` grades
@@ -434,6 +434,16 @@ any check runs, and a well-formed call runs the suite under the awks `--awk`
 asks for. It runs a copy of the gate in a throwaway repo where every check is
 missing and `run-tests` is a stub that records its arguments, because the real
 gate runs `run-tests`, which would run that same file again.
+
+`run-tests` runs every `.bats` file as its own `bats`, as many at once as the
+host has CPUs (`--jobs N` sets the number), in a pool of plain background jobs:
+`bats --jobs` needs flock and GNU parallel, both Linux-only in nixpkgs. Files
+are queued largest first, and each file's output is held back and printed
+whole, in queue order, once the pool drains, so a failing file reads as one
+block. Because files run concurrently, no test may share state with another
+file's: fixtures live under `BATS_TEST_TMPDIR`, never at a fixed path under
+`/tmp` or `HOME`. The repo-mutation snapshot brackets the whole pool, so a
+fixture that escaped onto the real repo from any worker still fails the run.
 
 ## Fail open, loudly
 
@@ -689,7 +699,8 @@ something to look at, not something to pass.
 Several things about it are not obvious.
 
 **The suite runs as many kcov processes, merged.** Each `.bats` file runs as
-its own `bats` under its own `kcov`, as many at once as there are CPUs, and
+its own `bats` under its own `kcov`, in the same worker pool as an ordinary
+run (as many at once as there are CPUs, or as `--jobs` allows), and
 `tests/classify.bats` — most of the suite's time under kcov — is split into a
 fixed number of slices through its `CLASSIFY_SLICE` variable. `kcov --merge`
 then writes the one report `.ci/report-coverage` reads,
@@ -937,15 +948,17 @@ tools, exactly like a `.bats` file. It gets away with it only because every
 GNU long option in it sits on a devShell-only path: `use_bwk_awk`'s
 `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
 under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
-them; `run_coverage`'s and `run_item`'s are reachable only under `--coverage`
-once its kcov check has passed, and kcov is a Linux-only devShell package; and
-`remove_temp_dirs` runs only once one of those paths has armed the EXIT trap.
-The lines that are _not_ devShell-only — the `mkdir -p` that creates
-`--report`'s output directory, and the `uname -s` and `mkdir -p` on the
-`--coverage` path — carry a POSIX short flag and a comment saying why: BSD
-`mkdir` rejects `--parents` with `mkdir: illegal option -- -` before a single
-test runs. A new long option anywhere else in `run-tests`' main path is that
-bug.
+them. Every other line runs on the ambient legs, the worker pool included, so
+each command there that BSD offers no long form for — the `mkdir -p` that
+creates `--report`'s output directory and each file's report subdirectory,
+the pool's `mktemp -d` and `wc -c`, `remove_temp_dirs`' `rm -r -f`, and the
+`uname -s` and
+`mkdir -p` on the `--coverage` path — carries a POSIX short flag and a comment
+saying why: BSD `mkdir` rejects `--parents` with
+`mkdir: illegal option -- -` before a single test runs. The pool also counts
+CPUs without relying on `nproc`, which stock macOS lacks, and orders files
+without `stat` or a numeric `sort`. A new long option anywhere else in
+`run-tests`' main path is that bug.
 
 ### 2. `hooks/` never sets `shopt -s inherit_errexit`
 

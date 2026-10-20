@@ -161,10 +161,14 @@ The suite is bats only, under `tests/`. The rules:
   payload runs. The same applies to `rm`, `dd`, `git push` and anything else
   with side effects.
 
-Run the suite with `just test`, or a single file with
-`just test tests/scanner.bats`. `run-tests` snapshots the repo's HEAD, config
-and index before and after, and fails loudly if the suite mutated the real
-repo even when bats exited 0.
+Run the suite with `./.ci/in-devshell ./run-tests` (`just test`), or a single
+file with `./.ci/in-devshell ./run-tests tests/scanner.bats`. `run-tests` runs
+the files concurrently, one per CPU, and prints each file's output whole once
+all have finished; `--jobs 1` runs one at a time. Files running at once means
+a test keeps its fixtures under `BATS_TEST_TMPDIR`, never at a fixed path that
+another file could share. `run-tests` snapshots the repo's HEAD, config and
+index before and after, and fails loudly if the suite mutated the real repo
+even when every file passed.
 
 ## Style
 
@@ -176,7 +180,8 @@ Shellcheck-clean, shfmt-formatted bash throughout, with these deliberate splits:
   `.ci/`, `run-all-checks`, `run-tests`, `.githooks/`, `.justfile`, the
   workflows — uses GNU long options, except on a line the ambient CI legs
   execute outside the devShell, which takes the same short flag and says why
-  (the `mkdir -p` in `run-tests`, `uname -s` in `.ci/check-devshell-provides`).
+  (the `mkdir -p` and `mktemp -d` in `run-tests`, `uname -s` in
+  `.ci/check-devshell-provides`).
 - **`hooks/` must never set `shopt -s inherit_errexit`**, and the
   `reason="$(repeat::repeat_check ...)" || reason=''` assignment in
   `classify::repeat_tier_reason` must never become a plain one.

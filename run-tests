@@ -11,8 +11,9 @@
 #              background jobs, not `bats --jobs`: that needs flock and GNU
 #              parallel, both Linux-only in nixpkgs, and referencing them would
 #              break evaluation of the devShell on aarch64-darwin. Files are
-#              queued largest first, so the longest ones start early and the
-#              small ones even out the finish. Each file's stdout and stderr go
+#              queued largest first (heaviest first under `--slice`, below), so
+#              the longest ones start early and the small ones even out the
+#              finish. Each file's stdout and stderr go
 #              to files of their own and are printed whole, in queue order, once
 #              every file has finished, so one file's output never interleaves
 #              with another's and the failing file reads as one block. The exit
@@ -48,6 +49,16 @@
 #              land whether the suite passed or failed; the failing case is the
 #              one they exist for.
 #
+#              `--slice I/N` runs only slice I (from 0) of N of the files, so N
+#              runners, one per slice, together run each file exactly once. The
+#              files are dealt heaviest first into the slice lightest so far,
+#              weighed by the FILE_WEIGHTS table of measured times rather than
+#              by size, which badly misjudges the files whose rows live in
+#              tests/cases/. The partition depends only on the file list, never
+#              on the machine or `--jobs`, so separate runners agree on it. A
+#              slice queues its files by the same weights. `--slice` does not
+#              combine with `--coverage`, which splits the suite its own way.
+#
 #              `--coverage DIR` runs the suite under kcov and writes an HTML
 #              line-coverage report for hooks/ into DIR (open DIR/index.html).
 #              Linux only: nixpkgs' kcov declares no darwin platform, so the
@@ -68,12 +79,13 @@
 #              CLASSIFY_SLICE variable, queued after every other file, because
 #              its rows are most of the suite's time under kcov. Naming no file
 #              while passing other arguments is an error under --coverage.
-# @arg $@ args optional `--awk=bwk`, `--report DIR`, `--jobs N` and
-#         `--coverage DIR` in any order, then bats arguments and test paths;
-#         give no test path to run all of tests/
+# @arg $@ args optional `--awk=bwk`, `--report DIR`, `--jobs N`, `--slice I/N`
+#         and `--coverage DIR` in any order, then bats arguments and test
+#         paths; give no test path to run all of tests/
 # @stdout each file's bats terminal output, in queue order
 # @stderr a `[<script>] <message>` line naming the awk in use under --awk=bwk,
-#         the number of files and workers, each file's stderr in queue order,
+#         the slice's share of the files under --slice, the number of files
+#         and workers, each file's stderr in queue order,
 #         kcov's own trace spill under --coverage, a `[<script>] <message>`
 #         line for a file that left no exit status, a
 #         `[<script>] FATAL: <message>` line on each exit-1 cause this script
@@ -83,8 +95,9 @@
 # @exitcode 1 bats missing, nawk missing or not one-true-awk under --awk=bwk,
 #             kcov missing under --coverage, --report or --coverage given
 #             without a directory or with one that cannot be created, --jobs
-#             given without a positive whole number, no .bats file named under
-#             --coverage, a test failed, a file left no exit status, the suite
+#             given without a positive whole number, --slice given without a
+#             well-formed I/N or together with --coverage, no .bats file named
+#             under --coverage, a test failed, a file left no exit status, the suite
 #             mutated the repo, or the host bash is older than 4.4
 # @exitcode 130 interrupted by INT
 # @exitcode 143 stopped by TERM
@@ -138,6 +151,33 @@ WORKER_STATUS_FILES=()
 # swallow windows hide (#128), so it must be the same on every machine for the
 # figure to be. Twice CI's 4 CPUs, so the slices even out the finish there.
 readonly CLASSIFY_SLICES=8
+# What --slice balances its slices by: the seconds each file's tests took on
+# the macOS gate leg (one-true-awk, 3 CPUs), rounded. Not bytes on disk, the
+# queue's measure otherwise: classify.bats and prefilter.bats are among the
+# smallest files and the slowest, because the rows they grade live in
+# tests/cases/. classify.bats weighs about twice its 158 s wall time because it
+# grades its rows in a shard per CPU, so it holds the whole runner while it
+# runs. A file the table does not name weighs DEFAULT_WEIGHT, about what each
+# unnamed file measured, so a new file still lands in exactly one slice. A
+# weight that has drifted unbalances the slices; it never drops or repeats a
+# file.
+declare -Ar FILE_WEIGHTS=(
+  ['classify.bats']=300
+  ['prefilter.bats']=102
+  ['classify-slice.bats']=52
+  ['bash-style-commands.bats']=48
+  ['bash-style-comments.bats']=46
+  ['bash-style-quoting.bats']=37
+  ['bash-style.bats']=34
+  ['bash-style-layout.bats']=27
+  ['invariant-markers.bats']=26
+  ['bench-run.bats']=21
+  ['run-tests-cli.bats']=15
+  ['commit-payload.bats']=12
+  ['repeat.bats']=12
+  ['scanner.bats']=12
+)
+readonly DEFAULT_WEIGHT=5
 
 # @description Print one fatal diagnostic to stderr and exit 1.
 # @arg $1 message the diagnostic text
@@ -240,7 +280,9 @@ function cpu_count() {
 
 # @description Split arguments into the .bats files to run and the arguments to
 #              pass to every bats. One naming a directory adds the .bats files
-#              under it, sorted, walked recursively when `--recursive` or `-r`
+#              under it, sorted bytewise so the order is the same under any
+#              locale (--slice breaks ties by it), walked recursively when
+#              `--recursive` or `-r`
 #              is among the arguments; one naming a file adds that file; any
 #              other, apart from `--recursive` and `-r` themselves, is a bats
 #              argument.
@@ -261,9 +303,9 @@ function collect_files() {
   for arg in "$@"; do
     if [[ -d "${arg}" ]]; then
       if [[ -n "${recursive}" ]]; then
-        mapfile -t dir_files < <(find "${arg}" -name '*.bats' -type f | sort)
+        mapfile -t dir_files < <(find "${arg}" -name '*.bats' -type f | LC_ALL=C sort)
       else
-        mapfile -t dir_files < <(find "${arg}" -maxdepth 1 -name '*.bats' -type f | sort)
+        mapfile -t dir_files < <(find "${arg}" -maxdepth 1 -name '*.bats' -type f | LC_ALL=C sort)
       fi
       FILES+=("${dir_files[@]}")
     elif [[ -f "${arg}" ]]; then
@@ -275,6 +317,82 @@ function collect_files() {
       esac
     fi
   done
+}
+
+# @description Order indices by their keys, largest first, a tie keeping index
+#              order. An insertion sort in bash, because `sort` spells a numeric
+#              reverse differently across the userlands this runs on, and the
+#              list is short.
+# @arg $1 keys_name the name of an array of whole-number keys
+# @arg $2 order_name the name of the array to fill with the keys' indices, in
+#         order
+function descending_order() {
+  local -n sort_keys="$1" sort_order="$2"
+  local i j swap
+  sort_order=()
+  for ((i = 0; i < ${#sort_keys[@]}; i++)); do
+    sort_order+=("${i}")
+    for ((j = ${#sort_order[@]} - 1; j > 0; j--)); do
+      if ((sort_keys[sort_order[j - 1]] >= sort_keys[sort_order[j]])); then
+        break
+      fi
+      swap="${sort_order[j - 1]}"
+      sort_order[j - 1]="${sort_order[j]}"
+      sort_order[j]="${swap}"
+    done
+  done
+}
+
+# @description Print the weight of each of FILES, from FILE_WEIGHTS by base
+#              name, else DEFAULT_WEIGHT, one per line, in FILES order.
+# @noargs
+# @stdout the weights
+function file_weights() {
+  local file
+  for file in "${FILES[@]}"; do
+    printf '%s\n' "${FILE_WEIGHTS["${file##*/}"]:-${DEFAULT_WEIGHT}}"
+  done
+}
+
+# @description Keep only the files the partition gives one slice. Files are
+#              dealt heaviest first, a tie keeping FILES order, each to the
+#              slice whose weight so far is lowest, the lowest index on a tie.
+#              Nothing in that depends on the machine or the worker count, so
+#              the slices of one file list, run on separate runners, together
+#              run every file exactly once.
+# @arg $1 index the slice to keep, from 0
+# @arg $2 count the number of slices
+# @set FILES the files of that slice, in their FILES order
+# @stderr a `[<script>] <message>` line giving the slice's share of the files
+function select_slice() {
+  local -r index="$1" count="$2"
+  local -a weights=() order=() totals=() kept=()
+  local -A chosen=()
+  local i slice lightest
+  mapfile -t weights < <(file_weights)
+  descending_order weights order
+  for ((slice = 0; slice < count; slice++)); do
+    totals+=(0)
+  done
+  for i in "${order[@]}"; do
+    lightest=0
+    for ((slice = 1; slice < count; slice++)); do
+      if ((totals[slice] < totals[lightest])); then
+        lightest="${slice}"
+      fi
+    done
+    totals[lightest]="$((totals[lightest] + weights[i]))"
+    if ((lightest == index)); then
+      chosen["${i}"]='y'
+    fi
+  done
+  for i in "${!FILES[@]}"; do
+    if [[ -n "${chosen["${i}"]:-}" ]]; then
+      kept+=("${FILES[i]}")
+    fi
+  done
+  log "slice ${index}/${count}: ${#kept[@]} of ${#FILES[@]} files"
+  FILES=("${kept[@]}")
 }
 
 # @description Append one item to the queue, labelled by its queue position and
@@ -300,33 +418,33 @@ function queue_item() {
 #              whole suite finished 10-25 s later with it queued first, whole or
 #              split into a slice per worker, than in size order, because its
 #              shards then crowd the largest file, the run's long pole.
+#
+#              Under --slice the queue goes heaviest first by FILE_WEIGHTS
+#              instead. A slice's long poles are its heaviest files, and some
+#              of the heaviest, prefilter.bats and classify-slice.bats, are
+#              among the smallest: queued by size they would start last and
+#              finish long after the rest. In the slice that holds
+#              classify.bats, classify.bats is that long pole, so it goes first.
 # @arg $1 coverage non-empty under --coverage
+# @arg $2 by_weight non-empty to queue by FILE_WEIGHTS rather than by size
 # @set ITEM_PATHS the queued files
 # @set ITEM_SLICES each item's CLASSIFY_SLICE value
 # @set ITEM_LABELS each item's label
 function queue_items() {
-  local -r coverage="$1"
-  local -a sizes=() order=()
-  local file size i j swap slice_file='' name
-  for file in "${FILES[@]}"; do
-    # Not `stat`: its size option is spelled differently by GNU and BSD.
-    # bash-style allow=long-options: runs on the ambient macOS leg; BSD wc has no long form
-    size="$(wc -c < "${file}")"
-    sizes+=("$((size))")
-  done
-  # An insertion sort in bash, because `sort` spells a numeric reverse
-  # differently across the userlands this runs on, and the list is short.
-  for ((i = 0; i < ${#FILES[@]}; i++)); do
-    order+=("${i}")
-    for ((j = ${#order[@]} - 1; j > 0; j--)); do
-      if ((sizes[order[j - 1]] >= sizes[order[j]])); then
-        break
-      fi
-      swap="${order[j - 1]}"
-      order[j - 1]="${order[j]}"
-      order[j]="${swap}"
+  local -r coverage="$1" by_weight="$2"
+  local -a keys=() order=()
+  local file size i slice_file='' name
+  if [[ -n "${by_weight}" ]]; then
+    mapfile -t keys < <(file_weights)
+  else
+    for file in "${FILES[@]}"; do
+      # Not `stat`: its size option is spelled differently by GNU and BSD.
+      # bash-style allow=long-options: runs on the ambient macOS leg; BSD wc has no long form
+      size="$(wc -c < "${file}")"
+      keys+=("$((size))")
     done
-  done
+  fi
+  descending_order keys order
   ITEM_PATHS=()
   ITEM_SLICES=()
   ITEM_LABELS=()
@@ -513,7 +631,7 @@ function main() {
   # one of them silently forward `--awk=bwk` to bats as a test path. `--jobs`
   # and `--coverage` join the same loop for the same reason: each has to
   # compose with the others, in either direction.
-  local report_dir='' coverage_dir='' awk_swapped='' jobs=''
+  local report_dir='' coverage_dir='' awk_swapped='' jobs='' slice=''
   while (($# > 0)); do
     case "$1" in
       '--awk=bwk')
@@ -540,6 +658,16 @@ function main() {
         jobs="$2"
         shift 2
         ;;
+      '--slice')
+        # The same shape as CLASSIFY_SLICE in tests/classify.bats: no leading
+        # zero, and an index below the count.
+        if (($# < 2)) || [[ ! "$2" =~ ^(0|[1-9][0-9]*)/([1-9][0-9]*)$ ]] \
+          || ((BASH_REMATCH[1] >= BASH_REMATCH[2])); then
+          die '--slice needs I/N, a slice index I from 0 below a slice count N'
+        fi
+        slice="$2"
+        shift 2
+        ;;
       '--coverage')
         if (($# < 2)); then
           die '--coverage needs a directory argument'
@@ -550,6 +678,12 @@ function main() {
       *) break ;;
     esac
   done
+
+  # Coverage splits the suite its own fixed way, because the split moves the
+  # figure (#128); a slice of it would be a figure no other run reproduces.
+  if [[ -n "${slice}" && -n "${coverage_dir}" ]]; then
+    die '--slice does not combine with --coverage'
+  fi
 
   if [[ -n "${report_dir}" ]]; then
     # bats' own --help says the --output directory "must exist"; it does not
@@ -616,7 +750,10 @@ function main() {
   if [[ -z "${jobs}" ]]; then
     jobs="$(cpu_count)"
   fi
-  queue_items "${coverage_dir}"
+  if [[ -n "${slice}" ]]; then
+    select_slice "${slice%/*}" "${slice#*/}"
+  fi
+  queue_items "${coverage_dir}" "${slice}"
 
   local before after
   before="$(repo_state)"

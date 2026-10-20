@@ -32,11 +32,21 @@
 #              JUnit report rather than one overwriting the other (#83).
 #              Nothing else in the gate emits a report; the flag exists so CI
 #              can upload the suite's results as an artifact when a leg fails.
+#
+#              `--slice I/N`, under `--scope=platform` only, is forwarded to
+#              each suite run, which then runs only slice I of N of the files
+#              (see run-tests), and the platform checks run only in slice 0.
+#              CI uses it to split one platform's suite across runners, each
+#              running one slice, so that together they run every file once
+#              and each platform check once. Under any other scope the shared
+#              checks would run in every slice, so it is rejected there.
 # @arg $@ args optional `--scope=shared` or `--scope=platform`, optional
-#         `--awk=gawk` or `--awk=bwk`, and optional `--report DIR` with exactly
-#         one non-empty directory not starting with `--`, each at most once, in
-#         any order; `--awk` and `--report` only shape the suite, so neither
-#         combines with `--scope=shared`
+#         `--awk=gawk` or `--awk=bwk`, optional `--report DIR` with exactly
+#         one non-empty directory not starting with `--`, and optional
+#         `--slice I/N` with a slice index I from 0 below a slice count N, each
+#         at most once, in any order; `--awk` and `--report` only shape the
+#         suite, so neither combines with `--scope=shared`, and `--slice`
+#         needs `--scope=platform`
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
 # @exitcode 2 any arguments other than those
@@ -91,7 +101,8 @@ function warn_untracked() {
 # @stderr the usage line
 # @exitcode 2 always
 function usage() {
-  printf 'usage: %s [--scope=shared|--scope=platform] [--awk=gawk|--awk=bwk] [--report DIR]\n' "${0##*/}" >&2
+  printf 'usage: %s [--scope=shared|--scope=platform] [--awk=gawk|--awk=bwk] [--report DIR] [--slice I/N]\n' \
+    "${0##*/}" >&2
   trap - ERR
   exit 2
 }
@@ -103,7 +114,7 @@ function main() {
   # silently running the gate without it would hand a caller who asked for a
   # report a green run and nothing to upload, or a caller who asked for one awk
   # a run under both.
-  local report_dir='' awk='' scope=''
+  local report_dir='' awk='' scope='' slice=''
   while (($# > 0)); do
     case "$1" in
       '--scope=shared' | '--scope=platform')
@@ -127,6 +138,15 @@ function main() {
         report_dir="$2"
         shift 2
         ;;
+      '--slice')
+        # The shape run-tests accepts: no leading zero, an index below the count.
+        if [[ -n "${slice}" ]] || (($# < 2)) || [[ ! "$2" =~ ^(0|[1-9][0-9]*)/([1-9][0-9]*)$ ]] \
+          || ((BASH_REMATCH[1] >= BASH_REMATCH[2])); then
+          usage
+        fi
+        slice="$2"
+        shift 2
+        ;;
       *) usage ;;
     esac
   done
@@ -134,6 +154,19 @@ function main() {
   # alongside it would get a green run without the suite run it asked to shape.
   if [[ "${scope}" == 'shared' ]] && [[ -n "${awk}" || -n "${report_dir}" ]]; then
     usage
+  fi
+  # Only the platform scope knows which of its checks belong to one slice;
+  # without it the shared checks would run again on every slice's runner.
+  if [[ -n "${slice}" && "${scope}" != 'platform' ]]; then
+    usage
+  fi
+  local -a slice_args=()
+  local platform_checks='y'
+  if [[ -n "${slice}" ]]; then
+    slice_args=(--slice "${slice}")
+    if [[ "${slice%/*}" != '0' ]]; then
+      platform_checks=''
+    fi
   fi
 
   # Each suite run gets its own subdirectory. Without --awk, run-all-checks runs
@@ -219,9 +252,12 @@ function main() {
   # check-devshell-provides and bench/run --smoke are the platform scope's.
   # check-devshell-provides grades the devShell of the host it runs on, so only
   # a macOS run catches a darwin devShell missing a tool; bench/run --smoke
-  # drives the hook under the host's awk.
-  log 'running governance checks'
-  if [[ "${scope}" != 'shared' ]]; then
+  # drives the hook under the host's awk. Under --slice both run in slice 0
+  # alone, so each still runs once per platform.
+  if [[ "${scope}" != 'platform' || -n "${platform_checks}" ]]; then
+    log 'running governance checks'
+  fi
+  if [[ "${scope}" != 'shared' && -n "${platform_checks}" ]]; then
     "${REPO_DIR}/.ci/check-devshell-provides" || rc=1
   fi
   if [[ "${scope}" != 'platform' ]]; then
@@ -238,7 +274,7 @@ function main() {
     "${REPO_DIR}/.ci/check-invariant-markers" || rc=1
     "${REPO_DIR}/.ci/check-bench-fresh" || rc=1
   fi
-  if [[ "${scope}" != 'shared' ]]; then
+  if [[ "${scope}" != 'shared' && -n "${platform_checks}" ]]; then
     "${REPO_DIR}/bench/run" --smoke || rc=1
   fi
 
@@ -249,12 +285,12 @@ function main() {
 
   if [[ "${scope}" != 'shared' && "${awk}" != 'bwk' ]]; then
     log 'running tests (gawk)'
-    "${REPO_DIR}/run-tests" "${gawk_report[@]}" || rc=1
+    "${REPO_DIR}/run-tests" "${gawk_report[@]}" "${slice_args[@]}" || rc=1
   fi
 
   if [[ "${scope}" != 'shared' && "${awk}" != 'gawk' ]]; then
     log 'running tests (one-true-awk)'
-    "${REPO_DIR}/run-tests" --awk=bwk "${bwk_report[@]}" || rc=1
+    "${REPO_DIR}/run-tests" --awk=bwk "${bwk_report[@]}" "${slice_args[@]}" || rc=1
   fi
 
   if ((rc != 0)); then

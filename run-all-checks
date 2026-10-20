@@ -10,6 +10,17 @@
 #              fast, so a single run surfaces every failing category instead of
 #              only the first.
 #
+#              `--scope=shared` runs only the platform-neutral checks: the
+#              formatting check, every governance lint but
+#              `.ci/check-devshell-provides`, and the lint suite.
+#              `--scope=platform` runs only what can pass on one platform and
+#              fail on another: `.ci/check-devshell-provides`, which grades the
+#              devShell of the host it runs on, `bench/run --smoke`, which drives
+#              the hook under the host's awk, and the suite. CI runs the shared
+#              scope once, on Linux, and the platform scope on every gate leg, so
+#              no leg pays for a check whose verdict cannot differ between them.
+#              Without `--scope`, as in a local run, both run.
+#
 #              `--awk=gawk` or `--awk=bwk` runs the suite under that awk
 #              alone. CI uses it to give each gate leg one awk -- gawk on
 #              Linux, one-true-awk on macOS, where it is the stock awk -- so
@@ -21,9 +32,11 @@
 #              JUnit report rather than one overwriting the other (#83).
 #              Nothing else in the gate emits a report; the flag exists so CI
 #              can upload the suite's results as an artifact when a leg fails.
-# @arg $@ args optional `--awk=gawk` or `--awk=bwk`, and optional `--report DIR`
-#         with exactly one non-empty directory not starting with `--`, each at
-#         most once, in either order
+# @arg $@ args optional `--scope=shared` or `--scope=platform`, optional
+#         `--awk=gawk` or `--awk=bwk`, and optional `--report DIR` with exactly
+#         one non-empty directory not starting with `--`, each at most once, in
+#         any order; `--awk` and `--report` only shape the suite, so neither
+#         combines with `--scope=shared`
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
 # @exitcode 2 any arguments other than those
@@ -78,7 +91,7 @@ function warn_untracked() {
 # @stderr the usage line
 # @exitcode 2 always
 function usage() {
-  printf 'usage: %s [--awk=gawk|--awk=bwk] [--report DIR]\n' "${0##*/}" >&2
+  printf 'usage: %s [--scope=shared|--scope=platform] [--awk=gawk|--awk=bwk] [--report DIR]\n' "${0##*/}" >&2
   trap - ERR
   exit 2
 }
@@ -90,9 +103,16 @@ function main() {
   # silently running the gate without it would hand a caller who asked for a
   # report a green run and nothing to upload, or a caller who asked for one awk
   # a run under both.
-  local report_dir='' awk=''
+  local report_dir='' awk='' scope=''
   while (($# > 0)); do
     case "$1" in
+      '--scope=shared' | '--scope=platform')
+        if [[ -n "${scope}" ]]; then
+          usage
+        fi
+        scope="${1#--scope=}"
+        shift
+        ;;
       '--awk=gawk' | '--awk=bwk')
         if [[ -n "${awk}" ]]; then
           usage
@@ -110,6 +130,11 @@ function main() {
       *) usage ;;
     esac
   done
+  # The shared scope runs no suite, so a caller asking for an awk or a report
+  # alongside it would get a green run without the suite run it asked to shape.
+  if [[ "${scope}" == 'shared' ]] && [[ -n "${awk}" || -n "${report_dir}" ]]; then
+    usage
+  fi
 
   # Each suite run gets its own subdirectory. Without --awk, run-all-checks runs
   # the suite under gawk and AGAIN under one-true-awk, and a shared output directory
@@ -121,11 +146,15 @@ function main() {
     bwk_report=(--report "${report_dir}/bwk")
   fi
 
+  # Each check is guarded by the scope that excludes it rather than grouped by
+  # scope, so a run without --scope keeps one order: formatting, governance,
+  # lint, suite.
   local rc=0
-  warn_untracked
-
-  log 'running nix flake check (formatting)'
-  nix flake check --no-eval-cache "${REPO_DIR}" || rc=1
+  if [[ "${scope}" != 'platform' ]]; then
+    warn_untracked
+    log 'running nix flake check (formatting)'
+    nix flake check --no-eval-cache "${REPO_DIR}" || rc=1
+  fi
 
   # Repo-consistency checks: devshell inputs match flake outputs, executable
   # bits and shebangs are correct on the right files, the guard's entry script
@@ -187,31 +216,43 @@ function main() {
   # hermetic -- every tool in it comes from the flake -- and a step whose
   # behaviour depends on an ambient `claude` would make the gate
   # non-deterministic; see that script's own header for the full rationale.
+  # check-devshell-provides and bench/run --smoke are the platform scope's.
+  # check-devshell-provides grades the devShell of the host it runs on, so only
+  # a macOS run catches a darwin devShell missing a tool; bench/run --smoke
+  # drives the hook under the host's awk.
   log 'running governance checks'
-  "${REPO_DIR}/.ci/check-devshell-provides" || rc=1
-  "${REPO_DIR}/.ci/check-executable-bit" || rc=1
-  "${REPO_DIR}/.ci/check-bats-no-shebang" || rc=1
-  "${REPO_DIR}/.ci/check-shell-shebangs" || rc=1
-  "${REPO_DIR}/.ci/check-fast-path-size" || rc=1
-  "${REPO_DIR}/.ci/check-guard-parts" || rc=1
-  "${REPO_DIR}/.ci/check-err-trap-hygiene" || rc=1
-  "${REPO_DIR}/.ci/check-uses-sha-pinned" || rc=1
-  "${REPO_DIR}/.ci/check-versions-in-sync" || rc=1
-  "${REPO_DIR}/.ci/check-manifest-invariants" || rc=1
-  "${REPO_DIR}/.ci/check-issue-forms" || rc=1
-  "${REPO_DIR}/.ci/check-invariant-markers" || rc=1
-  "${REPO_DIR}/.ci/check-bench-fresh" || rc=1
-  "${REPO_DIR}/bench/run" --smoke || rc=1
+  if [[ "${scope}" != 'shared' ]]; then
+    "${REPO_DIR}/.ci/check-devshell-provides" || rc=1
+  fi
+  if [[ "${scope}" != 'platform' ]]; then
+    "${REPO_DIR}/.ci/check-executable-bit" || rc=1
+    "${REPO_DIR}/.ci/check-bats-no-shebang" || rc=1
+    "${REPO_DIR}/.ci/check-shell-shebangs" || rc=1
+    "${REPO_DIR}/.ci/check-fast-path-size" || rc=1
+    "${REPO_DIR}/.ci/check-guard-parts" || rc=1
+    "${REPO_DIR}/.ci/check-err-trap-hygiene" || rc=1
+    "${REPO_DIR}/.ci/check-uses-sha-pinned" || rc=1
+    "${REPO_DIR}/.ci/check-versions-in-sync" || rc=1
+    "${REPO_DIR}/.ci/check-manifest-invariants" || rc=1
+    "${REPO_DIR}/.ci/check-issue-forms" || rc=1
+    "${REPO_DIR}/.ci/check-invariant-markers" || rc=1
+    "${REPO_DIR}/.ci/check-bench-fresh" || rc=1
+  fi
+  if [[ "${scope}" != 'shared' ]]; then
+    "${REPO_DIR}/bench/run" --smoke || rc=1
+  fi
 
-  log 'running lint checks'
-  "${REPO_DIR}/.ci/run-lint-checks" || rc=1
+  if [[ "${scope}" != 'platform' ]]; then
+    log 'running lint checks'
+    "${REPO_DIR}/.ci/run-lint-checks" || rc=1
+  fi
 
-  if [[ "${awk}" != 'bwk' ]]; then
+  if [[ "${scope}" != 'shared' && "${awk}" != 'bwk' ]]; then
     log 'running tests (gawk)'
     "${REPO_DIR}/run-tests" "${gawk_report[@]}" || rc=1
   fi
 
-  if [[ "${awk}" != 'gawk' ]]; then
+  if [[ "${scope}" != 'shared' && "${awk}" != 'gawk' ]]; then
     log 'running tests (one-true-awk)'
     "${REPO_DIR}/run-tests" --awk=bwk "${bwk_report[@]}" || rc=1
   fi

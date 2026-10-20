@@ -632,7 +632,8 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
   for name in "${SLICE_FIXTURE_NAMES[@]}"; do
     make_named_file "${dir}" "${name}"
   done
-  local -r all="$(printf '%s\n' "${SLICE_FIXTURE_NAMES[@]}" | sort)"
+  local all
+  all="$(printf '%s\n' "${SLICE_FIXTURE_NAMES[@]}" | sort)"
   local count index outputs
   for count in 2 3; do
     outputs=''
@@ -693,4 +694,18 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
   run --separate-stderr "${RUN_TESTS}" --slice 0/2 --coverage "${BATS_TEST_TMPDIR}/cov33" "${suite}"
   assert_failure 1
   [[ "${stderr}" == *'[run-tests] FATAL:'*'--slice'* ]]
+}
+
+@test "run-tests: a slice that holds no file warns and passes" {
+  # More slices than files leaves some empty. That is no failure -- the other
+  # slices still run every file -- but a leg that ran nothing says so, so a
+  # file walk that found nothing cannot pass unnoticed.
+  local -r dir="${BATS_TEST_TMPDIR}/suite34"
+  mkdir -p "${dir}"
+  make_named_file "${dir}" 'alpha'
+  make_named_file "${dir}" 'beta'
+  run --separate-stderr "${RUN_TESTS}" --slice 3/4 "${dir}"
+  assert_success
+  [[ "${stderr}" == *'[run-tests] WARN: slice 3/4 holds none of the 2 files'* ]]
+  refute_output --partial 'fixture case'
 }

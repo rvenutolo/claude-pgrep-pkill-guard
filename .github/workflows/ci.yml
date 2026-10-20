@@ -74,9 +74,7 @@ jobs:
           # CI run and the check would be theatre.
           fetch-depth: 0
           persist-credentials: false
-      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
-      # would resolve the same tree. Full rationale at the gate job's
-      # `uses: ./.github/actions/setup` (#137).
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
       - name: Run the shared checks
         # See the gate job's gate step for why the interpreter is the flake's bash.
@@ -135,28 +133,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      # zizmor's `self-repository` audit, new in 1.30.0, asks that a local
-      # composite action be reached through GitHub's `$/` form rather than the
-      # path-relative `./`, so it resolves at the commit the workflow is
-      # running rather than out of whatever the working tree happens to hold.
-      # The concern it exists for is a job that checks out a ref it does not
-      # control and then runs an action from it.
-      #
-      # `$/` is not adoptable yet. No released actionlint parses it -- it
-      # rejects every one of these lines with "invalid format because ref is
-      # missing" -- and actionlint runs one linter EARLIER than zizmor in
-      # .ci/run-lint-checks, so converting the call sites would trade this
-      # audit for a hard parse error on every one of them. Upstream support is
-      # an open, unmerged pull request against rhysd/actionlint. Every one of
-      # these suppressions lifts when it ships (#137).
-      #
-      # Here, at the checks job above, at the compat legs below and in
-      # links.yml, the checkout immediately above is this workflow's own
-      # commit, so `./` and `$/` resolve to the same tree and the audit has
-      # nothing to bite on.
-      # The one site in this repo where the forms genuinely differ is
-      # release.yml's `release-please` job; the rationale lives there, next to
-      # it.
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
       - name: Run the platform gate
         # The gate is run under a bash from the repo's own flake, not the host's.
@@ -243,9 +220,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
-      # would resolve the same tree. Full rationale at the gate job's
-      # `uses: ./.github/actions/setup` (#137).
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
       - name: Measure hook line coverage
         # See the gate job's gate step for why the interpreter is the flake's bash.
@@ -338,9 +313,7 @@ jobs:
           # belongs in the log when a run goes red.
           command -v awk
           awk --version 2>&1 | head -1 || awk -W version 2>&1 | head -1
-      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
-      # would resolve the same tree. Full rationale at the gate job's
-      # `uses: ./.github/actions/setup` above (#137).
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
       - uses: ./.github/actions/bats-ambient  # zizmor: ignore[self-repository]
       - name: Run the suite against ambient tools
         run: ./run-tests --report "${RUNNER_TEMP}/bats-junit"
@@ -375,9 +348,7 @@ jobs:
           "${brew_prefix}/bin/bash" --version | head -1
           jq --version
           /usr/bin/awk --version 2>&1 | head -1
-      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
-      # would resolve the same tree. Full rationale at the gate job's
-      # `uses: ./.github/actions/setup` above (#137).
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
       - uses: ./.github/actions/bats-ambient  # zizmor: ignore[self-repository]
       - name: Run the suite against ambient tools
         run: |

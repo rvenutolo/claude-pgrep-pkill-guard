@@ -227,9 +227,10 @@ function main() {
   # `self-repository`, the last on every `uses: ./.github/actions/...` call
   # site. No released actionlint parses the `$/` form that audit asks for, and
   # actionlint runs above, so converting the call sites would trade the audit
-  # for a parse error on every one -- see #137 and the rationale beside ci.yml's
-  # gate job. A zizmor.yml ignore list is the right shape for a repo with many
-  # such call sites and the wrong one for the handful here.
+  # for a parse error on every one; release.yml's release-please job, whose
+  # checkout is not the running commit, carries the full rationale. A
+  # zizmor.yml ignore list is the right shape for a repo with many such call
+  # sites and the wrong one for the handful here.
   #
   # .github/ and not `.` : zizmor's own discovery walks for workflows, and a
   # bare `.` would descend into the author's untracked docs/superpowers/ tree

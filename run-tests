@@ -84,8 +84,9 @@
 #         paths; give no test path to run all of tests/
 # @stdout each file's bats terminal output, in queue order
 # @stderr a `[<script>] <message>` line naming the awk in use under --awk=bwk,
-#         the slice's share of the files under --slice, the number of files
-#         and workers, each file's stderr in queue order,
+#         the slice's share of the files under --slice and a warning when it
+#         is none, the number of files and workers, each file's stderr in
+#         queue order,
 #         kcov's own trace spill under --coverage, a `[<script>] <message>`
 #         line for a file that left no exit status, a
 #         `[<script>] FATAL: <message>` line on each exit-1 cause this script
@@ -363,7 +364,8 @@ function file_weights() {
 # @arg $1 index the slice to keep, from 0
 # @arg $2 count the number of slices
 # @set FILES the files of that slice, in their FILES order
-# @stderr a `[<script>] <message>` line giving the slice's share of the files
+# @stderr a `[<script>] <message>` line giving the slice's share of the files,
+#         and a `[<script>] WARN: <message>` line when that share is none
 function select_slice() {
   local -r index="$1" count="$2"
   local -a weights=() order=() totals=() kept=()
@@ -392,6 +394,12 @@ function select_slice() {
     fi
   done
   log "slice ${index}/${count}: ${#kept[@]} of ${#FILES[@]} files"
+  # Not a failure: with more slices than files some are empty and the others
+  # still run every file. But a leg that ran nothing says so, so a file walk
+  # that found nothing cannot pass unnoticed there.
+  if ((${#kept[@]} == 0)); then
+    log "WARN: slice ${index}/${count} holds none of the ${#FILES[@]} files"
+  fi
   FILES=("${kept[@]}")
 }
 

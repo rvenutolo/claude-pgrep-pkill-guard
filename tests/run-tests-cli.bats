@@ -539,6 +539,9 @@ BATS
   # count from any of them.
   PATH="${stub}:${PATH}" run "${RUN_TESTS}" "${dir}/first.bats" "${dir}/second.bats"
   assert_success
+  # The worker count run-tests logs, not just a pass: an empty or garbage count
+  # would also run both files, and only this line says it fell back to one.
+  assert_output --partial '[run-tests] running 2 files, 1 at a time'
   assert_output --partial 'first fixture case'
   assert_output --partial 'second fixture case'
 }

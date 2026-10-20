@@ -1,8 +1,8 @@
 # run-all-checks' argument handling, in a throwaway repo with `nix`,
 # `run-tests`, `.ci/check-devshell-provides` and `bench/run` stubs: a malformed
 # invocation is rejected with exit 2 and the usage line, and a well-formed one
-# runs the gate, with the suite under the awks --awk asks for and the checks
-# --scope selects.
+# runs the gate, with the suite under the awks --awk asks for, the checks
+# --scope selects, and the suite slice --slice names.
 #
 # `run --separate-stderr` is a bats 1.5.0 flag: the usage line belongs on
 # stderr, and a merged capture cannot tell it apart from a stray stdout write.
@@ -85,7 +85,7 @@ function assert_rejected() {
   assert_failure 2
   assert_output ''
   assert_equal "${stderr}" \
-    'usage: run-all-checks [--scope=shared|--scope=platform] [--awk=gawk|--awk=bwk] [--report DIR]'
+    'usage: run-all-checks [--scope=shared|--scope=platform] [--awk=gawk|--awk=bwk] [--report DIR] [--slice I/N]'
   [[ ! -e "${MARKER}" ]]
 }
 
@@ -244,4 +244,61 @@ function assert_rejected() {
   run_gate --scope=platform --awk=bwk --report "${out}"
   assert_success
   assert_equal "$(cat -- "${RUNS}")" "--awk=bwk --report ${out}/bwk"
+}
+
+@test "run-all-checks: --slice under --scope=platform forwards the slice to every suite run" {
+  run_gate --scope=platform --slice 1/2
+  assert_success
+  assert_equal "$(cat -- "${RUNS}")" "$(printf '%s\n' '--slice 1/2' '--awk=bwk --slice 1/2')"
+}
+
+@test "run-all-checks: --slice combines with --awk and --report, in any order" {
+  local -r out="${BATS_TEST_TMPDIR}/out"
+  run_gate --slice 1/2 --awk=bwk --scope=platform --report "${out}"
+  assert_success
+  assert_equal "$(cat -- "${RUNS}")" "--awk=bwk --report ${out}/bwk --slice 1/2"
+}
+
+@test "run-all-checks: the platform checks run in slice 0 only" {
+  # Each slice runs on its own runner of the same platform, so the checks run
+  # once per platform when exactly one slice runs them.
+  run_gate --scope=platform --awk=bwk --slice 0/2
+  assert_success
+  assert_equal "$(cat -- "${PLATFORM}")" "$(printf '%s\n' 'devshell-provides' 'bench --smoke')"
+  rm -f -- "${PLATFORM}"
+  run_gate --scope=platform --awk=bwk --slice 1/2
+  assert_success
+  [[ ! -e "${PLATFORM}" ]]
+  assert_equal "$(cat -- "${RUNS}")" "$(printf '%s\n' '--awk=bwk --slice 0/2' '--awk=bwk --slice 1/2')"
+}
+
+@test "run-all-checks: --slice without --scope=platform is rejected" {
+  # Without a scope the gate also runs the shared checks, and a slice of the
+  # gate would run them on every slice's runner: only the platform scope knows
+  # which of its checks belong to slice 0.
+  run_gate --slice 0/2
+  assert_rejected
+}
+
+@test "run-all-checks: --slice with --scope=shared is rejected" {
+  run_gate --scope=shared --slice 0/2
+  assert_rejected
+}
+
+@test "run-all-checks: a malformed --slice is rejected" {
+  local value
+  for value in '2/2' 'x/2' '1/0' '01/2' '1' '' '--awk=bwk'; do
+    run_gate --scope=platform --slice "${value}"
+    assert_rejected
+  done
+}
+
+@test "run-all-checks: a bare --slice is rejected" {
+  run_gate --scope=platform --slice
+  assert_rejected
+}
+
+@test "run-all-checks: a repeated --slice is rejected" {
+  run_gate --scope=platform --slice 0/2 --slice 0/2
+  assert_rejected
 }

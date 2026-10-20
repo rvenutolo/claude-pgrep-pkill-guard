@@ -6,6 +6,15 @@ runs:
   using: composite
   steps:
     - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa  # v23
+      env:
+        # Turns off the action's OpenTelemetry export. Its collector,
+        # otel.determinate.systems, is not on harden-runner's egress
+        # allowlist, so each phase of the action -- and each `nix` it runs to
+        # probe the store, which inherits the exporter settings -- waits out
+        # a blocked connection before giving up. macOS drops the blocked DNS
+        # lookup rather than refusing it, so there each wait is a full
+        # resolver timeout. Nothing reads that telemetry.
+        OTEL_SDK_DISABLED: 'true'
     - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569  # v7
       with:
         # `-v2-` is a generation marker, not tidiness. Garbage collection (below)
@@ -41,8 +50,10 @@ runs:
       # checkout would be an untracked file in the tree the gate grades.
       #
       # Flake inputs (the nixpkgs source tree among them) are NOT rooted and
-      # are collected. They are re-fetched from the cache.nixos.org tarball
-      # mirror on the next run at a cost of a few seconds, which is cheaper
-      # than carrying them in the tarball.
+      # are collected, so the next run re-fetches them from cache.nixos.org.
+      # Carrying them in the tarball does not pay: the nixpkgs tree is over a
+      # hundred thousand small files, and `gtar` extracting them adds as much
+      # to the restore as substituting them costs `nix develop` on Linux, and
+      # about twice as much on macOS.
       shell: bash
       run: nix develop --profile "${RUNNER_TEMP}/devshell-profile" --command true

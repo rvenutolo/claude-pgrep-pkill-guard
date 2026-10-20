@@ -122,8 +122,10 @@
               ]))
               # Deliberately NOT util-linux/parallel: `flock` is Linux-only in
               # nixpkgs and referencing it breaks evaluation on aarch64-darwin,
-              # which would kill the hermetic macOS gate. bats runs serially;
-              # tests/classify.bats shards its rows with plain background jobs.
+              # which would kill the hermetic macOS gate. `bats --jobs` is not
+              # used; run-tests runs the files concurrently, and
+              # tests/classify.bats shards its rows, both with plain background
+              # jobs.
               jq
               gawk
               # one-true-awk, the stock awk on macOS: run-tests --awk=bwk runs the

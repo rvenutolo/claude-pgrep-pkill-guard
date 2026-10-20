@@ -557,8 +557,9 @@ function main() {
     # per-run path like ${RUNNER_TEMP}/bats-junit that nothing else made.
     #
     # A short flag only where macOS has no long form, deliberately, like every
-    # other line on run-tests' ambient path (the pool's `mktemp -d`, `wc -c`,
-    # and `rm -r -f`, the --coverage mkdir and `uname -s` below).
+    # other line on run-tests' ambient path (remove_temp_dirs' `rm -r -f`, the
+    # pool's `mktemp -d`, `wc -c` and per-file `mkdir -p`, the --coverage mkdir
+    # and `uname -s` below).
     # The rest of run-tests keeps GNU long options because every one of them
     # sits on a devShell-only path -- `use_bwk_awk`'s `mktemp --directory`,
     # `ln --symbolic` and `head --lines=1` are reachable only under

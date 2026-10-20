@@ -951,7 +951,8 @@ under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
 them. Every other line runs on the ambient legs, the worker pool included, so
 each command there that BSD offers no long form for — the `mkdir -p` that
 creates `--report`'s output directory and each file's report subdirectory,
-the pool's `mktemp -d`, `wc -c` and `rm -r -f`, and the `uname -s` and
+the pool's `mktemp -d` and `wc -c`, `remove_temp_dirs`' `rm -r -f`, and the
+`uname -s` and
 `mkdir -p` on the `--coverage` path — carries a POSIX short flag and a comment
 saying why: BSD `mkdir` rejects `--parents` with
 `mkdir: illegal option -- -` before a single test runs. The pool also counts

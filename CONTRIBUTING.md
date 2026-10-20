@@ -101,8 +101,9 @@ skipped. Adding, splitting or renaming a CI job means editing `needs:` on
 
 | Job                              | What it covers                                              |
 | -------------------------------- | ----------------------------------------------------------- |
-| `gate (ubuntu-latest)`           | the full hermetic gate on Linux                             |
-| `gate (macos-latest)`            | the same gate on macOS                                      |
+| `checks`                         | formatting, lints and governance checks, once, on Linux     |
+| `gate (ubuntu-latest)`           | the suite and the host-dependent checks on Linux            |
+| `gate (macos-latest)`            | the same on macOS                                           |
 | `coverage`                       | the suite again under kcov, for hook line coverage on Linux |
 | `compat (ubuntu, ambient)`       | the bats suite against the runner's own tools               |
 | `compat (macos, homebrew bash)`  | the same, under Homebrew bash                               |

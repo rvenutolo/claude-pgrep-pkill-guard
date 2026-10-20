@@ -429,13 +429,16 @@ so the cases measure `run-tests` and not the suite's runtime. It and
 `tests/classify-slice.bats`, which pins the `CLASSIFY_SLICE` contract
 `run-tests --coverage` uses to split `tests/classify.bats` into slices, are
 the only bats files that run `bats` inside `bats`. `tests/run-all-checks.bats` grades
-`run-all-checks`' argument handling: anything but an optional `--awk=gawk` or
-`--awk=bwk` and an optional `--report DIR` whose directory does not start with
-`--`, each at most once, exits 2 before
-any check runs, and a well-formed call runs the suite under the awks `--awk`
-asks for. It runs a copy of the gate in a throwaway repo where every check is
-missing and `run-tests` is a stub that records its arguments, because the real
-gate runs `run-tests`, which would run that same file again.
+`run-all-checks`' argument handling: anything but an optional
+`--scope=shared` or `--scope=platform`, an optional `--awk=gawk` or `--awk=bwk`
+and an optional `--report DIR` whose directory does not start with `--`, each
+at most once and neither of the last two beside `--scope=shared`, exits 2
+before any check runs, and a well-formed call runs the checks `--scope` selects
+and the suite under the awks `--awk` asks for. It runs a copy of the gate in a
+throwaway repo where every check is missing but `run-tests`,
+`.ci/check-devshell-provides` and `bench/run`, which are stubs that record
+their calls: `run-tests` because the real one would run that same file again,
+and the other two so the platform scope can run to a pass in the fixture.
 
 `run-tests` runs every `.bats` file as its own `bats`, as many at once as the
 host has CPUs (`--jobs N` sets the number), in a pool of plain background jobs:

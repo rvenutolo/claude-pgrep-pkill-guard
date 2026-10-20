@@ -67,7 +67,7 @@ readonly KEEP_VARS=(
   FUZZ_N
   FUZZ_SEED
   # .ci/check-bench-fresh convicts on stale numbers only when this is set; the
-  # gate job in ci.yml sets it on release-please's branch. Without it here
+  # checks job in ci.yml sets it on release-please's branch. Without it here
   # --ignore-environment would strip it and a release PR would never be strict.
   BENCH_FRESH_STRICT
   GITHUB_ACTIONS

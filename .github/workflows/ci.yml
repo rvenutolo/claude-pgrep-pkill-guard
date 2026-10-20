@@ -8,10 +8,11 @@ on:
   # tools by design, and GitHub rolls those images roughly weekly. Without a
   # scheduled run the suite can go red in a week nobody pushed, and the breakage
   # then surfaces on the next PR looking like that PR's fault. The hermetic
-  # `gate` jobs are pinned by flake.lock so an image roll cannot move them, but
-  # they still depend on cache.nixos.org and the Nix installer, which this
-  # covers too. GitHub emails the repo owner when a scheduled workflow fails, so
-  # a red run is not silent even with nobody watching Actions.
+  # `checks` and `gate` jobs are pinned by flake.lock so an image roll cannot
+  # move them, but they still depend on cache.nixos.org and the Nix installer,
+  # which this covers too. GitHub emails the repo owner when a scheduled
+  # workflow fails, so a red run is not silent even with nobody watching
+  # Actions.
   #
   # :47 rather than :00 -- on-the-hour cron slots are the most contended on
   # GitHub's shared scheduler, and therefore the most delayed. The minute
@@ -35,13 +36,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  gate:
-    name: gate (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    # About twice the slower macOS leg's warm-cache run (~12 min), which leaves
-    # room for a cold Nix store and a growing verdict table while still failing
-    # a hang before it burns most of an hour.
-    timeout-minutes: 25
+  checks:
+    name: checks
+    # The half of run-all-checks whose verdict cannot differ between platforms
+    # -- formatting, the governance lints, the lint suite -- runs once, on Linux,
+    # rather than on both gate legs. It reports in a few minutes, so a lint or
+    # governance failure surfaces long before the suite finishes. The gate legs
+    # run the other half.
+    runs-on: ubuntu-latest
+    # The warm run is ~2 min; 15 leaves room for a cold Nix store while still
+    # failing a hang early.
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
@@ -51,6 +56,45 @@ jobs:
       # red until `just bench` runs on main and merges; an ordinary hooks/ PR
       # is not asked to pay a wall-clock benchmark.
       BENCH_FRESH_STRICT: ${{ github.head_ref == 'release-please--branches--main' && '1' || '' }}
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
+        with:
+          egress-policy: block
+          allowed-endpoints: >-
+            api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
+            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
+            releases.nixos.org:443 tarballs.nixos.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # Full history, not actions/checkout's default depth of 1. This job
+          # runs .ci/check-bench-fresh, which asks git whether hooks/ has moved
+          # since the commit bench/RESULTS.md was generated at -- a question a
+          # shallow clone cannot answer. The check skips rather than fails when
+          # the recorded commit is missing, so at depth 1 it would skip on every
+          # CI run and the check would be theatre.
+          fetch-depth: 0
+          persist-credentials: false
+      # Benign `./`: the checkout above is this workflow's own commit, so `$/`
+      # would resolve the same tree. Full rationale at the gate job's
+      # `uses: ./.github/actions/setup` (#137).
+      - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
+      - name: Run the shared checks
+        # See the gate job's gate step for why the interpreter is the flake's bash.
+        shell: nix develop --command bash -e {0}
+        run: ./.ci/in-devshell ./run-all-checks --scope=shared
+
+  gate:
+    name: gate (${{ matrix.os }})
+    # The platform-sensitive half of run-all-checks: the suite, under the leg's
+    # awk, and the checks whose verdict depends on the host -- see
+    # run-all-checks' --scope. The checks job runs the rest once.
+    runs-on: ${{ matrix.os }}
+    # About twice the slower macOS leg's warm-cache run (~9 min), which leaves
+    # room for a cold Nix store and a growing verdict table while still failing
+    # a hang before it burns most of an hour.
+    timeout-minutes: 20
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -75,13 +119,6 @@ jobs:
             releases.nixos.org:443 tarballs.nixos.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          # Full history, not actions/checkout's default depth of 1. The gate
-          # runs .ci/check-bench-fresh, which asks git whether hooks/ has moved
-          # since the commit bench/RESULTS.md was generated at -- a question a
-          # shallow clone cannot answer. The check skips rather than fails when
-          # the recorded commit is missing, so at depth 1 it would skip on every
-          # CI run and the gate would be theatre.
-          fetch-depth: 0
           persist-credentials: false
       # zizmor's `self-repository` audit, new in 1.30.0, asks that a local
       # composite action be reached through GitHub's `$/` form rather than the
@@ -98,14 +135,15 @@ jobs:
       # an open, unmerged pull request against rhysd/actionlint. Every one of
       # these suppressions lifts when it ships (#137).
       #
-      # Here, and at the compat legs below and in links.yml, the checkout
-      # immediately above is this workflow's own commit, so `./` and `$/`
-      # resolve to the same tree and the audit has nothing to bite on.
+      # Here, at the checks job above, at the compat legs below and in
+      # links.yml, the checkout immediately above is this workflow's own
+      # commit, so `./` and `$/` resolve to the same tree and the audit has
+      # nothing to bite on.
       # The one site in this repo where the forms genuinely differ is
       # release.yml's `release-please` job; the rationale lives there, next to
       # it.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
-      - name: Run the full gate
+      - name: Run the platform gate
         # The gate is run under a bash from the repo's own flake, not the host's.
         # .ci/in-devshell runs BEFORE the devShell it creates, so it executes
         # under whatever bash the host provides -- and macOS ships 3.2, which
@@ -138,7 +176,7 @@ jobs:
         # `run:`, which zizmor flags as template injection whatever the source.
         env:
           GATE_AWK: ${{ matrix.awk }}
-        run: ./.ci/in-devshell ./run-all-checks --awk="${GATE_AWK}" --report "${RUNNER_TEMP}/bats-junit"
+        run: ./.ci/in-devshell ./run-all-checks --scope=platform --awk="${GATE_AWK}" --report "${RUNNER_TEMP}/bats-junit"
       # if: failure() -- the report is only interesting when something went red,
       # and uploading ~22 KB of green XML on every push is noise. run-all-checks
       # writes a gawk/ or bwk/ subdirectory, named for the leg's awk (#83).
@@ -424,6 +462,7 @@ jobs:
     # job, and a skipped required check counts as passing.
     if: always()
     needs:
+      - checks
       - gate
       - coverage
       - commitlint

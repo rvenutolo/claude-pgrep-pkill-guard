@@ -348,7 +348,7 @@ RESULTS
 #
 # Freshness is a release-time property (see the header of .ci/check-bench-fresh).
 # Without BENCH_FRESH_STRICT the stale and unreachable verdicts warn and exit 0;
-# the CI gate job sets the variable only on release-please's branch. The malformed-report
+# the CI checks job sets the variable only on release-please's branch. The malformed-report
 # verdicts above are a broken FILE rather than stale numbers, and fail either way.
 
 @test "bench fresh: a stale report only warns without BENCH_FRESH_STRICT" {

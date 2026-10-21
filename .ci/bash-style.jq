@@ -917,13 +917,15 @@ def comment_commit_relative:
   | {line, rule: "comment-commit-relative", message: ("state it in the present tense: \"" + $phrase + "\"")};
 
 # An issue or pull request number in a comment: provenance, which belongs in
-# the commit message. A `#` after a word character, `$` or `&` is an anchor,
-# a parameter expansion or an entity, and a `#` followed by more word
-# characters than digits is a colour, not a number.
+# the commit message. A `#` after a word character, `$`, `{` or `&` is an
+# anchor, a parameter expansion or an entity, and digits that run on into a
+# letter (`#1a2b3c`) are a colour; an all-digit colour is reported. The text
+# arrives without the comment's own `#`, so a comment that opens with the
+# number (`#55 split ...`) shows as leading digits.
 def comment_issue_ref:
   comments
-  | (.text | match("(?<![A-Za-z0-9_$&{])#[0-9]+\\b") | .string) as $ref
-  | {line, rule: "comment-issue-ref", message: ("state the reason, not the issue it came from: " + $ref)};
+  | (.text | match("(?<![A-Za-z0-9_$&{])#[0-9]+\\b|^[0-9]+\\b") | .string | ltrimstr("#")) as $ref
+  | {line, rule: "comment-issue-ref", message: ("state the reason, not the issue it came from: #" + $ref)};
 
 # Deferred work is marked TODO:, upper-case with a colon. Only a marker shape
 # is a finding: an upper-case TODO, FIXME or XXX word not followed directly by

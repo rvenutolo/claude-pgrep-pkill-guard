@@ -148,9 +148,9 @@ function check_row() {
 
   # The row separator is the FIRST colon, not the only one: the parts are
   # namespaced, so a function half reads `tokens::is_keyword` and a row carries
-  # extra colons. Counting them -- which this used to do -- would reject every
-  # row in the table. The remainder after the first colon is graded as a
-  # function name instead, which is the check that was actually wanted.
+  # extra colons. Requiring exactly one colon would reject every row in the
+  # table. The remainder after the first colon is graded as a function name
+  # instead.
   if [[ ! "${function_name}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z_][a-zA-Z0-9_]*)*$ ]]; then
     printf 'FAIL: GUARD_PARTS row %s is not <file>:<function>\n' "\"${row}\"" >&2
     return 1

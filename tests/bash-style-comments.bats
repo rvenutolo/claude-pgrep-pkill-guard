@@ -312,9 +312,13 @@ function setup() {
     'function caller() {' '  echo PAYLOAD_RAN' '}'
 }
 
-@test "bash style: comment-commit-relative reports commit-relative wording with no issue anchor" {
+@test "bash style: comment-commit-relative reports commit-relative wording" {
   assert_fires 'c.sh' 'comment-commit-relative' 1 '# Until now this was unguarded.' 'echo PAYLOAD_RAN'
-  assert_passes 'c.sh' '# Before this change (#72) it was unguarded; a retry used to hide it.' 'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-commit-relative reports commit-relative wording even beside an issue number" {
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Before this change (#72) it was unguarded.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-commit-relative' 1 '# Until now (see #128) this was unguarded.' 'echo PAYLOAD_RAN'
 }
 
 @test "bash style: comment-commit-relative reports each listed phrase" {
@@ -329,6 +333,21 @@ function setup() {
     '# The old message said "x"; a retry used to hide the failure.' \
     '# Nothing here waits until nowhere is reachable.' \
     'echo PAYLOAD_RAN'
+}
+
+@test "bash style: comment-issue-ref reports an issue number in a comment" {
+  assert_fires 'c.sh' 'comment-issue-ref' 1 '# The guard is split for speed (#55).' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-issue-ref' 1 '# See #128 for why.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-issue-ref' 1 '#              #43 shipped a list.' 'echo PAYLOAD_RAN'
+  assert_fires 'c.sh' 'comment-issue-ref' 1 'echo PAYLOAD_RAN # since #7'
+}
+
+@test "bash style: comment-issue-ref passes a hash that is not an issue number" {
+  assert_passes 'c.sh' \
+    '# ${#names[@]} counts the names; $# counts the arguments.' \
+    '# The colour is #1a2b3c, and docs/architecture.md#42 is an anchor.' \
+    '# Row #b and a lone # are not issues.' \
+    "echo 'PAYLOAD_RAN #72'"
 }
 
 @test "bash style: todo-form reports a deferred-work marker that is not TODO:" {
@@ -361,7 +380,6 @@ function setup() {
   assert_passes 'c.sh' \
     '# Lint runs before this gate, so the tree is formatted.' \
     '# Before this change takes effect the cache is empty.' \
-    '# Before this gate (#72) there was no check.' \
     'echo PAYLOAD_RAN'
 }
 

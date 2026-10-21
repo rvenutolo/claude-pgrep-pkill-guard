@@ -21,7 +21,7 @@ space_redirects = true
 # from here and not from an `-ln bats` flag on the command line, because shfmt
 # reads .editorconfig only when it is given NO parser or printer flag: the flag
 # would buy the dialect and silently discard the style keys below,
-# reindenting every bats file to tabs (#72).
+# reindenting every bats file to tabs.
 [*.bats]
 shell_variant = bats
 binary_next_line = true

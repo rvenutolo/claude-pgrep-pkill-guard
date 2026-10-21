@@ -24,7 +24,7 @@ function setup() {
   #
   # Probing `base64 --wrap=0` for its exit status is not enough: the
   # `compat (macos, homebrew bash)` runner's base64 ACCEPTS --wrap=0 and then
-  # appends a trailing newline (#94). So probe each flag the script actually
+  # appends a trailing newline. So probe each flag the script actually
   # uses, and probe base64 for the PROPERTY rather than for the exit status:
   # `printf 'x' | base64` is `eA==`, four bytes and no more.
   # A short flag only where macOS has no long form, on purpose, in the probes

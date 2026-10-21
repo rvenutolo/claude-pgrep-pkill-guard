@@ -23,11 +23,11 @@
 #              whole of hooks/pgrep-pkill-guard-body.sh from the report rather
 #              than undercounting it. The percentage that survives is
 #              arithmetically correct over the files that remain and silently
-#              describes a different codebase, which is how #126 came to be
-#              filed against helpers the suite provably reaches. So every hooks/
+#              describes a different codebase, one in which helpers the suite
+#              provably reaches read as never entered. So every hooks/
 #              file -- the entry script, the loader and each part under
 #              hooks/lib/ -- must appear in `files[]` with a non-zero
-#              covered-line count before any number is printed. See #128 and
+#              covered-line count before any number is printed. See
 #              docs/architecture.md, "Line coverage".
 # @arg $1 dir the directory passed to `run-tests --coverage`
 # @stdout the percentage, e.g. `76.42`
@@ -57,7 +57,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # @exitcode 1 always
 function die() {
   printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
-  # Cleared only for symmetry with the verdict returns (#43, invariant 6):
+  # Cleared only for symmetry with the verdict returns (invariant 6):
   # exit itself never fires the ERR trap.
   trap - ERR
   exit 1
@@ -66,7 +66,7 @@ function die() {
 function main() {
   if (($# != 1)); then
     printf 'usage: %s <coverage-dir>\n' "${0##*/}" >&2
-    # Cleared only for symmetry with the verdict returns (#43, invariant 6):
+    # Cleared only for symmetry with the verdict returns (invariant 6):
     # exit itself never fires the ERR trap.
     trap - ERR
     exit 1
@@ -124,14 +124,15 @@ function main() {
     )"
     if [[ "${matched%% *}" == '0' ]]; then
       no_entry_msg="coverage report lists no entry for hooks/${required_hook_file} — kcov 43 drops a"
-      no_entry_msg+=" traced file outright when it loses xtrace sync, so the percentage in ${report}"
-      no_entry_msg+=' describes a different codebase; see #128'
+      no_entry_msg+=' traced file outright when it loses xtrace sync on a command carrying an odd number'
+      no_entry_msg+=" of unescaped apostrophes, so the percentage in ${report} describes a different codebase"
       die "${no_entry_msg}"
     fi
     if [[ "${matched##* }" == '0' ]]; then
       zero_covered_msg="coverage report records zero covered lines for hooks/${required_hook_file} — the"
       zero_covered_msg+=' suite drives that file on every case, so a zero means collection failed, not that'
-      zero_covered_msg+=" the code is untested; see #128 and ${report}"
+      zero_covered_msg+=' the code is untested: kcov 43 loses xtrace sync on a command carrying an odd number'
+      zero_covered_msg+=" of unescaped apostrophes; see ${report}"
       die "${zero_covered_msg}"
     fi
   done
@@ -167,7 +168,7 @@ multi-line quoted strings as coverable and never hits them, and the guard's
 verdict messages are long prose strings of exactly that shape. kcov also
 stops recording after a traced command carrying an odd number of unescaped
 apostrophes, and resumes at the next one, so some windows of a run are missing
-however complete the report looks (#128). A zero in the per-line hit counts in
+however complete the report looks. A zero in the per-line hit counts in
 the `coverage-html` artifact is a question, not a finding — see
 docs/architecture.md, "Line coverage", for the recipe that answers it.
 SUMMARY_MD

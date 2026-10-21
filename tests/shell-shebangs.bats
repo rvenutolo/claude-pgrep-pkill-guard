@@ -63,9 +63,10 @@ function make_shebang_fixture() {
 }
 
 @test "shell shebangs: #!/bin/bash is named and rejected" {
-  # The hole this gate was filed for (#171). Before it existed, a file spelled
-  # this way was dropped from BOTH shellcheck and shfmt by
-  # .ci/run-lint-checks' shell_files, with no diagnostic at all.
+  # The hole this gate closes. .ci/run-lint-checks' shell_files admits an
+  # extensionless file only on the exact `#!/usr/bin/env bash` line, so a file
+  # spelled this way would drop out of BOTH shellcheck and shfmt with no
+  # diagnostic at all.
   local -r root="${BATS_TEST_TMPDIR}/bin-bash"
   make_shebang_fixture "${root}"
   printf '#!/bin/bash\necho ok\n' > "${root}/run-thing"
@@ -78,8 +79,8 @@ function make_shebang_fixture() {
 }
 
 @test "shell shebangs: env -S bash is rejected too" {
-  # The other spelling #171 calls out. It is bash, it works, and shell_files
-  # still would not have matched it.
+  # The other spelling shell_files misses. It is bash, it works, and
+  # shell_files would not match it.
   local -r root="${BATS_TEST_TMPDIR}/env-s"
   make_shebang_fixture "${root}"
   printf '#!/usr/bin/env -S bash\necho ok\n' > "${root}/run-thing"

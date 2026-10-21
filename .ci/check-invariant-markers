@@ -16,14 +16,11 @@
 #              It is a PRESENCE check, not a semantic one. It cannot know
 #              whether the comment still says something true -- only that the
 #              rule has not quietly lost its footprint in the code while the
-#              document kept describing it. That is the failure mode actually
-#              observed: #85 was filed because
-#              `grep 'POSIX short flags, deliberately'
-#              hooks/pgrep-pkill-guard.sh` (the invariant-1 phrase before
-#              #273) returned nothing. The comment was
-#              there, but line-wrapped across `POSIX short flags,` and
-#              `# deliberately:`, so the phrase the docs tell a reader to search
-#              for found only the body file.
+#              document kept describing it. The trap in checking that by hand
+#              is line wrapping: a comment wrapped across `... no long form,`
+#              and `# deliberately:` is present, yet a plain `grep` for its
+#              phrase finds nothing in that file, so the search the docs tell a
+#              reader to run reports a footprint missing that is there.
 #
 #              Hence the matching rule: line breaks and `#` continuations are
 #              collapsed before the search, so a wrapped comment still counts.
@@ -71,8 +68,8 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
-# ERR trap is dropped first only for symmetry with the verdict returns (#43,
-# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# ERR trap is dropped first only for symmetry with the verdict returns
+# (invariant 6); exit itself never fires it. A top-level guard ahead of the
 # bindings, the same file-layout exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [dir]\n' "${0##*/}" >&2
@@ -196,7 +193,7 @@ function main() {
   if ((${#MARKERS[@]} == 0)); then
     printf 'FAIL: the marker table is empty; an empty scan is not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -217,7 +214,7 @@ function main() {
       "${checked}" "${#MARKERS[@]}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

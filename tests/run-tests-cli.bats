@@ -226,7 +226,7 @@ BATS
 
 @test "run-tests: --coverage splits a classify.bats the same way on any CPU count" {
   require_kcov
-  # The split decides which lines kcov's apostrophe swallow windows hide (#128),
+  # The split decides which lines kcov's apostrophe swallow windows hide,
   # so a split that followed the worker count would give each machine its own
   # figure. --jobs stands in for a smaller or larger machine here.
   local -r dir="${BATS_TEST_TMPDIR}/suite18"
@@ -687,7 +687,8 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
 
 @test "run-tests: --slice with --coverage is rejected" {
   # No require_kcov: this is parsing, and it must hold on a leg with no kcov.
-  # Coverage splits the suite its own fixed way (#128), so a slice of it would
+  # Coverage splits the suite its own fixed way, because the split decides
+  # which lines kcov's apostrophe swallow windows hide, so a slice of it would
   # be a figure no other run reproduces.
   local -r suite="${BATS_TEST_TMPDIR}/suite33/ok.bats"
   make_trivial_suite "${suite}"

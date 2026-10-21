@@ -1127,8 +1127,8 @@ parsed command tree. Against this corpus, an `if:` of `Bash(pgrep *)`
 plus `Bash(pkill *)` misses non-`allow` rows of these kinds: `sudo` is not in
 Claude Code's stripped-wrapper list, `bash -c '…'` is not descended into, and
 the `deny:task-poll` shapes contain no matchable command name at all. A
-substring test over the raw payload sees them all. See issue #29 for the
-probe matrix.
+substring test over the raw payload sees them all. Probed against this
+corpus, the `if:` filter misses 39 of the 180 non-`allow` rows.
 
 Tracked counterpart: the prefilter comment block in `main`.
 
@@ -1175,7 +1175,8 @@ green run.
 
 **Why:** the trap is there to report _unexpected_ failure, and a gate
 announcing its own verdict is the one thing it must not report as a crash.
-Before #43, a real `.ci/check-manifest-invariants` failure ended like this:
+Without the `trap - ERR`, a real `.ci/check-manifest-invariants` failure ends
+like this:
 
 ```text
 FAIL: I9: marketplace plugins[0] source contains a path traversal (..): ../../etc
@@ -1265,7 +1266,7 @@ follows:
 
 ```text
 # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-# diagnostics above are the last thing the reader sees (#43, invariant 6).
+# diagnostics above are the last thing the reader sees (invariant 6).
 ```
 
 and the `@description` header of `.ci/check-err-trap-hygiene`, which carries the

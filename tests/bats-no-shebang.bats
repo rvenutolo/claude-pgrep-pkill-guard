@@ -80,7 +80,7 @@ function gate_in() {
 @test "bats no shebang: a lone shebang with no trailing newline is rejected" {
   # `read` stores an unterminated last line AND returns 1. A fallback that
   # blanks the variable on that status throws away the shebang it just read,
-  # and the gate passes the file (#305).
+  # and the gate passes the file.
   local -r root="${BATS_TEST_TMPDIR}/unterminated"
   make_bats_fixture "${root}"
   printf '#!/usr/bin/env bats' > "${root}/tests/a.bats"

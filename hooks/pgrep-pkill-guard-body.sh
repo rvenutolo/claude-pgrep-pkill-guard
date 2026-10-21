@@ -8,8 +8,8 @@
 # and sources the parts themselves.
 #
 # The split exists for one reason: bash parses ~1.2 us per line before it runs
-# any of them (#55), and at 2200-odd lines that was 2.4 ms on every Bash call
-# in every session, four fifths of what the guard cost. Keeping this file out of
+# any of them, and a guard parsed whole at 2200-odd lines pays 2.4 ms on every
+# Bash call in every session, four fifths of what it costs. Keeping this file out of
 # the fast path is the whole point -- do not move anything here into the entry
 # script, and see invariant 5 in docs/architecture.md for the ceiling that
 # enforces it. The logic itself lives in hooks/lib/, one file per concern,
@@ -56,7 +56,7 @@ SCANNER=''
 # that did not. `source` yields the status of the sourced file's LAST top-level
 # command, so its status alone cannot: a part that ended in a `[[ ... ]]` or a
 # `grep` returning non-zero would look exactly like a missing one and stand the
-# guard down on every call (#147). A function that was defined is the proof
+# guard down on every call. A function that was defined is the proof
 # that the file was found, parsed to the end, and ran.
 #
 # Each row is `<file under lib/>:<function it must define>`.
@@ -100,7 +100,7 @@ for guard_part in "${GUARD_PARTS[@]}"; do
     #
     # `source`'s own status cannot tell them apart -- it yields the status of
     # the part's LAST top-level command, which is the whole reason this loop
-    # judges by `declare -F` (#147) -- so readability is the test.
+    # judges by `declare -F` -- so readability is the test.
     if [[ -r "${HOOK_DIR}/lib/${guard_part%%:*}" ]]; then
       printf '{"systemMessage":"%s%s"}\n' \
         "${HOOK_NAME}: lib/${guard_part%%:*} did not define ${guard_part#*:}; it either failed to parse" \

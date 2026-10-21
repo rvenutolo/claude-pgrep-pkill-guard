@@ -43,7 +43,7 @@ jobs:
       # token is a real actor and its events do trigger workflows.
       #
       # `client-id`, not `app-id`: v3.2.0 deprecates the latter and annotates
-      # every run that uses it (#41). The Client ID is a DIFFERENT value from
+      # every run that uses it. The Client ID is a DIFFERENT value from
       # the App ID -- same App, newer identifier -- so it has its own secret,
       # APP_CLIENT_ID. This step is the first thing after harden-runner, so a
       # wrong id fails here with a 401 before release-please runs at all, and
@@ -121,7 +121,7 @@ jobs:
       # `git push`. `protect-main` has `required_signatures`, and nothing on the
       # runner holds a signing key, so a pushed commit arrives unsigned and the
       # ruleset refuses the merge -- the release PR sits at `BLOCKED` with every
-      # required check green (#70). GraphQL `createCommitOnBranch`, called with
+      # required check green. GraphQL `createCommitOnBranch`, called with
       # the App installation token, produces a commit GitHub signs on the App's
       # behalf: same content, same bot, valid signature. It is the same
       # mechanism that makes release-please's own commit acceptable.
@@ -136,7 +136,7 @@ jobs:
           # untrusted-input discipline across this repo's workflows, which
           # zizmor enforces.
           #
-          # The `|| '{}'` is not defensive padding, it is the fix for #103. A
+          # The `|| '{}'` is not defensive padding; the job fails without it. A
           # step's env: block is evaluated BEFORE its `if:`, unlike its `with:`,
           # so this expression runs even on the pushes where the guard above is
           # about to skip the step. release-please emits no `pr` output when it

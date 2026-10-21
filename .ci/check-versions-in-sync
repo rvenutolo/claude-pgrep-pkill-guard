@@ -140,7 +140,7 @@ function main() {
 
   if ((rc != 0)); then
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # read failures above are the last thing the reader sees (#43, invariant 6).
+    # read failures above are the last thing the reader sees (invariant 6).
     trap - ERR
     return "${rc}"
   fi
@@ -171,7 +171,7 @@ function main() {
       "${plugin_version}" "${market_version}" "${manifest_version}" "${hook_version}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

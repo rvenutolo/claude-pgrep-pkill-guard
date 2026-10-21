@@ -8,7 +8,7 @@
 #              carry a trailing `# linux-only` annotation, which the forward
 #              pass honours by skipping the entry off Linux -- nixpkgs' kcov has
 #              no darwin build at all, so flake.nix adds it conditionally and
-#              the devShell genuinely does not provide it on macOS (#91). The
+#              the devShell genuinely does not provide it on macOS. The
 #              skip is printed, not silent: a Darwin run must say out loud what
 #              it did not check. Any OTHER annotation is a hard failure rather
 #              than an ignored comment, because a typo'd `# linux_only` silently
@@ -84,8 +84,8 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
-# ERR trap is dropped first only for symmetry with the verdict returns (#43,
-# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# ERR trap is dropped first only for symmetry with the verdict returns
+# (invariant 6); exit itself never fires it. A top-level guard ahead of the
 # bindings, the same file-layout exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [dir]\n' "${0##*/}" >&2
@@ -412,7 +412,7 @@ function main() {
   if [[ ! -r "${TOOLS_FILE}" ]]; then
     printf 'FAIL: %s is missing or unreadable\n' "${TOOLS_FILE}" >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -432,7 +432,7 @@ function main() {
     # reverse pass would report every package no formatter backs as unjustified.
     # Stop here so the real cause is the only output.
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -441,7 +441,7 @@ function main() {
   reverse_check "${tools[@]}" || rc=1
 
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

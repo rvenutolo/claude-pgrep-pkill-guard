@@ -4,7 +4,7 @@
 # nixpkgs ships and flake.lock pins -- defaults `--config` to `lychee.toml`;
 # `.lycheerc` was the default name in older releases. Under that name the
 # config is read by nobody and every setting below is silently inert: the
-# check runs on stock defaults while looking configured (#42).
+# check runs on stock defaults while looking configured.
 # .ci/check-links passes `--config` by absolute path so the name is never
 # load-bearing.
 
@@ -12,13 +12,14 @@
 # raises the rate limit, it does not remove it.
 accept = [200, 206, 429]
 
-# --- Network behaviour (#100) ---------------------------------------------
+# --- Network behaviour ----------------------------------------------------
 #
 # The keys below are all settings lychee applies by default; what this file
 # sets is the value, not whether the setting exists. Retries are on by
 # default, at 3 retries with a wait that starts at one second, and that
-# default loses to the failures in #100. So the keys retry more patiently and
-# open fewer sockets at once.
+# default loses to transient network failures: 503s and connection resets on
+# links that are fine. So the keys retry more patiently and open fewer sockets
+# at once.
 #
 # Nothing here accepts a 503. A 503 means the host decided it was too busy to
 # serve the page, which is exactly the condition this job exists to report;
@@ -29,11 +30,11 @@ accept = [200, 206, 429]
 # here -- but a MISUNDERSTOOD key still can: see retry_wait_time.
 
 # 5, up from the default 3. Probed: lychee retries TRANSPORT errors and does
-# NOT retry a rejected HTTP status. A connection reset -- the direnv.net
-# failure in #100 -- is attempted max_retries + 1 times; a 503 from github.com
-# is attempted exactly ONCE regardless of what this is set to. So this key
-# addresses one of the flakes in #100 and provably cannot address the
-# other; the concurrency keys below are what address that one.
+# NOT retry a rejected HTTP status. A connection reset, such as
+# direnv.net's, is attempted max_retries + 1 times; a 503 from github.com is
+# attempted exactly ONCE regardless of what this is set to. So this key
+# addresses the resets and provably cannot address the 503s; the concurrency
+# keys below are what address those.
 max_retries = 5
 
 # 2 seconds, up from the default 1 -- and deliberately not 4, because the wait
@@ -47,10 +48,10 @@ max_retries = 5
 retry_wait_time = 2
 
 # 16, down from the default 128. The default is high enough to fan the check
-# out in a single burst. That burst is the most plausible cause of the 503s in
-# #100: a 503 is what a host returns when it sheds load, not when a page is
-# missing. Retries cannot help there (see max_retries), opening fewer sockets
-# can.
+# out in a single burst. That burst is the most plausible cause of the 503s
+# from github.com: a 503 is what a host returns when it sheds load, not when a
+# page is missing. Retries cannot help there (see max_retries), opening fewer
+# sockets can.
 max_concurrency = 16
 
 # 4 per host, down from the default 10, and the key that actually bites here:
@@ -139,7 +140,7 @@ exclude = [
   # CHANGELOG.md, and the tag it points at is not created until the release PR
   # MERGES. So for the whole life of every release PR the link is correct and
   # 404 at the same time, and the links job goes red on a changelog that is
-  # exactly right (#98). It resolves the moment the tag exists.
+  # exactly right. It resolves the moment the tag exists.
   #
   # Narrow on purpose. This is NOT the blanket own-repo exclude the closing
   # comment below warns against: issue links, release links, the README badges

@@ -2,13 +2,12 @@
 
 # @description Assert that every deliberate non-zero `return` from `main`, in
 #              every tracked file that installs an `ERR` trap, is immediately
-#              preceded by `trap - ERR` (#43, invariant 6 in
-#              docs/architecture.md).
+#              preceded by `trap - ERR` (invariant 6 in docs/architecture.md).
 #
 #              The trap is there to report UNEXPECTED failure. A gate returning
 #              non-zero because it found exactly what it was looking for is the
-#              one thing it must not report as a crash. Before #43 a real
-#              check-manifest-invariants failure ended like this:
+#              one thing it must not report as a crash. Without that `trap - ERR`
+#              a real check-manifest-invariants failure ends like this:
 #
 #                FAIL: I9: marketplace plugins[0] source contains a path traversal (..): ../../etc
 #                FAIL: I8: marketplace plugins[0] source "../../etc" has no vendored .../plugin.json
@@ -33,12 +32,11 @@
 #
 #              The candidate set is derived from the tree -- `git ls-files`
 #              filtered to files whose text installs an `ERR` trap -- and never
-#              from a list. #43 shipped a list and it was wrong in both
-#              directions: it predicted bench/run, and it missed run-tests,
-#              check-fast-path-size and check-issue-forms, each of which
-#              joined the family after the issue was filed and reintroduced
-#              the pattern. A new .ci/check-* is covered the
-#              day it lands.
+#              from a list. A list goes wrong in both directions: it names
+#              files that never install the trap, and it misses every script
+#              that joins the family after the list was written, each of which
+#              can reintroduce the pattern unpoliced. A new .ci/check-* is
+#              covered the day it lands.
 #
 #              One kind of `ERR` trap is deliberately NOT policed: a fail-open
 #              handler that exits 0. hooks/pgrep-pkill-guard.sh installs
@@ -183,7 +181,7 @@ function main() {
   if ((${#scripts[@]} == 0)); then
     printf 'FAIL: no tracked file installs a reporting ERR trap — an empty scan is not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -237,7 +235,7 @@ function main() {
     fi
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

@@ -35,7 +35,7 @@
 #              restructuring them to reach it would trade a real rule against
 #              the traps above. A form referencing a label that does not
 #              exist does not error either -- GitHub files the issue without it
-#              -- so this is the same failure mode as the rest of the file (#89).
+#              -- so this is the same failure mode as the rest of the file.
 # @arg $1 dir optional directory to check; defaults to the repo root plus
 #         .github/ISSUE_TEMPLATE. It exists so the bats suite can point the
 #         script at a fixture holding one deliberately broken form and assert
@@ -70,8 +70,8 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
-# ERR trap is dropped first only for symmetry with the verdict returns (#43,
-# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# ERR trap is dropped first only for symmetry with the verdict returns
+# (invariant 6); exit itself never fires it. A top-level guard ahead of the
 # bindings, the same file-layout exemption a version guard gets.
 if (($# > 2)); then
   printf 'usage: %s [dir] [labels]\n' "${0##*/}" >&2
@@ -238,7 +238,7 @@ function declared_labels() {
 # @description Assert every label a form declares exists in the labels file.
 #              A form referencing a label that does not exist does not error --
 #              GitHub silently files the issue without it -- so nothing short of
-#              filing one notices (#89).
+#              filing one notices.
 # @arg $1 file path to the form
 # @arg $2 declared newline-separated label names from the labels file
 # @exitcode 0 every referenced label is declared
@@ -274,7 +274,7 @@ function main() {
   if [[ ! -d "${DIR}" ]]; then
     fail "${DIR} does not exist or is not a directory"
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -337,7 +337,7 @@ function main() {
       "${#forms[@]}" "${CONFIG_NAME}" "${LABELS_FILE##*/}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

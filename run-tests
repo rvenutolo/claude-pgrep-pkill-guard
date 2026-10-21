@@ -42,7 +42,7 @@
 #              `--formatter`, because the compat legs' job logs are the first
 #              thing a reader looks at when a macOS-only failure appears and
 #              swapping them for XML would trade the artifact against the thing
-#              it exists to supplement (#83). A subdirectory each, because
+#              it exists to supplement. A subdirectory each, because
 #              files that shared one would leave only the report of the last to
 #              finish. DIR is created if absent, because bats requires
 #              `--output` to name a directory that already exists. The reports
@@ -68,7 +68,7 @@
 #              hooks/ files that matter. kcov instruments bash by exporting
 #              BASH_ENV, which tests/test_helper/common.bash unsets unless
 #              COVERAGE is set, so this flag exports COVERAGE=1; without that the
-#              report is 0.00% with no files (#91).
+#              report is 0.00% with no files.
 #
 #              Under --coverage each file's bats runs under its own kcov, and
 #              `kcov --merge` combines them into DIR/kcov-merged/. kcov reads
@@ -149,7 +149,7 @@ WORKER_PIDS=()
 WORKER_STATUS_FILES=()
 # How many slices --coverage splits a classify.bats into. Fixed rather than
 # derived from the CPU count: the split decides which lines kcov's apostrophe
-# swallow windows hide (#128), so it must be the same on every machine for the
+# swallow windows hide, so it must be the same on every machine for the
 # figure to be. Twice CI's 4 CPUs, so the slices even out the finish there.
 readonly CLASSIFY_SLICES=8
 # What --slice balances its slices by: the seconds each file's tests took on
@@ -688,7 +688,7 @@ function main() {
   done
 
   # Coverage splits the suite its own fixed way, because the split moves the
-  # figure (#128); a slice of it would be a figure no other run reproduces.
+  # figure; a slice of it would be a figure no other run reproduces.
   if [[ -n "${slice}" && -n "${coverage_dir}" ]]; then
     die '--slice does not combine with --coverage'
   fi
@@ -722,7 +722,7 @@ function main() {
       # bash-style allow=long-options: reachable on macOS outside the devShell; BSD uname has no long form
       case "$(uname -s)" in
         'Darwin')
-          die 'kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only (#91)'
+          die 'kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only'
           ;;
         *)
           die "kcov not found on PATH — run './.ci/in-devshell ./run-tests --coverage DIR' or 'just coverage'"
@@ -740,7 +740,7 @@ function main() {
     # The one caller of COVERAGE. tests/test_helper/common.bash unsets BASH_ENV
     # for fixture hygiene unless it sees this, and BASH_ENV is the channel kcov
     # instruments bash through; without the export the report is 0.00% with no
-    # files (#91). Exported here rather than in the fixture so a bare `bats` run
+    # files. Exported here rather than in the fixture so a bare `bats` run
     # never sees it.
     export COVERAGE=1
   fi
@@ -772,7 +772,7 @@ function main() {
     die "test suite mutated the real repo — before: [${before//$'\n'/ }] after: [${after//$'\n'/ }]"
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # bats output above is the last thing the reader sees (#43, invariant 6).
+  # bats output above is the last thing the reader sees (invariant 6).
   trap - ERR
   return "${SUITE_STATUS}"
 }

@@ -134,7 +134,7 @@ body carries a terminator, and `none` can only ever reach `warn`.
 | 55  | 2759      | `done` as an argument does not close a span                       | `while true; do echo done; pgrep --full zzctxdonearg \|\| break; done`                   | `deny:loop` | discriminating — a popped span gives `warn`                          |
 | 56  | 2765      | a case pattern does not close the enclosing body span             | `while true; do case x in y) :; esac; pgrep --full zzctxcase \|\| break; done`           | `deny:loop` | discriminating — a popped span gives `warn`                          |
 | 57  | 2769      | a subshell close still pops                                       | `while true; do (echo hi); pgrep --full zzctxsubshell \|\| break; done`                  | `deny:loop` | **pin** — see "Pins", below                                          |
-| 58  | 2777      | a `done` inside a substitution cannot pop the enclosing body span | `while true; do echo "$(: ; done)"; pgrep --full zzctxsubdone \|\| break; sleep 5; done` | `deny:loop` | intact since #8 — see "Pins", below                                  |
+| 58  | 2777      | a `done` inside a substitution cannot pop the enclosing body span | `while true; do echo "$(: ; done)"; pgrep --full zzctxsubdone \|\| break; sleep 5; done` | `deny:loop` | intact — see "Pins", below                                           |
 
 ## `terminator_probe` → `loops::body_has_terminator` (3) → `tests/cases/verdicts.tsv`
 
@@ -189,20 +189,18 @@ were checked against the real code rather than assumed.
   marker keeps `do` from replacing `cond`:
   `until (true); do sleep 1; done; pgrep --full x` would answer `cond` and deny.
 - **#58 (2777), "a `done` inside a substitution cannot pop the enclosing body
-  span".** Pinned as `warn` at extraction time, because `loops::body_has_terminator`
-  had no scope barrier of its own: the stray `done` zeroed its depth counter
-  and it reported "no terminator" regardless of what `loops::loop_context` said, so
-  `body`-without-terminator and `none` both fell through to `warn` and the
-  assertion could not discriminate. Issue #8 gave `loops::body_has_terminator` the
-  same barrier, the row's verdict moved to `deny:loop`, and the assertion
-  discriminates again: with both barriers removed the row (and its sibling
-  `zzsubdone` `deny:loop` row) flips back to `warn`. That flip was checked once by hand
-  when #8 landed; it is not a permanent test, since it needs the hook's
-  internals.
+  span".** The row discriminates only because `loops::body_has_terminator`
+  carries the same scope barrier as `loops::loop_context`. Without it the stray
+  `done` zeroes its depth counter and it reports "no terminator" regardless of
+  what `loops::loop_context` says, so `body`-without-terminator and `none` both
+  fall through to `warn` and the assertion cannot discriminate. With both
+  barriers removed the row (and its sibling `zzsubdone` `deny:loop` row) flips
+  to `warn`. That flip is checked by hand, not by a permanent test, since it
+  needs the hook's internals.
 
 ## Nothing else was dropped
 
 62 of the 64 assertions are re-encoded with their discriminating power intact
-(#58 regained its power when issue #8 landed). Two (#52, #57) are pins for
+(#58 among them, through the scope barrier both loop readers carry). Two (#52, #57) are pins for
 reasons intrinsic to the hook's own control flow. **No assertion was removed
 without a row or a test.**

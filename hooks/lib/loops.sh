@@ -224,9 +224,9 @@ function loops::terminator_ends_body() {
 #              A `$(`, a backtick, or a plain `(` opens a scope barrier, mirroring loops::loop_context: a
 #              `do`/`done`/`break` inside a substitution belongs to the shell that substitution runs,
 #              so it must neither close the enclosing body nor count as its terminator. Without
-#              the barrier a literal `done` inside `$( )` closed the body and hid a real `break` that
-#              followed it, and loops::loop_context (which has the barrier) answered `body` for the same
-#              command -- two readers of one structure disagreeing (#8). The barrier is opaque in
+#              the barrier a literal `done` inside `$( )` would close the body and hide a real `break`
+#              that follows it, while loops::loop_context (which has the barrier) answers `body` for
+#              the same command -- two readers of one structure disagreeing. The barrier is opaque in
 #              both directions for the bodies: the ones open outside it are set aside while it is
 #              open, so a loop keyword inside can neither close nor end them, and the bodies opened
 #              inside it are dropped when it closes. A loop that sits wholly inside a barrier has

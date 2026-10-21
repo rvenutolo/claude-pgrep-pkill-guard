@@ -12,7 +12,7 @@ test *ARGS:
 # Measure line coverage of hooks/ under the BATS suite, as HTML in DIR
 #
 # Linux only: nixpkgs' kcov names no darwin platform, so the devShell carries it
-# only on Linux (#91). This goes through .ci/in-devshell like the other gate
+# only on Linux. This goes through .ci/in-devshell like the other gate
 # recipes, which works only because kcov is a devShell package: a kcov supplied
 # from a `nix shell` outside the boundary is stripped back out by
 # --ignore-environment.
@@ -35,7 +35,7 @@ coverage DIR="coverage":
 # Re-measure the hook's per-call cost and rewrite bench/RESULTS.md
 #
 # The steps are one operation: bench/run emits markdown tables with unpadded
-# cells, and prettier owns their alignment (#76). Skipping the `nix fmt` step
+# cells, and prettier owns their alignment. Skipping the `nix fmt` step
 # leaves a tree that fails `nix flake check`. `nix fmt` is invoked outside
 # in-devshell on purpose -- treefmt-nix supplies prettier from the Nix store
 # rather than through PATH, so the devShell has nothing to add here.

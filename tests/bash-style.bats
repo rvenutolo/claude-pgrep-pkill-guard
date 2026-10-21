@@ -384,7 +384,10 @@ function assert_marker_stops_at_header() {
 @test "bash style: a shfmt that answers with another tree shape fails the canary" {
   local -r shim_dir="${BATS_TEST_TMPDIR}/shim"
   mkdir -p "${shim_dir}"
-  printf '%s\n' '#!/usr/bin/env bash' "printf '{\"Type\":\"File\"}\n'" > "${shim_dir}/shfmt"
+  # The shim drains stdin first: one that exits unread can break the gate's
+  # pipe into it, and the gate then reports "could not be scanned" instead of
+  # the verdict this test asserts.
+  printf '%s\n' '#!/usr/bin/env bash' 'cat > /dev/null' "printf '{\"Type\":\"File\"}\n'" > "${shim_dir}/shfmt"
   chmod +x "${shim_dir}/shfmt"
   write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
   PATH="${shim_dir}:${PATH}" run "${CHECK}" "${FIXTURE}"

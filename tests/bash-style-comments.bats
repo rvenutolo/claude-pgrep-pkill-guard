@@ -342,6 +342,10 @@ function setup() {
   assert_fires 'c.sh' 'comment-issue-ref' 1 'echo PAYLOAD_RAN # since #7'
 }
 
+@test "bash style: comment-issue-ref reports a comment that starts with an issue number" {
+  assert_fires 'c.sh' 'comment-issue-ref' 1 '#55 split the guard for speed.' 'echo PAYLOAD_RAN'
+}
+
 @test "bash style: comment-issue-ref passes a hash that is not an issue number" {
   assert_passes 'c.sh' \
     '# ${#names[@]} counts the names; $# counts the arguments.' \

@@ -7,12 +7,12 @@
 #
 #              hooks/pgrep-pkill-guard-body.sh pins one function name per part as
 #              a STRING, and proves a part loaded by calling `declare -F` on the
-#              paired name. That makes a rename that misses the table a
-#              runtime failure: the guard prints INACTIVE and allows the command
-#              through. The bats suite catches it -- every case that reaches the
-#              body gets INACTIVE instead of a verdict and reddens -- but only
-#              at test time. This gate is the lint-time half, and it runs in
-#              milliseconds against the text of the table.
+#              paired name. That makes a rename that misses the table a runtime
+#              failure: the guard prints INACTIVE and allows the command
+#              through. The bats suite catches it -- every case that reaches
+#              the body gets INACTIVE instead of a verdict and reddens -- but
+#              only at test time. This gate is the lint-time half, and it runs
+#              in milliseconds against the text of the table.
 #
 #              The reverse direction matters just as much: a part under
 #              hooks/lib/ that no row names is never sourced, so its functions

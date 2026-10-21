@@ -9,10 +9,10 @@
 #
 # The split exists for one reason: bash parses ~1.2 us per line before it runs
 # any of them, and a guard parsed whole at 2200-odd lines pays 2.4 ms on every
-# Bash call in every session, four fifths of what it costs. Keeping this file out of
-# the fast path is the whole point -- do not move anything here into the entry
-# script, and see invariant 5 in docs/architecture.md for the ceiling that
-# enforces it. The logic itself lives in hooks/lib/, one file per concern,
+# Bash call in every session, four fifths of what it costs. Keeping this file
+# out of the fast path is the whole point -- do not move anything here into the
+# entry script, and see invariant 5 in docs/architecture.md for the ceiling
+# that enforces it. The logic itself lives in hooks/lib/, one file per concern,
 # sourced from the list below.
 #
 # This file is SOURCED, never executed: no shebang, not executable, and it must

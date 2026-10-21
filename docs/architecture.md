@@ -1127,8 +1127,8 @@ parsed command tree. Against this corpus, an `if:` of `Bash(pgrep *)`
 plus `Bash(pkill *)` misses non-`allow` rows of these kinds: `sudo` is not in
 Claude Code's stripped-wrapper list, `bash -c '…'` is not descended into, and
 the `deny:task-poll` shapes contain no matchable command name at all. A
-substring test over the raw payload sees them all. Probed against this
-corpus, the `if:` filter misses 39 of the 180 non-`allow` rows.
+substring test over the raw payload sees them all. Probed against the
+corpus when it held 180 non-`allow` rows, the `if:` filter missed 39 of them.
 
 Tracked counterpart: the prefilter comment block in `main`.
 
@@ -1175,7 +1175,7 @@ green run.
 
 **Why:** the trap is there to report _unexpected_ failure, and a gate
 announcing its own verdict is the one thing it must not report as a crash.
-Without the `trap - ERR`, a real `.ci/check-manifest-invariants` failure ends
+Without the `trap - ERR`, a real `.ci/check-manifest-invariants` failure ended
 like this:
 
 ```text
@@ -1185,8 +1185,8 @@ FAIL: I8: marketplace plugins[0] source "../../etc" has no vendored .../plugin.j
 ```
 
 The first two lines are the answer. The third sends the reader hunting for a
-bug at line 225, where there is none — and line 225 is not even the `return`
-the message quotes: `LINENO` in that report is the `main "$@"` line at the
+bug at line 225, where there is none — and line 225 was not even the `return`
+the message quotes: `LINENO` in that report was the `main "$@"` line at the
 bottom of the file. The trap fires once, at the top-level call, whatever
 returned non-zero underneath it. So the one line of the three that looks like a
 stack pointer is the one line that points nowhere.

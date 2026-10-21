@@ -195,12 +195,12 @@ were checked against the real code rather than assumed.
   what `loops::loop_context` says, so `body`-without-terminator and `none` both
   fall through to `warn` and the assertion cannot discriminate. With both
   barriers removed the row (and its sibling `zzsubdone` `deny:loop` row) flips
-  to `warn`. That flip is checked by hand, not by a permanent test, since it
-  needs the hook's internals.
+  to `warn`. That flip was checked once by hand; no permanent test covers it,
+  since it needs the hook's internals.
 
 ## Nothing else was dropped
 
 62 of the 64 assertions are re-encoded with their discriminating power intact
-(#58 among them, through the scope barrier both loop readers carry). Two (#52, #57) are pins for
-reasons intrinsic to the hook's own control flow. **No assertion was removed
-without a row or a test.**
+(#58 among them, through the scope barrier both loop readers carry). Two
+(#52, #57) are pins for reasons intrinsic to the hook's own control flow. **No
+assertion was removed without a row or a test.**

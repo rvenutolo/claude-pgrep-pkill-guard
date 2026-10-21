@@ -24,11 +24,11 @@
 #              than undercounting it. The percentage that survives is
 #              arithmetically correct over the files that remain and silently
 #              describes a different codebase, one in which helpers the suite
-#              provably reaches read as never entered. So every hooks/
-#              file -- the entry script, the loader and each part under
-#              hooks/lib/ -- must appear in `files[]` with a non-zero
-#              covered-line count before any number is printed. See
-#              docs/architecture.md, "Line coverage".
+#              provably reaches read as never entered. So every hooks/ file --
+#              the entry script, the loader and each part under hooks/lib/ --
+#              must appear in `files[]` with a non-zero covered-line count
+#              before any number is printed. See docs/architecture.md, "Line
+#              coverage".
 # @arg $1 dir the directory passed to `run-tests --coverage`
 # @stdout the percentage, e.g. `76.42`
 # @stderr the usage line, or one `[<script>] FATAL: <message>` line naming what

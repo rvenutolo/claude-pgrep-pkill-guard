@@ -139,9 +139,9 @@ function main() {
   local input=''
   IFS= read -r -d '' input || : # an empty delimiter returns 1 at EOF with the payload stored
 
-  # The prefilter. Everything below this point costs a `jq` spawn, plus at least one
-  # `awk` scanner pass once the command names a trigger token, and on an ordinary
-  # Bash call none of it finds anything: the full path measures 13.12 ms per call against a 1.55 ms spawn floor.
+  # The prefilter. Everything below costs a `jq` spawn, plus at least one `awk`
+  # pass once the command names a trigger token, and on an ordinary Bash call
+  # none of it finds anything: measured at 13.12 ms against a 1.55 ms floor.
   #
   # This is sound because it is provably weaker than a gate the guard already
   # applies to the parsed command:
@@ -162,7 +162,7 @@ function main() {
   # Testing the RAW PAYLOAD rather than the parsed command is the whole point.
   # A substring test does not care that `pkill` sits behind `sudo`, inside
   # `bash -c '...'`, or in a heredoc body -- the shapes that made Claude Code's
-  # own `if:` handler filter unusable here (it misses 39 of 180 non-allow rows).
+  # own `if:` handler filter unusable here (probed, it missed 39 of 180).
   #
   # The test is a superset, so it fails in the safe direction: a payload that
   # matches merely takes the full path below at its full cost. A `cwd` or

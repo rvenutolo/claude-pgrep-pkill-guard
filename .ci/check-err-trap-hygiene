@@ -7,7 +7,7 @@
 #              The trap is there to report UNEXPECTED failure. A gate returning
 #              non-zero because it found exactly what it was looking for is the
 #              one thing it must not report as a crash. Without that `trap - ERR`
-#              a real check-manifest-invariants failure ends like this:
+#              a real check-manifest-invariants failure ended like this:
 #
 #                FAIL: I9: marketplace plugins[0] source contains a path traversal (..): ../../etc
 #                FAIL: I8: marketplace plugins[0] source "../../etc" has no vendored .../plugin.json

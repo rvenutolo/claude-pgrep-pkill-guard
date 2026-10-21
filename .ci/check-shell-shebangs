@@ -11,7 +11,7 @@
 #              a script written `#!/bin/bash` or `#!/usr/bin/env -S bash` would
 #              be dropped from BOTH linters with no diagnostic, and the
 #              empty-scan guard in run-lint-checks' `main` fires only when the
-#              list is entirely empty, never when it is one file short (#171).
+#              list is entirely empty, never when it is one file short.
 #              Rather than teach a function whose whole contract is "print one
 #              path per line" to fail — it runs inside a process substitution
 #              feeding `mapfile`, so a non-zero return there reaches nobody —
@@ -63,8 +63,8 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
-# ERR trap is dropped first only for symmetry with the verdict returns (#43,
-# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# ERR trap is dropped first only for symmetry with the verdict returns
+# (invariant 6); exit itself never fires it. A top-level guard ahead of the
 # bindings, the same file-layout exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [dir]\n' "${0##*/}" >&2
@@ -174,7 +174,7 @@ function check_shebang() {
       "${path}" "\"${shebang}\"" "\"${CANONICAL}\"" >&2
     printf '      .ci/run-lint-checks admits an extensionless file into\n' >&2
     printf '      shellcheck and shfmt only on an exact match of that string,\n' >&2
-    printf '      so any other spelling is silently unlinted (#171).\n' >&2
+    printf '      so any other spelling is silently unlinted.\n' >&2
     return 1
   fi
 
@@ -239,7 +239,7 @@ function main() {
       "$((checked - exempt))" "${exempt}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

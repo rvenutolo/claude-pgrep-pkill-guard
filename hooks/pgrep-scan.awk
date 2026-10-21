@@ -33,12 +33,12 @@
 # line by line with getline under the default RS and reassembled with "\n", so
 # the scanner behaves identically on gawk, mawk and one-true-awk (BWK, the stock
 # awk on macOS). BWK truncates RS="\0" to RS="" -- paragraph mode -- which
-# splits records on blank lines and strips leading/trailing newlines; the
-# previous RS="\0" design tripped the integrity trailer there for every heredoc
-# payload (#7). POSIX awk cannot tell `foo` from `foo\n` at end of input (there
-# is no RT), so the CALLER TERMINATES THE INPUT WITH EXACTLY ONE NEWLINE and the
-# code below drops exactly one: a command's own trailing newline survives,
-# which is what a heredoc body's byte count depends on.
+# splits records on blank lines and strips leading/trailing newlines, so an
+# RS="\0" design trips the integrity trailer there for every heredoc payload.
+# POSIX awk cannot tell `foo` from `foo\n` at end of input (there is no RT), so
+# the CALLER TERMINATES THE INPUT WITH EXACTLY ONE NEWLINE and the code below
+# drops exactly one: a command's own trailing newline survives, which is what a
+# heredoc body's byte count depends on.
 
 # True when the word starting at a position is the first word of a command: only blanks stand
 # between it and the start of the input, a `;`, `&`, `|`, `(` or newline, a `{` that is itself

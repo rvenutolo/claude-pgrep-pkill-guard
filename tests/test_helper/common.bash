@@ -58,8 +58,7 @@ export GIT_CEILING_DIRECTORIES="${REPO_DIR}"
 # BASH_SOURCE/LINENO and turns on `set -x` so the trace becomes the coverage
 # record. Because every test drives the guard as a fresh subprocess
 # (invariant 3), an unconditional unset here means kcov instruments the bats
-# parent and nothing below it -- which is exactly why the first coverage probe
-# reported 0.00% with no files at all (#91).
+# parent and nothing below it, and the report reads 0.00% with no files at all.
 #
 # COVERAGE has exactly one caller, `run-tests --coverage`, which exports it
 # immediately before starting kcov. Any other run of the suite -- a bare `bats`,

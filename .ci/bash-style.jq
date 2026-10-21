@@ -13,7 +13,7 @@
 # `hits`. The tests/bash-style*.bats files name every id, so an id is never
 # renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr", "comment-line-ref", "comment-untracked-ref", "comment-missing-path", "comment-missing-function", "comment-commit-relative", "todo-form", "mktemp-exit-trap"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr", "comment-line-ref", "comment-untracked-ref", "comment-missing-path", "comment-missing-function", "comment-commit-relative", "comment-issue-ref", "todo-form", "mktemp-exit-trap"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -899,14 +899,13 @@ def comment_missing_function($functions):
   | select(($functions | index($ref)) == null)
   | {line: $line, rule: "comment-missing-function", message: ("no function is named " + $ref)};
 
-# Wording that only makes sense next to the commit that added it. An issue
-# reference on the same line anchors it and is allowed. `before this
-# gate|change|commit` is ordinary present-tense ordering ("lint runs before
-# this gate") unless a past-tense verb follows in the same sentence, which
-# makes the commit the referent; the other phrases have no present-tense use.
+# Wording that only makes sense next to the commit that added it. `before
+# this gate|change|commit` is ordinary present-tense ordering ("lint runs
+# before this gate") unless a past-tense verb follows in the same sentence,
+# which makes the commit the referent; the other phrases have no
+# present-tense use.
 def comment_commit_relative:
   comments
-  | select(.text | test("#[0-9]+") | not)
   | (
       .text
       | match(
@@ -915,7 +914,18 @@ def comment_commit_relative:
         )
       | .string
     ) as $phrase
-  | {line, rule: "comment-commit-relative", message: ("state it in the present tense, or anchor it to an issue: \"" + $phrase + "\"")};
+  | {line, rule: "comment-commit-relative", message: ("state it in the present tense: \"" + $phrase + "\"")};
+
+# An issue or pull request number in a comment: provenance, which belongs in
+# the commit message. A `#` after a word character, `$`, `{` or `&` is an
+# anchor, a parameter expansion or an entity, and digits that run on into a
+# letter (`#1a2b3c`) are a colour; an all-digit colour is reported. The text
+# arrives without the comment's own `#`, so a comment that opens with the
+# number (`#55 split ...`) shows as leading digits.
+def comment_issue_ref:
+  comments
+  | (.text | match("(?<![A-Za-z0-9_$&{])#[0-9]+\\b|^[0-9]+\\b") | .string | ltrimstr("#")) as $ref
+  | {line, rule: "comment-issue-ref", message: ("state the reason, not the issue it came from: #" + $ref)};
 
 # Deferred work is marked TODO:, upper-case with a colon. Only a marker shape
 # is a finding: an upper-case TODO, FIXME or XXX word not followed directly by
@@ -948,7 +958,7 @@ def mktemp_exit_trap($sourced):
   | select($armed | not)
   | {line: $call.Pos.Line, rule: "mktemp-exit-trap", message: "arm an EXIT trap that removes what mktemp creates"};
 
-def hits($path; $src; $sourced; $tracked; $functions; $helpers): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path; $helpers), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, todo_form, mktemp_exit_trap($sourced);
+def hits($path; $src; $sourced; $tracked; $functions; $helpers): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path; $helpers), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, comment_issue_ref, todo_form, mktemp_exit_trap($sourced);
 
 # The last line a marker attached to this node reaches. A simple command or a
 # pipeline is reached whole, continuation lines included. A compound statement

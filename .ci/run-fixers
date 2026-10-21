@@ -29,9 +29,9 @@
 #              bare `markdownlint-cli2 '**/*.md'` or a bare `typos` walks into
 #              the author's UNTRACKED docs/superpowers/ and .claude/ trees and
 #              rewrites files that are not this repo's -- a fixer doing that is
-#              strictly worse than the linter that only reported it, which is
-#              the trap #46 fixed for `typos`. .ci/run-lint-checks solves it
-#              with the same `git ls-files` / `git grep -I` incantations, and
+#              strictly worse than the linter that only reported it.
+#              .ci/run-lint-checks meets the same trap with `typos` and solves
+#              it with the same `git ls-files` / `git grep -I` incantations, and
 #              they are repeated rather than shared because .ci/ has no sourced
 #              library and inventing one for these scripts alone would cost
 #              more than it saves.
@@ -46,7 +46,7 @@
 #              `typos --write-changes` leaves any word with more than one
 #              plausible correction alone -- see the abbreviated-SHA note in
 #              .typos.toml, where a two-suggestion word in release-please's
-#              changelog links is exactly what could not self-heal (#61) --
+#              changelog links is exactly what cannot self-heal --
 #              and exits non-zero for it. That is the correct behaviour, not a
 #              bug in the fixer -- a tool that guessed between two corrections
 #              would silently corrupt prose. Read the output, fix those by hand,
@@ -155,7 +155,7 @@ function main() {
     log 'a fixer failed or left something it could not fix; see above'
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

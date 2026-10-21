@@ -147,7 +147,7 @@
             ]
             ++ lib.optionals stdenv.hostPlatform.isLinux [
               # kcov, which `run-tests --coverage` drives to measure the hook's
-              # line coverage under the bats suite (#91).
+              # line coverage under the bats suite.
               #
               # Conditional, and it has to be: nixpkgs' kcov declares NO darwin
               # platform at all in meta.platforms. An unconditional entry here

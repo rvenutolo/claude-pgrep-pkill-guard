@@ -105,12 +105,10 @@ DROPPED
 }
 
 @test "invariant markers: a phrase wrapped across comment lines still counts" {
-  # This is the #85 regression in miniature. The marker was present in
-  # hooks/pgrep-pkill-guard.sh all along, wrapped across `POSIX short flags,`
-  # and `# deliberately:` (the invariant-1 phrase before #273), and the grep
-  # the docs tell a reader to run found only the body file. Collapsing line
-  # breaks and `#` continuations before the search is what makes the gate agree
-  # with a human reading the comment.
+  # A marker phrase can sit in a file wrapped across two comment lines, where a
+  # plain grep for the phrase misses it although a human reading the comment
+  # sees it. Collapsing line breaks and `#` continuations before the search is
+  # what makes the gate agree with that reader.
   local -r root="${BATS_TEST_TMPDIR}/wrapped"
   make_marker_fixture "${root}"
   cat > "${root}/hooks/pgrep-pkill-guard.sh" << 'WRAPPED'

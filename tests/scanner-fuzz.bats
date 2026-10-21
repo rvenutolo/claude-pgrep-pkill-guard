@@ -1,4 +1,4 @@
-# Property fuzzing for hooks/pgrep-scan.awk (#92).
+# Property fuzzing for hooks/pgrep-scan.awk.
 #
 # tests/scanner.bats pins the scanner's BEHAVIOUR on hand-written inputs -- which
 # tokens come out, at which offsets. This file pins the far narrower thing that

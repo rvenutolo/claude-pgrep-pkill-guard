@@ -1,4 +1,4 @@
-# The authoritative label set for this repository (#89).
+# The authoritative label set for this repository.
 #
 # AUTHORITATIVE means exactly that: .github/workflows/labels.yml applies this
 # file with deletion enabled, so a label that is not listed here is DELETED the

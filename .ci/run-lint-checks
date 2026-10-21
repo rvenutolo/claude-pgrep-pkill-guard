@@ -41,8 +41,8 @@ function log() {
 #              `git ls-files` rather than a tree walk so untracked scratch files
 #              are never linted.
 #
-#              *.bats is bash too, and until #72 it was the only bash in the
-#              repo no tool touched. shellcheck needs no help with it: a bats
+#              *.bats is bash too, and no linter reaches it unless this list
+#              names it. Once named, shellcheck needs no help with it: a bats
 #              file carries no shebang (.ci/check-bats-no-shebang enforces that,
 #              because bats sources them), and shellcheck falls back to bash for
 #              a shebang-less file, so neither `--shell=bash` nor a per-file
@@ -58,7 +58,7 @@ function log() {
 #              script written `#!/bin/bash` is dropped from both shellcheck and
 #              shfmt with no diagnostic at all, and the empty-scan guard in
 #              `main` below does not catch it -- that fires only when the list
-#              is entirely empty, never when it is one file short (#171).
+#              is entirely empty, never when it is one file short.
 #              Loosening the match here instead would be the wrong shape: this
 #              function's whole contract is one path per line, it runs inside a
 #              process substitution feeding `mapfile`, and a non-zero return
@@ -113,15 +113,15 @@ function main() {
   "${REPO_DIR}/.ci/check-bash-style" "${files[@]}" || rc=1
 
   log 'running gawk --lint over the awk programs'
-  # The scanner is the repo's other language and, until #74, the only source
-  # file no linter looked at -- .treefmt.nix excludes *.awk outright, because
-  # no formatter in the flake understands it.
+  # The scanner is the repo's other language, and no linter but this one looks
+  # at it -- .treefmt.nix excludes *.awk outright, because no formatter in the
+  # flake understands it.
   #
   # --lint=fatal, not plain --lint: --lint writes its warnings to stderr and
   # still exits 0, and a gate that reports a problem and passes is not a gate.
   #
   # --posix is the half that matters here. The hook must behave identically on
-  # gawk, mawk and one-true-awk (#7), and `run-tests --awk=bwk` already proves
+  # gawk, mawk and one-true-awk, and `run-tests --awk=bwk` already proves
   # that dynamically -- but only for the lines some test actually executes. A
   # gawk-only construct (gensub, asort, `length(array)`, `**`) on a branch no
   # fixture reaches would ship. --posix takes those out of the LANGUAGE rather
@@ -270,7 +270,7 @@ function main() {
   log 'running typos'
   # Explicit file list, not a bare `typos`. Bare `typos` walks the tree and
   # SKIPS HIDDEN PATHS, so it silently leaves out .ci/, .github/,
-  # .claude-plugin/ and .githooks/ and reports a clean pass regardless (#46).
+  # .claude-plugin/ and .githooks/ and reports a clean pass regardless.
   # `--hidden` is the wrong fix -- it also picks up UNTRACKED hidden paths.
   #
   # `git grep -I --files-with-matches ''` is every tracked file git considers
@@ -293,7 +293,7 @@ function main() {
     log 'one or more linters failed'
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

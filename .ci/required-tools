@@ -56,7 +56,7 @@ just
 # the hook's line coverage under the bats suite. nixpkgs' kcov declares no
 # darwin platform at all, so flake.nix adds it behind `lib.optionals
 # stdenv.isLinux` and the forward pass must skip it off Linux rather than
-# report a missing tool the shell was never going to have (#91).
+# report a missing tool the shell was never going to have.
 kcov  # linux-only
 # invoked by .ci/check-links
 lychee

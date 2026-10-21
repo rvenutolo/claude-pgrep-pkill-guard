@@ -3,8 +3,8 @@
 # @description Run the full local verification gate: the formatting check, the
 #              governance lints, the benchmark smoke run, the lint suite, and
 #              the BATS suite -- the last under gawk and again under
-#              one-true-awk, because the hook must behave identically on both
-#              (#7), unless `--awk` picks one. Verify-only
+#              one-true-awk, because the hook must behave identically on both,
+#              unless `--awk` picks one. Verify-only
 #              — it never rewrites the tree, which is why `nix fmt` is a separate
 #              step run before it. Exit codes are AGGREGATED rather than failing
 #              fast, so a single run surfaces every failing category instead of
@@ -29,7 +29,7 @@
 #
 #              `--report DIR` is forwarded to each suite run as
 #              `--report DIR/<awk>` (`gawk` or `bwk`), so each gets its own
-#              JUnit report rather than one overwriting the other (#83).
+#              JUnit report rather than one overwriting the other.
 #              Nothing else in the gate emits a report; the flag exists so CI
 #              can upload the suite's results as an artifact when a leg fails.
 #
@@ -94,8 +94,8 @@ function warn_untracked() {
 
 # @description Print the usage line and exit 2. Exit 2 rather than 1: 1 is the
 #              gate's verdict, and "you called it wrong" must stay
-#              distinguishable from it (#216). The ERR trap is dropped first
-#              only for symmetry with the verdict returns (#43, invariant 6);
+#              distinguishable from it. The ERR trap is dropped first
+#              only for symmetry with the verdict returns (invariant 6);
 #              exit itself never fires it.
 # @noargs
 # @stderr the usage line
@@ -202,13 +202,13 @@ function main() {
   # check-invariant-markers turns docs/architecture.md's "Design invariants"
   # section from description into enforcement: that section promises each rule
   # is repeated as a comment in the source it constrains, and that promise
-  # needs enforcing: one marker had already been line-wrapped into invisibility
-  # to the grep the doc tells a reader to run (#85). It is a presence check over
+  # needs enforcing: a marker wrapped across a line break is invisible to the
+  # grep the doc tells a reader to run. It is a presence check over
   # a table of phrases, collapsing line breaks and `#` continuations first, so
   # rewrapping a comment stays allowed and deleting one does not.
   # check-guard-parts holds the loader's GUARD_PARTS table to what is actually
   # under hooks/lib/. The loader pins one function name per part as a STRING
-  # and proves a part loaded by calling `declare -F` on it (#147), so a rename
+  # and proves a part loaded by calling `declare -F` on it, so a rename
   # that misses the table makes the guard print INACTIVE and allow the command
   # through. The bats suite catches that at test time -- every case reaching the
   # body gets INACTIVE instead of a verdict -- and this gate catches it at lint
@@ -220,15 +220,15 @@ function main() {
   # into shellcheck and shfmt only when its first line matches that string
   # exactly, and drops any other bash spelling from BOTH linters with no
   # diagnostic -- its empty-scan guard fires only when the list is entirely
-  # empty, never when it is one file short (#171). The one exemption,
+  # empty, never when it is one file short. The one exemption,
   # .ci/check-inactive-on-old-bash, is named in the gate's table, so it is
   # skipped by name rather than by mechanism -- the latter is indistinguishable
   # from that bug.
   # check-bench-fresh compares the commit bench/RESULTS.md records in its
   # provenance table against the hooks/ history since. The README quotes that
-  # report's figures as measured, and nothing tied them together: when the
-  # gate was written the file said 4c189fb and hooks/ had moved twice since,
-  # including the split the benchmark exists to measure (#84). More verdicts
+  # report's figures as measured, and nothing else ties them to the code:
+  # hooks/ can move on, even through a change the benchmark exists to measure,
+  # while the report still names an older commit. More verdicts
   # than pass and fail -- the recorded commit can also be present but
   # unreachable (its branch was rewritten), which is reported with different
   # wording because no comparison happened at all, or absent from the object
@@ -297,7 +297,7 @@ function main() {
     log 'one or more checks failed'
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

@@ -2,7 +2,7 @@
 
 # @description Rebuild assets/social-preview.png, the 1280x640 Open Graph card
 #              GitHub serves when someone pastes this repo's URL into Slack,
-#              Discord or X (#35). The image is composed from
+#              Discord or X. The image is composed from
 #              assets/deny-message.png, the same capture the README embeds.
 #
 #              Tracked because the constants below are not recoverable by
@@ -61,7 +61,7 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # to the first argument, which may not be the one the caller meant. Exit 2 rather
 # than 1: 1 means the card could not be built, and "you called it wrong" must
 # stay distinguishable from "the build failed". The ERR trap is dropped first
-# only for symmetry with the verdict returns (#43, invariant 6); exit itself
+# only for symmetry with the verdict returns (invariant 6); exit itself
 # never fires it. A top-level guard ahead of the bindings, the same file-layout
 # exemption a version guard gets.
 if (($# > 1)); then
@@ -123,7 +123,7 @@ function log() {
 # @exitcode 1 always
 function die() {
   printf '[%s] FATAL: %s\n' "${0##*/}" "$1" >&2
-  # Cleared only for symmetry with the verdict returns (#43, invariant 6):
+  # Cleared only for symmetry with the verdict returns (invariant 6):
   # exit itself never fires the ERR trap.
   trap - ERR
   exit 1

@@ -4,7 +4,7 @@
 #              onto a branch through GitHub's createCommitOnBranch mutation,
 #              shaped for `gh api graphql --input -`.
 #
-#              Why the API rather than `git commit` + `git push` (#70):
+#              Why the API rather than `git commit` + `git push`:
 #              protect-main has required_signatures on, and nothing on a runner
 #              holds a signing key, so a pushed commit is unsigned and the
 #              ruleset refuses the merge -- mergeStateStatus BLOCKED with every
@@ -27,12 +27,12 @@
 #              `printf '{"path": "%s"' "${path}"` here would still hand an
 #              attacker who can name a file the whole mutation.
 #
-#              What forced the move off argv is that argv is bounded (#94).
-#              MAX_ARG_STRLEN caps a single argument at 128 KiB on Linux and
-#              ARG_MAX caps the whole vector, and base64's 4/3 inflation turned
-#              that into a ~96 KiB ceiling on a single staged source file --
-#              past which the exec failed outright with `Argument list too
-#              long`. Files have no such ceiling.
+#              Blobs cross through files rather than argv because argv is
+#              bounded. MAX_ARG_STRLEN caps a single argument at 128 KiB on
+#              Linux and ARG_MAX caps the whole vector, and base64's 4/3
+#              inflation turns that into a ~96 KiB ceiling on a single staged
+#              source file -- past which the exec fails outright with
+#              `Argument list too long`. Files have no such ceiling.
 # @arg $1 repo owner/name, e.g. rvenutolo/claude-pgrep-pkill-guard
 # @arg $2 branch the branch to commit onto, e.g. release-please--branches--main
 # @arg $3 headline the commit subject
@@ -106,7 +106,7 @@ readonly JQ_PROGRAM='
 #
 #              `[<script>] FATAL: <message>` is the house format for a fatal
 #              diagnostic, matching `die` in run-tests, bench/run and
-#              .ci/report-coverage (#169). The script name is what tells a
+#              .ci/report-coverage. The script name is what tells a
 #              reader which tool in a pipeline gave up.
 # @arg $1 message the diagnostic text
 # @stderr the `[<script>] FATAL: <message>` line
@@ -187,7 +187,7 @@ function main() {
         # file's bytes over verbatim, so a base64 that appends a trailing
         # newline puts that newline inside the JSON string and ships a corrupt
         # blob -- and the macOS runner's base64 does exactly that: it accepts
-        # --wrap=0 and emits the newline anyway (#94).
+        # --wrap=0 and emits the newline anyway.
         git show ":0:${path}" | base64 --wrap=0 | tr --delete '\n' > "${blob_file}"
         jq --null-input --compact-output \
           --arg path "${path}" \

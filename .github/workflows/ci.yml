@@ -179,7 +179,7 @@ jobs:
             --report "${RUNNER_TEMP}/bats-junit"
       # if: failure() -- the report is only interesting when something went red,
       # and uploading ~22 KB of green XML on every push is noise. run-all-checks
-      # writes a gawk/ or bwk/ subdirectory, named for the leg's awk (#83).
+      # writes a gawk/ or bwk/ subdirectory, named for the leg's awk.
       # The name must be unique across the whole workflow run: two legs
       # uploading `bats-junit-gate` would collide. The OS alone is not unique
       # once a platform is sliced, and the slice itself holds a `/`, which an
@@ -195,7 +195,7 @@ jobs:
     name: coverage
     # Linux only: nixpkgs' kcov names no darwin platform at all, so the devShell
     # does not carry it on macos-latest and `run-tests --coverage` would die
-    # there by design (#91).
+    # there by design.
     #
     # Its own job, in parallel with the gate, rather than a step after the gate:
     # the kcov run is a full extra pass of the suite, and as a step it would add
@@ -317,7 +317,7 @@ jobs:
       - uses: ./.github/actions/bats-ambient  # zizmor: ignore[self-repository]
       - name: Run the suite against ambient tools
         run: ./run-tests --report "${RUNNER_TEMP}/bats-junit"
-      # See the gate job's upload step for why this only fires on failure (#83).
+      # See the gate job's upload step for why this only fires on failure.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: failure()
         with:
@@ -337,9 +337,9 @@ jobs:
           persist-credentials: false
       - name: Install a modern bash
         # bash is the ONLY macOS prerequisite. Stock awk is one-true-awk, and
-        # since #7 the scanner depends on nothing awk-specific, so this leg runs
-        # the suite against /usr/bin/awk on purpose: it is exactly what a
-        # coworker's Mac looks like after the README's `brew install bash`.
+        # the scanner depends on nothing awk-specific, so this leg runs the
+        # suite against /usr/bin/awk on purpose: it is exactly what a coworker's
+        # Mac looks like after the README's `brew install bash`.
         run: brew install bash
       - name: Report the ambient toolchain
         run: |
@@ -364,7 +364,7 @@ jobs:
           awk --version 2>&1 | head -1
           bash --version | head -1
           ./run-tests --report "${RUNNER_TEMP}/bats-junit"
-      # See the gate job's upload step for why this only fires on failure (#83).
+      # See the gate job's upload step for why this only fires on failure.
       # This leg runs no harden-runner, so nothing in its egress path needs
       # allowlisting.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2

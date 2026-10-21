@@ -1138,9 +1138,9 @@ function consumption::result_is_consumed() {
   # invocation in command position, so a word reached here is a prefix command,
   # one of its flags, that flag's value, an assignment word, or part of a
   # redirection. Testing for a
-  # prefix COMMAND alone stopped at the value word and hid the enclosing `if` of
-  # `if sudo -u bob pgrep --full x`, `if timeout 5 pgrep --full x` and every
-  # other prefix carrying an option or an operand (#132). The prefix-command test
+  # prefix COMMAND alone would stop at the value word and hide the enclosing `if`
+  # of `if sudo -u bob pgrep --full x`, `if timeout 5 pgrep --full x` and every
+  # other prefix carrying an option or an operand. The prefix-command test
   # stays ahead of the stop test because `time` is both a prefix and a keyword.
   local -n openers="$2"
   local k="$((target - 1))" word

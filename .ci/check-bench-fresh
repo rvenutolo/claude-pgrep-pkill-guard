@@ -5,10 +5,10 @@
 #
 #              The report records the commit it was generated from in its
 #              provenance table, and the README's Performance section quotes its
-#              figures as fact. Nothing connected them until #84: the file
-#              then said `4c189fb`, and hooks/ had moved twice since --
-#              including `perf: split the guard`, the single change the
-#              benchmark exists to measure. A published number that no longer
+#              figures as fact. Nothing else connects them, so they drift
+#              apart silently: a report recording `4c189fb` predates
+#              `perf: split the guard`, the single change the benchmark
+#              exists to measure. A published number that no longer
 #              describes the code is worse than no number, because it reads as
 #              measured rather than as guessed.
 #
@@ -51,7 +51,7 @@
 #              an ordinary hooks/ PR sees a WARN it can read and move past.
 #
 #              Verdict 3 is not a corner case invented for symmetry. `4c189fb`,
-#              the sha RESULTS.md recorded when #84 was filed, is exactly it:
+#              a sha RESULTS.md has recorded, is exactly it:
 #              the object is in the store, but it is on no branch, because it
 #              was superseded on its own branch by `6fa70a0` before that branch
 #              merged. `git merge-base --is-ancestor` says nothing about hooks/
@@ -112,8 +112,8 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
-# ERR trap is dropped first only for symmetry with the verdict returns (#43,
-# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# ERR trap is dropped first only for symmetry with the verdict returns
+# (invariant 6); exit itself never fires it. A top-level guard ahead of the
 # bindings, the same file-layout exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [dir]\n' "${0##*/}" >&2
@@ -310,7 +310,7 @@ function main() {
     printf 'FAIL: %s is missing or unreadable\n' "${REPORT}" >&2
     printf '      Generate it with: just bench\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -321,7 +321,7 @@ function main() {
   # decide the exit code.
   if ! recorded="$(recorded_commit)"; then
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -350,8 +350,8 @@ function main() {
     printf '      exists in this history. Regenerate with: just bench\n' >&2
     if [[ -n "${STRICT}" ]]; then
       # A gate reporting its own verdict is not a crash: drop the ERR trap so
-      # the diagnostics above are the last thing the reader sees (#43,
-      # invariant 6).
+      # the diagnostics above are the last thing the reader sees
+      # (invariant 6).
       trap - ERR
       return 1
     fi
@@ -366,7 +366,7 @@ function main() {
   if ! changes="$(git -C "${REPO_DIR}" log --format='%h %s' "${recorded}..HEAD" -- "${BENCH_SUBJECT}")"; then
     printf 'FAIL: could not read the %s history since %s\n' "${BENCH_SUBJECT}" "${recorded}" >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -400,8 +400,8 @@ function main() {
     fi
     if [[ -n "${STRICT}" ]]; then
       # A gate reporting its own verdict is not a crash: drop the ERR trap so
-      # the diagnostics above are the last thing the reader sees (#43,
-      # invariant 6).
+      # the diagnostics above are the last thing the reader sees
+      # (invariant 6).
       trap - ERR
       return 1
     fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# @description Check every link in the tracked tree with lychee (#42).
+# @description Check every link in the tracked tree with lychee.
 #
 #              The choices below look arbitrary and are not:
 #
@@ -8,18 +8,17 @@
 #                 rather than from a bare `lychee .`. A tree walk does not honour
 #                 gitignore-adjacent reality: it descends into the author's
 #                 UNTRACKED docs/superpowers/ and .claude/ trees and reports
-#                 their links as this repo's. That is the same trap #46 fixed for
-#                 `typos`, and .ci/run-lint-checks solves it with exactly this
-#                 incantation -- every line matches the empty pattern, so git
-#                 names every tracked file, and `-I` (git grep has no long form
-#                 for it) drops the binaries, which keeps lychee from reading
-#                 assets/deny-message.png as prose.
+#                 their links as this repo's. That is the same trap a
+#                 tree-walking `typos` falls into, and .ci/run-lint-checks
+#                 solves it with exactly this incantation -- every line matches
+#                 the empty pattern, so git names every tracked file, and `-I`
+#                 (git grep has no long form for it) drops the binaries, which
+#                 keeps lychee from reading assets/deny-message.png as prose.
 #              2. The config is passed by ABSOLUTE path. lychee's default
 #                 config name differs between releases (`.lycheerc` in older
 #                 ones), and a config under a name the installed release does
-#                 not look for is read by nobody while looking configured
-#                 (#42). Relying on cwd would be the same mistake in a second
-#                 form.
+#                 not look for is read by nobody while looking configured.
+#                 Relying on cwd would be the same mistake in a second form.
 #              3. A missing GitHub token WARNS rather than fails. The token
 #                 lifts anonymous GitHub rate limits on this repo's own links
 #                 -- it is not a credential the check needs to function. A coworker with no `gh` login must still be
@@ -108,7 +107,7 @@ function main() {
   if ((${#files[@]} == 0)); then
     printf 'FAIL: no tracked text files found — this is a failure, not a clean pass\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -148,7 +147,7 @@ function main() {
     printf 'FAIL: lychee reported at least one unreachable link\n' >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

@@ -9,8 +9,8 @@ extend-exclude = ["tests/cases/*.tsv", "flake.lock"]
 # reads a 7-character hex string as an identifier and splits it into words, so
 # `33ba166` reports as `ba` -> `by`/`be` and reds the release job. Whether that
 # fires depends only on which hex characters a release's SHAs happen to contain,
-# so every release was a coin flip -- and it cannot self-heal, because `ba` has
-# two suggestions and `typos --write-changes` will not guess between them (#61).
+# so every release is a coin flip -- and it cannot self-heal, because `ba` has
+# two suggestions and `typos --write-changes` will not guess between them.
 #
 # The 40-character form in the URL beside it needs no entry: typos' own
 # hash-shaped-string heuristic already ignores it. Only the abbreviated form is

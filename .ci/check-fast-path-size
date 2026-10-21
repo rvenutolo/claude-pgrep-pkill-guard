@@ -11,12 +11,11 @@
 #              2203. A guard parsed whole at that length pays ~2.4 ms of pure
 #              parse on every call.
 #
-#              The guard is therefore split (#55): a small entry script
-#              that runs the payload prefilter, and
-#              hooks/pgrep-pkill-guard-body.sh, a loader for the parts under
-#              hooks/lib/, none of it with a shebang or exec bit -- which
-#              the entry script sources only for human mode or once a payload
-#              looks worth inspecting. That win is invisible to every other
+#              The guard is therefore split: a small entry script that runs
+#              the payload prefilter, and hooks/pgrep-pkill-guard-body.sh, a
+#              loader for the parts under hooks/lib/, none of it with a
+#              shebang or exec bit -- which the entry script sources only for
+#              human mode or once a payload looks worth inspecting. That win is invisible to every other
 #              check in this repo, so without this gate it would regress one
 #              helper at a time and nobody would notice.
 #
@@ -56,7 +55,7 @@ function main() {
   if [[ ! -r "${file}" ]]; then
     printf 'FAIL: %s is missing or unreadable\n' "${FAST_PATH}" >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -69,7 +68,7 @@ function main() {
   if ((lines == 0)); then
     printf 'FAIL: %s is empty — the line count looks broken\n' "${FAST_PATH}" >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -78,7 +77,7 @@ function main() {
     printf 'FAIL: %s is %s lines, over the %s-line ceiling by %s\n' \
       "${FAST_PATH}" "${lines}" "${MAX_LINES}" "$((lines - MAX_LINES))" >&2
     printf '      bash parses every one of those lines on every Bash tool\n' >&2
-    printf '      call (#55, ~1.2 us/line). Move the new code into a part\n' >&2
+    printf '      call (~1.2 us/line). Move the new code into a part\n' >&2
     printf '      under hooks/lib/ (sourced by %s)\n' "${BODY_PATH}" >&2
     printf '      rather than raising the ceiling.\n' >&2
     rc=1
@@ -86,7 +85,7 @@ function main() {
     printf 'OK: %s is %s lines (ceiling %s)\n' "${FAST_PATH}" "${lines}" "${MAX_LINES}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

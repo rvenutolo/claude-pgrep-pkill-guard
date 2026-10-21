@@ -48,7 +48,7 @@ readonly HEALTHY_FILES
 #              what these cases are grading. What they grade is the LOCATION
 #              rule -- the merged report `run-tests --coverage` writes with
 #              `kcov --merge`, at kcov-merged/coverage.json, and nothing else --
-#              and, since #128, the INTEGRITY rule: every required hooks/ file
+#              and the INTEGRITY rule: every required hooks/ file
 #              present in files[] with a non-zero covered-line count. Both are
 #              pure JSON-and-filesystem shape and need no kcov at all. A short
 #              flag only where macOS has no long form, on purpose: a compat CI
@@ -57,7 +57,7 @@ readonly HEALTHY_FILES
 #
 #              The healthy fixture carries a files[] array because the
 #              INTEGRITY rule requires one: a report with no files[] is
-#              exactly the broken report the reporter must refuse (#128), so a
+#              exactly the broken report the reporter must refuse, so a
 #              fixture meant to pass carries what a healthy report carries.
 # @arg $1 root directory to populate
 # @arg $2 percent the percent_covered value to record, or the empty string to
@@ -167,14 +167,14 @@ function make_single_run_report() {
   assert_output '76.42'
 }
 
-# --- Report integrity (#128) -------------------------------------------------
+# --- Report integrity --------------------------------------------------------
 #
 # kcov 43 desynchronises on a traced command carrying an odd number of unescaped
 # apostrophes and drops the whole of hooks/pgrep-pkill-guard-body.sh from the
 # report rather than undercounting it. What survives is a well-formed JSON with
 # an arithmetically correct percentage over the files that remain, so nothing
-# about the report's SHAPE says it is wrong -- which is how #126 came to be
-# filed against helpers the suite provably reaches.
+# about the report's SHAPE says it is wrong, and helpers the suite provably
+# reaches read as never entered.
 #
 # These cases grade the reporter, not kcov. Reproducing the real loss would mean
 # a two-and-a-half-minute Linux-only kcov run to observe a bug in a third-party
@@ -192,8 +192,8 @@ function make_single_run_report() {
   # Naming the file is the whole point of the message: "the report is incomplete"
   # sends the next reader back to first principles.
   assert_output --partial 'pgrep-pkill-guard-body.sh'
-  # The issue number travels with the failure so nobody re-derives the trigger.
-  assert_output --partial '#128'
+  # The trigger travels with the failure so nobody re-derives it.
+  assert_output --partial 'odd number of unescaped apostrophes'
   # And the number must not escape anyway. A gate that goes red while still
   # printing the figure feeds the figure to whatever reads stdout.
   refute_output --partial '76.42'
@@ -209,7 +209,7 @@ function make_single_run_report() {
   run "${REPORTER}" "${BATS_TEST_TMPDIR}/cov"
   assert_failure
   assert_output --partial 'pgrep-pkill-guard.sh'
-  assert_output --partial '#128'
+  assert_output --partial 'odd number of unescaped apostrophes'
 }
 
 @test "report-coverage: a body file with zero covered lines fails" {
@@ -227,7 +227,7 @@ function make_single_run_report() {
   assert_failure
   assert_output --partial 'zero covered lines'
   assert_output --partial 'pgrep-pkill-guard-body.sh'
-  assert_output --partial '#128'
+  assert_output --partial 'odd number of unescaped apostrophes'
   refute_output --partial '27.83'
 }
 

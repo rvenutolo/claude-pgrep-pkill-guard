@@ -39,7 +39,7 @@ export LC_ALL=C
 # Resolved lazily by resolve_hook_dir, via load_body: only the human-mode
 # dispatch or a payload that passed the prefilter pays for it. It locates both
 # the sourced body and the awk scanner, and costs a `dirname` fork and exec
-# (~1.6 ms, #54) that an ordinary Bash call has no reason to pay.
+# (~1.6 ms) that an ordinary Bash call has no reason to pay.
 #
 # Declared here rather than only inside the function so `set -u` has a
 # definition to see on any path that never resolves it.
@@ -124,7 +124,7 @@ function main() {
   fi
 
   # A builtin read rather than `input="$(cat)"`, which is a fork and an exec on
-  # every Bash tool call and measured ~2.4 ms of one (#54). The empty delimiter
+  # every Bash tool call and measured ~2.4 ms of one. The empty delimiter
   # reads to EOF, so `read` returns 1 having stored the whole payload -- that is
   # the normal case here, not a failure, which is what the `|| :` is for. `IFS=`
   # with an empty delimiter keeps the payload byte for byte: no word splitting,
@@ -139,9 +139,9 @@ function main() {
   local input=''
   IFS= read -r -d '' input || : # an empty delimiter returns 1 at EOF with the payload stored
 
-  # The prefilter. Everything below this point costs a `jq` spawn, plus at least one
-  # `awk` scanner pass once the command names a trigger token, and on an ordinary
-  # Bash call none of it finds anything: #32 measured 13.12 ms per call against a 1.55 ms spawn floor.
+  # The prefilter. Everything below costs a `jq` spawn, plus at least one `awk`
+  # pass once the command names a trigger token, and on an ordinary Bash call
+  # none of it finds anything: measured at 13.12 ms against a 1.55 ms floor.
   #
   # This is sound because it is provably weaker than a gate the guard already
   # applies to the parsed command:
@@ -162,7 +162,7 @@ function main() {
   # Testing the RAW PAYLOAD rather than the parsed command is the whole point.
   # A substring test does not care that `pkill` sits behind `sudo`, inside
   # `bash -c '...'`, or in a heredoc body -- the shapes that made Claude Code's
-  # own `if:` handler filter unusable here (#29: 39 of 180 non-allow rows missed).
+  # own `if:` handler filter unusable here (probed, it missed 39 of 180).
   #
   # The test is a superset, so it fails in the safe direction: a payload that
   # matches merely takes the full path below at its full cost. A `cwd` or
@@ -170,7 +170,7 @@ function main() {
   # positive, which is a performance non-event.
   #
   # The proof assumes the scanner never recognises a name that is not a literal
-  # substring of the payload -- true because it does not unquote (#52). If that
+  # substring of the payload -- true because it does not unquote. If that
   # ever changes, revisit this pattern in the same commit; tests/prefilter.bats
   # is what will catch the drift. It also assumes the payload spells the
   # command's characters out literally rather than escaping them -- true
@@ -190,7 +190,7 @@ function main() {
   # the machinery that does it. Everything below this point lives in the sibling
   # loader and the parts under hooks/lib/ it sources, which is why an ordinary
   # Bash call parses under 200 lines (.ci/check-fast-path-size), not the whole
-  # guard (#55).
+  # guard.
   load_body || return 0
 
   classify::inspect_command "${input}"

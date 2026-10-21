@@ -170,10 +170,10 @@ function record_commit() {
 }
 
 @test "bench fresh: a release-please version bump alone is not stale" {
-  # The state release PR #50 sat in for twelve days. release-please-config.json
-  # lists hooks/pgrep-pkill-guard-body.sh as a generic extra-file, so every
-  # release PR carries a one-line hooks/ diff -- and the gate demanded an hour
-  # of wall-clock benchmarking over a string the hook never branches on.
+  # The state every release PR is in. release-please-config.json lists
+  # hooks/pgrep-pkill-guard-body.sh as a generic extra-file, so every release PR
+  # carries a one-line hooks/ diff -- and a gate that counted it would demand an
+  # hour of wall-clock benchmarking over a string the hook never branches on.
   local -r root="${BATS_TEST_TMPDIR}/version-bump"
   make_bench_fixture "${root}"
   write_hook "${root}" '1.1.0'
@@ -253,11 +253,10 @@ HOOK
 }
 
 @test "bench fresh: an unreachable recorded commit is a different failure" {
-  # The state the real repo was in when #84 was filed: `4c189fb` is in the
-  # object store and on no branch, because it was superseded on its own branch
-  # before that branch merged. No comparison is possible, so the report must not
-  # claim one -- saying "hooks/ changed" here would send the reader to a diff
-  # that does not exist.
+  # A recorded commit that is in the object store and on no branch, because it
+  # was superseded on its own branch before that branch merged. No comparison is
+  # possible, so the report must not claim one -- saying "hooks/ changed" here
+  # would send the reader to a diff that does not exist.
   local -r root="${BATS_TEST_TMPDIR}/unreachable"
   make_bench_fixture "${root}"
   printf 'guard, superseded\n' > "${root}/hooks/pgrep-pkill-guard.sh"

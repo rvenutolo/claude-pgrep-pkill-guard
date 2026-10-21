@@ -71,10 +71,10 @@ BODY
 }
 
 @test "guard parts: a row whose function was renamed away is named" {
-  # The bug this gate was filed for. The part loads perfectly well; only the
+  # The bug this gate exists for. The part loads perfectly well; only the
   # string in the table is stale, and at runtime that stands the guard down on
   # every call that reaches the body, with a message that cannot say whether
-  # the part failed to parse or the row is stale (#147).
+  # the part failed to parse or the row is stale.
   local -r root="${BATS_TEST_TMPDIR}/renamed"
   make_parts_fixture "${root}"
   printf 'function inspect_payload() {\n  :\n}\n' > "${root}/hooks/lib/classify.sh"

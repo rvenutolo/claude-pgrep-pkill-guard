@@ -7,12 +7,12 @@
 #
 #              hooks/pgrep-pkill-guard-body.sh pins one function name per part as
 #              a STRING, and proves a part loaded by calling `declare -F` on the
-#              paired name (#147). That makes a rename that misses the table a
-#              runtime failure: the guard prints INACTIVE and allows the command
-#              through. The bats suite catches it -- every case that reaches the
-#              body gets INACTIVE instead of a verdict and reddens -- but only
-#              at test time. This gate is the lint-time half, and it runs in
-#              milliseconds against the text of the table.
+#              paired name. That makes a rename that misses the table a runtime
+#              failure: the guard prints INACTIVE and allows the command
+#              through. The bats suite catches it -- every case that reaches
+#              the body gets INACTIVE instead of a verdict and reddens -- but
+#              only at test time. This gate is the lint-time half, and it runs
+#              in milliseconds against the text of the table.
 #
 #              The reverse direction matters just as much: a part under
 #              hooks/lib/ that no row names is never sourced, so its functions
@@ -61,8 +61,8 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # check anyway and report success on something nobody asked for. Exit 2 rather
 # than 1: 1 is this script's verdict on what it inspected, and "you called it
 # wrong" must stay distinguishable from "what you pointed me at is wrong". The
-# ERR trap is dropped first only for symmetry with the verdict returns (#43,
-# invariant 6); exit itself never fires it. A top-level guard ahead of the
+# ERR trap is dropped first only for symmetry with the verdict returns
+# (invariant 6); exit itself never fires it. A top-level guard ahead of the
 # bindings, the same file-layout exemption a version guard gets.
 if (($# > 1)); then
   printf 'usage: %s [dir]\n' "${0##*/}" >&2
@@ -169,7 +169,7 @@ function check_row() {
       "${path}" "${function_name}()" >&2
     printf '      The loader proves a part loaded by asking declare -F for\n' >&2
     printf '      that name, so a rename that misses the table makes the guard\n' >&2
-    printf '      print INACTIVE and allow the command through (#147). Rename\n' >&2
+    printf '      print INACTIVE and allow the command through. Rename\n' >&2
     printf '      the row and the function together.\n' >&2
     printf '      Note: a definition is matched as the word function, the\n' >&2
     printf '      name and (), at column zero -- which is how every part is\n' >&2
@@ -187,7 +187,7 @@ function main() {
     printf 'FAIL: %s is missing or unreadable; there is no table to check\n' \
       "${LOADER}" >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -204,7 +204,7 @@ function main() {
     printf '      Either the table is empty or this gate no longer recognises\n' >&2
     printf '      it; an empty scan is not a clean pass.\n' >&2
     # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-    # diagnostics above are the last thing the reader sees (#43, invariant 6).
+    # diagnostics above are the last thing the reader sees (invariant 6).
     trap - ERR
     return 1
   fi
@@ -252,7 +252,7 @@ function main() {
       "${#rows[@]}" "${LIB_DIR}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
-  # diagnostics above are the last thing the reader sees (#43, invariant 6).
+  # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR
   return "${rc}"
 }

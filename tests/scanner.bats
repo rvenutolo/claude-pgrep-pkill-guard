@@ -538,7 +538,7 @@ function build_inactive_fixture() {
   chmod +x "${probe_dir}/hook.sh"
   # The body too, or the entry script stops at its own missing-sibling branch and
   # never reaches the awk and scanner checks these probes exist to exercise --
-  # they would report `inactive` for the wrong reason and pass regardless (#55).
+  # they would report `inactive` for the wrong reason and pass regardless.
   cp -- "${BODY}" "${probe_dir}/pgrep-pkill-guard-body.sh"
   # And the parts the body sources, for the same reason.
   cp -R -- "${LIB_DIR}" "${probe_dir}/lib"
@@ -671,7 +671,7 @@ function loader_probe() {
 @test "scanner: a part whose last top-level command fails still loads" {
   # `source` yields the status of the sourced file's last top-level command, so
   # a loader that trusted that status would call this part "missing or failed
-  # to load" and stand the guard down on every call (#147). The loader must
+  # to load" and stand the guard down on every call. The loader must
   # judge a part by what it defines, not by what its last line returned. The
   # part is intact -- every function it holds is still here -- so the probe's
   # `pkill --full zzznoproc` must get the ordinary deny, not INACTIVE. The

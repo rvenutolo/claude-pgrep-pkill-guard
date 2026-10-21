@@ -31,8 +31,8 @@ function setup() {
 #              stub that only touches a marker.
 #
 #              Never the real script in the real repo. The rejection cases feed
-#              an argument shape the gate should reject, and the gate used to
-#              run anyway -- including `run-tests`, which runs this very file
+#              an argument shape the gate should reject; a gate that wrongly
+#              runs anyway would run `run-tests`, which runs this very file
 #              again, recursing through the whole gate. In the fixture every
 #              `${REPO_DIR}/...` callee but the stubs is missing, so
 #              a gate that wrongly runs only collects exit 127s it already

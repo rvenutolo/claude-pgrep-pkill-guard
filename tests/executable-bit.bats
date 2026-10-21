@@ -112,8 +112,8 @@ function make_exec_bit_fixture() {
 }
 
 @test "executable bit: a non-executable file tracked 100755 is named" {
-  # The case the gate was written for: pgrep-scan.awk is only ever read by
-  # `awk -f`, and an exec bit on it would suggest otherwise.
+  # The gate's core case: pgrep-scan.awk is only ever read by `awk -f`, and an
+  # exec bit on it would suggest otherwise.
   local -r root="${BATS_TEST_TMPDIR}/exec"
   make_exec_bit_fixture "${root}"
   git -C "${root}" update-index --chmod=+x -- 'hooks/pgrep-scan.awk'
@@ -141,8 +141,8 @@ function make_exec_bit_fixture() {
 }
 
 @test "executable bit: a literal row whose file is no longer tracked is named" {
-  # A rename used to drop the file from the check without a word. The file is
-  # left on disk, untracked: only the tracked tree counts.
+  # A rename must not drop the file from the check without a word. The file
+  # is left on disk, untracked: only the tracked tree counts.
   local -r root="${BATS_TEST_TMPDIR}/vanished-literal"
   make_exec_bit_fixture "${root}"
   git -C "${root}" update-index --force-remove -- 'bench/run'

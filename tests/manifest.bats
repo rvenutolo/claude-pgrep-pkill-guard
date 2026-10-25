@@ -1,44 +1,27 @@
-# The plugin's manifests -- .claude-plugin/plugin.json,
-# .claude-plugin/marketplace.json and hooks/hooks.json -- and the files they
-# point at; the entry script's old-bash INACTIVE branch, pinned at source
-# level; and .ci/check-manifest-invariants, against the real repo and fixtures.
+# The plugin's manifests -- .claude-plugin/plugin.json and hooks/hooks.json --
+# and the files they point at; the entry script's old-bash INACTIVE branch,
+# pinned at source level; and .ci/check-manifest-invariants, against the real
+# repo and fixtures.
 #
-# setup sets PLUGIN_JSON, MARKET_JSON and HOOKS_JSON, the paths of the real
-# manifests.
+# setup sets PLUGIN_JSON and HOOKS_JSON, the paths of the real manifests.
 
 function setup() {
   load 'test_helper/common'
   PLUGIN_JSON="${REPO_DIR}/.claude-plugin/plugin.json"
-  MARKET_JSON="${REPO_DIR}/.claude-plugin/marketplace.json"
   HOOKS_JSON="${REPO_DIR}/hooks/hooks.json"
 }
 
-@test "manifest: all three files are valid JSON" {
+@test "manifest: plugin.json and hooks.json are valid JSON" {
   run jq 'empty' "${PLUGIN_JSON}"
-  assert_success
-  run jq 'empty' "${MARKET_JSON}"
   assert_success
   run jq 'empty' "${HOOKS_JSON}"
   assert_success
 }
 
-@test "manifest: plugin name matches the marketplace entry" {
-  local plugin_name market_name
+@test "manifest: the plugin is named pgrep-pkill-guard" {
+  local plugin_name
   plugin_name="$(jq --raw-output '.name' "${PLUGIN_JSON}")"
-  market_name="$(jq --raw-output '.plugins[0].name' "${MARKET_JSON}")"
   [[ "${plugin_name}" == 'pgrep-pkill-guard' ]]
-  [[ "${market_name}" == 'pgrep-pkill-guard' ]]
-}
-
-@test "manifest: marketplace declares the required top-level fields" {
-  run jq --exit-status '.name and .owner.name and (.plugins | length > 0)' "${MARKET_JSON}"
-  assert_success
-}
-
-@test "manifest: the plugin source points at the repo root" {
-  local source
-  source="$(jq --raw-output '.plugins[0].source' "${MARKET_JSON}")"
-  [[ "${source}" == './' ]]
 }
 
 @test "manifest: the hook command invokes the script directly, not via bash" {
@@ -92,49 +75,34 @@ function setup() {
   assert_output --partial 'bash 4.4+ required'
 }
 
-@test "manifest: the marketplace category is a recognised value" {
-  local category
-  category="$(jq --raw-output '.plugins[0].category' "${MARKET_JSON}")"
-  # `safety` appears zero times across the 289 entries in
-  # anthropics/claude-plugins-official; `security` is the real vocabulary.
-  [[ "${category}" == 'security' ]]
-}
-
 @test "manifest: safety survives as a keyword" {
   run jq --exit-status '.keywords | index("safety")' "${PLUGIN_JSON}"
   assert_success
 }
 
-@test "manifest: plugin and marketplace advertise the same version" {
-  local plugin_version market_version
+@test "manifest: the plugin advertises a semver version" {
+  local plugin_version
   plugin_version="$(jq --raw-output '.version' "${PLUGIN_JSON}")"
-  market_version="$(jq --raw-output '.plugins[0].version' "${MARKET_JSON}")"
-  [[ "${plugin_version}" == "${market_version}" ]]
   [[ "${plugin_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
 
-@test "manifest: both files declare a schemastore \$schema" {
-  local plugin_schema market_schema
+@test "manifest: plugin.json declares a schemastore \$schema" {
+  local plugin_schema
   plugin_schema="$(jq --raw-output '.["$schema"]' "${PLUGIN_JSON}")"
-  market_schema="$(jq --raw-output '.["$schema"]' "${MARKET_JSON}")"
   [[ "${plugin_schema}" == 'https://json.schemastore.org/claude-code-plugin-manifest.json' ]]
-  [[ "${market_schema}" == 'https://json.schemastore.org/claude-code-marketplace.json' ]]
+}
+
+@test "manifest: the repo ships no marketplace manifest" {
+  # The plugin is listed in the separate rvenutolo/claude-plugins-marketplace
+  # repo, pinned by tag and sha. A copy here would be a second, unpinned
+  # listing that nothing keeps in sync.
+  [[ ! -e "${REPO_DIR}/.claude-plugin/marketplace.json" ]]
 }
 
 @test "manifest: the plugin declares a displayName for the /plugin UI" {
   local display_name
   display_name="$(jq --raw-output '.displayName' "${PLUGIN_JSON}")"
   [[ "${display_name}" == 'pgrep/pkill Guard' ]]
-}
-
-@test "manifest: the marketplace entry carries homepage and author" {
-  local homepage author_name author_url
-  homepage="$(jq --raw-output '.plugins[0].homepage' "${MARKET_JSON}")"
-  author_name="$(jq --raw-output '.plugins[0].author.name' "${MARKET_JSON}")"
-  author_url="$(jq --raw-output '.plugins[0].author.url' "${MARKET_JSON}")"
-  [[ "${homepage}" == 'https://github.com/rvenutolo/claude-pgrep-pkill-guard' ]]
-  [[ "${author_name}" == 'Rick Venutolo' ]]
-  [[ "${author_url}" == 'https://github.com/rvenutolo' ]]
 }
 
 @test "manifest: the hooks description is behavioural, not a label" {
@@ -156,28 +124,7 @@ function setup() {
 # @arg $1 root directory to populate
 function make_manifest_fixture() {
   local -r root="$1"
-  mkdir -p "${root}/.claude-plugin" "${root}/hooks" "${root}/beta/.claude-plugin"
-  cat > "${root}/.claude-plugin/marketplace.json" << 'JSON'
-{
-  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "rvenutolo",
-  "owner": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" },
-  "plugins": [
-    {
-      "name": "alpha-plugin",
-      "source": "./",
-      "description": "A description that is comfortably longer than ten characters.",
-      "homepage": "https://example.com/alpha"
-    },
-    {
-      "name": "beta-plugin",
-      "source": "./beta",
-      "description": "Another description that is comfortably longer than ten characters.",
-      "homepage": "https://example.com/beta"
-    }
-  ]
-}
-JSON
+  mkdir -p "${root}/.claude-plugin" "${root}/hooks"
   cat > "${root}/.claude-plugin/plugin.json" << 'JSON'
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
@@ -185,20 +132,6 @@ JSON
   "description": "A plugin description that is comfortably longer than ten characters.",
   "homepage": "https://example.com/alpha",
   "repository": "https://example.com/alpha.git",
-  "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
-}
-JSON
-  # beta-plugin's marketplace entry points at "./beta", and I8 requires
-  # every string source to vendor its own plugin.json -- so the fixture must
-  # provide one, or every test that reuses this fixture would fail on I8 for
-  # the wrong reason.
-  cat > "${root}/beta/.claude-plugin/plugin.json" << 'JSON'
-{
-  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
-  "name": "beta-plugin",
-  "description": "A vendored plugin description that is comfortably longer than ten characters.",
-  "homepage": "https://example.com/beta",
-  "repository": "https://example.com/beta.git",
   "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
 }
 JSON
@@ -230,28 +163,10 @@ function fixture_jq() {
   assert_success
 }
 
-@test "invariants: I1 rejects an out-of-order plugins array" {
-  local -r root="${BATS_TEST_TMPDIR}/i1"
-  make_manifest_fixture "${root}"
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins |= reverse'
-  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
-  assert_failure
-  assert_output --partial 'I1'
-}
-
-@test "invariants: I2 rejects duplicate plugin names" {
-  local -r root="${BATS_TEST_TMPDIR}/i2"
-  make_manifest_fixture "${root}"
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[1].name = "alpha-plugin"'
-  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
-  assert_failure
-  assert_output --partial 'I2'
-}
-
 @test "invariants: I3 rejects a too-short description" {
   local -r root="${BATS_TEST_TMPDIR}/i3-short"
   make_manifest_fixture "${root}"
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].description = "tiny"'
+  fixture_jq "${root}/.claude-plugin/plugin.json" '.description = "tiny"'
   run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
   assert_failure
   assert_output --partial 'I3'
@@ -269,47 +184,10 @@ function fixture_jq() {
 @test "invariants: I4 rejects a non-https URL" {
   local -r root="${BATS_TEST_TMPDIR}/i4"
   make_manifest_fixture "${root}"
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.owner.url = "http://example.com"'
+  fixture_jq "${root}/.claude-plugin/plugin.json" '.homepage = "http://example.com"'
   run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
   assert_failure
   assert_output --partial 'I4'
-}
-
-@test "invariants: I8 rejects a source with no vendored plugin.json" {
-  local -r root="${BATS_TEST_TMPDIR}/i8"
-  make_manifest_fixture "${root}"
-  # "./ghost" passes the I9 allowlist and has no ".." -- the only thing wrong
-  # with it is that ${root}/ghost/.claude-plugin/plugin.json does not exist.
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[1].source = "./ghost"'
-  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
-  assert_failure
-  assert_output --partial 'I8'
-}
-
-@test "invariants: I9 rejects shell metacharacters in a source" {
-  local -r root="${BATS_TEST_TMPDIR}/i9"
-  make_manifest_fixture "${root}"
-  # An inert marker, never a real command: the point is that the string reaches
-  # the check, not that anything runs.
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].source = "./; echo PAYLOAD_RAN"'
-  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
-  assert_failure
-  # The I9 message quotes the offending value, so PAYLOAD_RAN appears in the
-  # output BY DESIGN -- a diagnostic that does not name the bad string is
-  # useless. The assertion below matches the whole quoted source, `echo`
-  # included, which is the form the message prints; it cannot tell a printed
-  # string from an evaluated one, which is why the payload is an inert echo.
-  assert_output --partial 'I9'
-  assert_output --partial './; echo PAYLOAD_RAN'
-}
-
-@test "invariants: I9 rejects a .. traversal in a source" {
-  local -r root="${BATS_TEST_TMPDIR}/i9-traversal"
-  make_manifest_fixture "${root}"
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].source = "../outside"'
-  run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
-  assert_failure
-  assert_output --partial 'I9'
 }
 
 @test "invariants: I10 rejects a zero-width space in a name" {
@@ -318,7 +196,7 @@ function fixture_jq() {
   # \u200b, not a literal zero-width space: a literal one is invisible in this
   # file and the first editor or copy-paste that eats it turns this into a test
   # that silently checks nothing.
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].name = "alpha\u200bplugin"'
+  fixture_jq "${root}/.claude-plugin/plugin.json" '.name = "alpha\u200bplugin"'
   run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
   assert_failure
   assert_output --partial 'I10'
@@ -330,7 +208,7 @@ function fixture_jq() {
   # \u200e, not a literal LEFT-TO-RIGHT MARK: a literal one is invisible in
   # this file and the first editor or copy-paste that eats it turns this into
   # a test that silently checks nothing.
-  fixture_jq "${root}/.claude-plugin/marketplace.json" '.plugins[0].name = "alpha\u200eplugin"'
+  fixture_jq "${root}/.claude-plugin/plugin.json" '.name = "alpha\u200eplugin"'
   run "${REPO_DIR}/.ci/check-manifest-invariants" "${root}"
   assert_failure
   assert_output --partial 'I10'

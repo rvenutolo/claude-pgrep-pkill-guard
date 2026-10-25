@@ -11,11 +11,6 @@
           "jsonpath": "$.version"
         },
         {
-          "type": "json",
-          "path": ".claude-plugin/marketplace.json",
-          "jsonpath": "$.plugins[0].version"
-        },
-        {
           "type": "generic",
           "path": "hooks/pgrep-pkill-guard-body.sh"
         }

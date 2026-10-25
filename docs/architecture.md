@@ -188,7 +188,7 @@ release time. The literal is kept honest from outside this file. Its
 that is the form release-please's generic updater rewrites, not the
 `x-release-please-start-version` block syntax — and `release-please-config.json`
 names the body as an `extra-files` entry of `type: "generic"`, so a release
-bumps it alongside `plugin.json` and `marketplace.json`.
+bumps it alongside `plugin.json`.
 `.ci/check-versions-in-sync` then reads it as one more version source, failing
 loudly if the line is missing, unannotated or not semver-shaped, and asserts it
 equals `plugin.json`'s `.version`. That assertion has **no `BOOTSTRAP_VERSION`
@@ -1179,16 +1179,15 @@ Without the `trap - ERR`, a real `.ci/check-manifest-invariants` failure ended
 like this:
 
 ```text
-FAIL: I9: marketplace plugins[0] source contains a path traversal (..): ../../etc
-FAIL: I8: marketplace plugins[0] source "../../etc" has no vendored .../plugin.json
-[check-manifest-invariants] ERROR: line 225 (exit 1): return "${rc}"
+FAIL: I4: plugin.json homepage is not an https URL: http://example.com
+[check-manifest-invariants] ERROR: line <n> (exit 1): return "${rc}"
 ```
 
-The first two lines are the answer. The third sends the reader hunting for a
-bug at line 225, where there is none — and line 225 was not even the `return`
-the message quotes: `LINENO` in that report was the `main "$@"` line at the
-bottom of the file. The trap fires once, at the top-level call, whatever
-returned non-zero underneath it. So the one line of the three that looks like a
+The first line is the answer. The second sends the reader hunting for a bug at
+the line number it reports, where there is none — and that line is not even the
+`return` the message quotes: `LINENO` in that report is the `main "$@"` line at
+the bottom of the file. The trap fires once, at the top-level call, whatever
+returned non-zero underneath it. So the one line of the two that looks like a
 stack pointer is the one line that points nowhere.
 
 **Why not `main "$@" || exit "$?"`.** It silences the report too, and it is a

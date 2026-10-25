@@ -84,8 +84,7 @@ format-check:
 hooks:
     ./.ci/activate-githooks
 
-# Print the Claude Code commands that add this working copy as a local marketplace, for dogfooding
+# Print the command that starts Claude Code with this working copy loaded as a plugin, for dogfooding
 install:
-    @echo "In Claude Code, run:"
-    @echo "  /plugin marketplace add {{ justfile_directory() }}"
-    @echo "  /plugin install pgrep-pkill-guard@rvenutolo"
+    @echo "Start Claude Code with this working copy loaded as a plugin:"
+    @echo "  claude --plugin-dir {{ justfile_directory() }}"

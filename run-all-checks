@@ -196,7 +196,7 @@ function main() {
   # non-zero return so a verdict never reads as a crash, external sources are
   # SHA-pinned, versions agree across manifests, the bats libraries are pinned
   # to the same SHAs on both sides of the hermetic boundary, the
-  # marketplace/plugin manifests satisfy the ported invariants, and every
+  # plugin manifest satisfies the ported invariants, and every
   # .github/ISSUE_TEMPLATE form is one GitHub will render rather than silently
   # drop from the chooser.
   # check-invariant-markers turns docs/architecture.md's "Design invariants"

@@ -2,10 +2,9 @@
 
 # @description Assert the plugin version agrees across every file that carries
 #              one. `plugin.json` is what gates whether installed users receive
-#              updates, and the marketplace entry is what the /plugin Discover
-#              tab reads; release-please bumps both through `extra-files`, so a
-#              disagreement means a bump was lost rather than that a version was
-#              chosen.
+#              updates, and release-please bumps it through `extra-files`, so a
+#              disagreement with the release-please manifest means a bump was
+#              lost rather than that a version was chosen.
 #
 #              A further source is the `HOOK_VERSION` constant in
 #              hooks/pgrep-pkill-guard-body.sh -- the string the guard's
@@ -17,10 +16,6 @@
 #              and a confidently wrong version there sends the maintainer to the
 #              wrong commit. A missing version is an inconvenience; a wrong one
 #              is a wasted triage.
-#
-#              `marketplace.json`'s `metadata.version` is deliberately NOT
-#              checked: it versions the marketplace catalogue, not the plugin,
-#              and nothing should couple it to the plugin's release cadence.
 # @noargs
 # @stderr FAIL lines naming each file whose version cannot be read and each pair
 #         of versions that disagree, or one OK line listing the versions; the
@@ -41,7 +36,6 @@ REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR
 
 readonly PLUGIN_JSON="${REPO_DIR}/.claude-plugin/plugin.json"
-readonly MARKET_JSON="${REPO_DIR}/.claude-plugin/marketplace.json"
 readonly RP_MANIFEST="${REPO_DIR}/.release-please-manifest.json"
 readonly BODY_SH="${REPO_DIR}/hooks/pgrep-pkill-guard-body.sh"
 
@@ -130,11 +124,10 @@ function read_hook_version() {
 }
 
 function main() {
-  local rc=0 plugin_version='' market_version=''
+  local rc=0 plugin_version=''
   local manifest_version='' hook_version=''
 
   plugin_version="$(read_version "${PLUGIN_JSON}" '.version')" || rc=1
-  market_version="$(read_version "${MARKET_JSON}" '.plugins[0].version')" || rc=1
   manifest_version="$(read_version "${RP_MANIFEST}" '."."')" || rc=1
   hook_version="$(read_hook_version "${BODY_SH}")" || rc=1
 
@@ -143,12 +136,6 @@ function main() {
     # read failures above are the last thing the reader sees (invariant 6).
     trap - ERR
     return "${rc}"
-  fi
-
-  if [[ "${plugin_version}" != "${market_version}" ]]; then
-    printf 'FAIL: plugin.json %s != marketplace.json plugins[0] %s\n' \
-      "${plugin_version}" "${market_version}" >&2
-    rc=1
   fi
 
   if [[ "${manifest_version}" != "${BOOTSTRAP_VERSION}" &&
@@ -167,8 +154,8 @@ function main() {
   fi
 
   if ((rc == 0)); then
-    printf 'OK: plugin %s, marketplace %s, release-please manifest %s, hook constant %s\n' \
-      "${plugin_version}" "${market_version}" "${manifest_version}" "${hook_version}" >&2
+    printf 'OK: plugin %s, release-please manifest %s, hook constant %s\n' \
+      "${plugin_version}" "${manifest_version}" "${hook_version}" >&2
   fi
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (invariant 6).

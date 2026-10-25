@@ -104,13 +104,15 @@ stateful rule:
 ## Install
 
 ```text
-/plugin marketplace add rvenutolo/claude-pgrep-pkill-guard
+/plugin marketplace add rvenutolo/claude-plugins-marketplace
 /plugin install pgrep-pkill-guard@rvenutolo
 /reload-plugins
 ```
 
-The repo is its own marketplace, so there is no separate marketplace to add.
-The last line activates the newly installed hook in the running session.
+The plugin is listed in the
+[rvenutolo marketplace](https://github.com/rvenutolo/claude-plugins-marketplace),
+a separate repository. The last line activates the newly installed hook in the
+running session.
 
 If the install reports that the marketplace is not found, the `marketplace add`
 line has not taken effect yet. Run it, then `/reload-plugins`, then retry the
@@ -120,9 +122,14 @@ The same steps from the CLI, for scripting a machine or a dotfiles
 bootstrap:
 
 ```console
-claude plugin marketplace add rvenutolo/claude-pgrep-pkill-guard
+claude plugin marketplace add rvenutolo/claude-plugins-marketplace
 claude plugin install pgrep-pkill-guard@rvenutolo
 ```
+
+Plugins are fetched over SSH from GitHub. Without a GitHub SSH key, set
+`CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` first. Only `claude plugin install` from
+the shell falls back to HTTPS on its own; installs and updates through
+`/plugin` do not.
 
 `claude plugin install` takes `-s`/`--scope` with the values `user`, `project`,
 or `local`, and defaults to `user`. `user` records the install for every project
@@ -183,7 +190,7 @@ What that reduces to, for the machine you are installing on:
   macOS and the BSDs). The scanner depends on nothing awk-specific.
 - **Claude Code** — any version with plugin marketplaces and `PreToolUse`
   `permissionDecision` support. There is no verified numeric floor to quote, so
-  this README does not invent one; CI validates both plugin manifests against a
+  this README does not invent one; CI validates the plugin manifest against a
   pinned CLI (`CLAUDE_CODE_VERSION`, in the `validate` job).
 
 **Linux works out of the box.** Current distro bash is 4.4+.
@@ -400,8 +407,9 @@ claude plugin uninstall pgrep-pkill-guard@rvenutolo
 the same `user` default, so a plugin installed into `project` or `local` has to
 be removed with the scope it was installed with.
 
-Removing the marketplace is optional, and leaving it in place costs nothing. If
-you want it gone too:
+Removing the marketplace is optional, and leaving it in place costs nothing. The
+marketplace hosts other plugins too, so removing it uninstalls every plugin
+installed from it. If you want it gone anyway:
 
 ```text
 /plugin marketplace remove rvenutolo

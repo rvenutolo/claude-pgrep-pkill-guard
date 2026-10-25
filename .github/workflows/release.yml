@@ -75,10 +75,10 @@ jobs:
 
       # release-please re-serialises every file it touches, and this repo's
       # own gates then reject the result: prettier collapses the `keywords`
-      # array it expands in the plugin and marketplace manifests, and
-      # markdownlint's MD012 rejects the double blank lines it writes into the
-      # changelog. Left alone, merging the release PR turns main red. So the
-      # release branch is reformatted in place before anyone can merge it.
+      # array it expands in the plugin manifest, and markdownlint's MD012
+      # rejects the double blank lines it writes into the changelog. Left
+      # alone, merging the release PR turns main red. So the release branch is
+      # reformatted in place before anyone can merge it.
       #
       # This cannot loop: the reformat lands on the release branch, and this
       # workflow fires only on push to main or a manual dispatch. It DOES

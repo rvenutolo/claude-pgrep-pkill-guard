@@ -10,13 +10,13 @@
 #              a real check-manifest-invariants failure ended like this:
 #
 #                FAIL: I4: plugin.json homepage is not an https URL: http://example.com
-#                [check-manifest-invariants] ERROR: line 225 (exit 1): return "${rc}"
+#                [check-manifest-invariants] ERROR: line <n> (exit 1): return "${rc}"
 #
 #              The FAIL line is the answer. The ERROR line sends the reader
-#              hunting for a bug at line 225, where there is none -- and 225 is
-#              not even the `return` it quotes, because LINENO in that report is
-#              the `main "$@"` call at the bottom of the file. The only line
-#              that looks like a stack pointer points nowhere.
+#              hunting for a bug at the line it reports, where there is none --
+#              that line is not even the `return` it quotes, because LINENO in
+#              that report is the `main "$@"` call at the bottom of the file.
+#              The only line that looks like a stack pointer points nowhere.
 #
 #              `trap - ERR` at the return gives up exactly that one report. The
 #              trap stays installed for everything before it, so a typo-d

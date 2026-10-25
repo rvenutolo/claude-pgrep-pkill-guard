@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# @description Validate both plugin manifests with the Claude Code CLI. This is
+# @description Validate the plugin manifest with the Claude Code CLI. This is
 #              the opt-in local half of the `validate` CI job; CI is what
 #              actually enforces the check, on a PINNED CLI version.
 #
@@ -10,18 +10,13 @@
 #              would make it non-deterministic. A contributor without the CLI
 #              installed must not be blocked, so a missing `claude` exits 0 with
 #              an explanation rather than failing.
-#
-#              Both files are named explicitly on purpose: `claude plugin
-#              validate <directory>` resolves to the MARKETPLACE manifest only
-#              and never reaches plugin.json, so a directory argument would
-#              silently check half of what it appears to.
 # @noargs
-# @stderr a `[<script>] <message>` banner before each manifest, the `SKIP:`
+# @stderr a `[<script>] <message>` banner before the manifest, the `SKIP:`
 #         advisory when the CLI is not installed, and the upgrade hint when the
 #         host bash is older than 4.4; the ERR trap's `[<script>] ERROR: ...`
 #         report when a command fails instead
-# @exitcode 0 both manifests validate, or the CLI is not installed
-# @exitcode 1 at least one manifest failed validation, or the host bash is
+# @exitcode 0 the manifest validates, or the CLI is not installed
+# @exitcode 1 the manifest failed validation, or the host bash is
 #             older than 4.4
 # @exitcode * otherwise the failing git status, when the repository root cannot
 #             be resolved
@@ -35,7 +30,7 @@ set -Eeuo pipefail
 # what to install. Check first, and say what to do. Must stay ABOVE the `shopt`
 # line it is protecting.
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
-  printf '%s: bash 4.4+ required to validate the manifests (found %s.%s). On macOS: brew install bash.\n' \
+  printf '%s: bash 4.4+ required to validate the manifest (found %s.%s). On macOS: brew install bash.\n' \
     "${0##*/}" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" >&2
   exit 1
 fi
@@ -57,16 +52,14 @@ function log() {
 
 function main() {
   if ! command -v claude > /dev/null 2>&1; then
-    printf 'SKIP: claude is not on PATH; the manifests are not validated\n' >&2
+    printf 'SKIP: claude is not on PATH; the manifest is not validated\n' >&2
     printf '      the validate job in .github/workflows/ci.yml enforces this on every PR.\n' >&2
     return 0
   fi
 
-  local rc=0 manifest
-  for manifest in '.claude-plugin/plugin.json' '.claude-plugin/marketplace.json'; do
-    log "validating ${manifest}"
-    claude plugin validate --strict "${REPO_DIR}/${manifest}" || rc=1
-  done
+  local rc=0
+  log 'validating .claude-plugin/plugin.json'
+  claude plugin validate --strict "${REPO_DIR}/.claude-plugin/plugin.json" || rc=1
   # A gate reporting its own verdict is not a crash: drop the ERR trap so the
   # diagnostics above are the last thing the reader sees (invariant 6).
   trap - ERR

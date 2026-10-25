@@ -92,6 +92,13 @@ function setup() {
   [[ "${plugin_schema}" == 'https://json.schemastore.org/claude-code-plugin-manifest.json' ]]
 }
 
+@test "manifest: the repo ships no marketplace manifest" {
+  # The plugin is listed in the separate rvenutolo/claude-plugins-marketplace
+  # repo, pinned by tag and sha. A copy here would be a second, unpinned
+  # listing that nothing keeps in sync.
+  [[ ! -e "${REPO_DIR}/.claude-plugin/marketplace.json" ]]
+}
+
 @test "manifest: the plugin declares a displayName for the /plugin UI" {
   local display_name
   display_name="$(jq --raw-output '.displayName' "${PLUGIN_JSON}")"
@@ -117,28 +124,7 @@ function setup() {
 # @arg $1 root directory to populate
 function make_manifest_fixture() {
   local -r root="$1"
-  mkdir -p "${root}/.claude-plugin" "${root}/hooks" "${root}/beta/.claude-plugin"
-  cat > "${root}/.claude-plugin/marketplace.json" << 'JSON'
-{
-  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "rvenutolo",
-  "owner": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" },
-  "plugins": [
-    {
-      "name": "alpha-plugin",
-      "source": "./",
-      "description": "A description that is comfortably longer than ten characters.",
-      "homepage": "https://example.com/alpha"
-    },
-    {
-      "name": "beta-plugin",
-      "source": "./beta",
-      "description": "Another description that is comfortably longer than ten characters.",
-      "homepage": "https://example.com/beta"
-    }
-  ]
-}
-JSON
+  mkdir -p "${root}/.claude-plugin" "${root}/hooks"
   cat > "${root}/.claude-plugin/plugin.json" << 'JSON'
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
@@ -146,20 +132,6 @@ JSON
   "description": "A plugin description that is comfortably longer than ten characters.",
   "homepage": "https://example.com/alpha",
   "repository": "https://example.com/alpha.git",
-  "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
-}
-JSON
-  # beta-plugin's marketplace entry points at "./beta", and I8 requires
-  # every string source to vendor its own plugin.json -- so the fixture must
-  # provide one, or every test that reuses this fixture would fail on I8 for
-  # the wrong reason.
-  cat > "${root}/beta/.claude-plugin/plugin.json" << 'JSON'
-{
-  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
-  "name": "beta-plugin",
-  "description": "A vendored plugin description that is comfortably longer than ten characters.",
-  "homepage": "https://example.com/beta",
-  "repository": "https://example.com/beta.git",
   "author": { "name": "Rick Venutolo", "url": "https://github.com/rvenutolo" }
 }
 JSON

@@ -407,9 +407,9 @@ claude plugin uninstall pgrep-pkill-guard@rvenutolo
 the same `user` default, so a plugin installed into `project` or `local` has to
 be removed with the scope it was installed with.
 
-Removing the marketplace is optional, and leaving it in place costs nothing. The
-marketplace hosts other plugins too, so removing it uninstalls every plugin
-installed from it. If you want it gone anyway:
+Removing the marketplace is optional, and leaving it in place costs nothing.
+Removing the marketplace uninstalls every plugin installed from it. If you want
+it gone anyway:
 
 ```text
 /plugin marketplace remove rvenutolo

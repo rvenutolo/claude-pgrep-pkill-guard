@@ -615,25 +615,29 @@ action's own `action.yml` at the pinned SHA whenever that pin moves.
 ### The Actions allowlist
 
 Repository settings restrict Actions to GitHub-owned actions plus an explicit
-list of owner patterns (`verified_allowed` is off, so Marketplace verification
-buys nothing here). That list is:
+list of per-action patterns of the form `owner/repo@*`, not whole owners
+(`verified_allowed` is off, so Marketplace verification buys nothing here). The
+policy also requires every `uses:` to be pinned to a full commit SHA.
 
-```text
-googleapis/*  step-security/*  nix-community/*  wagoid/*  DeterminateSystems/*  crazy-max/*
-```
-
-It is repository configuration, not a tracked file, so it is read and written
-through the API:
+The list is repository configuration, not a tracked file, and it is managed in the
+private `rvenutolo/tofu-github-repos` repository (`repos.auto.tfvars`, this
+repo's `actions.extra_patterns_allowed`). Change it
+there and apply it, never through the API directly, which the next apply would
+revert. Read the live value with:
 
 ```console
 gh api repos/rvenutolo/claude-pgrep-pkill-guard/actions/permissions/selected-actions
 ```
 
-A workflow using an owner outside the list is rejected by policy before it runs,
-which looks like a workflow failure rather than a settings problem. Adding one
-means reading the current value and merging into it — never writing the list
-from memory or from a design document, which is how the other entries would
-get dropped.
+The policy applies to nested actions too: a composite action that calls another
+action needs both on the list. `DeterminateSystems/determinate-nix-action` is
+one: it calls `DeterminateSystems/nix-installer-action` itself, so both stay
+listed though no workflow here names the second.
+
+A workflow using an action outside the list is rejected by policy before it
+runs: the run ends in `startup_failure` in zero seconds, with no jobs and no
+error, which looks like a workflow failure rather than a settings problem. Add
+the pattern and apply it before merging the workflow that needs it.
 
 ### The bash style gate
 

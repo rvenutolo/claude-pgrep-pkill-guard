@@ -619,11 +619,8 @@ list of per-action patterns of the form `owner/repo@*`, not whole owners
 (`verified_allowed` is off, so Marketplace verification buys nothing here). The
 policy also requires every `uses:` to be pinned to a full commit SHA.
 
-The list is repository configuration, not a tracked file, and it is managed in the
-private `rvenutolo/tofu-github-repos` repository (`repos.auto.tfvars`, this
-repo's `actions.extra_patterns_allowed`). Change it
-there and apply it, never through the API directly, which the next apply would
-revert. Read the live value with:
+The list is repository configuration, not a tracked file. Read the live value
+with:
 
 ```console
 gh api repos/rvenutolo/claude-pgrep-pkill-guard/actions/permissions/selected-actions
@@ -636,8 +633,8 @@ listed though no workflow here names the second.
 
 A workflow using an action outside the list is rejected by policy before it
 runs: the run ends in `startup_failure` in zero seconds, with no jobs and no
-error, which looks like a workflow failure rather than a settings problem. Add
-the pattern and apply it before merging the workflow that needs it.
+error, which looks like a workflow failure rather than a settings problem. The
+pattern must be on the list before the workflow that needs it merges.
 
 ### The bash style gate
 

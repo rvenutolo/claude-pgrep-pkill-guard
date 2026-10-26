@@ -38,17 +38,10 @@ jobs:
       # The token exists to raise GitHub's API rate limit, not to write.
       contents: read
     steps:
-      # `audit`, not `block`. This is a deliberate deviation from every other
-      # harden-runner step in this repo, all of which pin an egress allowlist
-      # -- do not "fix" it. An allowlist is structurally impossible for this
-      # job: its entire purpose is to make outbound requests to whatever hosts
-      # the repo happens to link to, so the list would have to be rewritten
-      # every time somebody adds a URL to the README. Worse, a stale allowlist
-      # fails the job in a way indistinguishable from a broken link -- exactly
-      # the verdict this job exists to report. `audit` still records the egress
-      # for review after the fact.
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

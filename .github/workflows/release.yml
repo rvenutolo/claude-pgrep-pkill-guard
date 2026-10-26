@@ -23,7 +23,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           # Same allowlist as ci.yml's gate job, which already proves it covers
           # a Nix install plus the GitHub API.
           #
@@ -35,8 +37,8 @@ jobs:
           # line there either, for the same reason.
           allowed-endpoints: >-
             api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
-            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
-            releases.nixos.org:443 tarballs.nixos.org:443
+            install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
+            nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443 releases.nixos.org:443 tarballs.nixos.org:443
       # Pull requests created with the default GITHUB_TOKEN do not trigger
       # workflows, so the release PR would never run the required status
       # checks and could only be merged by admin bypass. An App installation
@@ -110,10 +112,11 @@ jobs:
       # release-please from main and only this repo's owner can push to it,
       # the ambient GITHUB_TOKEN for this job holds `contents: read`, the
       # checkout above sets `persist-credentials: false`, and harden-runner
-      # runs with `egress-policy: block`. Worth stating plainly, though, that
-      # this job DOES hold an App installation token in scope by the time this
-      # step runs -- so what bounds the site is the branch's provenance, not
-      # the absence of a credential worth reaching.
+      # records this job's egress (in audit mode for now, so the allowlist is
+      # declared but not enforced -- see the TODO on its step). Worth stating
+      # plainly, though, that this job DOES hold an App installation token in
+      # scope by the time this step runs -- so what bounds the site is the
+      # branch's provenance, not the absence of a credential worth reaching.
       - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
         if: steps.release.outputs.pr != ''
 

@@ -59,11 +59,13 @@ jobs:
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >-
             api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
-            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
-            releases.nixos.org:443 tarballs.nixos.org:443
+            install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
+            nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443 releases.nixos.org:443 tarballs.nixos.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Full history, not actions/checkout's default depth of 1. This job
@@ -117,19 +119,21 @@ jobs:
             awk: bwk
             slice: 1/2
     steps:
-      # harden-runner enforces this allowlist on the macOS legs too, through a
-      # Network Extension content filter. A step-level `if:` could not keep it
+      # harden-runner applies its egress policy on the macOS legs too, through
+      # a Network Extension content filter. A step-level `if:` could not keep it
       # off them anyway: the action's `pre:` and `post:` phases ignore it. On
       # macOS a blocked DNS lookup is dropped rather than refused, so an
       # endpoint missing from this list costs a full resolver timeout there,
       # not a fast failure -- see the setup action's OTEL_SDK_DISABLED.
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >-
             api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
-            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
-            releases.nixos.org:443 tarballs.nixos.org:443
+            install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
+            nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443 releases.nixos.org:443 tarballs.nixos.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
@@ -212,11 +216,13 @@ jobs:
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >-
             api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
-            install.determinate.systems:443 nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
-            releases.nixos.org:443 tarballs.nixos.org:443
+            install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
+            nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443 releases.nixos.org:443 tarballs.nixos.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
@@ -275,7 +281,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           disable-sudo: true
           allowed-endpoints: >-
             api.github.com:443 auth.docker.io:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443
@@ -295,7 +303,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >-
             api.github.com:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -405,7 +415,7 @@ jobs:
       CLAUDE_CODE_VERSION: '2.1.310'
       # The CLI validates manifests entirely offline -- verified with an empty
       # HOME, which produced no login prompt and wrote no config. These keep it
-      # from trying anything else under a blocking egress policy.
+      # from trying any host beyond the job's egress allowlist.
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
       DISABLE_AUTOUPDATER: '1'
       DISABLE_ERROR_REPORTING: '1'
@@ -413,7 +423,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           disable-sudo: true
           allowed-endpoints: >-
             api.github.com:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443 registry.npmjs.org:443
@@ -471,7 +483,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           disable-sudo: true
           # No network calls: the job only inspects its own `needs` context.
           allowed-endpoints: ''

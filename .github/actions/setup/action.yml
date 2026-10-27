@@ -6,6 +6,11 @@ runs:
   using: composite
   steps:
     - uses: DeterminateSystems/determinate-nix-action@92957199488000b908fdad19f63711000965d8f3  # v3.24.1
+      with:
+        # Turns off the installer's diagnostics. They go to
+        # install.determinate.systems, the host the installer is downloaded from,
+        # so the harden-runner allowlist cannot separate them from the download.
+        diagnostic-endpoint: ''
       env:
         # Turns off the action's OpenTelemetry export. Its collector,
         # otel.determinate.systems, is not on harden-runner's egress

@@ -59,9 +59,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >-
             api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
             install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
@@ -127,9 +125,7 @@ jobs:
       # not a fast failure -- see the setup action's OTEL_SDK_DISABLED.
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >-
             api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
             install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
@@ -216,9 +212,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >-
             api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
             install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
@@ -281,9 +275,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           disable-sudo: true
           allowed-endpoints: >-
             api.github.com:443 auth.docker.io:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443
@@ -303,9 +295,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >-
             api.github.com:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -423,9 +413,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           disable-sudo: true
           allowed-endpoints: >-
             api.github.com:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443 registry.npmjs.org:443
@@ -483,9 +471,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           disable-sudo: true
           # No network calls: the job only inspects its own `needs` context.
           allowed-endpoints: ''

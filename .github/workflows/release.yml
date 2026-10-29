@@ -23,9 +23,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           # Same allowlist as ci.yml's gate job, which already proves it covers
           # a Nix install plus the GitHub API.
           #
@@ -112,8 +110,7 @@ jobs:
       # release-please from main and only this repo's owner can push to it,
       # the ambient GITHUB_TOKEN for this job holds `contents: read`, the
       # checkout above sets `persist-credentials: false`, and harden-runner
-      # records this job's egress (in audit mode for now, so the allowlist is
-      # declared but not enforced -- see the TODO on its step). Worth stating
+      # blocks this job's egress to anything off its allowlist. Worth stating
       # plainly, though, that this job DOES hold an App installation token in
       # scope by the time this step runs -- so what bounds the site is the
       # branch's provenance, not the absence of a credential worth reaching.

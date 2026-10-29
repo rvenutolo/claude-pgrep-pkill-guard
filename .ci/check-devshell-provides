@@ -110,11 +110,16 @@ fi
 # Both expressions carry REPO_PLACEHOLDER rather than an interpolated path so
 # they can stay single-quoted: every `${...}` below is Nix syntax, and letting
 # bash near it would expand the lot. The substitution happens at the call site.
+# The reference is git+file://, never a bare path: Nix reads a bare absolute
+# path as path:, which copies the whole working tree into the store, ignored
+# and untracked files included, and aborts on a non-regular file such as a
+# daemon's Unix socket. Through git the check sees only tracked files (dirty
+# edits to them included), the same tree CI and `nix flake check` evaluate.
 #
 # shellcheck disable=SC2016 # every `${...}` below is Nix syntax, not a shell expansion
 readonly PACKAGES_EXPR='
 let
-  flake = builtins.getFlake (toString REPO_PLACEHOLDER);
+  flake = builtins.getFlake "git+file://REPO_PLACEHOLDER";
   system = builtins.currentSystem;
   outputsOf = pkg: map (name: toString pkg.${name}) (pkg.outputs or [ "out" ]);
   line = pkg: builtins.concatStringsSep "\t" ([ (pkg.pname or pkg.name) ] ++ outputsOf pkg);
@@ -130,7 +135,7 @@ builtins.concatStringsSep "\n" (map line flake.devShells.${system}.default.nativ
 # shellcheck disable=SC2016 # every `${...}` below is Nix syntax, not a shell expansion
 readonly FORMATTERS_EXPR='
 let
-  flake = builtins.getFlake (toString REPO_PLACEHOLDER);
+  flake = builtins.getFlake "git+file://REPO_PLACEHOLDER";
   system = builtins.currentSystem;
   pkgs = flake.inputs.nixpkgs.legacyPackages.${system};
   eval = flake.inputs.treefmt-nix.lib.evalModule pkgs (flake.outPath + "/.treefmt.nix");

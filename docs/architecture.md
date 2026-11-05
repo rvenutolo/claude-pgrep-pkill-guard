@@ -418,6 +418,11 @@ invoked inside a throwaway repo, `check-bash-style` by being handed fixture path
 built — for the same reason: a suite that only asserted "exits 0 on the real
 repo" would pass just as well against a script that unconditionally returned 0.
 
+`tests/commit-msg.bats` drives `.githooks/commit-msg` against the real
+`.commitlintrc.yml`, the one file the CI `commitlint` job also reads: the
+subjects it accepts, `!` breaking-change markers included, and the ones it
+rejects. It skips outside the devShell, where the hook has no commitlint.
+
 `tests/run-tests-cli.bats`, `tests/run-all-checks.bats` and `tests/bench-run.bats`
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives
 `bench/run`, in the real repo and in a fixture repo holding a copy of the hook

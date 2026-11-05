@@ -267,24 +267,42 @@ jobs:
     # pull_request ONLY: default merge-commit subjects ("Merge pull request #1
     # ...") are not conventional and would redden main on the first merge.
     # release-please still reads the branch commits for its changelog.
+    #
+    # The devShell's commitlint, not a commitlint action: the commit-msg hook
+    # runs that same binary against the same .commitlintrc.yml, so a message
+    # the hook accepts cannot be rejected here, or the reverse. A packaged
+    # action brings its own commitlint version, and looks for its own config
+    # file name, falling back to plain config-conventional when it is absent.
+    # No disable-sudo in harden-runner: the Nix installer the setup action runs
+    # needs sudo.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
           egress-policy: block
-          disable-sudo: true
           allowed-endpoints: >-
-            api.github.com:443 auth.docker.io:443 codeload.github.com:443 github.com:443 objects.githubusercontent.com:443
-            production.cloudflare.docker.com:443 registry-1.docker.io:443
+            api.github.com:443 cache.nixos.org:443 channels.nixos.org:443 codeload.github.com:443 github.com:443 hosted-compute-*.githubapp.com:443
+            install.determinate.systems:443 nix-installer20230104193028379800000001.s3.dualstack.us-east-2.amazonaws.com:443
+            nixos.org:443 objects.githubusercontent.com:443 raw.githubusercontent.com:443 releases.nixos.org:443 tarballs.nixos.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          # Full history: commitlint walks base..head, and a shallow clone
+          # holds neither end.
           fetch-depth: 0
           persist-credentials: false
-      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed  # v6.2.1
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup  # zizmor: ignore[self-repository]
+      - name: Lint the pull request's commits
+        # The SHAs arrive through env rather than a `${{ }}` expansion inside
+        # `run:`, which zizmor flags as template injection whatever the source.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ./.ci/in-devshell commitlint --from "${BASE_SHA}" --to "${HEAD_SHA}" --verbose
 
   compat-linux:
     name: compat (ubuntu, ambient)

@@ -1,8 +1,7 @@
 # .githooks/commit-msg, run against the real .commitlintrc.yml: the subjects
 # and bodies the hook must accept, the ones it must reject, and the one it
-# accepts with a warning. It grades the local hook only: the CI commitlint
-# job's action looks for commitlint.config.mjs, finds none, and falls back to
-# plain config-conventional, so it never reads .commitlintrc.yml.
+# accepts with a warning. The CI commitlint job runs the same devShell
+# commitlint against the same file, so this grades both.
 #
 # The hook reaches commitlint through .ci/in-devshell, which runs it directly
 # when IN_DEVSHELL is set and starts a fresh devShell otherwise. The ambient

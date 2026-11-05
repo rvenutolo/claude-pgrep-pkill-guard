@@ -43,6 +43,15 @@ runs:
         # regardless (see the step below), so a ceiling could only ever keep
         # garbage, and the right amount of garbage is none.
         gc-max-store-size: 0
+        # Only the default branch saves; every other run restores. A run can
+        # restore only its own ref's caches and the default branch's, so a
+        # cache saved from a pull request, merge-queue run or feature-branch
+        # dispatch serves that ref alone, yet each ~1 GB store counts against
+        # the repository's 10 GB cache limit until evicted. Gated on the ref,
+        # not the event: an event gate still saves from a dispatch on a
+        # feature branch. ci.yml's push and schedule triggers on main keep
+        # the saved cache fresh.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Root the devShell so garbage collection keeps it
       # `nix develop` roots nothing: the shell's closure is garbage the moment
       # the command exits, and the GC configured above would delete the very

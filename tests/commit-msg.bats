@@ -48,7 +48,7 @@ function hook_on() {
   assert_success
 }
 
-# Without .commitlintrc.yml's issuePrefixes, the `#12` line opens a footer and
+# Without .commitlintrc.yml's issuePrefixes, the issue-citing line opens a footer and
 # draws a footer-leading-blank warning, which does not fail the commit; so
 # the absence of the warning is what this pins, not only the exit status.
 @test "commit-msg: a body citing an issue mid-paragraph passes without a warning" {

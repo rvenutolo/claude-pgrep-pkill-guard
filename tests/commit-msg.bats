@@ -1,7 +1,8 @@
 # .githooks/commit-msg, run against the real .commitlintrc.yml: the subjects
 # and bodies the hook must accept, the ones it must reject, and the one it
 # accepts with a warning. The CI commitlint job runs the same devShell
-# commitlint against the same file, so this grades both.
+# commitlint against the same file, reading the commits from git rather than
+# from a message file, so the rules graded here are the rules CI applies.
 #
 # The hook reaches commitlint through .ci/in-devshell, which runs it directly
 # when IN_DEVSHELL is set and starts a fresh devShell otherwise. The ambient

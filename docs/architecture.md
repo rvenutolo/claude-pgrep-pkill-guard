@@ -421,7 +421,9 @@ repo" would pass just as well against a script that unconditionally returned 0.
 `tests/commit-msg.bats` drives `.githooks/commit-msg` against the real
 `.commitlintrc.yml`: the subjects it accepts, `!` breaking-change markers
 included, and the ones it rejects. The CI `commitlint` job runs the same
-devShell commitlint against the same file, so the suite grades it too. It skips outside the devShell, where the hook has no commitlint.
+devShell commitlint against the same file, reading the commits from git
+rather than from a message file, so the rules graded here are the rules CI
+applies. It skips outside the devShell, where the hook has no commitlint.
 
 `tests/run-tests-cli.bats`, `tests/run-all-checks.bats` and `tests/bench-run.bats`
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives

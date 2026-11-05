@@ -419,9 +419,10 @@ built — for the same reason: a suite that only asserted "exits 0 on the real
 repo" would pass just as well against a script that unconditionally returned 0.
 
 `tests/commit-msg.bats` drives `.githooks/commit-msg` against the real
-`.commitlintrc.yml`, the one file the CI `commitlint` job also reads: the
-subjects it accepts, `!` breaking-change markers included, and the ones it
-rejects. It skips outside the devShell, where the hook has no commitlint.
+`.commitlintrc.yml`: the subjects it accepts, `!` breaking-change markers
+included, and the ones it rejects. The CI `commitlint` job is outside its
+reach: that action looks for `commitlint.config.mjs`, finds none, and lints
+with plain config-conventional instead. It skips outside the devShell, where the hook has no commitlint.
 
 `tests/run-tests-cli.bats`, `tests/run-all-checks.bats` and `tests/bench-run.bats`
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives

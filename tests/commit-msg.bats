@@ -4,9 +4,10 @@
 # commitlint against the same file, reading the commits from git rather than
 # from a message file, so the rules graded here are the rules CI applies.
 #
-# The hook reaches commitlint through .ci/in-devshell, which runs it directly
-# when IN_DEVSHELL is set and starts a fresh devShell otherwise. The ambient
-# compat legs have no Nix to start one with, so this suite skips outside it.
+# The hook calls commitlint directly when IN_DEVSHELL is set and otherwise
+# re-runs itself through .ci/in-devshell, which starts a fresh devShell. The
+# ambient compat legs have no Nix to start one with, so this suite skips
+# outside it.
 
 function setup() {
   load 'test_helper/common'

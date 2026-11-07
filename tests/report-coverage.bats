@@ -1,9 +1,17 @@
 # .ci/report-coverage, against fixture kcov output directories.
 #
+# The reporter re-runs itself through .ci/in-devshell whenever IN_DEVSHELL is
+# unset, and the ambient compat legs have no Nix to start a devShell with, so
+# setup skips this suite there; the gate legs run it.
+#
 # setup sets REPORTER, the script under test.
 
 function setup() {
   load 'test_helper/common'
+  # .ci/in-devshell exports IN_DEVSHELL; the ambient compat legs do not have it.
+  if [[ -z "${IN_DEVSHELL:-}" ]]; then
+    skip 'not in the devShell; the reporter re-runs itself there'
+  fi
   REPORTER="${REPO_DIR}/.ci/report-coverage"
 }
 

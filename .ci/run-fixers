@@ -67,6 +67,16 @@ IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
+# An interactive `nix develop` or direnv shell leaves IN_DEVSHELL unset and the
+# host PATH behind the flake's tools: a tool the flake lacks would resolve from
+# the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
+# recursion.
+if [[ -z "${IN_DEVSHELL:-}" ]]; then
+  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+  SELF_DIR="${SELF_PATH%/*}"
+  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+fi
+
 REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR
 

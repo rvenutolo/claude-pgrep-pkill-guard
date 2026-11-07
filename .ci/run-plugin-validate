@@ -21,6 +21,8 @@
 # @exitcode * otherwise the failing git status, when the repository root cannot
 #             be resolved
 
+# devshell-exempt: needs the claude CLI from the host PATH, which the devShell's --ignore-environment drops
+
 set -Eeuo pipefail
 # This script runs under the HOST bash -- the `claude` CLI lives on the ambient
 # PATH, not in the devShell -- so the version is whatever the machine ships.

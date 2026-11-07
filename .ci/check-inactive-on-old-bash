@@ -13,6 +13,8 @@
 #         when the runner's bash is 4.x or newer (with an indented note) or the
 #         hook's output carries no INACTIVE
 
+# devshell-exempt: runs on a stock-macOS CI runner with no Nix, under bash 3.2, which the devShell would replace
+
 set -eu
 
 hook="$(dirname "$0")/../hooks/pgrep-pkill-guard.sh"

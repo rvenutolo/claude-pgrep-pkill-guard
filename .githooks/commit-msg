@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 # @description Git commit-msg hook. Validates the prospective commit message
-#              against Conventional Commits via commitlint, inside the devShell
-#              so the same commitlint runs locally and in CI.
+#              against Conventional Commits via commitlint. The hook re-runs
+#              itself inside the devShell, so the same commitlint runs locally
+#              and in CI.
 # @arg $1 msg_file path to the file holding the prospective commit message
 # @stderr the usage line when the argument count is wrong
 # @exitcode 0 the message is conventional
@@ -12,8 +13,22 @@
 # @exitcode * otherwise the failing git or nix status; the commit is aborted
 
 set -Eeuo pipefail
-# No inherit_errexit: this runs under the host bash, 3.2 on stock macOS, where the option does not exist.
+# No inherit_errexit: git runs this under the host bash, 3.2 on stock macOS,
+# where the option does not exist. The self-wrap block below is bash 3.2 safe;
+# the re-run it starts needs what .ci/in-devshell needs: bash 4.4+ and GNU
+# readlink, mktemp and rm on the host. On macOS: brew install bash coreutils,
+# with the coreutils gnubin directory first on PATH.
 IFS=$'\n\t'
+
+# Git runs hooks with the caller's environment, and an interactive shell leaves
+# IN_DEVSHELL unset and the host PATH in place: a tool the flake lacks would
+# resolve from the host. Re-run through in-devshell, which sets IN_DEVSHELL and
+# so stops the recursion.
+if [[ -z "${IN_DEVSHELL:-}" ]]; then
+  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+  SELF_DIR="${SELF_PATH%/*}"
+  exec "${SELF_DIR}/../.ci/in-devshell" "${SELF_PATH}" "$@"
+fi
 
 # Git always passes exactly one argument, the message file, so any other count
 # means the hook was invoked by hand or misinstalled -- and binding an unset $1
@@ -29,9 +44,7 @@ fi
 readonly MSG_FILE="$1"
 
 function main() {
-  local repo_dir
-  repo_dir="$(git rev-parse --show-toplevel)"
-  "${repo_dir}/.ci/in-devshell" commitlint --edit "${MSG_FILE}"
+  commitlint --edit "${MSG_FILE}"
 }
 
 main "$@"

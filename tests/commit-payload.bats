@@ -13,27 +13,14 @@ function setup() {
   load 'test_helper/common'
   BUILD="${REPO_DIR}/.ci/build-commit-payload"
 
-  # .ci/build-commit-payload is devShell-only by contract -- the release
-  # workflow reaches it through .ci/in-devshell -- and it needs GNU coreutils
+  # .ci/build-commit-payload is devShell-only: it re-runs itself through
+  # .ci/in-devshell whenever IN_DEVSHELL is unset, and it needs GNU coreutils
   # for `base64 --wrap=0`, `mktemp --directory`, `rm --recursive --force` and
-  # `tr --delete`. The ambient compat legs that run bats run this suite
-  # against whatever the runner ships. Skipping there is honest: the hermetic
-  # leg is the one that grades this script, and a test that quietly rewrote an
-  # invocation to something BSD accepts would be grading a command the script
-  # never runs.
-  #
-  # Probing `base64 --wrap=0` for its exit status is not enough: the
-  # `compat (macos, homebrew bash)` runner's base64 ACCEPTS --wrap=0 and then
-  # appends a trailing newline. So probe each flag the script actually
-  # uses, and probe base64 for the PROPERTY rather than for the exit status:
-  # `printf 'x' | base64` is `eA==`, four bytes and no more.
-  # A short flag only where macOS has no long form, on purpose, in the probes
-  # -- `wc -c` pads on BSD, hence the tr.
-  if [[ "$(printf 'x' | base64 --wrap=0 2> /dev/null | wc -c | tr -d ' ')" != '4' ]] \
-    || ! mktemp --directory --dry-run > /dev/null 2>&1 \
-    || ! rm --recursive --force -- "${BATS_TEST_TMPDIR}/no-such-path" 2> /dev/null \
-    || ! printf 'x' | tr --delete 'x' > /dev/null 2>&1; then
-    skip 'not GNU coreutils; .ci/ scripts are graded inside the devShell'
+  # `tr --delete`, which the devShell provides. The ambient compat legs have
+  # no Nix to start a devShell with, so the suite skips there; the gate legs
+  # grade the script.
+  if [[ -z "${IN_DEVSHELL:-}" ]]; then
+    skip 'not in the devShell; the script re-runs itself there'
   fi
 }
 
@@ -41,8 +28,9 @@ function setup() {
 #              files, so each case can stage exactly the change it is about.
 #              A short flag only where macOS has no long form, on purpose, like
 #              every tests/*.bats file -- see make_manifest_fixture in
-#              tests/manifest.bats. setup() skips this suite wherever GNU
-#              coreutils are absent, so the reason here is consistency.
+#              tests/manifest.bats. setup() skips this suite outside the
+#              devShell, where GNU coreutils are always present, so the reason
+#              here is consistency.
 #
 #              Identity is passed with `-c` rather than written with
 #              `git config`, because test_helper/common points

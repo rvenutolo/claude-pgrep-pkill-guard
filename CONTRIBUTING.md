@@ -41,13 +41,26 @@ just hooks
 
 ## Running the gate
 
-**Everything runs through `./.ci/in-devshell`. Never invoke a gate tool from
-the ambient `PATH`.** That wrapper runs `nix develop --ignore-environment`, so
-the devShell cannot inherit the caller's `PATH` and no gate step can silently
-resolve a tool from the machine it happens to be running on. Local runs and CI
-runs therefore cannot drift. The `just` recipes that run a gate tool go through
-it. `validate`, `hooks` and `install` run on the host, and so does the `nix`
-command behind `format`, `format-check` and the treefmt step of `fix`:
+**Everything runs inside the devShell. Never invoke a gate tool from the
+ambient `PATH`.** Every gate script and git hook enters the devShell itself:
+started with `IN_DEVSHELL` unset, as from an interactive `nix develop` or direnv
+shell, it re-runs itself through `./.ci/in-devshell`, so `./run-all-checks`
+and `./.ci/in-devshell ./run-all-checks` are the same run. That wrapper runs
+`nix develop --ignore-environment`, so the devShell cannot inherit the caller's
+`PATH` and no gate step can silently resolve a tool from the machine it happens
+to be running on. Local runs and CI runs therefore cannot drift. Call
+`./.ci/in-devshell` directly only for a command that is not one of the repo's
+scripts, such as `./.ci/in-devshell commitlint --from HEAD~1`. The exceptions
+stay on the host on purpose, each saying why in a `# devshell-exempt:` comment:
+`.ci/activate-githooks`, which the devShell's shellHook runs;
+`.ci/check-inactive-on-old-bash`, which runs on a runner with no Nix;
+`.ci/run-plugin-validate`, which needs the host's `claude`; the shipped hook
+`hooks/pgrep-pkill-guard.sh`; and `.ci/in-devshell` itself. `run-tests
+--ambient` skips the re-run too, for the compat CI legs that test the suite
+against the runner's own tools. The `just` recipes that run a gate tool go
+through the wrapper. `validate`, `hooks` and `install` run on the host, and so
+does the `nix` command behind `format`, `format-check` and the treefmt step of
+`fix`:
 
 | Recipe              | What it does                                                                 |
 | ------------------- | ---------------------------------------------------------------------------- |
@@ -163,8 +176,8 @@ The suite is bats only, under `tests/`. The rules:
   payload runs. The same applies to `rm`, `dd`, `git push` and anything else
   with side effects.
 
-Run the suite with `./.ci/in-devshell ./run-tests` (`just test`), or a single
-file with `./.ci/in-devshell ./run-tests tests/scanner.bats`. `run-tests` runs
+Run the suite with `./run-tests` (`just test`), or a single file with
+`./run-tests tests/scanner.bats`; it enters the devShell itself. `run-tests` runs
 the files concurrently, one per CPU, and prints each file's output whole once
 all have finished; `--jobs 1` runs one at a time. `--slice I/N` runs only slice
 I of N of the files, as the macOS gate legs do; the slices are balanced by the

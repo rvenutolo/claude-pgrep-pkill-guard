@@ -6,6 +6,11 @@
 # `run --separate-stderr` is a bats 1.5.0 flag: the --jobs and --slice
 # rejections assert on run-tests' own stderr.
 #
+# Every case runs run-tests with `--ambient`, so it runs where this suite runs
+# rather than re-running itself through .ci/in-devshell: inside the devShell
+# that changes nothing, and on the ambient compat legs, which have no Nix, it
+# grades run-tests against the runner's own tools, as those legs run it.
+#
 # setup sets RUN_TESTS, the path of the runner under test.
 
 bats_require_minimum_version 1.5.0
@@ -93,7 +98,7 @@ function require_kcov() {
   local -r suite="${BATS_TEST_TMPDIR}/suite/ok.bats"
   local -r out="${BATS_TEST_TMPDIR}/report"
   make_trivial_suite "${suite}"
-  run "${RUN_TESTS}" --report "${out}" "${suite}"
+  run "${RUN_TESTS}" --ambient --report "${out}" "${suite}"
   assert_success
   assert_output --partial 'trivial fixture case'
   [[ -d "${out}" ]]
@@ -104,13 +109,13 @@ function require_kcov() {
   local -r suite="${BATS_TEST_TMPDIR}/suite2/ok.bats"
   local -r out="${BATS_TEST_TMPDIR}/nested/deeper/report"
   make_trivial_suite "${suite}"
-  run "${RUN_TESTS}" --report "${out}" "${suite}"
+  run "${RUN_TESTS}" --ambient --report "${out}" "${suite}"
   assert_success
   [[ -d "${out}" ]]
 }
 
 @test "run-tests: --report with no argument is rejected" {
-  run "${RUN_TESTS}" --report
+  run "${RUN_TESTS}" --ambient --report
   assert_failure
   # The `[run-tests] FATAL:` prefix, not just the flag name, is what makes this
   # case non-vacuous: a run-tests that did not know --report at all would
@@ -125,16 +130,16 @@ function require_kcov() {
   require_bwk_awk
   local -r suite="${BATS_TEST_TMPDIR}/suite3/ok.bats"
   make_trivial_suite "${suite}"
-  run "${RUN_TESTS}" --awk=bwk --report "${BATS_TEST_TMPDIR}/r1" "${suite}"
+  run "${RUN_TESTS}" --ambient --awk=bwk --report "${BATS_TEST_TMPDIR}/r1" "${suite}"
   assert_success
-  run "${RUN_TESTS}" --report "${BATS_TEST_TMPDIR}/r2" --awk=bwk "${suite}"
+  run "${RUN_TESTS}" --ambient --report "${BATS_TEST_TMPDIR}/r2" --awk=bwk "${suite}"
   assert_success
 }
 
 @test "run-tests: no report is written when --report is absent" {
   local -r suite="${BATS_TEST_TMPDIR}/suite4/ok.bats"
   make_trivial_suite "${suite}"
-  run "${RUN_TESTS}" "${suite}"
+  run "${RUN_TESTS}" --ambient "${suite}"
   assert_success
   [[ -z "$(find "${BATS_TEST_TMPDIR}" -name '*.xml' -print -quit)" ]]
 }
@@ -145,7 +150,7 @@ function require_kcov() {
   # the --report case above -- a run-tests that did not know --coverage would
   # forward it to bats as a test path, and bats would fail too, with the same
   # string in its output.
-  run "${RUN_TESTS}" --coverage
+  run "${RUN_TESTS}" --ambient --coverage
   assert_failure
   assert_output --partial '[run-tests] FATAL:'
   assert_output --partial '--coverage'
@@ -156,7 +161,7 @@ function require_kcov() {
   local -r suite="${BATS_TEST_TMPDIR}/suite5/ok.bats"
   local -r out="${BATS_TEST_TMPDIR}/cov"
   make_trivial_suite "${suite}"
-  run "${RUN_TESTS}" --coverage "${out}" "${suite}"
+  run "${RUN_TESTS}" --ambient --coverage "${out}" "${suite}"
   assert_success
   assert_output --partial 'trivial fixture case'
   # Exactly the shape .ci/report-coverage reads: the merged report, and the HTML
@@ -168,7 +173,7 @@ function require_kcov() {
 @test "run-tests: --coverage with flags but no test file is rejected" {
   require_kcov
   # Without the check this ran nothing, merged nothing and still passed.
-  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov17" --filter 'nothing'
+  run "${RUN_TESTS}" --ambient --coverage "${BATS_TEST_TMPDIR}/cov17" --filter 'nothing'
   assert_failure
   assert_output --partial '[run-tests] FATAL: --coverage found no .bats file'
 }
@@ -179,7 +184,7 @@ function require_kcov() {
   mkdir -p "${dir}"
   printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
   printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
-  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov12" "${dir}/first.bats" "${dir}/second.bats"
+  run "${RUN_TESTS}" --ambient --coverage "${BATS_TEST_TMPDIR}/cov12" "${dir}/first.bats" "${dir}/second.bats"
   assert_success
   assert_output --partial 'ok 1 first fixture case'
   assert_output --partial 'ok 1 second fixture case'
@@ -192,7 +197,7 @@ function require_kcov() {
   mkdir -p "${dir}"
   printf '@test "passing fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/pass.bats"
   printf '@test "failing fixture case" {\n  [[ 1 -eq 2 ]]\n}\n' > "${dir}/fail.bats"
-  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov13" "${dir}/pass.bats" "${dir}/fail.bats"
+  run "${RUN_TESTS}" --ambient --coverage "${BATS_TEST_TMPDIR}/cov13" "${dir}/pass.bats" "${dir}/fail.bats"
   assert_failure
   # The failing file's report and the passing file's both reach the reader.
   assert_output --partial 'not ok 1 failing fixture case'
@@ -210,7 +215,7 @@ function require_kcov() {
   printf 'SLICE=%s\n' "${CLASSIFY_SLICE:-unset}" >&3
 }
 BATS
-  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/cov14" "${dir}/classify.bats"
+  run "${RUN_TESTS}" --ambient --coverage "${BATS_TEST_TMPDIR}/cov14" "${dir}/classify.bats"
   assert_success
   refute_output --partial 'SLICE=unset'
   local -a slices=()
@@ -237,10 +242,10 @@ BATS
 }
 BATS
   local one three
-  run "${RUN_TESTS}" --jobs 1 --coverage "${BATS_TEST_TMPDIR}/cov18a" "${dir}/classify.bats"
+  run "${RUN_TESTS}" --ambient --jobs 1 --coverage "${BATS_TEST_TMPDIR}/cov18a" "${dir}/classify.bats"
   assert_success
   one="$(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort)"
-  run "${RUN_TESTS}" --jobs 3 --coverage "${BATS_TEST_TMPDIR}/cov18b" "${dir}/classify.bats"
+  run "${RUN_TESTS}" --ambient --jobs 3 --coverage "${BATS_TEST_TMPDIR}/cov18b" "${dir}/classify.bats"
   assert_success
   three="$(grep --only-matching 'SLICE=[0-9]*/[0-9]*' <<< "${output}" | sort)"
   [[ -n "${one}" ]]
@@ -258,7 +263,7 @@ BATS
   local -r out="${BATS_TEST_TMPDIR}/cov15"
   make_trivial_suite "${suite}"
   mkdir -p "${tmp}"
-  TMPDIR="${tmp}" run "${RUN_TESTS}" --coverage "${out}" "${suite}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --ambient --coverage "${out}" "${suite}"
   assert_success
   [[ -z "$(find "${tmp}" -name 'coverage.json' -print -quit)" ]]
   [[ -z "$(find "${out}" -name 'coverage.json' -not -path "${out}/kcov-merged/*" -print -quit)" ]]
@@ -269,7 +274,7 @@ BATS
   local -r suite="${BATS_TEST_TMPDIR}/suite6/ok.bats"
   local -r out="${BATS_TEST_TMPDIR}/nested2/deeper/cov"
   make_trivial_suite "${suite}"
-  run "${RUN_TESTS}" --coverage "${out}" "${suite}"
+  run "${RUN_TESTS}" --ambient --coverage "${out}" "${suite}"
   assert_success
   [[ -d "${out}" ]]
 }
@@ -278,10 +283,10 @@ BATS
   require_kcov
   local -r suite="${BATS_TEST_TMPDIR}/suite7/ok.bats"
   make_trivial_suite "${suite}"
-  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/c1" --report "${BATS_TEST_TMPDIR}/r3" "${suite}"
+  run "${RUN_TESTS}" --ambient --coverage "${BATS_TEST_TMPDIR}/c1" --report "${BATS_TEST_TMPDIR}/r3" "${suite}"
   assert_success
   [[ -n "$(find "${BATS_TEST_TMPDIR}/r3" -name '*.xml' -print -quit)" ]]
-  run "${RUN_TESTS}" --report "${BATS_TEST_TMPDIR}/r4" --coverage "${BATS_TEST_TMPDIR}/c2" "${suite}"
+  run "${RUN_TESTS}" --ambient --report "${BATS_TEST_TMPDIR}/r4" --coverage "${BATS_TEST_TMPDIR}/c2" "${suite}"
   assert_success
   [[ -n "$(find "${BATS_TEST_TMPDIR}/r4" -name '*.xml' -print -quit)" ]]
 }
@@ -294,7 +299,7 @@ BATS
   mkdir -p "${dir}"
   printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
   printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
-  run "${RUN_TESTS}" --coverage "${BATS_TEST_TMPDIR}/c16" --report "${BATS_TEST_TMPDIR}/r16" \
+  run "${RUN_TESTS}" --ambient --coverage "${BATS_TEST_TMPDIR}/c16" --report "${BATS_TEST_TMPDIR}/r16" \
     "${dir}/first.bats" "${dir}/second.bats"
   assert_success
   run grep --recursive --files-with-matches --include='*.xml' 'fixture case' "${BATS_TEST_TMPDIR}/r16"
@@ -321,7 +326,7 @@ BATS
   [[ -z "${COVERAGE:-}" ]]
 }
 BATS
-  run env -u COVERAGE "${RUN_TESTS}" "${suite}"
+  run env -u COVERAGE "${RUN_TESTS}" --ambient "${suite}"
   assert_success
 }
 
@@ -338,7 +343,7 @@ BATS
   local -r tmp="${BATS_TEST_TMPDIR}/tmpdir"
   make_trivial_suite "${suite}"
   mkdir -p "${tmp}"
-  TMPDIR="${tmp}" run "${RUN_TESTS}" --awk=bwk "${suite}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --ambient --awk=bwk "${suite}"
   assert_success
   [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
 }
@@ -351,7 +356,7 @@ BATS
   local -r tmp="${BATS_TEST_TMPDIR}/it's tmpdir"
   make_trivial_suite "${suite}"
   mkdir -p "${tmp}"
-  TMPDIR="${tmp}" run "${RUN_TESTS}" --awk=bwk "${suite}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --ambient --awk=bwk "${suite}"
   assert_success
   [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
 }
@@ -364,7 +369,7 @@ BATS
   local -r tmp="${BATS_TEST_TMPDIR}/tmpdir-repeated"
   make_trivial_suite "${suite}"
   mkdir -p "${tmp}"
-  TMPDIR="${tmp}" run "${RUN_TESTS}" --awk=bwk --awk=bwk "${suite}"
+  TMPDIR="${tmp}" run "${RUN_TESTS}" --ambient --awk=bwk --awk=bwk "${suite}"
   assert_success
   [[ -z "$(find "${tmp}" -name 'awk' -print -quit)" ]]
 }
@@ -374,7 +379,7 @@ BATS
   mkdir -p "${dir}"
   printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
   printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
-  run "${RUN_TESTS}" "${dir}"
+  run "${RUN_TESTS}" --ambient "${dir}"
   assert_success
   assert_output --partial 'first fixture case'
   assert_output --partial 'second fixture case'
@@ -385,7 +390,7 @@ BATS
   mkdir -p "${dir}"
   printf '@test "passing fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/pass.bats"
   printf '@test "failing fixture case" {\n  [[ 1 -eq 2 ]]\n}\n' > "${dir}/fail.bats"
-  run "${RUN_TESTS}" "${dir}/pass.bats" "${dir}/fail.bats"
+  run "${RUN_TESTS}" --ambient "${dir}/pass.bats" "${dir}/fail.bats"
   assert_failure
   assert_output --partial 'not ok'
 }
@@ -401,7 +406,7 @@ BATS
       printf '@test "%s case %s" {\n  sleep 0.2\n}\n' "${file}" "${i}"
     done > "${dir}/${file}.bats"
   done
-  run "${RUN_TESTS}" --jobs 2 "${dir}/alpha.bats" "${dir}/beta.bats"
+  run "${RUN_TESTS}" --ambient --jobs 2 "${dir}/alpha.bats" "${dir}/beta.bats"
   assert_success
   local -a alpha_lines=() beta_lines=()
   for i in "${!lines[@]}"; do
@@ -448,7 +453,7 @@ BATS
   mkdir -p "${dir}"
   make_rendezvous_file "${dir}" 'one' 'two'
   make_rendezvous_file "${dir}" 'two' 'one'
-  run "${RUN_TESTS}" --jobs 2 "${dir}/one.bats" "${dir}/two.bats"
+  run "${RUN_TESTS}" --ambient --jobs 2 "${dir}/one.bats" "${dir}/two.bats"
   assert_success
 }
 
@@ -467,14 +472,14 @@ BATS
 }
 BATS
   done
-  run "${RUN_TESTS}" --jobs 1 "${dir}/one.bats" "${dir}/two.bats"
+  run "${RUN_TESTS}" --ambient --jobs 1 "${dir}/one.bats" "${dir}/two.bats"
   assert_success
 }
 
 @test "run-tests: --jobs with no value is rejected" {
   # The `[run-tests] FATAL:` prefix pins who rejected it: bats has a --jobs of
   # its own and would fail too, with the flag name in its own error.
-  run --separate-stderr "${RUN_TESTS}" --jobs
+  run --separate-stderr "${RUN_TESTS}" --ambient --jobs
   assert_failure 1
   [[ "${stderr}" == *'[run-tests] FATAL:'*'--jobs'* ]]
 }
@@ -482,7 +487,7 @@ BATS
 @test "run-tests: --jobs 0 is rejected" {
   local -r suite="${BATS_TEST_TMPDIR}/suite24/ok.bats"
   make_trivial_suite "${suite}"
-  run --separate-stderr "${RUN_TESTS}" --jobs 0 "${suite}"
+  run --separate-stderr "${RUN_TESTS}" --ambient --jobs 0 "${suite}"
   assert_failure 1
   [[ "${stderr}" == *'[run-tests] FATAL:'*'--jobs'* ]]
 }
@@ -490,7 +495,7 @@ BATS
 @test "run-tests: --jobs that is not a number is rejected" {
   local -r suite="${BATS_TEST_TMPDIR}/suite25/ok.bats"
   make_trivial_suite "${suite}"
-  run --separate-stderr "${RUN_TESTS}" --jobs 'many' "${suite}"
+  run --separate-stderr "${RUN_TESTS}" --ambient --jobs 'many' "${suite}"
   assert_failure 1
   [[ "${stderr}" == *'[run-tests] FATAL:'*'--jobs'* ]]
 }
@@ -502,7 +507,7 @@ BATS
   mkdir -p "${dir}"
   printf '@test "first fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/first.bats"
   printf '@test "second fixture case" {\n  [[ 1 -eq 1 ]]\n}\n' > "${dir}/second.bats"
-  run "${RUN_TESTS}" --report "${BATS_TEST_TMPDIR}/r26" "${dir}/first.bats" "${dir}/second.bats"
+  run "${RUN_TESTS}" --ambient --report "${BATS_TEST_TMPDIR}/r26" "${dir}/first.bats" "${dir}/second.bats"
   assert_success
   local -a reports=()
   mapfile -t reports < <(find "${BATS_TEST_TMPDIR}/r26" -name '*.xml' -type f)
@@ -517,7 +522,7 @@ BATS
     printf '@test "keep case" {\n  [[ 1 -eq 1 ]]\n}\n@test "drop case" {\n  [[ 1 -eq 1 ]]\n}\n' \
       > "${dir}/${file}.bats"
   done
-  run "${RUN_TESTS}" --filter 'keep' "${dir}/first.bats" "${dir}/second.bats"
+  run "${RUN_TESTS}" --ambient --filter 'keep' "${dir}/first.bats" "${dir}/second.bats"
   assert_success
   local -a kept=()
   mapfile -t kept < <(grep --fixed-strings 'keep case' <<< "${output}")
@@ -538,7 +543,7 @@ BATS
   done
   # PATH carries the failing probes first, so run-tests cannot learn the CPU
   # count from any of them.
-  PATH="${stub}:${PATH}" run "${RUN_TESTS}" "${dir}/first.bats" "${dir}/second.bats"
+  PATH="${stub}:${PATH}" run "${RUN_TESTS}" --ambient "${dir}/first.bats" "${dir}/second.bats"
   assert_success
   # The worker count run-tests logs, not just a pass: an empty or garbage count
   # would also run both files, and only this line says it fell back to one.
@@ -571,7 +576,7 @@ SH
 BATS
   # fd 3 closed: bats waits on it, and a background job holding it open hangs
   # the run.
-  "${RUN_TESTS}" "${dir}/slow.bats" > "${dir}/run.log" 2>&1 3>&- &
+  "${RUN_TESTS}" --ambient "${dir}/slow.bats" > "${dir}/run.log" 2>&1 3>&- &
   local -r pid="$!"
   local i
   for ((i = 0; i < 100; i++)); do
@@ -638,7 +643,7 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
   for count in 2 3; do
     outputs=''
     for ((index = 0; index < count; index++)); do
-      run "${RUN_TESTS}" --slice "${index}/${count}" "${dir}"
+      run "${RUN_TESTS}" --ambient --slice "${index}/${count}" "${dir}"
       assert_success
       outputs+="${output}"$'\n'
     done
@@ -659,10 +664,10 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
     make_named_file "${dir}" "${name}"
   done
   local one three
-  run "${RUN_TESTS}" --jobs 1 --slice 0/2 "${dir}"
+  run "${RUN_TESTS}" --ambient --jobs 1 --slice 0/2 "${dir}"
   assert_success
   one="$(ran_files "${output}")"
-  run "${RUN_TESTS}" --jobs 3 --slice 0/2 "${dir}"
+  run "${RUN_TESTS}" --ambient --jobs 3 --slice 0/2 "${dir}"
   assert_success
   three="$(ran_files "${output}")"
   [[ -n "${one}" ]]
@@ -676,11 +681,11 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
   make_trivial_suite "${suite}"
   local value
   for value in '2/2' 'x/2' '1/0' '01/2' '1' '-1/2'; do
-    run --separate-stderr "${RUN_TESTS}" --slice "${value}" "${suite}"
+    run --separate-stderr "${RUN_TESTS}" --ambient --slice "${value}" "${suite}"
     assert_failure 1
     [[ "${stderr}" == *'[run-tests] FATAL:'*'--slice'* ]]
   done
-  run --separate-stderr "${RUN_TESTS}" --slice
+  run --separate-stderr "${RUN_TESTS}" --ambient --slice
   assert_failure 1
   [[ "${stderr}" == *'[run-tests] FATAL:'*'--slice'* ]]
 }
@@ -692,7 +697,7 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
   # be a figure no other run reproduces.
   local -r suite="${BATS_TEST_TMPDIR}/suite33/ok.bats"
   make_trivial_suite "${suite}"
-  run --separate-stderr "${RUN_TESTS}" --slice 0/2 --coverage "${BATS_TEST_TMPDIR}/cov33" "${suite}"
+  run --separate-stderr "${RUN_TESTS}" --ambient --slice 0/2 --coverage "${BATS_TEST_TMPDIR}/cov33" "${suite}"
   assert_failure 1
   [[ "${stderr}" == *'[run-tests] FATAL:'*'--slice'* ]]
 }
@@ -705,7 +710,7 @@ readonly -a SLICE_FIXTURE_NAMES=('classify' 'prefilter' 'alpha' 'beta' 'gamma')
   mkdir -p "${dir}"
   make_named_file "${dir}" 'alpha'
   make_named_file "${dir}" 'beta'
-  run --separate-stderr "${RUN_TESTS}" --slice 3/4 "${dir}"
+  run --separate-stderr "${RUN_TESTS}" --ambient --slice 3/4 "${dir}"
   assert_success
   [[ "${stderr}" == *'[run-tests] WARN: slice 3/4 holds none of the 2 files'* ]]
   refute_output --partial 'fixture case'

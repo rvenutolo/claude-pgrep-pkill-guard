@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.3.0](https://github.com/rvenutolo/claude-pgrep-pkill-guard/compare/v1.2.0...v1.3.0) (2026-11-07)
+
+### Features
+
+- add --scope to run-all-checks ([0236443](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/02364433984b597c7d60980a5e98406ef8c320bb))
+- add --slice I/N to run-tests and run-all-checks ([b1dcb57](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/b1dcb577030d96227c13d831fe53457908af75b4))
+- warn when a run-tests slice holds no file ([21fd115](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/21fd11593e3e40d364e45409cec411f9c68d5d1a))
+
+### Bug Fixes
+
+- accept breaking-change subjects in commitlint ([d69ee9b](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/d69ee9bbc9756be498b60796d14d708cdd597938)), closes [#589](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/589)
+- accept breaking-change subjects in commitlint ([#590](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/590)) ([2015ace](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/2015acef7a57d8b6f75cc8149cc0be2a6819a745))
+- enter the devShell from every script and remove in-devshell's temp dir ([3251b53](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/3251b5347755f60891497f24a238dd3c696c8446))
+- enter the devShell from every script and stop leaking in-devshell temp dirs ([#597](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/597)) ([ec8321d](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/ec8321d3d2d154a94e879477e9717dd84f20f71b))
+- re-wait after every trapped signal and pin the no-re-run probe ([1092a78](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/1092a78c413c519407748da3f796a5a3d754cbbb))
+- read the flake through git in check-devshell-provides ([baf92ab](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/baf92ab50a94e52344bd88a0ff1806ea74448962))
+- read the flake through git in check-devshell-provides ([#579](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/579)) ([0c57b6b](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/0c57b6b0baa88e53c160aa6ccbd5b22f5c342a98))
+- report an issue number that opens a comment ([7a5a5ef](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/7a5a5ef6bacbb15770f219ab0f1961d3ac4431e9))
+- report issue numbers in comments ([e415929](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/e41592905f4509d6795a115b423d20d6ecbe961f))
+
+### Performance Improvements
+
+- run test files concurrently in run-tests ([11032c9](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/11032c9910a3f19aab2487c5cf32ec31606d80f2))
+- run test files concurrently in run-tests ([#541](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/541)) ([0e98fe1](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/0e98fe186d7f02c7c95b352995a38ae5f58eeba6))
+- split the bash style suite across five files ([68d0460](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/68d0460daf2abe7ced7f002e31783839e06e527c))
+- split the bash style suite across five files ([#544](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/544)) ([3d4ad1c](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/3d4ad1ca3a4c2d5965777d8b92f9b6ad4c8ce58c))
+- split the macOS gate's suite across two runners ([#545](https://github.com/rvenutolo/claude-pgrep-pkill-guard/issues/545)) ([51512b4](https://github.com/rvenutolo/claude-pgrep-pkill-guard/commit/51512b49a03a38167026d2f262fa7b056497d5c4))
+
 ## [1.2.0](https://github.com/rvenutolo/claude-pgrep-pkill-guard/compare/v1.1.0...v1.2.0) (2026-10-19)
 
 ### Features

@@ -40,10 +40,8 @@ export LC_ALL=C
 # Resolved lazily by resolve_hook_dir, via load_body: only the human-mode
 # dispatch or a payload that passed the prefilter pays for it. It locates both
 # the sourced body and the awk scanner, and costs a `dirname` fork and exec
-# (~1.6 ms) that an ordinary Bash call has no reason to pay.
-#
-# Declared here rather than only inside the function so `set -u` has a
-# definition to see on any path that never resolves it.
+# (~1.6 ms) that an ordinary Bash call has no reason to pay. Declared here too,
+# so `set -u` has a definition on any path that never resolves it.
 HOOK_DIR=''
 
 # @description Emit an allow decision.
@@ -54,8 +52,7 @@ function emit_allow() {
 }
 
 # @description Resolve the directory this script lives in and freeze it. Called once, from
-#              load_body. It locates the sourced body and, through it, the awk
-#              scanner.
+#              load_body, to locate the sourced body and, through it, the awk scanner.
 # @set HOOK_DIR the absolute, symlink-resolved directory holding this script
 # @noargs
 function resolve_hook_dir() {
@@ -190,8 +187,7 @@ function main() {
   # Past the short-circuit the guard is going to look at the command, so bring in
   # the machinery that does it. Everything below this point lives in the sibling
   # loader and the parts under hooks/lib/ it sources, which is why an ordinary
-  # Bash call parses under 200 lines (.ci/check-fast-path-size), not the whole
-  # guard.
+  # Bash call parses under 200 lines (.ci/check-fast-path-size), not the whole guard.
   load_body || return 0
 
   classify::inspect_command "${input}"

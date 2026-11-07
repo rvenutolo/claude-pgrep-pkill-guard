@@ -61,6 +61,18 @@ if (($# > 1)); then
   exit 2
 fi
 
+# Without an argument the script grades the real tree with the flake's tools,
+# and an interactive `nix develop` or direnv shell leaves IN_DEVSHELL unset and
+# the host PATH behind them: a tool the flake lacks would resolve from the
+# host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
+# recursion. Given a tree, as the bats suite gives one on the ambient compat
+# legs, the script re-runs nothing.
+if [[ -z "${1:-}" && -z "${IN_DEVSHELL:-}" ]]; then
+  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+  SELF_DIR="${SELF_PATH%/*}"
+  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+fi
+
 ROOT="${1:-$(git rev-parse --show-toplevel)}"
 readonly ROOT
 

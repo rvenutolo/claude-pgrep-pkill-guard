@@ -15,6 +15,8 @@
 # @exitcode 1 not a git repo
 # @exitcode * otherwise the failing git status; core.hooksPath is not set
 
+# devshell-exempt: the devShell's shellHook runs it while entering the shell; a re-run would nest nix develop
+
 set -Eeuo pipefail
 # No inherit_errexit: the repo_dir substitution in main is tested where it is
 # assigned (`if !`), and the core.hooksPath one guards its git call with `||`

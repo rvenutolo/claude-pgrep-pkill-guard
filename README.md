@@ -163,7 +163,8 @@ checks — cannot differ between platforms, so a separate `checks` job runs it
 once, on Linux. A local `./run-all-checks` runs all of it, the suite under both
 awks. The `compat (ubuntu, ambient)` and
 `compat (macos, homebrew bash)` legs run the test suite only, against the tools
-the runner ships: `compat (ubuntu, ambient)`
+the runner ships, through `./run-tests --ambient`, which keeps it from
+re-running itself inside the devShell: `compat (ubuntu, ambient)`
 takes the image's own bash, `jq` and `awk`, and prints which awk it got, since
 the image may resolve it to either gawk or mawk. `compat (macos, homebrew
 bash)` installs bash from Homebrew and nothing else, then asserts that `awk`

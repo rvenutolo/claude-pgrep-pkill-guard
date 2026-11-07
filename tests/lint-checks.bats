@@ -12,6 +12,10 @@ bats_require_minimum_version 1.5.0
 
 function setup() {
   load 'test_helper/common'
+  # .ci/in-devshell exports IN_DEVSHELL; the ambient compat legs do not have it.
+  if [[ -z "${IN_DEVSHELL:-}" ]]; then
+    skip 'not in the devShell; the gate re-runs itself there'
+  fi
   CHECK="${REPO_DIR}/.ci/run-lint-checks"
   FIXTURE="${BATS_TEST_TMPDIR}/repo"
   STUB_DIR="${BATS_TEST_TMPDIR}/stubs"
@@ -74,10 +78,10 @@ function gate_in_fixture() {
 }
 
 # Every case needs nothing but bash, git and POSIX `mkdir -p`, `cp`, `mv -f`
-# and `chmod` -- deliberately no coreutils long options and no Nix -- so the ambient
-# `compat (macos, homebrew bash)` leg runs this suite for real rather than
-# skipping it. Hence no devShell skip here, the same as
-# tests/bats-no-shebang.bats.
+# and `chmod`, but the gate takes no fixture argument and re-runs itself through
+# .ci/in-devshell whenever IN_DEVSHELL is unset. The ambient compat legs have no
+# Nix to start a devShell with, so setup skips this suite there, the same as
+# tests/bats-no-shebang.bats; the gate legs run it.
 #
 # Nothing here grades a linter's verdict on the real repo: run-all-checks runs
 # the gate itself, with the real linters, on every gate run.

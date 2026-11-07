@@ -5,6 +5,10 @@
 
 function setup() {
   load 'test_helper/common'
+  # .ci/in-devshell exports IN_DEVSHELL; the ambient compat legs do not have it.
+  if [[ -z "${IN_DEVSHELL:-}" ]]; then
+    skip 'not in the devShell; the gate re-runs itself there'
+  fi
   CHECK="${REPO_DIR}/.ci/check-bats-no-shebang"
 }
 
@@ -43,11 +47,10 @@ function gate_in() {
   (cd "${dir}" && "${CHECK}")
 }
 
-# Every case needs nothing but bash, git and a POSIX `mkdir -p` -- deliberately
-# no coreutils long options and no Nix -- so the ambient
-# `compat (macos, homebrew bash)` leg runs this suite for real rather than
-# skipping it. Hence no devShell skip here, the same as
-# tests/shell-shebangs.bats.
+# Every case needs nothing but bash, git and a POSIX `mkdir -p`, but the gate
+# takes no fixture argument and re-runs itself through .ci/in-devshell whenever
+# IN_DEVSHELL is unset. The ambient compat legs have no Nix to start a devShell
+# with, so setup skips this suite there; the gate legs run it.
 #
 # The real-repo case is the exception that keeps the rest honest: it runs the gate
 # in the real repo, so a fixture that has drifted away from the shape the

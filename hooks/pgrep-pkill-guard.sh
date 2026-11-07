@@ -7,6 +7,7 @@
 # @exitcode 0 a decision, a notice, the help or the version was printed; any unexpected failure fails open
 # @exitcode 2 a human-mode usage error
 
+# devshell-exempt: the shipped plugin hook; Claude Code runs it on the user's host, outside any checkout
 set -Eeuo pipefail
 # No inherit_errexit: forbidden in hooks/, where `||` fallbacks keep substitutions off the ERR trap (invariant 2).
 IFS=$'\n\t'

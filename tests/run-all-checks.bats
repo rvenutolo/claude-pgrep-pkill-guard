@@ -11,10 +11,18 @@
 # directory holding the `nix` stub, MARKER, the file that stub touches, RUNS,
 # the file the `run-tests` stub appends its arguments to, and PLATFORM, the file
 # the `.ci/check-devshell-provides` and `bench/run` stubs append to.
+#
+# The copied gate re-runs itself through .ci/in-devshell whenever IN_DEVSHELL
+# is unset, and the ambient compat legs have no Nix to start a devShell with,
+# so setup skips this suite there; the gate legs run it.
 bats_require_minimum_version 1.5.0
 
 function setup() {
   load 'test_helper/common'
+  # .ci/in-devshell exports IN_DEVSHELL; the ambient compat legs do not have it.
+  if [[ -z "${IN_DEVSHELL:-}" ]]; then
+    skip 'not in the devShell; the gate re-runs itself there'
+  fi
   FIXTURE="${BATS_TEST_TMPDIR}/repo"
   STUB_DIR="${BATS_TEST_TMPDIR}/stubs"
   MARKER="${BATS_TEST_TMPDIR}/gate-ran"

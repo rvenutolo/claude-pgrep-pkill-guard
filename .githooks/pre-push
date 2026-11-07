@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
-# @description Git pre-push hook. Runs the full local gate inside the devShell
-#              and aborts the push if it fails. One runner rather than a
-#              hand-maintained step list, so the hook, the docs and the justfile
-#              cannot drift apart. Bypass with `git push --no-verify`.
+# @description Git pre-push hook. Re-runs itself inside the devShell, runs the
+#              full local gate there and aborts the push if it fails. One
+#              runner rather than a hand-maintained step list, so the hook, the
+#              docs and the justfile cannot drift apart. Bypass with
+#              `git push --no-verify`.
 # @arg $@ args the remote name and URL git passes (the ref/sha pairs arrive on
 #         stdin); this hook uses neither
 # @stderr a `pre-push: <message>` line before the gate runs and one with its
@@ -14,14 +15,28 @@
 # @exitcode * otherwise the failing git status; the push is aborted
 
 set -Eeuo pipefail
-# No inherit_errexit: this runs under the host bash, 3.2 on stock macOS, where the option does not exist.
+# No inherit_errexit: git runs this under the host bash, 3.2 on stock macOS,
+# where the option does not exist. The self-wrap block below is bash 3.2 safe;
+# the re-run it starts needs what .ci/in-devshell needs: bash 4.4+ and GNU
+# readlink, mktemp and rm on the host. On macOS: brew install bash coreutils,
+# with the coreutils gnubin directory first on PATH.
 IFS=$'\n\t'
+
+# Git runs hooks with the caller's environment, and an interactive shell leaves
+# IN_DEVSHELL unset and the host PATH in place: a tool the flake lacks would
+# resolve from the host. Re-run through in-devshell, which sets IN_DEVSHELL and
+# so stops the recursion.
+if [[ -z "${IN_DEVSHELL:-}" ]]; then
+  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+  SELF_DIR="${SELF_PATH%/*}"
+  exec "${SELF_DIR}/../.ci/in-devshell" "${SELF_PATH}" "$@"
+fi
 
 function main() {
   local repo_dir
   repo_dir="$(git rev-parse --show-toplevel)"
   printf 'pre-push: running the full local gate\n' >&2
-  if ! "${repo_dir}/.ci/in-devshell" "${repo_dir}/run-all-checks"; then
+  if ! "${repo_dir}/run-all-checks"; then
     printf 'pre-push: gate failed — fix, or rerun with --no-verify to bypass\n' >&2
     exit 1
   fi

@@ -6,6 +6,16 @@
 #              every file passed — the repeat-tier cases create state dirs,
 #              symlinks and large fixture files, so fixture escape is a real risk.
 #
+#              With IN_DEVSHELL unset, as in an interactive `nix develop` or
+#              direnv shell, the script re-runs itself through .ci/in-devshell,
+#              so bats and every tool a test calls come from the flake. That
+#              devShell is entered with --ignore-environment, so a direct run
+#              keeps only the KEEP_VARS environment (see .ci/in-devshell).
+#              `--ambient`, anywhere among the arguments, skips that and keeps
+#              the caller's environment and tools; the compat CI legs use it to
+#              run the suite against what the runner ships. It is removed
+#              before anything else reads the arguments.
+#
 #              Each .bats file runs as its own bats, as many at once as `--jobs
 #              N` allows (default: the number of CPUs online). The pool is plain
 #              background jobs, not `bats --jobs`: that needs flock and GNU
@@ -79,9 +89,10 @@
 #              CLASSIFY_SLICE variable, queued after every other file, because
 #              its rows are most of the suite's time under kcov. Naming no file
 #              while passing other arguments is an error under --coverage.
-# @arg $@ args optional `--awk=bwk`, `--report DIR`, `--jobs N`, `--slice I/N`
-#         and `--coverage DIR` in any order, then bats arguments and test
-#         paths; give no test path to run all of tests/
+# @arg $@ args optional `--ambient`, anywhere, then optional `--awk=bwk`,
+#         `--report DIR`, `--jobs N`, `--slice I/N` and `--coverage DIR` in
+#         any order, then bats arguments and test paths; give no test path to
+#         run all of tests/
 # @stdout each file's bats terminal output, in queue order
 # @stderr a `[<script>] <message>` line naming the awk in use under --awk=bwk,
 #         the slice's share of the files under --slice and a warning when it
@@ -120,6 +131,33 @@ shopt -s inherit_errexit
 IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+# `--ambient` is taken out here, before the flag loop in main or bats ever sees
+# it, wherever it appears.
+AMBIENT=''
+ARGS=()
+for arg in "$@"; do
+  if [[ "${arg}" == '--ambient' ]]; then
+    AMBIENT='y'
+  else
+    ARGS+=("${arg}")
+  fi
+done
+set -- "${ARGS[@]}"
+unset arg ARGS
+
+# An interactive `nix develop` or direnv shell leaves IN_DEVSHELL unset and the
+# host PATH behind the flake's tools: a tool the flake lacks would resolve from
+# the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
+# recursion. `--ambient` skips this: the compat CI legs, which have no Nix,
+# run the suite against the tools the runner ships on purpose. This block is
+# therefore never reached on the ambient macOS leg, so its GNU long option
+# needs no BSD spelling.
+if [[ -z "${IN_DEVSHELL:-}" && -z "${AMBIENT}" ]]; then
+  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+  SELF_DIR="${SELF_PATH%/*}"
+  exec "${SELF_DIR}/.ci/in-devshell" "${SELF_PATH}" "$@"
+fi
 
 REPO_DIR="$(git rev-parse --show-toplevel)"
 readonly REPO_DIR
@@ -170,10 +208,12 @@ declare -Ar FILE_WEIGHTS=(
   ['bash-style-comments.bats']=46
   ['bash-style-quoting.bats']=37
   ['bash-style.bats']=34
+  ['in-devshell.bats']=30
   ['bash-style-layout.bats']=27
   ['invariant-markers.bats']=26
   ['bench-run.bats']=21
   ['run-tests-cli.bats']=15
+  ['self-wrap.bats']=15
   ['commit-payload.bats']=12
   ['repeat.bats']=12
   ['scanner.bats']=12
@@ -629,7 +669,7 @@ function main() {
   unset BASH_ENV
 
   if ! command -v bats > /dev/null 2>&1; then
-    die "bats not found on PATH — run './.ci/in-devshell ./run-tests' or 'just test'"
+    die "bats not found on PATH — run './run-tests' without --ambient, or 'just test'"
   fi
 
   # Leading flags, in any order, consumed before anything reaches bats. A loop
@@ -725,7 +765,7 @@ function main() {
           die 'kcov not found — nixpkgs ships no darwin kcov, so --coverage is Linux-only'
           ;;
         *)
-          die "kcov not found on PATH — run './.ci/in-devshell ./run-tests --coverage DIR' or 'just coverage'"
+          die "kcov not found on PATH — run './run-tests --coverage DIR' without --ambient, or 'just coverage'"
           ;;
       esac
     fi

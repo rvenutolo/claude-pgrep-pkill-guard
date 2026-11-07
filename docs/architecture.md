@@ -425,6 +425,23 @@ devShell commitlint against the same file, reading the commits from git
 rather than from a message file, so the rules graded here are the rules CI
 applies. It skips outside the devShell, where the hook has no commitlint.
 
+Every gate script and git hook re-runs itself through `.ci/in-devshell` when
+`IN_DEVSHELL` is unset, and the ambient compat legs have no Nix, so a suite
+that drives a script on those legs must leave the re-run out. The `.ci/` gates
+that take a fixture argument re-run nothing when given one, and their suites
+run on the ambient legs. `run-tests --ambient` re-runs nothing either, and
+`tests/run-tests-cli.bats` passes it. The suites of the scripts with no such
+mode — `tests/bats-no-shebang.bats`, `tests/lint-checks.bats`,
+`tests/commit-payload.bats`, `tests/report-coverage.bats` and
+`tests/run-all-checks.bats` — skip outside the devShell, as
+`tests/commit-msg.bats` and `tests/bench-run.bats` do.
+`tests/self-wrap.bats` holds every tracked bash or sh script to the rule, or to
+a `# devshell-exempt:` reason, and shows the re-run and both opt-outs against a
+stub `nix`; `tests/in-devshell.bats` runs the wrapper against the real devShell
+and checks that it returns the command's status and leaves nothing in the
+caller's `TMPDIR`, however the command ends. Both need Nix and skip outside the
+devShell.
+
 `tests/run-tests-cli.bats`, `tests/run-all-checks.bats` and `tests/bench-run.bats`
 drive neither the guard alone nor a `.ci/` script; `tests/bench-run.bats` drives
 `bench/run`, in the real repo and in a fixture repo holding a copy of the hook
@@ -970,9 +987,11 @@ is the `short flag only where macOS has no long form, on purpose` comment above
 `make_manifest_fixture` in `tests/manifest.bats`.
 
 `run-tests` itself mostly keeps long options, but **not because it is safe to**
-— the legs that run the suite invoke `./run-tests` directly against ambient
-tools, exactly like a `.bats` file. It gets away with it only because every
-GNU long option in it sits on a devShell-only path: `use_bwk_awk`'s
+— the legs that run the suite invoke `./run-tests --ambient` directly against
+ambient tools, exactly like a `.bats` file. It gets away with it only because
+every GNU long option in it sits on a devShell-only path: the
+`readlink --canonicalize` of its self-wrap block runs only without `--ambient`,
+on the way into the devShell, and `use_bwk_awk`'s
 `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
 under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
 them. Every other line runs on the ambient legs, the worker pool included, so
@@ -1232,8 +1251,8 @@ have nothing for it to police:
 - `bench/run` — its `main` never returns non-zero. Bad input goes through
   `die`, and `exit` does not fire an `ERR` trap. It also installs an `EXIT`
   cleanup trap partway through `main`, alongside the `ERR` trap.
-- `.ci/in-devshell` — `main` ends in `exec`, and its failure paths call
-  `exit 1`.
+- `.ci/in-devshell` — `main` ends in `exit` with the wrapped command's status,
+  and its failure paths call `exit 1`; `exit` does not fire an `ERR` trap.
 - `.ci/activate-githooks` — installs no `ERR` trap.
 - `.ci/check-inactive-on-old-bash` — POSIX `sh` with `set -eu`, no trap.
 

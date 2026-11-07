@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+# @description Fixture for tests/self-wrap.bats: a script that follows the
+#              self-wrap rule and reports where it ended up. It prints
+#              its own pid, IN_DEVSHELL, PATH and each argument on a line of
+#              their own (`PID=<pid>`, `IN_DEVSHELL=<value>`, `PATH=<value>`,
+#              `ARG=<value>`), then
+#              exits with the status given by a leading `--exit=N`, or 0.
+#              The status is an argument and not an environment variable
+#              because the devShell wipes the environment, so a variable would
+#              not survive the re-run.
+# @arg $@ args any arguments, echoed back unchanged; a leading --exit=N is
+#         consumed
+# @stdout the PID, IN_DEVSHELL, PATH and ARG lines
+# @exitcode * the N of --exit=N, or 0
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+IFS=$'\n\t'
+
+trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+# The same block every gate script carries; see run-all-checks.
+if [[ -z "${IN_DEVSHELL:-}" ]]; then
+  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+  SELF_DIR="${SELF_PATH%/*}"
+  exec "${SELF_DIR}/../in-devshell" "${SELF_PATH}" "$@"
+fi
+
+function main() {
+  local probe_exit=0 arg
+  if [[ "${1:-}" == --exit=* ]]; then
+    probe_exit="${1#--exit=}"
+    shift
+  fi
+  printf 'PID=%s\n' "$$"
+  printf 'IN_DEVSHELL=%s\n' "${IN_DEVSHELL}"
+  printf 'PATH=%s\n' "${PATH}"
+  for arg in "$@"; do
+    printf 'ARG=%s\n' "${arg}"
+  done
+  # The status is the caller's choice, not a crash: drop the ERR trap first
+  # (invariant 6).
+  trap - ERR
+  return "${probe_exit}"
+}
+
+main "$@"

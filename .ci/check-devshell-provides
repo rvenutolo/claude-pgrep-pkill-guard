@@ -95,6 +95,18 @@ fi
 
 readonly FIXTURE_DIR="${1:-}"
 
+# Real mode grades the real tree with the flake's tools, and an interactive
+# `nix develop` or direnv shell leaves IN_DEVSHELL unset and the host PATH
+# behind them: a tool the flake lacks would resolve from the host. Re-run
+# through in-devshell, which sets IN_DEVSHELL and so stops the recursion.
+# Fixture mode re-runs nothing: it needs no devShell, and the ambient compat
+# legs drive it.
+if [[ -z "${FIXTURE_DIR}" && -z "${IN_DEVSHELL:-}" ]]; then
+  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+  SELF_DIR="${SELF_PATH%/*}"
+  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+fi
+
 # REPO_DIR is resolved only in real mode. Fixture mode must not need a git repo
 # at all: a bats test builds its fixture under a temp directory, and making the
 # fixture path depend on `git rev-parse` would couple it to the suite's working

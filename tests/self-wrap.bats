@@ -290,10 +290,19 @@ function assert_in_devshell() {
 }
 
 @test "self-wrap: with IN_DEVSHELL already set there is no re-run" {
+  local parent pid
   cd "${REPO_DIR}"
-  run env IN_DEVSHELL=1 PATH="${STUB_DIR}:${HOST_DIR}:${PATH}" "${PROBE}" 'z'
+  # The shell prints its pid and execs the probe, so the probe keeps that pid
+  # unless something between them started it as a new process. A re-run would
+  # also reset IN_DEVSHELL to the wrapper's value and drop HOST_DIR from PATH.
+  # shellcheck disable=SC2016 # expanded by the inner bash, not here
+  run env IN_DEVSHELL='caller-set' PATH="${HOST_DIR}:${PATH}" \
+    bash -c 'printf "PARENT=%s\n" "$$"; exec "$1" z' bash "${PROBE}"
   assert_success
+  assert_line 'IN_DEVSHELL=caller-set'
   assert_line 'ARG=z'
   assert_line --regexp "^PATH=(.*:)?${HOST_DIR}(:.*)?$"
-  [[ ! -e "${BATS_TEST_TMPDIR}/nix-args" ]]
+  parent="$(sed --quiet 's/^PARENT=//p' <<< "${output}")"
+  pid="$(sed --quiet 's/^PID=//p' <<< "${output}")"
+  assert_equal "${pid}" "${parent}"
 }

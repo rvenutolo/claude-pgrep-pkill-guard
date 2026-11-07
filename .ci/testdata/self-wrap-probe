@@ -2,15 +2,16 @@
 
 # @description Fixture for tests/self-wrap.bats: a script that follows the
 #              self-wrap rule and reports where it ended up. It prints
-#              IN_DEVSHELL, PATH and each argument on a line of their own
-#              (`IN_DEVSHELL=<value>`, `PATH=<value>`, `ARG=<value>`), then
+#              its own pid, IN_DEVSHELL, PATH and each argument on a line of
+#              their own (`PID=<pid>`, `IN_DEVSHELL=<value>`, `PATH=<value>`,
+#              `ARG=<value>`), then
 #              exits with the status given by a leading `--exit=N`, or 0.
 #              The status is an argument and not an environment variable
 #              because the devShell wipes the environment, so a variable would
 #              not survive the re-run.
 # @arg $@ args any arguments, echoed back unchanged; a leading --exit=N is
 #         consumed
-# @stdout the IN_DEVSHELL, PATH and ARG lines
+# @stdout the PID, IN_DEVSHELL, PATH and ARG lines
 # @exitcode * the N of --exit=N, or 0
 
 set -Eeuo pipefail
@@ -32,6 +33,7 @@ function main() {
     probe_exit="${1#--exit=}"
     shift
   fi
+  printf 'PID=%s\n' "$$"
   printf 'IN_DEVSHELL=%s\n' "${IN_DEVSHELL}"
   printf 'PATH=%s\n' "${PATH}"
   for arg in "$@"; do

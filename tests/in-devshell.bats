@@ -309,3 +309,46 @@ function wrap() {
   assert_gone "${cmd_pid}"
   assert_empty_dir "${SCRATCH}"
 }
+
+@test "in-devshell: SIGHUP to the wrapper alone gives 129 and leaves TMPDIR empty" {
+  local wrapper_pid cmd_pid rc=0
+  cd "${REPO_DIR}"
+  # shellcheck disable=SC2016 # expanded by the wrapped sh, not here
+  env --unset=IN_DEVSHELL --unset=GIT_CEILING_DIRECTORIES TMPDIR="${SCRATCH}" "${WRAPPER}" \
+    sh -c 'echo $$ > "$1"; exec sleep 300' sh "${BATS_TEST_TMPDIR}/cmd.pid" \
+    < '/dev/null' > "${BATS_TEST_TMPDIR}/out" 2>&1 3>&- &
+  wrapper_pid="$!"
+  remember_pid "${wrapper_pid}"
+  wait_for_file "${BATS_TEST_TMPDIR}/cmd.pid" \
+    || fail "the command never started: $(< "${BATS_TEST_TMPDIR}/out")"
+  cmd_pid="$(< "${BATS_TEST_TMPDIR}/cmd.pid")"
+  remember_pid "${cmd_pid}"
+  kill -s HUP "${wrapper_pid}"
+  wait "${wrapper_pid}" || rc="$?"
+  forget_pid "${wrapper_pid}"
+  assert_equal "${rc}" 129
+  assert_gone "${cmd_pid}"
+  assert_empty_dir "${SCRATCH}"
+}
+
+@test "in-devshell: a command that handles a forwarded SIGHUP reports its own status" {
+  local wrapper_pid cmd_pid rc=0
+  cd "${REPO_DIR}"
+  # shellcheck disable=SC2016 # expanded by the wrapped sh, not here
+  env --unset=IN_DEVSHELL --unset=GIT_CEILING_DIRECTORIES TMPDIR="${SCRATCH}" "${WRAPPER}" \
+    sh -c 'trap "kill \$! 2> /dev/null; exit 0" HUP; echo $$ > "$1"; sleep 300 & wait' \
+    sh "${BATS_TEST_TMPDIR}/cmd.pid" \
+    < '/dev/null' > "${BATS_TEST_TMPDIR}/out" 2>&1 3>&- &
+  wrapper_pid="$!"
+  remember_pid "${wrapper_pid}"
+  wait_for_file "${BATS_TEST_TMPDIR}/cmd.pid" \
+    || fail "the command never started: $(< "${BATS_TEST_TMPDIR}/out")"
+  cmd_pid="$(< "${BATS_TEST_TMPDIR}/cmd.pid")"
+  remember_pid "${cmd_pid}"
+  kill -s HUP "${wrapper_pid}"
+  wait "${wrapper_pid}" || rc="$?"
+  forget_pid "${wrapper_pid}"
+  assert_equal "${rc}" 0
+  assert_gone "${cmd_pid}"
+  assert_empty_dir "${SCRATCH}"
+}

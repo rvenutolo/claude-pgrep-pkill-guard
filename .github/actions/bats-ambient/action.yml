@@ -63,4 +63,4 @@ runs:
         echo "BATS_LIB_PATH=${libdir}" >> "${GITHUB_ENV}"
       env:
         # renovate: datasource=git-refs depName=bats-core/bats-core
-        BATS_CORE_SHA: 'dd43d25dac55fa30e779381a257d26fb8f21588f'
+        BATS_CORE_SHA: '9c153ec126fa6c005dfc6d2a39c04bb81a329e9b'

@@ -433,12 +433,12 @@ function assert_marker_stops_at_header() {
 
 @test "bash style: a missing shfmt or jq is exit 2, before anything is scanned" {
   write_fixture 'clean.sh' 'echo PAYLOAD_RAN'
-  # bash and dirname are what the gate needs to reach its tool check.
-  make_tool_dir 'no-shfmt' 'bash' 'dirname' 'jq'
+  # bash, dirname and readlink are what the gate needs to reach its tool check.
+  make_tool_dir 'no-shfmt' 'bash' 'dirname' 'readlink' 'jq'
   run env PATH="${TOOL_DIR}" "${CHECK}" "${FIXTURE}"
   assert_failure 2
   assert_output 'FAIL: shfmt is not on PATH; run this gate through .ci/in-devshell'
-  make_tool_dir 'no-jq' 'bash' 'dirname' 'shfmt'
+  make_tool_dir 'no-jq' 'bash' 'dirname' 'readlink' 'shfmt'
   run env PATH="${TOOL_DIR}" "${CHECK}" "${FIXTURE}"
   assert_failure 2
   assert_output 'FAIL: jq is not on PATH; run this gate through .ci/in-devshell'

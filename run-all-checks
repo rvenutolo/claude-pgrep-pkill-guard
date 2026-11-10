@@ -50,8 +50,7 @@
 # @exitcode 0 every check passed
 # @exitcode 1 one or more checks failed
 # @exitcode 2 any arguments other than those
-# @exitcode * otherwise the failing git status, when the repository root cannot
-#             be resolved
+# @exitcode * otherwise the failing git status
 # @stderr a `[<script>] <message>` banner before each step, a warning naming
 #         each untracked file, `one or more checks failed` on exit 1, and the
 #         usage line on exit 2; the ERR trap's `[<script>] ERROR: ...` report
@@ -67,13 +66,13 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # host PATH behind the flake's tools: a tool the flake lacks would resolve from
 # the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*}"
 if [[ -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/.ci/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
+REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
 
 # @description Log a step banner to stderr, in the house format.

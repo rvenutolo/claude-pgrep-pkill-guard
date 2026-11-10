@@ -18,9 +18,8 @@ function setup() {
 }
 
 # @description Run the hook from the repo root on a message file holding the
-#              text given. The hook finds .commitlintrc.yml through
-#              `git rev-parse --show-toplevel`, so the cd selects the real
-#              config.
+#              text given. commitlint finds .commitlintrc.yml from the working
+#              directory, so the cd selects the real config.
 # @arg $1 message the full commit message, newlines included
 function hook_on() {
   local -r message="$1"

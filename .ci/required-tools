@@ -45,7 +45,7 @@ gawk
 nawk
 # asserted by .ci/check-uses-sha-pinned and used by the release flow
 gh
-# every repo-tooling script derives the repo root via `git rev-parse`
+# every repo-tooling script reads the repository through it
 git
 # the hook's own runtime dependency; manifest.bats parses JSON with it; and
 # .ci/check-bash-style runs its rule module over shfmt's syntax tree

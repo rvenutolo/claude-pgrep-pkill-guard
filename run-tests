@@ -153,13 +153,13 @@ unset arg ARGS
 # run the suite against the tools the runner ships on purpose. This block is
 # therefore never reached on the ambient macOS leg, so its GNU long option
 # needs no BSD spelling.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*}"
 if [[ -z "${IN_DEVSHELL:-}" && -z "${AMBIENT}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/.ci/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
+REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
 # Temporary directories for the EXIT trap to remove, registered through
 # remove_on_exit. One list behind one trap, because --awk=bwk and the pool

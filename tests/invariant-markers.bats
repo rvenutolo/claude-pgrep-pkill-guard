@@ -70,8 +70,8 @@ ARCH
 
 @test "invariant markers: the real repo passes" {
   # REPO_DIR explicitly rather than relying on the argument-less default: the
-  # default resolves through `git rev-parse --show-toplevel`, and a bats test
-  # must not depend on the directory the suite happened to be launched from.
+  # default is the script's own repo root, which the symlink and fixture-copy
+  # cases in self-wrap.bats pin, so this case names the tree it grades.
   # Past that one branch the script runs the same either way.
   run "${CHECK}" "${REPO_DIR}"
   assert_success

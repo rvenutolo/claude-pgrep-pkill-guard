@@ -28,8 +28,7 @@
 #         trap's `[<script>] ERROR: ...` report when a command fails instead
 # @exitcode 0 the entry script is within the ceiling
 # @exitcode 1 it is over the ceiling, missing or unreadable, or reads as zero lines
-# @exitcode * otherwise the failing git status, when the repository root cannot
-#             be resolved
+# @exitcode * otherwise the failing git status
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -41,13 +40,13 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # host PATH behind the flake's tools: a tool the flake lacks would resolve from
 # the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
+REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
 
 readonly FAST_PATH='hooks/pgrep-pkill-guard.sh'

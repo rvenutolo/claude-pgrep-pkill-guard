@@ -24,10 +24,10 @@ IFS=$'\n\t'
 # IN_DEVSHELL unset and the host PATH in place: a tool the flake lacks would
 # resolve from the host. Re-run through in-devshell, which sets IN_DEVSHELL and
 # so stops the recursion.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/../.ci/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
 # Git always passes exactly one argument, the message file, so any other count

@@ -36,12 +36,12 @@
 #              the traps above. A form referencing a label that does not
 #              exist does not error either -- GitHub files the issue without it
 #              -- so this is the same failure mode as the rest of the file.
-# @arg $1 dir optional directory to check; defaults to the repo root plus
+# @arg $1 dir optional directory to check; defaults to the script's own repo root plus
 #         .github/ISSUE_TEMPLATE. It exists so the bats suite can point the
 #         script at a fixture holding one deliberately broken form and assert
 #         that it fails. Without it the only possible test would be "exits 0 on
 #         the real repo", which a script that always returned 0 would also pass.
-# @arg $2 labels optional path to the labels file; defaults to the repo root
+# @arg $2 labels optional path to the labels file; defaults to the script's own repo root
 #         plus .github/labels.yml. Defaulted to the REAL file rather than
 #         derived from dir on purpose: the suite's form fixtures declare
 #         `labels: [bug]`, and `bug` is in the real file, so a case needs no
@@ -56,8 +56,7 @@
 #             unparsable, the labels file is missing or declares nothing, a rule
 #             program fails to run, or a rule is violated
 # @exitcode 2 more arguments were given than the script accepts
-# @exitcode * otherwise the failing git status, when a default path is needed and
-#             the repository root cannot be resolved
+# @exitcode * otherwise the failing git status
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -85,14 +84,14 @@ fi
 # host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion. Given a tree, as the bats suite gives one on the ambient compat
 # legs, the script re-runs nothing.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${1:-}" && -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-DIR="${1:-$(git rev-parse --show-toplevel)/.github/ISSUE_TEMPLATE}"
-LABELS_FILE="${2:-$(git rev-parse --show-toplevel)/.github/labels.yml}"
+DIR="${1:-${SELF_REPO}/.github/ISSUE_TEMPLATE}"
+LABELS_FILE="${2:-${SELF_REPO}/.github/labels.yml}"
 readonly DIR LABELS_FILE
 
 # config.yml is the chooser configuration, not a form: it carries no name,

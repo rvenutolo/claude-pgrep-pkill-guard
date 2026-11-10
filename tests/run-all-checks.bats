@@ -71,9 +71,9 @@ function make_fixture() {
 }
 
 # @description Run the fixture's run-all-checks from inside the fixture, with
-#              the stub first on PATH. The script finds its repo with
-#              `git rev-parse --show-toplevel`, so the cd is the fixture
-#              selection.
+#              the stub first on PATH. The script takes its repo from its own
+#              path, so the fixture holds a copy of it at the same relative
+#              path.
 # @arg $@ args the arguments to hand the gate
 function gate_in_fixture() {
   (cd "${FIXTURE}" && PATH="${STUB_DIR}:${PATH}" ./run-all-checks "$@")

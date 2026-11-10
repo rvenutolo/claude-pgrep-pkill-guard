@@ -273,8 +273,11 @@ function check_form_labels() {
     # `grep --line-regexp --fixed-strings` rather than a bash `[[ ]]` match: a
     # label name may hold a space (`good first issue`) or a colon
     # (`autorelease: pending`), and a substring match would let a declared `bugs`
-    # satisfy a reference to `bug`.
-    if ! printf '%s\n' "${declared}" | grep --line-regexp --fixed-strings --quiet -- "${name}"; then
+    # satisfy a reference to `bug`. A here-string, not `printf | grep`: bash's
+    # printf writes a pipe one line at a time, `--quiet` exits on the first
+    # match, and the writer's broken pipe then fails the pipeline under
+    # pipefail even though the label is declared.
+    if ! grep --line-regexp --fixed-strings --quiet -- "${name}" <<< "${declared}"; then
       fail "${label}: references label \"${name}\", which ${LABELS_FILE##*/} does not declare"
       rc=1
     fi

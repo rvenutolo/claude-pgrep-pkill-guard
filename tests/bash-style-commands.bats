@@ -120,6 +120,61 @@ function setup() {
   assert_passes 't.sh' 'while read -r line; do' '  echo PAYLOAD_RAN' 'done < <(some_command) | other_command'
 }
 
+@test "bash style: no-pipe-grep-quiet reports a pipe into grep --quiet" {
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | grep --quiet -- 'a' && echo PAYLOAD_RAN"
+  assert_passes 't.sh' "grep --quiet -- 'a' <<< \"\$(some_command)\" && echo PAYLOAD_RAN"
+}
+
+@test "bash style: no-pipe-grep-quiet reports -q, --silent and a short-flag cluster" {
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | grep -q 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | grep --silent 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | grep -Fxq 'a' && echo PAYLOAD_RAN"
+}
+
+@test "bash style: no-pipe-grep-quiet reports |&, a later stage and a negated test" {
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command |& grep --quiet 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | other_command | grep --quiet 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | grep --quiet 'a' | other_command"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 2 \
+    "if ! some_command \\" "  | grep --quiet 'a'; then" '  echo PAYLOAD_RAN' 'fi'
+}
+
+@test "bash style: no-pipe-grep-quiet passes a grep that reads all its input" {
+  assert_passes 't.sh' "some_command | grep --count -- 'a'"
+  assert_passes 't.sh' "some_command | grep --fixed-strings -- '-q'"
+}
+
+@test "bash style: no-pipe-grep-quiet passes grep --quiet as the first stage" {
+  assert_passes 't.sh' "grep --quiet -- 'a' 'f.txt' | other_command"
+}
+
+@test "bash style: no-pipe-grep-quiet reports grep behind a wrapper, a path or another name" {
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | command grep --quiet 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | env LC_ALL=C grep --quiet 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | /usr/bin/grep --quiet 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | egrep -q 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | fgrep -q 'a' && echo PAYLOAD_RAN"
+}
+
+@test "bash style: no-pipe-grep-quiet reports grep inside a piped-into block or subshell" {
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | { grep --quiet 'a'; } && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | (grep --quiet 'a') && echo PAYLOAD_RAN"
+}
+
+@test "bash style: no-pipe-grep-quiet reports a quoted quiet flag" {
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | grep '--quiet' 'a' && echo PAYLOAD_RAN"
+  assert_fires 't.sh' 'no-pipe-grep-quiet' 1 "some_command | grep \"-q\" 'a' && echo PAYLOAD_RAN"
+}
+
+@test "bash style: no-pipe-grep-quiet passes a -q that is the value of -e or --regexp" {
+  assert_passes 't.sh' "some_command | grep --regexp '-q' 'f.txt'"
+  # -e trips long-options, so these assert only that the -q is not read as a flag.
+  assert_fires 't.sh' 'long-options' 1 "some_command | grep -e '-q' 'f.txt'"
+  refute_output --partial '[no-pipe-grep-quiet]'
+  assert_fires 't.sh' 'long-options' 1 "some_command | grep -eq 'f.txt'"
+  refute_output --partial '[no-pipe-grep-quiet]'
+}
+
 @test "bash style: source-not-dot reports the dot command" {
   assert_fires 't.sh' 'source-not-dot' 1 ". 'lib.sh'"
   assert_passes 't.sh' "source 'lib.sh'"

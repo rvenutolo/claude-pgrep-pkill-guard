@@ -13,7 +13,7 @@
 # `hits`. The tests/bash-style*.bats files name every id, so an id is never
 # renamed.
 
-def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr", "comment-line-ref", "comment-untracked-ref", "comment-missing-path", "comment-missing-function", "comment-commit-relative", "comment-issue-ref", "todo-form", "mktemp-exit-trap"];
+def rule_ids: ["function-keyword", "no-raw-tab", "quote-expansions", "single-quote-literals", "quote-literal-path", "quote-subst-in-assign", "unquoted-numeric-opt", "no-braces-in-arith", "quote-heredoc-terminator", "long-options", "double-dash-before-paths", "xargs-flags", "no-echo-e", "fetch-flags", "test-double-equals", "empty-string-test", "no-lexical-compare", "no-one-line-case", "no-fallthrough", "explicit-for-in", "no-for-in-subst", "no-pipe-while", "no-pipe-grep-quiet", "source-not-dot", "no-let-expr", "no-alias", "bare-arith-stmt", "blank-fallback-comment", "shellcheck-disable-justified", "no-subst-or-exit", "eval-comment", "main-last", "functions-grouped", "strict-prologue", "no-default-wellknown-env", "max-line-length", "shdoc-present", "shdoc-arg-positions", "shdoc-arg-name", "shdoc-set", "shdoc-stderr", "comment-line-ref", "comment-untracked-ref", "comment-missing-path", "comment-missing-function", "comment-commit-relative", "comment-issue-ref", "todo-form", "mktemp-exit-trap"];
 
 def nodes: .. | objects;
 def args: (.Args // []);
@@ -421,6 +421,53 @@ def no_pipe_while:
       or (.Y.Cmd.Type | IN("Block", "Subshell")) and any(.Y.Cmd.Stmts[]?; .Cmd.Type == "WhileClause")
     )
   | {line: .Y.Pos.Line, rule: "no-pipe-while", message: "feed the loop with < <(cmd), not a pipe"};
+
+# The text of a word that is one literal, quoted or not, or null when the word
+# holds an expansion. Quoting does not change what a command receives, so
+# '--quiet' is as much a flag as --quiet.
+def literal_text:
+  (.Parts // []) as $p
+  | if ($p | length) != 1 then null
+    elif $p[0].Type == "Lit" or $p[0].Type == "SglQuoted" then $p[0].Value
+    elif $p[0].Type == "DblQuoted" and (($p[0].Parts // []) | length) == 1 and $p[0].Parts[0].Type == "Lit"
+    then $p[0].Parts[0].Value
+    else null
+    end;
+
+# cmd | grep --quiet: grep exits on its first match, the writer can still be
+# mid-write, and its broken pipe fails the whole pipeline under pipefail -- a
+# match reported as a miss, and only when the scheduler interleaves the two.
+# bash's printf writes a pipe one line at a time, so even a short list races.
+# Any stage after the first counts, as does a grep at the top of a block or
+# subshell piped into. Flags are read up to `--`; the word after -e, -f,
+# --regexp or --file is a pattern or a path, never a flag, and a short-flag
+# cluster stops at the first letter that takes a value (-eq is -e 'q').
+def no_pipe_grep_quiet:
+  nodes
+  | select(.Type == "BinaryCmd" and (.Op == "|" or .Op == "|&"))
+  | .Y.Cmd
+  | if .Type | IN("Block", "Subshell") then .Stmts[]?.Cmd else . end
+  | select(.Type == "CallExpr")
+  | real_words as $w
+  | select(($w[0].Parts[0].Value // "") | sub(".*/"; "") | IN("grep", "egrep", "fgrep"))
+  | select(
+      [$w[1:][] | literal_text]
+      | reduce .[] as $v ({quiet: false, skip: false, done: false};
+          if .done then .
+          elif .skip then .skip = false
+          elif $v == null then .
+          elif $v == "--" then .done = true
+          elif $v | IN("--quiet", "--silent") then .quiet = true
+          elif $v | IN("--regexp", "--file") then .skip = true
+          elif $v | test("^-[^-]") then
+            ($v[1:] | capture("^(?<flags>[^efmABCdD]*)(?<value>[efmABCdD]?)(?<rest>.*)$")) as $c
+            | (if $c.flags | contains("q") then .quiet = true else . end)
+            | (if $c.value != "" and $c.rest == "" then .skip = true else . end)
+          else .
+          end)
+      | .quiet
+    )
+  | {line: .Pos.Line, rule: "no-pipe-grep-quiet", message: "grep --quiet ends its pipe early; feed it a here-string"};
 
 # The leading literal text of a command's first word once leading wrappers are
 # removed, or "" when the word starts with an expansion or a double-quoted
@@ -958,7 +1005,7 @@ def mktemp_exit_trap($sourced):
   | select($armed | not)
   | {line: $call.Pos.Line, rule: "mktemp-exit-trap", message: "arm an EXIT trap that removes what mktemp creates"};
 
-def hits($path; $src; $sourced; $tracked; $functions; $helpers): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path; $helpers), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, comment_issue_ref, todo_form, mktemp_exit_trap($sourced);
+def hits($path; $src; $sourced; $tracked; $functions; $helpers): function_keyword, no_raw_tab($src), quote_expansions, single_quote_literals, quote_literal_path, quote_subst_in_assign, unquoted_numeric_opt, no_braces_in_arith, quote_heredoc_terminator, long_options($path; $helpers), double_dash_before_paths, xargs_flags($path), no_echo_e, fetch_flags, test_double_equals, empty_string_test, no_lexical_compare, no_one_line_case, no_fallthrough, explicit_for_in, no_for_in_subst, no_pipe_while, no_pipe_grep_quiet, source_not_dot, no_let_expr, no_alias, bare_arith_stmt, blank_fallback_comment, shellcheck_disable_justified, no_subst_or_exit, eval_comment, main_last($sourced), functions_grouped($sourced), strict_prologue($sourced), no_default_wellknown_env, max_line_length($src), shdoc_present, shdoc_arg_positions, shdoc_arg_name, shdoc_set, shdoc_stderr, comment_line_ref, comment_untracked_ref, comment_missing_path($tracked), comment_missing_function($functions), comment_commit_relative, comment_issue_ref, todo_form, mktemp_exit_trap($sourced);
 
 # The last line a marker attached to this node reaches. A simple command or a
 # pipeline is reached whole, continuation lines included. A compound statement

@@ -67,7 +67,8 @@ fi
 # host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion. Given a tree, as the bats suite gives one on the ambient compat
 # legs, the script re-runs nothing.
-SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+# bash-style allow=long-options: reached on the ambient macOS leg, where BSD readlink has no --canonicalize
+SELF_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
 SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${1:-}" && -z "${IN_DEVSHELL:-}" ]]; then
   exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"

@@ -150,10 +150,11 @@ unset arg ARGS
 # host PATH behind the flake's tools: a tool the flake lacks would resolve from
 # the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion. `--ambient` skips this: the compat CI legs, which have no Nix,
-# run the suite against the tools the runner ships on purpose. This block is
-# therefore never reached on the ambient macOS leg, so its GNU long option
-# needs no BSD spelling.
-SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+# run the suite against the tools the runner ships on purpose. The path
+# resolution below still runs there, so it uses `readlink -f`, the
+# spelling BSD readlink has; the long-option rule is waived for it.
+# bash-style allow=long-options: reached on the ambient macOS leg, where BSD readlink has no --canonicalize
+SELF_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
 SELF_REPO="${SELF_PATH%/*}"
 if [[ -z "${IN_DEVSHELL:-}" && -z "${AMBIENT}" ]]; then
   exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"

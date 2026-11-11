@@ -70,8 +70,7 @@
 #             package inventory or formatter list is unreadable, the inventory
 #             is empty, or a package justifies nothing
 # @exitcode 2 more arguments were given than the script accepts
-# @exitcode * otherwise the failing git status, when no fixture directory is
-#             given and the repository root cannot be resolved
+# @exitcode * otherwise the failing git status
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -101,20 +100,20 @@ readonly FIXTURE_DIR="${1:-}"
 # through in-devshell, which sets IN_DEVSHELL and so stops the recursion.
 # Fixture mode re-runs nothing: it needs no devShell, and the ambient compat
 # legs drive it.
+# bash-style allow=long-options: reached on the ambient macOS leg, where BSD readlink has no --canonicalize
+SELF_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${FIXTURE_DIR}" && -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-# REPO_DIR is resolved only in real mode. Fixture mode must not need a git repo
-# at all: a bats test builds its fixture under a temp directory, and making the
-# fixture path depend on `git rev-parse` would couple it to the suite's working
-# directory.
+# REPO_DIR is resolved only in real mode, from the script's own path. Fixture
+# mode takes the fixture directory as given and needs no git repo at all: a bats
+# test builds its fixture under a temp directory.
 if [[ -n "${FIXTURE_DIR}" ]]; then
   readonly TOOLS_FILE="${FIXTURE_DIR}/required-tools"
 else
-  REPO_DIR="$(git rev-parse --show-toplevel)"
+  REPO_DIR="${SELF_REPO}"
   readonly REPO_DIR
   readonly TOOLS_FILE="${REPO_DIR}/.ci/required-tools"
 fi

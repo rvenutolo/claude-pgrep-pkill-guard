@@ -8,6 +8,9 @@
 #
 #              Standalone, like .ci/in-devshell: it runs during shell startup,
 #              before any repo tooling is guaranteed available.
+#
+#              Acts on the repository the caller is in, not the one holding
+#              this script.
 # @noargs
 # @stderr the reason the script cannot run, or one line saying core.hooksPath
 #         was set

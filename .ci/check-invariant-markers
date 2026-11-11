@@ -54,8 +54,7 @@
 # @exitcode 1 a phrase is missing, a listed file is unreadable or reads as
 #             empty, or the table is empty
 # @exitcode 2 more arguments were given than the script accepts
-# @exitcode * otherwise the failing git status, when no fixture directory is
-#             given and the repository root cannot be resolved
+# @exitcode * otherwise the failing git status
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -85,20 +84,21 @@ readonly FIXTURE_DIR="${1:-}"
 # through in-devshell, which sets IN_DEVSHELL and so stops the recursion.
 # Fixture mode re-runs nothing: it needs no devShell, and the ambient compat
 # legs drive it.
+# bash-style allow=long-options: reached on the ambient macOS leg, where BSD readlink has no --canonicalize
+SELF_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${FIXTURE_DIR}" && -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
 # In fixture mode the directory IS the repo root, and it must be taken at face
-# value: `git rev-parse --show-toplevel` run from a bats temp directory would
-# either fail or -- worse -- resolve to some enclosing repo, and the suite would
-# then be grading the author's checkout instead of its own fixture.
+# value, or the suite would grade the author's checkout instead of its own
+# fixture. Otherwise the repo root is the script's own, whatever directory it is
+# run from.
 if [[ -n "${FIXTURE_DIR}" ]]; then
   readonly REPO_DIR="${FIXTURE_DIR}"
 else
-  REPO_DIR="$(git rev-parse --show-toplevel)"
+  REPO_DIR="${SELF_REPO}"
   readonly REPO_DIR
 fi
 

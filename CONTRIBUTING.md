@@ -48,7 +48,10 @@ shell, it re-runs itself through `./.ci/in-devshell`, so `./run-all-checks`
 and `./.ci/in-devshell ./run-all-checks` are the same run. That wrapper runs
 `nix develop --ignore-environment`, so the devShell cannot inherit the caller's
 `PATH` and no gate step can silently resolve a tool from the machine it happens
-to be running on. Local runs and CI runs therefore cannot drift. Call
+to be running on. Local runs and CI runs therefore cannot drift. A wrapped
+script takes its repository root from its own canonical path, never from the
+caller's working directory, so a symlink to it run from anywhere grades its own
+repository. Call
 `./.ci/in-devshell` directly only for a command that is not one of the repo's
 scripts, such as `./.ci/in-devshell commitlint --from HEAD~1`. The exceptions
 stay on the host on purpose, each saying why in a `# devshell-exempt:` comment:

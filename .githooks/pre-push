@@ -26,15 +26,14 @@ IFS=$'\n\t'
 # IN_DEVSHELL unset and the host PATH in place: a tool the flake lacks would
 # resolve from the host. Re-run through in-devshell, which sets IN_DEVSHELL and
 # so stops the recursion.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/../.ci/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
 function main() {
-  local repo_dir
-  repo_dir="$(git rev-parse --show-toplevel)"
+  local -r repo_dir="${SELF_REPO}"
   printf 'pre-push: running the full local gate\n' >&2
   if ! "${repo_dir}/run-all-checks"; then
     printf 'pre-push: gate failed — fix, or rerun with --no-verify to bypass\n' >&2

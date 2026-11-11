@@ -24,7 +24,8 @@
 #              bash: the character-class checks among its rules cannot be done
 #              portably in shell, because `grep -P` is not guaranteed on macOS,
 #              where the gate also runs.
-# @arg $1 root optional tree to check; defaults to the git repo root. It exists
+# @arg $1 root optional tree to check; defaults to the repo root of the script's own
+#         path. It exists
 #         so the bats suite can point the script at a fixture holding one
 #         deliberately broken manifest and assert that it fails. Without it the
 #         only possible test would be "exits 0 on the real repo", which a script
@@ -38,8 +39,7 @@
 # @exitcode 1 a file is missing or unparsable, the invariant program fails to
 #             run, or an invariant is violated
 # @exitcode 2 more arguments were given than the script accepts
-# @exitcode * otherwise the failing git status, when no tree is given and the
-#             repository root cannot be resolved
+# @exitcode * otherwise the failing git status
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -67,13 +67,14 @@ fi
 # host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion. Given a tree, as the bats suite gives one on the ambient compat
 # legs, the script re-runs nothing.
+# bash-style allow=long-options: reached on the ambient macOS leg, where BSD readlink has no --canonicalize
+SELF_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${1:-}" && -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-ROOT="${1:-$(git rev-parse --show-toplevel)}"
+ROOT="${1:-${SELF_REPO}}"
 readonly ROOT
 
 readonly PLUGIN_JSON="${ROOT}/.claude-plugin/plugin.json"

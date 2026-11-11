@@ -61,15 +61,13 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # host PATH behind the flake's tools: a tool the flake lacks would resolve from
 # the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_DIR
-readonly REPO_DIR="${SCRIPT_DIR}/.."
+readonly REPO_DIR="${SELF_REPO}"
 
 # The directory the scan jobs write their logs and verdicts to. Script-level,
 # not a local of `main`: the EXIT trap that removes it runs after `main` has
@@ -182,7 +180,7 @@ function run_rules() {
   local -r helpers="$6"
   # The lists reach jq as files, not `--arg` strings: one argument is capped at
   # 128 KiB on Linux, and a large repository's lists are not.
-  jq --raw-output --library-path "${SCRIPT_DIR}" \
+  jq --raw-output --library-path "${SELF_REPO}/.ci" \
     --arg path "${display_path}" --rawfile src "${src_file}" --argjson sourced "${sourced}" \
     --rawfile tracked <(printf '%s\n' "${tracked}") --rawfile functions <(printf '%s\n' "${functions}") \
     --rawfile helpers <(printf '%s\n' "${helpers}") \

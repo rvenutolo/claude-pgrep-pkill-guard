@@ -124,8 +124,8 @@ function record_commit() {
   # is the part that holds everywhere.
   #
   # REPO_DIR is passed explicitly rather than relying on the argument-less
-  # default: that default resolves through `git rev-parse --show-toplevel`, and
-  # a bats test must not depend on the directory the suite was launched from.
+  # default: that default is the script's own repo root, which self-wrap.bats
+  # pins, and this case names the tree it grades.
   run "${CHECK}" "${REPO_DIR}"
   assert_success
 }

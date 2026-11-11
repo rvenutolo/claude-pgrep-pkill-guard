@@ -306,3 +306,139 @@ function assert_in_devshell() {
   pid="$(sed --quiet 's/^PID=//p' <<< "${output}")"
   assert_equal "${pid}" "${parent}"
 }
+
+@test "self-wrap: every wrapped script takes its repo root from its own path" {
+  # The strip count is the script's depth below the root plus one: a root-level
+  # script strips one component, a script one directory down strips two, and
+  # so on.
+  # A `rev-parse --show-toplevel` that is not the repo root carries a
+  # `# cwd-root: <reason>` comment on its line.
+  local path text strip depth expected roots bare line seen failures=''
+  while IFS= read -r path; do
+    is_exempt "${path}" && continue
+    text="$(grep --invert-match '^[[:space:]]*#' -- "${REPO_DIR}/${path}" || true)"       # none left: fine
+    roots="$(grep --fixed-strings 'git rev-parse --show-toplevel' <<< "${text}" || true)" # none: fine
+    bare="$(grep --invert-match --fixed-strings '# cwd-root: ' <<< "${roots}" || true)"   # none left: fine
+    if [[ -n "${bare}" ]]; then
+      failures+=" ${path}(cwd root)"
+      continue
+    fi
+    depth="${path//[^\/]/}"
+    strip=''
+    for ((i = 0; i <= ${#depth}; i++)); do
+      strip+='/*'
+    done
+    expected="SELF_REPO=\"\${SELF_PATH%${strip}}\""
+    seen=0
+    while IFS= read -r line; do
+      if [[ "${line}" == "${expected}" ]]; then
+        seen=1
+      elif [[ "${line}" == *'[['*IN_DEVSHELL* ]]; then
+        break
+      fi
+    done < "${REPO_DIR}/${path}"
+    if ((! seen)); then
+      failures+=" ${path}(no SELF_REPO at depth ${#depth})"
+    fi
+  done < <(tracked_scripts)
+  assert_equal "${failures}" ''
+}
+
+@test "self-wrap: a check run through a symlink from outside any repo grades its own repo" {
+  mkdir -- "${BATS_TEST_TMPDIR}/elsewhere"
+  ln --symbolic -- "${REPO_DIR}/.ci/check-uses-sha-pinned" "${BATS_TEST_TMPDIR}/elsewhere/link"
+  cd "${BATS_TEST_TMPDIR}/elsewhere"
+  run env IN_DEVSHELL=1 "${BATS_TEST_TMPDIR}/elsewhere/link"
+  assert_success
+}
+
+@test "self-wrap: a check run through a symlink from another repo grades its own repo" {
+  local scratch="${BATS_TEST_TMPDIR}/other-repo"
+  mkdir --parents -- "${scratch}/.github/workflows"
+  # An inert unpinned reference: the check rejects it if it grades this tree.
+  printf 'jobs:\n  x:\n    steps:\n      - uses: actions/checkout@v4\n' > "${scratch}/.github/workflows/x.yml"
+  git -C "${scratch}" init --quiet
+  git -C "${scratch}" add -- '.github/workflows/x.yml'
+  ln --symbolic -- "${REPO_DIR}/.ci/check-uses-sha-pinned" "${scratch}/link"
+  cd "${scratch}"
+  run env IN_DEVSHELL=1 "${scratch}/link"
+  assert_success
+}
+
+@test "self-wrap: a wrapped script derives no path from a non-canonical BASH_SOURCE or \$0" {
+  # The only BASH_SOURCE use is the canonical SELF_PATH line, spelled
+  # `readlink -f` in the AMBIENT_REACHED scripts and `readlink --canonicalize`
+  # everywhere else; a dirname of BASH_SOURCE or $0, or a suffix strip of
+  # either, resolves against a symlink's directory.
+  local path text hits bad allowed spelling failures=''
+  while IFS= read -r path; do
+    is_exempt "${path}" && continue
+    spelling='--canonicalize'
+    if [[ " ${AMBIENT_REACHED[*]} " == *" ${path} "* ]]; then
+      spelling='-f'
+    fi
+    allowed="readlink ${spelling} -- \"\${BASH_SOURCE[0]}\""
+    text="$(grep --invert-match '^[[:space:]]*#' -- "${REPO_DIR}/${path}" || true)" # none left: fine
+    # shellcheck disable=SC2016 # literal patterns, not expansions
+    hits="$(grep --extended-regexp 'BASH_SOURCE|dirname[^|]*"\$0"|\$\{0%' <<< "${text}" || true)" # none: ok
+    bad="$(grep --invert-match --fixed-strings "${allowed}" <<< "${hits}" || true)"               # none: ok
+    if [[ -n "${bad}" ]]; then
+      failures+=" ${path}(non-canonical self-location)"
+    fi
+  done < <(tracked_scripts)
+  assert_equal "${failures}" ''
+}
+
+@test "self-wrap: check-bash-style run through a symlink finds its own jq library" {
+  mkdir -- "${BATS_TEST_TMPDIR}/elsewhere"
+  ln --symbolic -- "${REPO_DIR}/.ci/check-bash-style" "${BATS_TEST_TMPDIR}/elsewhere/link"
+  printf '#!/usr/bin/env bash\necho PAYLOAD_RAN\n' > "${BATS_TEST_TMPDIR}/elsewhere/clean.sh"
+  cd "${BATS_TEST_TMPDIR}/elsewhere"
+  run env IN_DEVSHELL=1 "${BATS_TEST_TMPDIR}/elsewhere/link" "${BATS_TEST_TMPDIR}/elsewhere"
+  refute_output --partial 'module not found'
+  refute_output --partial 'could not be scanned'
+}
+
+# The scripts the ambient compat legs reach with IN_DEVSHELL unset: run-tests
+# under --ambient and the checks under a fixture argument. They resolve their
+# own path with `readlink -f`, because BSD readlink on the macOS leg has no
+# long options.
+readonly -a AMBIENT_REACHED=(
+  '.ci/check-bench-fresh'
+  '.ci/check-devshell-provides'
+  '.ci/check-executable-bit'
+  '.ci/check-guard-parts'
+  '.ci/check-invariant-markers'
+  '.ci/check-issue-forms'
+  '.ci/check-manifest-invariants'
+  '.ci/check-shell-shebangs'
+  'run-tests'
+)
+
+@test "self-wrap: the scripts the ambient legs run resolve their path with a BSD readlink" {
+  local path rc failures=''
+  local -r bsd_dir="${BATS_TEST_TMPDIR}/bsd"
+  mkdir -- "${bsd_dir}"
+  # Inert: refuses every long option the way BSD readlink does, and otherwise
+  # hands the call to the real readlink.
+  # shellcheck disable=SC2016 # expanded by the stub, not here
+  printf '#!/bin/sh\nfor a in "$@"; do\n  case "$a" in\n    --?*) echo "readlink: illegal option -- -" >&2; exit 1 ;;\n  esac\ndone\nexec "%s" "$@"\n' \
+    "$(command -v readlink)" > "${bsd_dir}/readlink"
+  chmod +x -- "${bsd_dir}/readlink"
+  printf '@test "probe" {\n  :\n}\n' > "${BATS_TEST_TMPDIR}/probe.bats"
+  cd "${BATS_TEST_TMPDIR}"
+  for path in "${AMBIENT_REACHED[@]}"; do
+    rc=0
+    if [[ "${path}" == 'run-tests' ]]; then
+      env --unset=IN_DEVSHELL PATH="${bsd_dir}:${PATH}" "${REPO_DIR}/${path}" --ambient \
+        "${BATS_TEST_TMPDIR}/probe.bats" > "${BATS_TEST_TMPDIR}/out" 2>&1 || rc="$?"
+    else
+      env --unset=IN_DEVSHELL PATH="${bsd_dir}:${PATH}" "${REPO_DIR}/${path}" "${REPO_DIR}" \
+        > "${BATS_TEST_TMPDIR}/out" 2>&1 || rc="$?"
+    fi
+    if grep --quiet --fixed-strings 'illegal option' "${BATS_TEST_TMPDIR}/out"; then
+      failures+=" ${path}(long option reached BSD readlink)"
+    fi
+  done
+  assert_equal "${failures}" ''
+}

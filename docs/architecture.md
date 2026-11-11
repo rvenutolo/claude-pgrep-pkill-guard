@@ -989,9 +989,9 @@ is the `short flag only where macOS has no long form, on purpose` comment above
 `run-tests` itself mostly keeps long options, but **not because it is safe to**
 — the legs that run the suite invoke `./run-tests --ambient` directly against
 ambient tools, exactly like a `.bats` file. It gets away with it only because
-every GNU long option in it sits on a devShell-only path: the
-`readlink --canonicalize` of its self-wrap block runs only without `--ambient`,
-on the way into the devShell, and `use_bwk_awk`'s
+every GNU long option in it sits on a devShell-only path: its self-wrap
+block resolves its own path with `readlink -f`, which BSD readlink has, because
+that line runs under `--ambient` too, and `use_bwk_awk`'s
 `mktemp --directory`, `ln --symbolic` and `head --lines=1` are reachable only
 under `--awk=bwk`, which needs the devShell's `nawk` before it reaches any of
 them. Every other line runs on the ambient legs, the worker pool included, so

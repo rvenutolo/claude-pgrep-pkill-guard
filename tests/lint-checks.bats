@@ -69,12 +69,13 @@ function make_lint_fixture() {
 }
 
 # @description Run the gate from inside the fixture, with the stub linters first
-#              on PATH. The gate takes no arguments and finds its repo with
-#              `git rev-parse --show-toplevel`, so the cd is the fixture
-#              selection.
+#              on PATH. The gate takes no arguments and takes its repo from
+#              its own path, so the fixture runs a copy of it at the same
+#              relative path.
 # @noargs
 function gate_in_fixture() {
-  (cd "${FIXTURE}" && PATH="${STUB_DIR}:${PATH}" "${CHECK}")
+  cp -- "${CHECK}" "${FIXTURE}/.ci/run-lint-checks"
+  (cd "${FIXTURE}" && PATH="${STUB_DIR}:${PATH}" "${FIXTURE}/.ci/run-lint-checks")
 }
 
 # Every case needs nothing but bash, git and POSIX `mkdir -p`, `cp`, `mv -f`

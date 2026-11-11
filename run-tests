@@ -150,16 +150,17 @@ unset arg ARGS
 # host PATH behind the flake's tools: a tool the flake lacks would resolve from
 # the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion. `--ambient` skips this: the compat CI legs, which have no Nix,
-# run the suite against the tools the runner ships on purpose. This block is
-# therefore never reached on the ambient macOS leg, so its GNU long option
-# needs no BSD spelling.
+# run the suite against the tools the runner ships on purpose. The path
+# resolution below still runs there, so it uses `readlink -f`, the
+# spelling BSD readlink has; the long-option rule is waived for it.
+# bash-style allow=long-options: reached on the ambient macOS leg, where BSD readlink has no --canonicalize
+SELF_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*}"
 if [[ -z "${IN_DEVSHELL:-}" && -z "${AMBIENT}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/.ci/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
+REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
 # Temporary directories for the EXIT trap to remove, registered through
 # remove_on_exit. One list behind one trap, because --awk=bwk and the pool

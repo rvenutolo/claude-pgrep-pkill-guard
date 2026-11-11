@@ -39,12 +39,19 @@ function make_bats_fixture() {
 }
 
 # @description Run the gate from inside a directory. The gate takes no
-#              arguments and finds its repo with `git rev-parse --show-toplevel`,
-#              so the cd is the fixture selection.
+#              arguments and takes its repo from its own path, so a fixture
+#              runs a copy of it at the same relative path, and the real repo
+#              runs the gate itself.
 # @arg $1 dir the repo to run the gate in
 function gate_in() {
   local -r dir="$1"
-  (cd "${dir}" && "${CHECK}")
+  local gate="${CHECK}"
+  if [[ "${dir}" != "${REPO_DIR}" ]]; then
+    mkdir -p "${dir}/.ci"
+    cp -- "${CHECK}" "${dir}/.ci/check-bats-no-shebang"
+    gate="${dir}/.ci/check-bats-no-shebang"
+  fi
+  (cd "${dir}" && "${gate}")
 }
 
 # Every case needs nothing but bash, git and a POSIX `mkdir -p`, but the gate

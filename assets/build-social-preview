@@ -60,10 +60,10 @@ trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "
 # host PATH behind the flake's tools: a tool the flake lacks would resolve from
 # the host. Re-run through in-devshell, which sets IN_DEVSHELL and so stops the
 # recursion.
+SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
+SELF_REPO="${SELF_PATH%/*/*}"
 if [[ -z "${IN_DEVSHELL:-}" ]]; then
-  SELF_PATH="$(readlink --canonicalize -- "${BASH_SOURCE[0]}")"
-  SELF_DIR="${SELF_PATH%/*}"
-  exec "${SELF_DIR}/../.ci/in-devshell" "${SELF_PATH}" "$@"
+  exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
 # The only positional is optional, so a surplus argument is a typo -- a
@@ -80,7 +80,7 @@ if (($# > 1)); then
   exit 2
 fi
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
+REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
 readonly SOURCE="${REPO_DIR}/assets/deny-message.png"
 OUTPUT="${1:-${REPO_DIR}/assets/social-preview.png}"

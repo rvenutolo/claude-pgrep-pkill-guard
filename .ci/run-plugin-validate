@@ -18,8 +18,7 @@
 # @exitcode 0 the manifest validates, or the CLI is not installed
 # @exitcode 1 the manifest failed validation, or the host bash is
 #             older than 4.4
-# @exitcode * otherwise the failing git status, when the repository root cannot
-#             be resolved
+# @exitcode * otherwise the failing git status
 
 # devshell-exempt: needs the claude CLI from the host PATH, which the devShell's --ignore-environment drops
 
@@ -41,7 +40,7 @@ IFS=$'\n\t'
 
 trap 'printf "[%s] ERROR: line %s (exit %s): %s\n" "${0##*/}" "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
-REPO_DIR="$(git rev-parse --show-toplevel)"
+REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
 
 # @description Log a step banner to stderr, in the house format.

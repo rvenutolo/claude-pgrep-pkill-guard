@@ -35,6 +35,9 @@ fi
 
 REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
+# The tools below take repo-relative paths and some read their config from the
+# cwd, so they run from the repo root whatever directory the gate was run from.
+cd -- "${REPO_DIR}"
 
 # @description Log a step banner to stderr.
 # @arg $1 message the text to log

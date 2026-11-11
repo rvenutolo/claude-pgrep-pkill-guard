@@ -64,6 +64,9 @@ fi
 
 REPO_DIR="${SELF_REPO}"
 readonly REPO_DIR
+# lychee gets repo-relative paths and reads its config from the cwd, so it runs
+# from the repo root whatever directory the gate was run from.
+cd -- "${REPO_DIR}"
 readonly CONFIG_FILE="${REPO_DIR}/lychee.toml"
 
 # @description Log a step banner to stderr, in the house format.

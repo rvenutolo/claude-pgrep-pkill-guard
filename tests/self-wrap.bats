@@ -368,7 +368,7 @@ function assert_in_devshell() {
 @test "self-wrap: a wrapped script derives no path from a non-canonical BASH_SOURCE or \$0" {
   # The only BASH_SOURCE use is the canonical SELF_PATH line, spelled
   # `readlink -f` in the AMBIENT_REACHED scripts and `readlink --canonicalize`
-  # everywhere else; a dirname of BASH_SOURCE or $0, or a suffix strip of
+  # everywhere else; a dirname of BASH_SOURCE or $0 (braced or not), or a suffix strip of
   # either, resolves against a symlink's directory.
   local path text hits bad allowed spelling failures=''
   while IFS= read -r path; do
@@ -380,8 +380,8 @@ function assert_in_devshell() {
     allowed="readlink ${spelling} -- \"\${BASH_SOURCE[0]}\""
     text="$(grep --invert-match '^[[:space:]]*#' -- "${REPO_DIR}/${path}" || true)" # none left: fine
     # shellcheck disable=SC2016 # literal patterns, not expansions
-    hits="$(grep --extended-regexp 'BASH_SOURCE|dirname[^|]*"\$0"|\$\{0%' <<< "${text}" || true)" # none: ok
-    bad="$(grep --invert-match --fixed-strings "${allowed}" <<< "${hits}" || true)"               # none: ok
+    hits="$(grep --extended-regexp 'BASH_SOURCE|dirname[^|]*"\$\{?0\}?"|\$\{0%' <<< "${text}" || true)" # none: ok
+    bad="$(grep --invert-match --fixed-strings "${allowed}" <<< "${hits}" || true)"                     # none: ok
     if [[ -n "${bad}" ]]; then
       failures+=" ${path}(non-canonical self-location)"
     fi
@@ -441,4 +441,59 @@ readonly -a AMBIENT_REACHED=(
     fi
   done
   assert_equal "${failures}" ''
+}
+
+# @description Build a scratch repo whose tracked files the gates would reject
+#              or rewrite if they graded it: a shell script with a shellcheck
+#              warning and bad formatting, a Markdown file with a lint
+#              violation and a misspelling. The names match this repo's own.
+# @arg $1 dir the scratch repo to create
+function make_scratch_repo() {
+  local -r dir="$1"
+  mkdir --parents -- "${dir}/.ci"
+  # shellcheck disable=SC2016 # the scratch script's text, not an expansion here
+  printf '#!/usr/bin/env bash\nif true;then echo $1;fi\n' > "${dir}/run-tests"
+  printf '# Title\n\n\n\nteh text\n' > "${dir}/README.md"
+  git -C "${dir}" init --quiet
+  git -C "${dir}" add --all
+}
+
+@test "self-wrap: the lint gate run through a symlink from another repo grades its own repo" {
+  local scratch="${BATS_TEST_TMPDIR}/other-repo"
+  make_scratch_repo "${scratch}"
+  ln --symbolic -- "${REPO_DIR}/.ci/run-lint-checks" "${scratch}/link"
+  cd "${scratch}"
+  run env IN_DEVSHELL=1 "${scratch}/link"
+  assert_success
+}
+
+@test "self-wrap: the fixer gate run through a symlink from another repo leaves that repo untouched" {
+  local scratch="${BATS_TEST_TMPDIR}/other-repo"
+  make_scratch_repo "${scratch}"
+  cp -- "${scratch}/run-tests" "${BATS_TEST_TMPDIR}/run-tests.orig"
+  cp -- "${scratch}/README.md" "${BATS_TEST_TMPDIR}/README.md.orig"
+  ln --symbolic -- "${REPO_DIR}/.ci/run-fixers" "${scratch}/link"
+  cd "${scratch}"
+  run env IN_DEVSHELL=1 "${scratch}/link"
+  assert_success
+  cmp -- "${scratch}/run-tests" "${BATS_TEST_TMPDIR}/run-tests.orig"
+  cmp -- "${scratch}/README.md" "${BATS_TEST_TMPDIR}/README.md.orig"
+}
+
+@test "self-wrap: the link check run through a symlink from another repo runs lychee in its own repo" {
+  local scratch="${BATS_TEST_TMPDIR}/other-repo"
+  make_scratch_repo "${scratch}"
+  # A stub lychee: it needs the network otherwise. It records its cwd and the
+  # file list it was given, and consumes stdin as the real one does.
+  printf '#!/bin/sh\npwd -P > "%s/lychee-cwd"\ncat > "%s/lychee-files"\n' \
+    "${BATS_TEST_TMPDIR}" "${BATS_TEST_TMPDIR}" > "${STUB_DIR}/lychee"
+  chmod +x -- "${STUB_DIR}/lychee"
+  ln --symbolic -- "${REPO_DIR}/.ci/check-links" "${scratch}/link"
+  cd "${scratch}"
+  run env IN_DEVSHELL=1 GITHUB_TOKEN=inert PATH="${STUB_DIR}:${PATH}" "${scratch}/link"
+  assert_success
+  assert_equal "$(< "${BATS_TEST_TMPDIR}/lychee-cwd")" "$(cd -- "${REPO_DIR}" && pwd -P)"
+  # The list is this repo's tracked files, not the scratch repo's.
+  run grep --fixed-strings --line-regexp 'CONTRIBUTING.md' "${BATS_TEST_TMPDIR}/lychee-files"
+  assert_success
 }

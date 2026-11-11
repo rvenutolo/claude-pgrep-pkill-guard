@@ -67,9 +67,7 @@ if [[ -z "${IN_DEVSHELL:-}" ]]; then
   exec "${SELF_REPO}/.ci/in-devshell" "${SELF_PATH}" "$@"
 fi
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_DIR
-readonly REPO_DIR="${SCRIPT_DIR}/.."
+readonly REPO_DIR="${SELF_REPO}"
 
 # The directory the scan jobs write their logs and verdicts to. Script-level,
 # not a local of `main`: the EXIT trap that removes it runs after `main` has
@@ -182,7 +180,7 @@ function run_rules() {
   local -r helpers="$6"
   # The lists reach jq as files, not `--arg` strings: one argument is capped at
   # 128 KiB on Linux, and a large repository's lists are not.
-  jq --raw-output --library-path "${SCRIPT_DIR}" \
+  jq --raw-output --library-path "${SELF_REPO}/.ci" \
     --arg path "${display_path}" --rawfile src "${src_file}" --argjson sourced "${sourced}" \
     --rawfile tracked <(printf '%s\n' "${tracked}") --rawfile functions <(printf '%s\n' "${functions}") \
     --rawfile helpers <(printf '%s\n' "${helpers}") \

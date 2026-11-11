@@ -364,3 +364,32 @@ function assert_in_devshell() {
   run env IN_DEVSHELL=1 "${scratch}/link"
   assert_success
 }
+
+@test "self-wrap: a wrapped script derives no path from a non-canonical BASH_SOURCE or \$0" {
+  # The only BASH_SOURCE use is the canonical SELF_PATH line; a dirname of
+  # BASH_SOURCE or $0, or a suffix strip of either, resolves against a
+  # symlink's directory.
+  local path text hits bad failures=''
+  while IFS= read -r path; do
+    is_exempt "${path}" && continue
+    text="$(grep --invert-match '^[[:space:]]*#' -- "${REPO_DIR}/${path}" || true)" # none left: fine
+    # shellcheck disable=SC2016 # literal patterns, not expansions
+    hits="$(grep --extended-regexp 'BASH_SOURCE|dirname[^|]*"\$0"|\$\{0%' <<< "${text}" || true)" # none: ok
+    # shellcheck disable=SC2016 # a literal line, not an expansion
+    bad="$(grep --invert-match --fixed-strings 'canonicalize -- "${BASH_SOURCE[0]}"' <<< "${hits}" || true)" # none: ok
+    if [[ -n "${bad}" ]]; then
+      failures+=" ${path}(non-canonical self-location)"
+    fi
+  done < <(tracked_scripts)
+  assert_equal "${failures}" ''
+}
+
+@test "self-wrap: check-bash-style run through a symlink finds its own jq library" {
+  mkdir -- "${BATS_TEST_TMPDIR}/elsewhere"
+  ln --symbolic -- "${REPO_DIR}/.ci/check-bash-style" "${BATS_TEST_TMPDIR}/elsewhere/link"
+  printf '#!/usr/bin/env bash\necho PAYLOAD_RAN\n' > "${BATS_TEST_TMPDIR}/elsewhere/clean.sh"
+  cd "${BATS_TEST_TMPDIR}/elsewhere"
+  run env IN_DEVSHELL=1 "${BATS_TEST_TMPDIR}/elsewhere/link" "${BATS_TEST_TMPDIR}/elsewhere"
+  refute_output --partial 'module not found'
+  refute_output --partial 'could not be scanned'
+}
